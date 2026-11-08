@@ -1,0 +1,378 @@
+[
+  {
+    "_comment": "SAMPLE DATA — fictional businesses for development and demonstration purposes only. All names and phone numbers are made up."
+  },
+  {
+    "id": "nashville-pipe-pros",
+    "name": "Nashville Pipe Pros",
+    "category": "plumbers",
+    "phone": "(555) 555-0101",
+    "address": "412 Dickerson Pike, Nashville, TN 37207",
+    "hours": {
+      "monday": "7am-5pm",
+      "tuesday": "7am-5pm",
+      "wednesday": "7am-5pm",
+      "thursday": "7am-5pm",
+      "friday": "7am-5pm",
+      "saturday": "8am-12pm",
+      "sunday": "Closed"
+    },
+    "services": ["leak repair", "drain cleaning", "water heater installation", "pipe replacement"],
+    "serviceArea": "Nashville and surrounding Davidson County",
+    "description": "We fix leaks, clear drains, and replace busted pipes. Same-day service most days.",
+    "city": "Nashville",
+    "state": "TN"
+  },
+  {
+    "id": "honky-tonk-plumbing",
+    "name": "Honky Tonk Plumbing",
+    "category": "plumbers",
+    "phone": "(555) 555-0102",
+    "address": "881 Gallatin Ave, Nashville, TN 37206",
+    "hours": {
+      "monday": "8am-5pm",
+      "tuesday": "8am-5pm",
+      "wednesday": "8am-5pm",
+      "thursday": "8am-5pm",
+      "friday": "8am-5pm",
+      "saturday": "Closed",
+      "sunday": "Closed"
+    },
+    "services": ["toilet repair", "faucet replacement", "sewer line inspection", "water line repair"],
+    "serviceArea": "Nashville metro area",
+    "description": "Family-run plumbing shop serving Nashville since the neighborhood was new. We show up on time and charge what we quoted.",
+    "city": "Nashville",
+    "state": "TN"
+  },
+  {
+    "id": "cumberland-drain-co",
+    "name": "Cumberland Drain Co.",
+    "category": "plumbers",
+    "phone": "(555) 555-0103",
+    "hours": {
+      "monday": "7am-6pm",
+      "tuesday": "7am-6pm",
+      "wednesday": "7am-6pm",
+      "thursday": "7am-6pm",
+      "friday": "7am-6pm",
+      "saturday": "8am-2pm",
+      "sunday": "Closed"
+    },
+    "services": ["drain cleaning", "hydro jetting", "rooter service", "grease trap cleaning"],
+    "serviceArea": "Nashville, Brentwood, and Antioch",
+    "description": "Drains backed up? We clear them. Commercial and residential jobs taken.",
+    "city": "Nashville",
+    "state": "TN"
+  },
+  {
+    "id": "volt-brothers-electric",
+    "name": "Volt Brothers Electric",
+    "category": "electricians",
+    "phone": "(555) 555-0104",
+    "address": "2203 Nolensville Pike, Nashville, TN 37211",
+    "hours": {
+      "monday": "8am-5pm",
+      "tuesday": "8am-5pm",
+      "wednesday": "8am-5pm",
+      "thursday": "8am-5pm",
+      "friday": "8am-5pm",
+      "saturday": "Closed",
+      "sunday": "Closed"
+    },
+    "services": ["panel upgrades", "outlet installation", "ceiling fan wiring", "code inspections"],
+    "serviceArea": "Nashville and Williamson County",
+    "description": "Licensed electricians. We do panel upgrades, new circuits, and repairs. No job too small.",
+    "city": "Nashville",
+    "state": "TN"
+  },
+  {
+    "id": "music-city-wiring",
+    "name": "Music City Wiring",
+    "category": "electricians",
+    "phone": "(555) 555-0105",
+    "address": "550 8th Ave S, Nashville, TN 37203",
+    "hours": {
+      "monday": "7am-4pm",
+      "tuesday": "7am-4pm",
+      "wednesday": "7am-4pm",
+      "thursday": "7am-4pm",
+      "friday": "7am-4pm",
+      "saturday": "8am-12pm",
+      "sunday": "Closed"
+    },
+    "services": ["residential wiring", "commercial wiring", "EV charger installation", "outdoor lighting"],
+    "serviceArea": "Greater Nashville area",
+    "description": "We wire homes and businesses. Residential remodels, new construction, and commercial tenant build-outs.",
+    "city": "Nashville",
+    "state": "TN"
+  },
+  {
+    "id": "neon-and-ohm-electric",
+    "name": "Neon & Ohm Electric",
+    "category": "electricians",
+    "phone": "(555) 555-0106",
+    "hours": {
+      "monday": "8am-5pm",
+      "tuesday": "8am-5pm",
+      "wednesday": "8am-5pm",
+      "thursday": "8am-5pm",
+      "friday": "8am-4pm",
+      "saturday": "Closed",
+      "sunday": "Closed"
+    },
+    "services": ["sign wiring", "lighting retrofit", "generator hookup", "breaker repair"],
+    "serviceArea": "Nashville proper",
+    "description": "Specialty electrical for signs, lighting retrofits, and generator hookups. Commercial and residential.",
+    "city": "Nashville",
+    "state": "TN"
+  },
+  {
+    "id": "the-griddle-house",
+    "name": "The Griddle House",
+    "category": "restaurants",
+    "phone": "(555) 555-0107",
+    "address": "134 Division St, Nashville, TN 37203",
+    "hours": {
+      "monday": "6am-2pm",
+      "tuesday": "6am-2pm",
+      "wednesday": "6am-2pm",
+      "thursday": "6am-2pm",
+      "friday": "6am-2pm",
+      "saturday": "7am-3pm",
+      "sunday": "7am-2pm"
+    },
+    "services": ["breakfast", "brunch", "lunch", "dine-in", "carry-out"],
+    "serviceArea": "Nashville",
+    "description": "Breakfast and lunch diner. Eggs, pancakes, sandwiches, and a daily soup. Nothing fancy, just good food.",
+    "city": "Nashville",
+    "state": "TN"
+  },
+  {
+    "id": "biscuit-and-brine",
+    "name": "Biscuit & Brine",
+    "category": "restaurants",
+    "phone": "(555) 555-0108",
+    "address": "709 Woodland St, Nashville, TN 37206",
+    "hours": {
+      "monday": "Closed",
+      "tuesday": "11am-9pm",
+      "wednesday": "11am-9pm",
+      "thursday": "11am-9pm",
+      "friday": "11am-10pm",
+      "saturday": "9am-10pm",
+      "sunday": "9am-3pm"
+    },
+    "services": ["southern food", "dine-in", "carry-out", "weekend brunch"],
+    "serviceArea": "Nashville",
+    "description": "Southern comfort food. Biscuits, fried chicken, pickled everything. Closed Mondays.",
+    "city": "Nashville",
+    "state": "TN"
+  },
+  {
+    "id": "hot-plate-nashville",
+    "name": "Hot Plate Nashville",
+    "category": "restaurants",
+    "phone": "(555) 555-0109",
+    "address": "1822 Charlotte Ave, Nashville, TN 37203",
+    "hours": {
+      "monday": "11am-8pm",
+      "tuesday": "11am-8pm",
+      "wednesday": "11am-8pm",
+      "thursday": "11am-8pm",
+      "friday": "11am-9pm",
+      "saturday": "11am-9pm",
+      "sunday": "Closed"
+    },
+    "services": ["hot chicken", "sides", "dine-in", "carry-out"],
+    "serviceArea": "Nashville",
+    "description": "Hot chicken and sides. Plates come with bread and pickles. Order at the counter.",
+    "city": "Nashville",
+    "state": "TN"
+  },
+  {
+    "id": "cumberland-auto-works",
+    "name": "Cumberland Auto Works",
+    "category": "auto-repair",
+    "phone": "(555) 555-0110",
+    "address": "3301 Clarksville Pike, Nashville, TN 37218",
+    "hours": {
+      "monday": "7am-5pm",
+      "tuesday": "7am-5pm",
+      "wednesday": "7am-5pm",
+      "thursday": "7am-5pm",
+      "friday": "7am-5pm",
+      "saturday": "8am-1pm",
+      "sunday": "Closed"
+    },
+    "services": ["oil change", "brake repair", "engine diagnostics", "tire rotation", "transmission service"],
+    "serviceArea": "North Nashville and Madison",
+    "description": "Full-service auto repair. We work on most domestic and import vehicles. Honest quotes, no surprises.",
+    "city": "Nashville",
+    "state": "TN"
+  },
+  {
+    "id": "pedal-to-the-metal-garage",
+    "name": "Pedal to the Metal Garage",
+    "category": "auto-repair",
+    "phone": "(555) 555-0111",
+    "address": "640 Fesslers Ln, Nashville, TN 37210",
+    "hours": {
+      "monday": "8am-6pm",
+      "tuesday": "8am-6pm",
+      "wednesday": "8am-6pm",
+      "thursday": "8am-6pm",
+      "friday": "8am-6pm",
+      "saturday": "9am-3pm",
+      "sunday": "Closed"
+    },
+    "services": ["general repair", "exhaust work", "suspension", "alignments", "pre-purchase inspection"],
+    "serviceArea": "Nashville metro",
+    "description": "General auto repair and performance work. We fix what's broken and tell you what else we find.",
+    "city": "Nashville",
+    "state": "TN"
+  },
+  {
+    "id": "five-points-auto",
+    "name": "Five Points Auto",
+    "category": "auto-repair",
+    "phone": "(555) 555-0112",
+    "hours": {
+      "monday": "8am-5pm",
+      "tuesday": "8am-5pm",
+      "wednesday": "8am-5pm",
+      "thursday": "8am-5pm",
+      "friday": "8am-5pm",
+      "saturday": "Closed",
+      "sunday": "Closed"
+    },
+    "services": ["oil change", "brake service", "AC repair", "electrical diagnostics", "check engine light"],
+    "serviceArea": "East Nashville",
+    "description": "East Nashville neighborhood shop. We work on what you drive. Quick turnaround when we can manage it.",
+    "city": "Nashville",
+    "state": "TN"
+  },
+  {
+    "id": "shear-nashville",
+    "name": "Shear Nashville",
+    "category": "hair-salons",
+    "phone": "(555) 555-0113",
+    "address": "2010 Belmont Blvd, Nashville, TN 37212",
+    "hours": {
+      "monday": "Closed",
+      "tuesday": "9am-6pm",
+      "wednesday": "9am-6pm",
+      "thursday": "9am-7pm",
+      "friday": "9am-7pm",
+      "saturday": "8am-5pm",
+      "sunday": "Closed"
+    },
+    "services": ["haircuts", "color", "highlights", "blowouts", "keratin treatment"],
+    "serviceArea": "Nashville",
+    "description": "Full-service hair salon in Belmont. Cuts, color, and treatments for all hair types. Walk-ins welcome when chairs are open.",
+    "city": "Nashville",
+    "state": "TN"
+  },
+  {
+    "id": "the-clip-joint",
+    "name": "The Clip Joint",
+    "category": "hair-salons",
+    "phone": "(555) 555-0114",
+    "address": "418 Houston St, Nashville, TN 37203",
+    "hours": {
+      "monday": "10am-6pm",
+      "tuesday": "10am-6pm",
+      "wednesday": "10am-6pm",
+      "thursday": "10am-6pm",
+      "friday": "10am-7pm",
+      "saturday": "9am-5pm",
+      "sunday": "Closed"
+    },
+    "services": ["haircuts", "fades", "beard trim", "kids cuts"],
+    "serviceArea": "Nashville",
+    "description": "No-frills haircuts for men and kids. Fades, tapers, and trims. No appointment needed most days.",
+    "city": "Nashville",
+    "state": "TN"
+  },
+  {
+    "id": "bangs-and-bobs-studio",
+    "name": "Bangs & Bobs Studio",
+    "category": "hair-salons",
+    "phone": "(555) 555-0115",
+    "hours": {
+      "monday": "Closed",
+      "tuesday": "10am-5pm",
+      "wednesday": "10am-5pm",
+      "thursday": "10am-6pm",
+      "friday": "10am-6pm",
+      "saturday": "9am-4pm",
+      "sunday": "Closed"
+    },
+    "services": ["cuts", "color", "balayage", "deep conditioning", "extensions"],
+    "serviceArea": "Nashville and Green Hills",
+    "description": "Small studio salon. By appointment only. Specializes in color work and extensions.",
+    "city": "Nashville",
+    "state": "TN"
+  },
+  {
+    "id": "barrett-and-hollow-law",
+    "name": "Barrett & Hollow Law",
+    "category": "lawyers",
+    "phone": "(555) 555-0116",
+    "address": "150 4th Ave N, Suite 800, Nashville, TN 37219",
+    "hours": {
+      "monday": "8am-5pm",
+      "tuesday": "8am-5pm",
+      "wednesday": "8am-5pm",
+      "thursday": "8am-5pm",
+      "friday": "8am-4pm",
+      "saturday": "Closed",
+      "sunday": "Closed"
+    },
+    "services": ["personal injury", "slip and fall", "car accident claims", "wrongful death"],
+    "serviceArea": "Middle Tennessee",
+    "description": "Personal injury law firm. We take cases on contingency — you pay nothing unless we win.",
+    "city": "Nashville",
+    "state": "TN"
+  },
+  {
+    "id": "hatch-and-greer-attorneys",
+    "name": "Hatch & Greer Attorneys",
+    "category": "lawyers",
+    "phone": "(555) 555-0117",
+    "address": "303 Church St, Nashville, TN 37201",
+    "hours": {
+      "monday": "9am-5pm",
+      "tuesday": "9am-5pm",
+      "wednesday": "9am-5pm",
+      "thursday": "9am-5pm",
+      "friday": "9am-4pm",
+      "saturday": "Closed",
+      "sunday": "Closed"
+    },
+    "services": ["real estate law", "business contracts", "landlord-tenant disputes", "title review"],
+    "serviceArea": "Nashville and Davidson County",
+    "description": "Real estate and business law. We review contracts, handle closings, and sort out disputes.",
+    "city": "Nashville",
+    "state": "TN"
+  },
+  {
+    "id": "stone-river-legal",
+    "name": "Stone River Legal",
+    "category": "lawyers",
+    "phone": "(555) 555-0118",
+    "hours": {
+      "monday": "8am-5pm",
+      "tuesday": "8am-5pm",
+      "wednesday": "8am-5pm",
+      "thursday": "8am-5pm",
+      "friday": "8am-5pm",
+      "saturday": "Closed",
+      "sunday": "Closed"
+    },
+    "services": ["family law", "divorce", "child custody", "adoption", "name change"],
+    "serviceArea": "Nashville metro area",
+    "description": "Family law practice. Divorce, custody, and adoption cases. We keep things straightforward and move as fast as the court allows.",
+    "city": "Nashville",
+    "state": "TN"
+  }
+]

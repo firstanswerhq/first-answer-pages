@@ -1,0 +1,8 @@
+[
+  { "slug": "plumbers",     "label": "Plumbers" },
+  { "slug": "electricians", "label": "Electricians" },
+  { "slug": "restaurants",  "label": "Restaurants" },
+  { "slug": "auto-repair",  "label": "Auto Repair" },
+  { "slug": "hair-salons",  "label": "Hair Salons" },
+  { "slug": "lawyers",      "label": "Lawyers" }
+]
