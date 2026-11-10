@@ -278,11 +278,21 @@ h1 {
 
 .admin-nav {
   margin-bottom: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
 }
 
+/* The Log out button sits in the same row as the admin links, also on a phone. */
 .admin-nav .admin-logout {
-  display: inline-block;
-  margin-left: 1rem;
+  display: inline-flex;
+  margin: 0;
+}
+
+.admin-nav .admin-logout .admin-button {
+  padding: 0.2rem 0.6rem;
+  font-size: 0.9rem;
 }
 
 .admin-note {

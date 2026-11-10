@@ -93,6 +93,43 @@ export function mapCategory(input, categories) {
   return '';
 }
 
+/** Two-letter codes for the 50 states and DC, keyed by full name (lowercase). */
+const STATE_NAMES = Object.freeze({
+  alabama: 'AL', alaska: 'AK', arizona: 'AZ', arkansas: 'AR', california: 'CA', colorado: 'CO',
+  connecticut: 'CT', delaware: 'DE', 'district of columbia': 'DC', florida: 'FL', georgia: 'GA',
+  hawaii: 'HI', idaho: 'ID', illinois: 'IL', indiana: 'IN', iowa: 'IA', kansas: 'KS', kentucky: 'KY',
+  louisiana: 'LA', maine: 'ME', maryland: 'MD', massachusetts: 'MA', michigan: 'MI', minnesota: 'MN',
+  mississippi: 'MS', missouri: 'MO', montana: 'MT', nebraska: 'NE', nevada: 'NV', 'new hampshire': 'NH',
+  'new jersey': 'NJ', 'new mexico': 'NM', 'new york': 'NY', 'north carolina': 'NC', 'north dakota': 'ND',
+  ohio: 'OH', oklahoma: 'OK', oregon: 'OR', pennsylvania: 'PA', 'rhode island': 'RI',
+  'south carolina': 'SC', 'south dakota': 'SD', tennessee: 'TN', texas: 'TX', utah: 'UT', vermont: 'VT',
+  virginia: 'VA', washington: 'WA', 'west virginia': 'WV', wisconsin: 'WI', wyoming: 'WY',
+});
+
+/** The 51 accepted state codes (50 states and DC). */
+export const US_STATE_CODES = Object.freeze(new Set(Object.values(STATE_NAMES)));
+
+/** Shown under the State box and as its error. */
+export const STATE_HINT = '2 letters, like TN';
+export const STATE_ERROR = 'Use the 2-letter state, like TN.';
+
+/**
+ * A real state code from a code or a full name, any letter case:
+ * "tn" -> "TN", "Tennessee" -> "TN", "Washington, D.C." -> "DC".
+ * Anything else comes back as typed (cleaned), so validateFields can flag it.
+ * @param {string} text already cleaned single-line text
+ * @returns {string}
+ */
+export function normalizeState(text) {
+  if (typeof text !== 'string' || text === '') return '';
+  const code = text.replace(/\./g, '').trim().toUpperCase();
+  if (US_STATE_CODES.has(code)) return code;
+  const name = text.toLowerCase().replace(/\./g, '').replace(/\s+/g, ' ').trim();
+  if (Object.hasOwn(STATE_NAMES, name)) return STATE_NAMES[name];
+  if (name === 'washington dc' || name === 'washington, dc' || name === 'dc') return 'DC';
+  return text;
+}
+
 /**
  * Tidy a city typed all in lower (or all in upper) case: "nashville" ->
  * "Nashville", "st. louis" -> "St. Louis", "winston-salem" -> "Winston-Salem".
@@ -105,7 +142,12 @@ export function tidyCity(text) {
   if (/\p{Ll}/u.test(text) && /\p{Lu}/u.test(text)) return text;
   return text
     .toLowerCase()
-    .replace(/(^|[\s\-.'\u2019])(\p{Ll})/gu, (_, before, letter) => before + letter.toUpperCase())
+    // Title case, not upper case: a letter whose capital is two letters ("\u00df" -> "SS",
+    // "\u1f80" -> "\u1f08\u0399") keeps only the first one capital, so a second pass changes nothing.
+    .replace(/(^|[\s\-.'\u2019])(\p{Ll})/gu, (_, before, letter) => {
+      const [first, ...rest] = letter.toUpperCase();
+      return before + first + rest.join('').toLowerCase();
+    })
     .slice(0, MAX_STRING)
     .trim();
 }
@@ -150,7 +192,7 @@ export function normalizeFields(raw, categories) {
   out.city = tidyCity(out.city);
   out.phone = normalizePhone(get('phone'));
   out.category = mapCategory(get('category'), categories);
-  if (/^[a-z]{2}$/i.test(out.state)) out.state = out.state.toUpperCase();
+  out.state = normalizeState(out.state);
   out.hours = normalizeHours(get('hours'));
   out.services = normalizeServices(get('services'));
   out.ownerEmail = normalizeEmail(get('ownerEmail')); // private, optional
@@ -176,7 +218,7 @@ export function validateFields(fields, categories) {
   if (out.serviceArea === '') fail('serviceArea', '');
   if (out.description === '') fail('description', '');
   if (out.city === '') fail('city', '');
-  if (!/^[A-Z]{2}$/.test(out.state)) fail('state', '');
+  if (!US_STATE_CODES.has(out.state)) fail('state', '');
 
   return { fields: out, missingFields: missing };
 }

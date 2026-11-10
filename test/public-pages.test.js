@@ -89,14 +89,18 @@ const hoursRow = (html, day) => new RegExp(`<tr><th scope="row">${day}</th><td>(
 
 // ---- 1. hours -----------------------------------------------------------------------
 
-test('hours: only filled days are shown; a typed "Closed" stays; none filled says "Call for hours"', () => {
+test('hours: every day shown once any is filled, a skipped day says "Call for hours", a typed "Closed" stays; none filled says "Call for hours"', () => {
   const html = listingDetail({ ...OWNER }, undefined, { categories });
   assert.equal(hoursRow(html, 'Monday'), '7:00 AM - 5:00 PM');
   assert.equal(hoursRow(html, 'Sunday'), 'Closed');
   for (const day of ['Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']) {
-    assert.equal(hoursRow(html, day), undefined, day);
+    assert.equal(hoursRow(html, day), 'Call for hours', day);
   }
-  assert.ok(!html.includes('Call for hours'));
+  // A typed "closed" in any case reads "Closed"; a skipped day is never "Closed".
+  const lower = listingDetail({ ...OWNER, hours: { monday: '8-4', tuesday: 'closed', wednesday: 'CLOSED' } }, undefined, { categories });
+  assert.equal(hoursRow(lower, 'Tuesday'), 'Closed');
+  assert.equal(hoursRow(lower, 'Wednesday'), 'Closed');
+  assert.equal(hoursRow(lower, 'Thursday'), 'Call for hours');
 
   for (const hours of [{}, { monday: '', friday: '   ' }, undefined, null]) {
     const none = listingDetail({ ...OWNER, hours }, undefined, { categories });
@@ -174,7 +178,8 @@ test('home, category and listing pages carry a canonical link and a meta descrip
   const page = (await text(env, `/listings/${OWNER.id}?quote=sent`)).body;
   assert.equal(canonicalOf(page), `${LIVE}/listings/${OWNER.id}`);
   const desc = descriptionOf(page);
-  assert.equal(desc, escapeHtml(`${OWNER.name}, listed under Plumbers in Nashville, TN. Call ${OWNER.phone}.`));
+  assert.equal(desc, escapeHtml(`${OWNER.name} is a plumber in Nashville, TN offering Leak repair and Drain cleaning. Call ${OWNER.phone}.`));
+  assert.ok(desc.length <= 200);
   assert.ok(!page.includes('<Co>'), 'the name is escaped in the meta tag');
 });
 
@@ -348,4 +353,21 @@ test('the demo footer line still lands inside the footer', async () => {
   const footer = body.slice(body.indexOf('<footer'), body.indexOf('</footer>'));
   assert.ok(footer.includes('Sample listings for demonstration'));
   assert.ok(footer.includes('<a href="/privacy">Privacy</a>'));
+});
+
+
+test('listing meta description: trade noun, up to 3 services, phone, at most 160 characters', async () => {
+  const { listingMetaDescription } = await import('../server/routes/listings.js');
+  assert.equal(
+    listingMetaDescription({ name: 'Acme Plumbing', category: 'plumbers', city: 'Nashville', state: 'TN', phone: '(615) 555-0100', services: ['drain cleaning', 'leak repair', 'water heaters', 'gas lines'] }),
+    'Acme Plumbing is a plumber in Nashville, TN offering drain cleaning, leak repair and water heaters. Call (615) 555-0100.',
+  );
+  assert.equal(
+    listingMetaDescription({ name: 'Bright Sparks', category: 'electricians', city: 'Franklin', state: 'TN', phone: '(615) 555-0101', services: ['panels'] }),
+    'Bright Sparks is an electrician in Franklin, TN offering panels. Call (615) 555-0101.',
+  );
+  assert.match(listingMetaDescription({ name: 'Odd Jobs', category: 'other', city: 'Nashville', state: 'TN', phone: '(615) 555-0102', services: [] }), /^Odd Jobs is a local business in Nashville, TN\. Call/);
+  const long = listingMetaDescription({ name: 'Long Name Services', category: 'plumbers', city: 'Nashville', state: 'TN', phone: '(615) 555-0103', services: ['x'.repeat(60), 'y'.repeat(60), 'z'.repeat(60)] });
+  assert.ok(long.length <= 160, long);
+  assert.ok(listingMetaDescription({ name: 'N'.repeat(300), category: 'plumbers', services: [] }).length <= 160);
 });

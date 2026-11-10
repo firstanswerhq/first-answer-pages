@@ -20,7 +20,7 @@ import { createDataStore } from '../server/data.js';
 import { createMockNotifier, createResendNotifier } from '../server/lib/notifier.js';
 import { createRateLimiter } from '../server/lib/rate-limiter.js';
 import { submitQuote } from '../server/lib/quotes.js';
-import { escapeHtml } from '../server/lib/html.js';
+import { escapeHtml, telLink } from '../server/lib/html.js';
 import { validateQuoteArgs } from '../server/lib/tool-validator.js';
 
 const REPO_DATA = fileURLToPath(new URL('../data/', import.meta.url));
@@ -538,6 +538,9 @@ test('listing page contains the quote form and the webmcp module script tag', as
 
 const sentenceFor = phone =>
   `Thanks! Your request is saved and we'll pass it to the business. If you need help sooner, call them at ${phone}.`;
+/** The page's banner: the same sentence, escaped, with the phone as a tap-to-call link. */
+const bannerHtmlFor = phone =>
+  `${escapeHtml("Thanks! Your request is saved and we'll pass it to the business. If you need help sooner, call them at ")}${telLink(phone)}.`;
 
 test('?quote=sent page has the new sentence with the escaped apostrophe and the listing phone', async () => {
   const env = await makeEnv();
@@ -548,8 +551,9 @@ test('?quote=sent page has the new sentence with the escaped apostrophe and the 
   const res = await fetch(`${env.base}/listings/${L0}?quote=sent`);
   assert.equal(res.status, 200);
   const html = await res.text();
-  assert.ok(html.includes(escapeHtml(sentenceFor(phone))), 'full sentence missing');
-  assert.ok(html.includes(`we&#39;ll pass it to the business. If you need help sooner, call them at ${escapeHtml(phone)}.`));
+  assert.ok(html.includes(bannerHtmlFor(phone)), 'full sentence missing');
+  assert.ok(html.includes(`we&#39;ll pass it to the business. If you need help sooner, call them at ${telLink(phone)}.`));
+  assert.match(telLink(phone), /^<a class="tel" href="tel:\d+">/, 'the phone is a tap-to-call link');
   assert.ok(!html.includes("we'll pass it"), 'apostrophe must be HTML-escaped in the raw page');
 
   // Without the query flag the notice is absent.
@@ -616,7 +620,7 @@ test('Property: confirmation page and MCP message carry any trusted phone, HTML-
         const res = await fetch(`${env.base}/listings/phone-prop?quote=sent`);
         assert.equal(res.status, 200);
         const html = await res.text();
-        assert.ok(html.includes(escapeHtml(sentenceFor(phone))), 'escaped sentence missing');
+        assert.ok(html.includes(bannerHtmlFor(phone)), 'escaped sentence missing');
         if (escapeHtml(phone) !== phone) assert.ok(!html.includes(sentenceFor(phone)), 'raw phone leaked into the page');
 
         const mcp = await (await callMcp(env, {
@@ -656,7 +660,8 @@ test('422 re-render: invalid contact shows the full listing page, kept values, a
   assert.ok(html.includes('<form class="quote-form"'));
   assert.ok(html.includes(`value="${escapeHtml('Pat <b>Jones</b>')}"`), 'name not kept');
   assert.ok(html.includes(`>${escapeHtml('Leak under "sink" & more')}</textarea>`), 'details not kept');
-  assert.match(html, /<p class="form-error" role="alert">Please enter a phone number or email\.<\/p>/);
+  // Something was typed, so the message says it doesn't look right (an empty box says "Please enter...").
+  assert.match(html, /<p class="form-error" role="alert">That doesn&#39;t look like a phone number or email\.<\/p>/);
   assert.equal((await readQuotesFile(env)).length, 0);
 });
 
@@ -690,7 +695,7 @@ test('303 then ?quote=sent shows the success box before the listing article and 
 
   const seed = JSON.parse(await fs.readFile(path.join(REPO_DATA, 'listings.json'), 'utf8'));
   const phone = seed.find(l => l && l.id === L0).phone;
-  const box = `<p class="notice success-box" role="status">${escapeHtml(sentenceFor(phone))}</p>`;
+  const box = `<p class="notice success-box" role="status">${bannerHtmlFor(phone)}</p>`;
   const boxAt = html.indexOf(box);
   assert.ok(boxAt >= 0, 'success box missing');
   const mainAt = html.indexOf('<main>');

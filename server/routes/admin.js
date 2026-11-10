@@ -32,6 +32,7 @@ import { indexNowNote } from '../lib/indexnow.js';
 import { DAYS } from '../lib/listing-fields.js';
 import { markQuoteHandled } from '../lib/quotes.js';
 import { runSeanceForListing } from './seance.js';
+import { DEFAULT_SITE_NAME } from '../lib/config.js';
 
 /** Fixed notes for /admin/pending?note=...; never echo the query value. */
 const NOTES = Object.freeze({
@@ -86,6 +87,23 @@ function mailtoHref(email, params = {}) {
   const [local, domain] = String(email).split('@');
   const query = new URLSearchParams(params).toString().replace(/\+/g, '%20');
   return `mailto:${encodeURIComponent(local)}@${encodeURIComponent(domain ?? '')}${query ? `?${query}` : ''}`;
+}
+
+/**
+ * mailto: link that forwards one quote to the business. Every part is
+ * encodeURIComponent'd (the address's local part and domain separately).
+ */
+function forwardHref(email, q, siteName) {
+  const [local, domain] = String(email).split('@');
+  const subject = `Quote request from ${String(q?.name ?? 'a customer')} via ${siteName}`;
+  const body = [
+    'A customer asked for a quote:',
+    '',
+    `Name: ${String(q?.name ?? '')}`,
+    `Contact: ${String(q?.contact ?? '')}`,
+    `Details: ${String(q?.details ?? '')}`,
+  ].join('\n');
+  return `mailto:${encodeURIComponent(local)}@${encodeURIComponent(domain ?? '')}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
 
 /** A customer's contact as a tel: or mailto: link when it looks like one, else plain text. */
@@ -247,12 +265,12 @@ export function createAdminRouter(ctx) {
         if (key && liveByPhone.has(key)) {
           const l = liveByPhone.get(key);
           const href = `/listings/${encodeURIComponent(l.id)}`;
-          dupes.push(`Possible duplicate of ${escapeHtml(l.name ?? l.id)} (<a href="${href}">${escapeHtml(href)}</a>)`);
+          dupes.push(`Same phone number as ${escapeHtml(l.name ?? l.id)}, already live (<a href="${href}">view it</a>)`);
         }
         for (const other of pendingFields) {
           if (other.entry.id === e.id || !key || phoneKey(other.f.phone) !== key) continue;
           const href = `#pending-${encodeURIComponent(other.entry.id)}`;
-          dupes.push(`Possible duplicate of ${escapeHtml(other.f.name ?? '(no name)')} (<a href="${href}">waiting for review below</a>)`);
+          dupes.push(`Same phone number as ${escapeHtml(other.f.name ?? '(no name)')}, also waiting for review (<a href="${href}">jump to it</a>)`);
         }
         const services = Array.isArray(f.services) ? f.services.filter(x => typeof x === 'string' && x.trim()) : [];
         const row = (label, value) => `    <dt>${label}</dt><dd>${value}</dd>`;
@@ -311,7 +329,15 @@ ${preview}
           body: `Good news: your listing is live at ${base}/listings/${encodeURIComponent(noteId)}`,
         }))}">Email the owner</a></p>`
         : '';
-      const note = noteKey ? `<p class="admin-note" role="status">${escapeHtml(NOTES[noteKey])}${link}</p>${ownerLine}${pingLine}` : '';
+      // After reject: the same reminder, so the owner hears back either way.
+      const rejectedEmail = noteKey === 'rejected' && noteId ? byId.get(noteId)?.fields?.ownerEmail : '';
+      const rejectLine = typeof rejectedEmail === 'string' && rejectedEmail.includes('@')
+        ? `<p class="hint">Let the owner know: <span class="owner-email">${escapeHtml(rejectedEmail)}</span> &middot; <a href="${escapeHtml(mailtoHref(rejectedEmail, {
+          subject: 'About your listing',
+          body: "Thanks for sending your listing. We couldn't publish it as it was sent. Reply to this email and we'll help you fix it.",
+        }))}">Email the owner</a></p>`
+        : '';
+      const note = noteKey ? `<p class="admin-note" role="status">${escapeHtml(NOTES[noteKey])}${link}</p>${ownerLine}${rejectLine}${pingLine}` : '';
 
       const body = `<section class="admin">
   ${adminNav()}
@@ -330,6 +356,7 @@ ${preview}
   router.get('/admin/quotes', async (req, res, next) => {
     try {
       const all = await ctx.store.collection('quotes').read();
+      const siteName = typeof ctx.config.siteName === 'string' && ctx.config.siteName.trim() ? ctx.config.siteName.trim() : DEFAULT_SITE_NAME;
       const quotes = (Array.isArray(all) ? all : [])
         .filter(q => q && typeof q === 'object')
         .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
@@ -349,12 +376,16 @@ ${preview}
           ? `<p>Business phone: ${businessPhone} &middot; Owner email (private): ${listing.ownerEmail ? escapeHtml(listing.ownerEmail) : 'none'}</p>\n  `
           : '';
         const handled = q.handled === true;
+        // Until email is set up, the admin forwards each open quote to the business by hand.
+        const forward = !handled && typeof listing?.ownerEmail === 'string' && listing.ownerEmail.includes('@')
+          ? `<p>Forward to the business: <span class="owner-email">${escapeHtml(listing.ownerEmail)}</span> &middot; <a href="${escapeHtml(forwardHref(listing.ownerEmail, q, siteName))}">Forward to the business</a></p>\n  `
+          : '';
         const action = handled
           ? `<p class="hint">Handled ${escapeHtml(adminTime(q.handledAt ?? ''))}</p>`
           : `<form method="POST" action="/admin/quotes/${encodeURIComponent(q.id ?? '')}/handled"><button type="submit" class="admin-button admin-button-secondary">Mark handled</button></form>`;
         return `<li class="pending-item">
   <h2>${target}</h2>
-  ${business}<p>Quote ${escapeHtml(q.id ?? '')} &middot; ${escapeHtml(adminTime(q.createdAt ?? ''))} &middot; Emailed: ${emailed}</p>
+  ${business}${forward}<p>Quote ${escapeHtml(q.id ?? '')} &middot; ${escapeHtml(adminTime(q.createdAt ?? ''))} &middot; Emailed: ${emailed}</p>
   <p>From: ${escapeHtml(q.name ?? '')} &middot; Contact: ${contactHtml(q.contact)}</p>
   <p class="quote-details">${escapeHtml(q.details ?? '')}</p>
   ${action}
@@ -489,7 +520,7 @@ ${preview}
       const result = await ctx.store.rejectDraft(entry.draftId);
       if (result.status === 404) return reply(req, res, { status: 404, json: { error: 'Draft not found' }, note: 'notfound' });
       if (result.status !== 200) return reply(req, res, { status: 409, json: { error: result.error ?? 'Cannot reject' }, note: 'failed' });
-      reply(req, res, { json: { ok: true }, note: 'rejected' });
+      reply(req, res, { json: { ok: true }, note: 'rejected', id: entry.id });
     } catch (err) {
       next(err);
     }

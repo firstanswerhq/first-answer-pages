@@ -4,7 +4,7 @@
  * "owner confirmation", never the word that names the old stamp.
  */
 
-import { layout, escapeHtml } from './html.js';
+import { layout, escapeHtml, formatStampDate } from './html.js';
 
 export const TAG_BEFORE = 'before owner confirmation';
 export const TAG_AFTER = 'after owner confirmation';
@@ -223,7 +223,7 @@ function runSection(run) {
 export function seanceReportPage(listing, runs, confirmedDate) {
   const { runs: tagged, groups } = buildHistory(runs, confirmedDate);
   const confirmed = confirmedDate
-    ? `<p>Owner-confirmed ${escapeHtml(confirmedDate)}.</p>`
+    ? `<p>Owner-confirmed ${escapeHtml(formatStampDate({ verifiedDate: confirmedDate }))}.</p>`
     : '<p>Not yet confirmed by the owner.</p>';
   let content;
   if (tagged.length === 0) {

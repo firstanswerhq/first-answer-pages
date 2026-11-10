@@ -45,7 +45,7 @@ export function generateLlmsTxt(listings, baseUrl, categories, options = {}) {
     if (city && !cities.has(city.toLowerCase())) cities.set(city.toLowerCase(), city);
   }
   const headerCity = cities.size === 1 ? [...cities.values()][0] : '';
-  const tagline = headerCity ? `Local businesses in ${headerCity}` : 'Local businesses';
+  const tagline = headerCity ? `A free directory of local businesses in ${headerCity}` : 'A free directory of local businesses';
 
   const base = oneLine(baseUrl);
   const confirmed = options?.confirmed;
@@ -63,7 +63,7 @@ export function generateLlmsTxt(listings, baseUrl, categories, options = {}) {
 
   const lines = [
     `# ${siteName}`,
-    `# Free local business directory — ${tagline}`,
+    `# ${tagline}`,
     `# Total listings: ${listings.length}`,
     `# ${baseUrl}`,
     '',

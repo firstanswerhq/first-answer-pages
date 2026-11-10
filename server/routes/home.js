@@ -19,6 +19,22 @@ function param(value) {
  * @param {{ store: object }} ctx
  * @returns {import('express').Router}
  */
+/**
+ * Empty-trade invite for owners. Plural labels read as they are ("No plumbers
+ * listed yet."); trade names get "businesses" ("No pressure washing businesses
+ * listed yet."); "Other" reads "No other businesses listed yet."
+ * @param {string} label category label, or '' for the whole directory
+ */
+export function emptyTradeText(label) {
+  const l = typeof label === 'string' ? label.trim().toLowerCase() : '';
+  let what;
+  if (l === '') what = 'businesses';
+  else if (l === 'other') what = 'other businesses';
+  else if (l.endsWith('s')) what = l;
+  else what = `${l} businesses`;
+  return `No ${what} listed yet. Own one?`;
+}
+
 export function createHomeRouter(ctx) {
   const router = Router();
   const { store } = ctx;
@@ -59,9 +75,8 @@ export function createHomeRouter(ctx) {
 
     let results;
     if (filtered.length === 0) {
-      const trade = categoryLabel ? categoryLabel.toLowerCase() : 'businesses';
       if (!city && (categoryLabel || !category)) {
-        results = `<p class="no-results">No ${escapeHtml(trade)} listed yet. Are you one? <a href="/rise">List your business free &rarr;</a></p>`;
+        results = `<p class="no-results">${escapeHtml(emptyTradeText(categoryLabel))} <a href="/rise">List it free &rarr;</a></p>`;
       } else {
         results = '<p class="no-results">No results found. Try a different category or city.</p>';
       }

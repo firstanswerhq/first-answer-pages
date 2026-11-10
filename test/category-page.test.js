@@ -189,7 +189,7 @@ test('Property: arbitrary city strings are escaped and the heading (when shown) 
         assert.ok(found.length <= 1);
         for (const t of found) assert.equal(t, expected);
         // Task 21.1: an empty trade with no city filter invites owners instead.
-        if (found.length === 0) assert.ok(html.includes('No results found') || html.includes('listed yet. Are you one?'));
+        if (found.length === 0) assert.ok(html.includes('No results found') || html.includes('listed yet. Own one?'));
       },
     ),
     { numRuns: 25 },
