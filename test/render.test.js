@@ -196,7 +196,8 @@ test('Property 26 (Listing_Page): body and JSON-LD escape every listing field an
 
         // Body only (no JSON-LD): full escaped-form assertions.
         const body = listingDetail(listing, undefined, { categories, verification }) + '\n' + quoteForm(listing);
-        const shown = [v.name, v.phone, v.description, ...v.services, v.serviceArea, v.hour, label];
+        // Hours are shown trimmed (filledHours), still escaped.
+        const shown = [v.name, v.phone, v.description, ...v.services, v.serviceArea, v.hour.trim(), label];
         // City and state are only rendered in the body when there is no street address.
         shown.push(...(v.address ? [v.address] : [v.city, v.state]));
         if (verification) shown.push(verification.verifiedDate, verification.hash);

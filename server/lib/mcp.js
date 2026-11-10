@@ -153,10 +153,13 @@ function searchListings(ctx, args) {
   // category, not just names, descriptions and services that contain the word.
   const queryCategory = query === undefined ? undefined : categoryForQuery(query, categories);
   if (queryCategory && (category === undefined || category === queryCategory)) {
-    const textIds = new Set(ctx.store.searchListings({ category, city, query }).map(l => l.id));
-    matches = ctx.store.searchListings({ category, city })
-      .filter(l => l.category === queryCategory || textIds.has(l.id))
-      .slice(0, SEARCH_LIMIT);
+    // Real text matches first (a plumber who lists "drain cleaning" beats a cleaner),
+    // then the rest of the named category.
+    const textMatches = ctx.store.searchListings({ category, city, query });
+    const textIds = new Set(textMatches.map(l => l.id));
+    const categoryOnly = ctx.store.searchListings({ category, city })
+      .filter(l => l.category === queryCategory && !textIds.has(l.id));
+    matches = [...textMatches, ...categoryOnly].slice(0, SEARCH_LIMIT);
   } else {
     matches = ctx.store.searchListings({ category, city, query, limit: SEARCH_LIMIT });
   }

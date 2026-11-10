@@ -37,7 +37,10 @@ export function createPagesRouter(ctx) {
   router.use((req, res, next) => {
     const send = res.send.bind(res);
     res.send = body => {
-      if (typeof body === 'string' && body.includes(CONTACT_MARKER)) {
+      // HTML only: JSON (API, MCP) passes through untouched, even if a listing contains the marker text.
+      const type = String(res.get('Content-Type') ?? '');
+      const isHtml = type.includes('html') || (!type && typeof body === 'string' && /^\s*<!doctype html/i.test(body));
+      if (typeof body === 'string' && isHtml && body.includes(CONTACT_MARKER)) {
         body = body.split(CONTACT_MARKER).join(footerContact);
       }
       return send(body);
