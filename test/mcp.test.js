@@ -689,3 +689,50 @@ test('request_quote success message is the new sentence with the listing phone',
   );
   assert.ok(!JSON.stringify(json).includes('will contact you'));
 });
+
+// ---- CORS preflight -------------------------------------------------------------
+
+const headerList = value => (value ?? '').split(',').map(s => s.trim().toLowerCase());
+
+test('OPTIONS /mcp returns 204 with an empty body and CORS headers', async () => {
+  const res = await fetch(main.base + '/mcp', { method: 'OPTIONS' });
+  assert.equal(res.status, 204);
+  assert.equal(await res.text(), '');
+  assert.equal(res.headers.get('access-control-allow-origin'), '*');
+  const allowHeaders = headerList(res.headers.get('access-control-allow-headers'));
+  for (const h of ['content-type', 'accept', 'mcp-session-id']) {
+    assert.ok(allowHeaders.includes(h), `missing allowed header ${h}`);
+  }
+  const methods = (res.headers.get('access-control-allow-methods') ?? '').split(',').map(s => s.trim().toUpperCase());
+  assert.ok(methods.includes('POST'));
+  assert.ok(methods.includes('OPTIONS'));
+});
+
+test('OPTIONS /mcp is not rate limited', async () => {
+  const clock = { t: Date.UTC(2025, 0, 15, 12, 0, 0), now() { return this.t; } };
+  const env = await makeEnv({ rateLimiter: createRateLimiter({ clock }), clock });
+  const ping = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'ping' });
+  for (let i = 0; i < 120; i++) {
+    assert.equal((await postRaw(env, ping)).res.status, 200);
+  }
+  const limited = await postRaw(env, ping);
+  assert.equal(limited.res.status, 429);
+  assert.equal(limited.res.headers.get('access-control-allow-origin'), '*');
+  const pre = await fetch(env.base + '/mcp', { method: 'OPTIONS' });
+  assert.equal(pre.status, 204);
+});
+
+test('POST success, 413 and GET 405 replies carry access-control-allow-origin *', async () => {
+  const ok = await postRaw(main, JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'ping' }));
+  assert.equal(ok.res.status, 200);
+  assert.equal(ok.res.headers.get('access-control-allow-origin'), '*');
+
+  const big = await postRaw(main, 'x'.repeat(70000));
+  assert.equal(big.res.status, 413);
+  assert.equal(big.res.headers.get('access-control-allow-origin'), '*');
+
+  const get405 = await fetch(main.base + '/mcp');
+  assert.equal(get405.status, 405);
+  assert.equal(get405.headers.get('allow'), 'POST');
+  assert.equal(get405.headers.get('access-control-allow-origin'), '*');
+});

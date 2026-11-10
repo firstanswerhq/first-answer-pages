@@ -401,3 +401,59 @@ h1 {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+/* Launch fixes 17.1: header link, small unconfirmed note, buttons */
+.site-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+}
+
+.site-nav a.nav-cta {
+  font-size: 0.95rem;
+  text-decoration: underline;
+}
+
+.stamp.stamp-unconfirmed {
+  display: block;
+  margin: 0.75rem 0;
+  padding: 0.4rem 0.75rem;
+  border: 1px dashed var(--color-divider);
+  color: var(--color-text);
+  transform: none;
+}
+
+.unconfirmed-note {
+  display: inline;
+  margin: 0 0.75rem 0 0;
+  font-size: 0.9rem;
+  font-style: italic;
+}
+
+.button,
+a.button {
+  display: inline-block;
+  margin: 0.25rem 0;
+  padding: 0.4rem 0.9rem;
+  border: 2px solid var(--color-text);
+  background: var(--color-text);
+  color: #fff8dc;
+  font-weight: bold;
+  text-decoration: none;
+}
+
+.button:hover,
+.button:focus {
+  background: #fff8dc;
+  color: var(--color-text);
+}
+
+.confirm-cta {
+  font-size: 0.95rem;
+}
+
+.seance-link {
+  margin: 0.5rem 0;
+}

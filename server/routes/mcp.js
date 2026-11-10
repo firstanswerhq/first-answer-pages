@@ -43,7 +43,23 @@ export function createMcpRouter(ctx) {
 
   const rawBody = express.raw({ type: () => true, limit: MAX_BODY_BYTES });
 
-  router.post('/mcp', rateLimit, rawBody, async (req, res) => {
+  function cors(req, res, next) {
+    res.set('Access-Control-Allow-Origin', '*');
+    next();
+  }
+
+  // Preflight: never rate limited, registered before the 405 catch-all.
+  router.options('/mcp', (req, res) => {
+    res.set({
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'content-type, accept, mcp-session-id',
+      'Access-Control-Max-Age': '86400',
+    });
+    res.status(204).end();
+  });
+
+  router.post('/mcp', cors, rateLimit, rawBody, async (req, res) => {
     try {
       const raw = Buffer.isBuffer(req.body) ? req.body.toString('utf8') : '';
       let message;
@@ -86,6 +102,7 @@ export function createMcpRouter(ctx) {
 
   router.all('/mcp', (req, res) => {
     res.set('Allow', 'POST');
+    res.set('Access-Control-Allow-Origin', '*');
     sendJson(res, 405, {
       jsonrpc: '2.0',
       id: null,

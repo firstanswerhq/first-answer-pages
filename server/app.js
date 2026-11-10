@@ -11,7 +11,7 @@ import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 import { createDataStore, getDefaultStore } from './data.js';
-import { configFromEnv } from './lib/config.js';
+import { configFromEnv, DEFAULT_SITE_NAME } from './lib/config.js';
 import { createRateLimiter } from './lib/rate-limiter.js';
 import { createVisionProvider } from './lib/vision.js';
 import { createNotifier } from './lib/notifier.js';
@@ -26,7 +26,7 @@ import { createMcpRouter }      from './routes/mcp.js';
 import { createSeanceRouter }   from './routes/seance.js';
 import { createAdminRouter }   from './routes/admin.js';
 import { mountA2A }             from './routes/a2a.js';
-import { layout, markDemo }     from './lib/html.js';
+import { layout, markDemo, applySiteName } from './lib/html.js';
 
 /** The only place in server/ that reads the system time. */
 const systemClock = Object.freeze({ now: () => Date.now() });
@@ -34,6 +34,7 @@ const systemClock = Object.freeze({ now: () => Date.now() });
 /**
  * @param {{
  *   dataDir?: string,
+ *   seedDir?: string,
  *   visionProvider?: object,
  *   notifier?: object,
  *   assistantProvider?: object,
@@ -50,9 +51,16 @@ export function createApp(deps = {}) {
 
   // No dataDir (and no custom clock): share the default store with the legacy
   // data.js exports so there is exactly one store loaded from the default dir.
-  const store = deps.dataDir || deps.clock
-    ? createDataStore({ dataDir: deps.dataDir ?? config.dataDir, clock })
+  // Tests that pass dataDir keep their seed files in that dir; the env-driven
+  // app reads seeds from the repo data/ folder and writes to DATA_DIR.
+  const seedDir = deps.seedDir ?? (deps.dataDir ? deps.dataDir : config.seedDir);
+  const store = deps.dataDir || deps.clock || deps.seedDir
+    ? createDataStore({ dataDir: deps.dataDir ?? config.dataDir, seedDir, clock })
     : getDefaultStore();
+
+  if (store.getCategories().length === 0) {
+    throw new Error('No categories found: refusing to start');
+  }
 
   // Retention on startup: fire-and-forget, never blocks or crashes startup.
   if (typeof store.pruneExpired === 'function') {
@@ -75,9 +83,40 @@ export function createApp(deps = {}) {
 
   const app = express();
 
+  // Don't advertise the framework; set baseline security headers on every
+  // response. Routes may override (e.g. draft pages use Referrer-Policy: no-referrer).
+  app.disable('x-powered-by');
+  app.use((req, res, next) => {
+    res.set({
+      'X-Content-Type-Options': 'nosniff',
+      'Referrer-Policy': 'strict-origin-when-cross-origin',
+      'Content-Security-Policy': "frame-ancestors 'none'",
+    });
+    next();
+  });
+
   // Hop count only; never `true` (it would trust any client-supplied X-Forwarded-For).
   if (Number.isInteger(config.trustProxy) && config.trustProxy >= 0) {
     app.set('trust proxy', config.trustProxy);
+  }
+
+  // SITE_NAME: swap the default site name in every HTML page. Installed
+  // before the DEMO_MODE wrapper so markDemo runs first, then this one.
+  // Only HTML string bodies are touched; JSON and plain text pass through.
+  if (typeof config.siteName === 'string' && config.siteName !== '' && config.siteName !== DEFAULT_SITE_NAME) {
+    app.use((req, res, next) => {
+      const send = res.send.bind(res);
+      res.send = body => {
+        if (typeof body === 'string') {
+          const type = String(res.get('Content-Type') ?? '');
+          if (type.includes('html') || (!type && /^\s*<!doctype html/i.test(body))) {
+            body = applySiteName(body, config.siteName);
+          }
+        }
+        return send(body);
+      };
+      next();
+    });
   }
 
   // DEMO_MODE: mark every HTML page (noindex meta + footer line) and send
@@ -98,6 +137,12 @@ export function createApp(deps = {}) {
       next();
     });
   }
+
+  // Liveness probe: no data access, no rate limit.
+  app.get('/healthz', (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.status(200).json({ ok: true });
+  });
 
   app.use(express.static(fileURLToPath(new URL('../public', import.meta.url))));
 
@@ -121,13 +166,30 @@ export function createApp(deps = {}) {
     }));
   });
 
-  // Generic 500 handler — no stack trace in the response
-  // eslint-disable-next-line no-unused-vars
+  // Generic error handler — honours 4xx/5xx err.status, never leaks message or stack
   app.use((err, req, res, next) => {
-    process.stderr.write(`[error] ${err.stack ?? err}\n`);
-    res.status(500).type('html').send(layout({
-      title: 'Something went wrong',
-      body: '<section class="message"><h1>Something went wrong</h1><p><a href="/">Back to the directory</a></p></section>',
+    if (res.headersSent) return next(err);
+
+    const raw = err?.status ?? err?.statusCode;
+    const status = Number.isInteger(raw) && raw >= 400 && raw <= 599 ? raw : 500;
+
+    // Status and error name only: message/stack may contain user data.
+    process.stderr.write(`[error] ${status} ${typeof err?.name === 'string' ? err.name : 'Error'}\n`);
+
+    let message;
+    if (status >= 500) message = 'Something went wrong';
+    else if (status === 400) message = 'Bad request';
+    else if (status === 404) message = 'Page not found';
+    else if (status === 413) message = 'Request too large';
+    else message = 'Request could not be processed';
+
+    if (req.path.startsWith('/api/') || req.path === '/mcp') {
+      return res.status(status).json({ error: message });
+    }
+
+    res.status(status).type('html').send(layout({
+      title: message,
+      body: `<section class="message"><h1>${message}</h1><p><a href="/">Back to the directory</a></p></section>`,
     }));
   });
 

@@ -468,74 +468,74 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
     - _Requirements: docs/launch-fixes.md section 15 (README fix)_
 
 - [ ] 16. Launch fixes: Deploy-ready on Render
-  - [ ] 16.1 Split read-only seed data from writable data
+  - [x] 16.1 Split read-only seed data from writable data
     - Read `listings.json` and `categories.json` from the repo `data/` folder; write only `drafts`, `pending`, `published`, `quotes`, `seance`, and `verified` files to `DATA_DIR` (update `createDataStore` and `configFromEnv`)
     - Refuse to start when there are 0 categories; in production, refuse to start when `DATA_DIR` or `BASE_URL` is missing (clear one-line error, exit code 1 from `server/index.js`)
     - Files: `server/data.js`, `server/lib/config.js`, `server/index.js`, `render.yaml`
     - _Requirements: docs/launch-fixes.md section 16 (data folders and startup checks)_
 
-  - [ ] 16.2 Add `GET /healthz`
+  - [x] 16.2 Add `GET /healthz`
     - Return `{ ok: true }` with 200, no data access, no rate limit
     - Files: `server/app.js`
     - _Requirements: docs/launch-fixes.md section 16 (healthz)_
 
-  - [ ] 16.3 Set engines and start script
+  - [x] 16.3 Set engines and start script
     - Add `"engines": { "node": "22.x" }` to `package.json`; make sure `npm start` runs `node server/index.js`
     - Files: `package.json`
     - _Requirements: docs/launch-fixes.md section 16 (engines and start)_
 
-  - [ ] 16.4 Fix the error handler
+  - [x] 16.4 Fix the error handler
     - Respect `err.status` (for example 400 for a malformed URL id from `decodeURIComponent` failures); unknown errors give 500 with a plain message; never send a stack trace and never include `err.message` for 5xx
     - Files: `server/app.js`
     - _Requirements: docs/launch-fixes.md section 16 (error handler)_
 
-  - [ ] 16.5 Turn off `x-powered-by` and add security headers
+  - [x] 16.5 Turn off `x-powered-by` and add security headers
     - `app.disable('x-powered-by')`; middleware sets `X-Content-Type-Options: nosniff`, `Referrer-Policy` (for example `strict-origin-when-cross-origin`), and `Content-Security-Policy: frame-ancestors 'none'`; keep the stricter `no-referrer` on draft pages
     - Files: `server/app.js`
     - _Requirements: docs/launch-fixes.md section 16 (headers)_
 
-  - [ ] 16.6 Answer `OPTIONS /mcp`
+  - [x] 16.6 Answer `OPTIONS /mcp`
     - Return 204 with `Access-Control-Allow-Origin: *` and `Access-Control-Allow-Headers` allowing `content-type`, `accept`, and `mcp-session-id`; also allow `POST, OPTIONS`; add `Access-Control-Allow-Origin: *` to POST /mcp replies
     - Files: `server/routes/mcp.js`
     - _Requirements: docs/launch-fixes.md section 16 (CORS preflight)_
 
-  - [ ] 16.7 Remove hard-coded `localhost` from the Rise curl example
+  - [x] 16.7 Remove hard-coded `localhost` from the Rise curl example
     - In `server/lib/rise-html.js`, build the curl example from `BASE_URL` (passed through `ctx.config`), escaped
     - Files: `server/lib/rise-html.js`, `server/routes/rise.js`
     - _Requirements: docs/launch-fixes.md section 16 (curl example)_
 
-  - [ ] 16.8 Add `SITE_NAME`
+  - [x] 16.8 Add `SITE_NAME`
     - Add `siteName` to `server/lib/config.js` (default "First Answer Pages") and use it everywhere the site name shows: `layout()` header and title, footer, llms.txt header, sitemap-adjacent text, Rise and Séance pages, JSON-LD publisher fields if any, MCP `serverInfo` title (keep `serverInfo.name` `first-answer-pages`)
     - Files: `server/lib/config.js`, `server/lib/html.js`, `server/lib/llms.js`, `server/lib/rise-html.js`, `server/lib/seance-html.js`, `server/lib/mcp.js`, `server/lib/schema.js`, `server/app.js`
     - _Requirements: docs/launch-fixes.md section 16 (SITE_NAME)_
 
-  - [ ] 16.9 Write tests for data folders and startup checks
+  - [x] 16.9 Write tests for data folders and startup checks
     - New file `test/data-dir.test.js`
     - Examples: seed files are read from repo `data/` even when `DATA_DIR` points elsewhere; writable files appear only in `DATA_DIR`; `listings.json` and `categories.json` are never written; 0 categories refuses to start; production without `DATA_DIR` or without `BASE_URL` refuses to start; non-production starts without them
     - **Property: After any sequence of app actions, the only files in DATA_DIR are the allow-listed writable files** (fast-check over action sequences)
     - Files: `test/data-dir.test.js`
     - _Requirements: docs/launch-fixes.md section 16 (data folders and startup checks)_
 
-  - [ ] 16.10 Write tests for healthz, engines, and start script
+  - [x] 16.10 Write tests for healthz, engines, and start script
     - New file `test/healthz.test.js`
     - Examples: `GET /healthz` returns 200 `{ ok: true }`; `package.json` has `engines.node` `22.x` and `scripts.start` `node server/index.js`
     - Files: `test/healthz.test.js`
     - _Requirements: docs/launch-fixes.md section 16 (healthz, engines and start)_
 
-  - [ ] 16.11 Write tests for errors and headers
+  - [x] 16.11 Write tests for errors and headers
     - New file `test/errors-headers.test.js`
     - **Property: Malformed ids never produce a 500 or a stack trace** (fast-check over arbitrary strings, including invalid percent-encoding such as `%E0%A4%A`; status is below 500 or a plain 500 body with no `at ` stack lines)
     - Examples: malformed id returns 400; thrown errors with `err.status` keep it; 5xx bodies contain no stack or file paths; no `X-Powered-By`; `nosniff`, referrer policy, and `frame-ancestors 'none'` present on HTML, JSON, and error responses
     - Files: `test/errors-headers.test.js`
     - _Requirements: docs/launch-fixes.md section 16 (error handler, headers)_
 
-  - [ ] 16.12 Write tests for the MCP preflight and curl example
+  - [-] 16.12 Write tests for the MCP preflight and curl example
     - Extend `test/mcp.test.js` and `test/rise.test.js`
     - Examples: `OPTIONS /mcp` returns 204 with `Access-Control-Allow-Origin: *` and allowed headers containing `content-type`, `accept`, `mcp-session-id`; `/rise` HTML shows `BASE_URL` in the curl example and the string `localhost` appears nowhere in `server/lib/rise-html.js`
     - Files: `test/mcp.test.js`, `test/rise.test.js`
     - _Requirements: docs/launch-fixes.md section 16 (CORS preflight, curl example)_
 
-  - [ ] 16.13 Write tests for `SITE_NAME`
+  - [x] 16.13 Write tests for `SITE_NAME`
     - New file `test/site-name.test.js`
     - **Property: A custom SITE_NAME appears in the header, title, and llms.txt and the default name appears nowhere** (fast-check over safe generated names, escaped in HTML)
     - Example: default is "First Answer Pages"
@@ -546,14 +546,14 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
     - Run `node --test`; all tests for tasks 13 to 16 and all pre-existing tests must pass. Ask the user if questions arise.
 
 - [ ] 17. Launch fixes: Owner-friendly wording and flow
-  - [ ] 17.1 Header link, unconfirmed note, and Séance link
+  - [-] 17.1 Header link, unconfirmed note, and Séance link
     - Add a header link "List your business free" pointing to `/rise` in `layout()`
     - On every unconfirmed listing, replace the large "NOT YET CONFIRMED BY THE OWNER" box with a smaller note plus a button "Is this your business? Confirm it free →" linking to `/rise`
     - Add a link "See what AI says about this business" to the listing's Séance report (`/seance/:id`)
     - Files: `server/lib/html.js`, `public/css/style.css`
     - _Requirements: docs/launch-fixes.md section 17 (header, unconfirmed note, Séance link)_
 
-  - [ ] 17.2 Simplify the `/rise` page
+  - [-] 17.2 Simplify the `/rise` page
     - One big "Take or choose a photo" button; hide the base64 text box under an "Advanced" disclosure (`<details>`); say "5 MB", not "5 MiB"; say "a business card, flyer, sign or storefront"
     - Page still works without JavaScript
     - Files: `server/lib/rise-html.js`, `public/js/rise.js`, `public/css/style.css`
@@ -573,7 +573,7 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
     - Files: `server/lib/html.js`, `server/data.js`, `server/lib/verifier.js`, `test/verify.test.js`, `test/render.test.js`
     - _Requirements: docs/launch-fixes.md section 17 (Owner-confirmed stamp)_
 
-  - [ ] 17.5 Séance report wording
+  - [-] 17.5 Séance report wording
     - Make the result the headline: "AI named this business" in green, or "AI didn't name this business yet" in amber
     - Hide the word "mock" (the "Demo answer (no AI connected)" label stays)
     - Use the name Séance with its accent in headings; show times in local time (America/Chicago)

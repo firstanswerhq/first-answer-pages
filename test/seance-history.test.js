@@ -374,7 +374,7 @@ test('HTML shows readable UTC times while the JSON keeps the raw ISO timestamp',
   await history.append(makeRun(id, { timestamp: '2026-11-10T05:05:00.000Z' }));
 
   const html = await (await fetch(`${env.base}/seance/${id}`)).text();
-  assert.ok(html.includes('<time datetime="2026-11-10T05:05:00.000Z">Nov 10, 2026, 5:05 AM UTC</time>'));
+  assert.ok(html.includes('<time datetime="2026-11-10T05:05:00.000Z">Nov 9, 2026, 11:05 PM CST</time>'));
   const json = await (await fetch(`${env.base}/api/seance/${id}`)).json();
   assert.equal(json.runs[0].timestamp, '2026-11-10T05:05:00.000Z');
 });
@@ -387,6 +387,7 @@ test('a mock-provider run is labeled as a demo answer in HTML and demo:true in J
 
   const html = await (await fetch(`${env.base}/seance/${id}`)).text();
   assert.ok(html.includes('Demo answer (no AI connected)'));
+  assert.ok(!/mock/i.test(html), 'the word mock is not shown');
   const json = await (await fetch(`${env.base}/api/seance/${id}`)).json();
   assert.equal(json.runs[0].demo, true);
   assert.equal(json.runs[0].provider, 'mock');
@@ -407,11 +408,12 @@ test('a real-provider run gets no demo label and demo:false', async () => {
   assert.equal(json.runs[0].demo, false);
 });
 
-test('formatRunTime builds a readable UTC string', () => {
-  assert.equal(formatRunTime('2026-11-10T05:05:00.000Z'), 'Nov 10, 2026, 5:05 AM UTC');
-  assert.equal(formatRunTime('2025-01-15T00:00:00.000Z'), 'Jan 15, 2025, 12:00 AM UTC');
-  assert.equal(formatRunTime('2025-01-15T12:00:00.000Z'), 'Jan 15, 2025, 12:00 PM UTC');
-  assert.equal(formatRunTime('2025-01-15T23:59:00.000Z'), 'Jan 15, 2025, 11:59 PM UTC');
+test('formatRunTime builds a readable Central time string', () => {
+  assert.equal(formatRunTime('2026-11-10T05:05:00.000Z'), 'Nov 9, 2026, 11:05 PM CST');
+  assert.equal(formatRunTime('2025-01-15T00:00:00.000Z'), 'Jan 14, 2025, 6:00 PM CST');
+  assert.equal(formatRunTime('2025-01-15T12:00:00.000Z'), 'Jan 15, 2025, 6:00 AM CST');
+  assert.equal(formatRunTime('2025-01-15T23:59:00.000Z'), 'Jan 15, 2025, 5:59 PM CST');
+  assert.equal(formatRunTime('2025-07-01T12:00:00.000Z'), 'Jul 1, 2025, 7:00 AM CDT');
   assert.ok(!/[\u202f\u00a0]/.test(formatRunTime('2026-11-10T05:05:00.000Z')));
 });
 

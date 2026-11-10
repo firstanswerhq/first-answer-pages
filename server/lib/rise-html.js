@@ -26,22 +26,34 @@ const FIELD_LABELS = Object.freeze({
 
 export const DEMO_BANNER_TEXT = 'Demo: no photo reader is connected, so this is a sample business, not your photo.';
 
-/** Page for the upload form: GET /rise. */
-export function uploadPage() {
+/**
+ * Page for the upload form: GET /rise.
+ * @param {{ baseUrl?: string }} [opts] public site URL used in the curl example
+ */
+export function uploadPage({ baseUrl } = {}) {
+  const site = typeof baseUrl === 'string' && baseUrl.trim() !== ''
+    ? baseUrl.trim().replace(/\/+$/, '')
+    : 'https://YOUR-SITE';
+  const riseUrl = escapeHtml(`${site}/rise`);
   const body = `<section class="rise">
   <h1>Rise from the Grave</h1>
-  <p class="tagline">Have an old printed ad? Send us a photo and we will read it into a draft listing.</p>
+  <p class="tagline">Send a photo of a business card, flyer, sign or storefront. We will read it into a draft listing.</p>
   <p>You get to look over and fix every field before anything is published. The photo is read once and is not saved.</p>
   <form id="rise-form" class="rise-form" method="POST" action="/rise" enctype="application/x-www-form-urlencoded">
-    <label for="imageBase64">Image as base64 text</label>
-    <textarea id="imageBase64" name="imageBase64" rows="8" required></textarea>
-    <p class="hint">Pictures can be JPEG, PNG, or WebP, up to 5 MiB.</p>
-    <button type="submit">Read my ad</button>
+    <label for="imageFile" class="big-button">Take or choose a photo</label>
+    <input type="file" id="imageFile" class="visually-hidden-file" accept="image/jpeg,image/png,image/webp" capture="environment">
+    <p class="hint">JPEG, PNG, or WebP, up to 5 MB.</p>
     <p id="rise-status" class="hint" role="status"></p>
+    <details class="advanced">
+      <summary>Advanced</summary>
+      <label for="imageBase64">Image as text (base64)</label>
+      <textarea id="imageBase64" name="imageBase64" rows="8"></textarea>
+      <button type="submit">Send image text</button>
+    </details>
   </form>
   <noscript>
-    <p class="hint">Picking a file needs JavaScript. Without it, paste the image as base64 text above, or send the file with curl:</p>
-    <pre>curl --data-binary @ad.jpg -H "Content-Type: image/jpeg" -i http://localhost:3000/rise</pre>
+    <p class="hint">Picking a photo needs JavaScript. Without it, open Advanced above and paste the image as base64 text, or send the file with curl:</p>
+    <pre>curl --data-binary @ad.jpg -H "Content-Type: image/jpeg" -i ${riseUrl}</pre>
   </noscript>
 </section>`;
   return layout({ title: 'Rise from the Grave: First Answer Pages', body, scripts: ['/js/rise.js'] });

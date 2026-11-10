@@ -1,8 +1,10 @@
 /**
  * data.js — data store
  *
- * createDataStore({ dataDir, fs, clock, validateFields, makeSlug }) builds a store
- * synchronously from JSON files in dataDir. Reads are served from an immutable
+ * createDataStore({ dataDir, seedDir, fs, clock, validateFields, makeSlug }) builds a
+ * store synchronously from JSON files. listings.json and categories.json are
+ * read-only seeds read from seedDir (defaults to dataDir); every other file
+ * (drafts, pending, published, quotes, seance, verified) lives in dataDir. Reads are served from an immutable
  * in-memory snapshot. Writes go only through updateJsonFile (json-file.js) and
  * only after the file rename succeeds is the snapshot swapped.
  *
@@ -98,13 +100,17 @@ const defaultClock = { now: () => new Date() };
  * @param {{ dataDir: string, fs?: object, clock?: { now(): Date|number },
  *           validateFields?: Function, makeSlug?: Function }} options
  */
-export function createDataStore({ dataDir, fs, clock = defaultClock, validateFields, makeSlug } = {}) {
+export function createDataStore({ dataDir, seedDir, fs, clock = defaultClock, validateFields, makeSlug } = {}) {
   if (typeof dataDir !== 'string' || dataDir === '') {
     throw new TypeError('createDataStore requires a dataDir');
   }
+  // Read-only seed files (listings.json, categories.json) come from seedDir,
+  // which defaults to dataDir. Everything writable lives in dataDir.
+  const seedRoot = typeof seedDir === 'string' && seedDir !== '' ? seedDir : dataDir;
   const fsImpl = fs ?? nodeFs;
   const io = fs ? { fs } : {}; // undefined -> json-file.js default
   const file = name => path.join(dataDir, name);
+  const seedFile = name => path.join(seedRoot, name);
 
   // ---- synchronous load -------------------------------------------------
   let seed;
@@ -112,8 +118,8 @@ export function createDataStore({ dataDir, fs, clock = defaultClock, validateFie
   let state;
 
   function load() {
-    seed = withoutComments(expectArray(loadSync(fsImpl, file('listings.json'), []), 'listings.json'));
-    categories = Object.freeze(expectArray(loadSync(fsImpl, file('categories.json'), []), 'categories.json'));
+    seed = withoutComments(expectArray(loadSync(fsImpl, seedFile('listings.json'), []), 'listings.json'));
+    categories = Object.freeze(expectArray(loadSync(fsImpl, seedFile('categories.json'), []), 'categories.json'));
     const published = withoutComments(
       expectArray(loadSync(fsImpl, file('published.json'), []), 'published.json'),
     );
@@ -479,8 +485,8 @@ let defaultStore;
 export function getDefaultStore() {
   if (!defaultStore) {
     try {
-      const { dataDir } = configFromEnv(process.env, { warn: () => {} });
-      defaultStore = createDataStore({ dataDir });
+      const { dataDir, seedDir } = configFromEnv(process.env, { warn: () => {} });
+      defaultStore = createDataStore({ dataDir, seedDir });
     } catch (err) {
       process.stderr.write(`[data] Failed to load data files: ${err.message}\n`);
       process.exit(1);

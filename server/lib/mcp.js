@@ -14,6 +14,7 @@ import {
 import { submitQuote } from './quotes.js';
 import { verificationFor } from './verifier.js';
 import { publicListing } from './public-listing.js';
+import { DEFAULT_SITE_NAME } from './config.js';
 
 export const SUPPORTED_PROTOCOL_VERSIONS = Object.freeze(['2025-06-18', '2025-03-26', '2024-11-05']);
 export const SERVER_INFO = Object.freeze({ name: 'first-answer-pages', version: '0.1.0' });
@@ -198,7 +199,7 @@ export async function handleRpc(ctx, message, clientIp) {
         return rpcResult(id, {
           protocolVersion,
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { ...SERVER_INFO },
+          serverInfo: { ...SERVER_INFO, title: ctx?.config?.siteName || DEFAULT_SITE_NAME },
         });
       }
       case 'ping':

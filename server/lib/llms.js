@@ -5,6 +5,7 @@
  */
 
 import { getCategories } from '../data.js';
+import { DEFAULT_SITE_NAME } from './config.js';
 
 /** Forces a value onto one line: line breaks and control characters become one space. */
 function oneLine(value) {
@@ -20,9 +21,11 @@ function oneLine(value) {
  * @param {object[]} listings
  * @param {string} baseUrl  e.g. "https://firstanswerpages.com"
  * @param {object[]} [categories]  defaults to the default store's categories
+ * @param {{ siteName?: string }} [options]  siteName defaults to "First Answer Pages"
  * @returns {string}
  */
-export function generateLlmsTxt(listings, baseUrl, categories) {
+export function generateLlmsTxt(listings, baseUrl, categories, options = {}) {
+  const siteName = oneLine(options?.siteName ?? DEFAULT_SITE_NAME) || DEFAULT_SITE_NAME;
   const categoryList = Array.isArray(categories) ? categories : getCategories();
   const labels = new Map(categoryList.map(c => [c.slug, c.label]));
 
@@ -35,7 +38,7 @@ export function generateLlmsTxt(listings, baseUrl, categories) {
   }
 
   const lines = [
-    '# First Answer Pages',
+    `# ${siteName}`,
     '# Free local business directory — Nashville, TN',
     `# Total listings: ${listings.length}`,
     `# ${baseUrl}`,

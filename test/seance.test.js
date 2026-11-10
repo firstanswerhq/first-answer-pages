@@ -214,6 +214,7 @@ test('seanceReportPage labels mock runs as a demo answer and real providers not'
   });
   const mockPage = seanceReportPage(listing, [makeRun('mock')], '2026-11-01');
   assert.ok(mockPage.includes('Demo answer (no AI connected)'));
+  assert.ok(!/mock/i.test(mockPage), 'the word mock is not shown');
   assert.equal(DEMO_LABEL, 'Demo answer (no AI connected)');
 
   const realPage = seanceReportPage(listing, [makeRun('openai')], '2026-11-01');

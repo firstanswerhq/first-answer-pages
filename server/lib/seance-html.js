@@ -16,17 +16,22 @@ const isDemo = providerName => providerName === 'mock';
 const demoSpan = providerName =>
   isDemo(providerName) ? ` <span class="seance-demo">${DEMO_LABEL}</span>` : '';
 
+/** Provider name as shown to people: the mock provider reads as "demo". */
+export const providerLabel = name => (name === 'mock' ? 'demo' : name);
+
 const TIME_FORMAT = new Intl.DateTimeFormat('en-US', {
-  timeZone: 'UTC',
+  timeZone: 'America/Chicago',
   year: 'numeric',
   month: 'short',
   day: 'numeric',
   hour: 'numeric',
   minute: '2-digit',
+  hour12: true,
+  timeZoneName: 'short',
 });
 
 /**
- * Readable UTC time, e.g. 'Nov 10, 2026, 5:05 AM UTC'.
+ * Readable Central time, e.g. 'Nov 9, 2026, 11:05 PM CST'.
  * Invalid input is returned unchanged (the caller escapes it).
  * @param {string} isoString
  * @returns {string}
@@ -38,7 +43,7 @@ export function formatRunTime(isoString) {
     const p = {};
     for (const part of TIME_FORMAT.formatToParts(date)) p[part.type] = part.value;
     const period = String(p.dayPeriod ?? '').replace(/[\u202f\u00a0]/g, ' ').trim();
-    return `${p.month} ${p.day}, ${p.year}, ${p.hour}:${p.minute} ${period} UTC`;
+    return `${p.month} ${p.day}, ${p.year}, ${p.hour}:${p.minute} ${period} ${p.timeZoneName}`;
   } catch {
     return isoString;
   }
@@ -136,7 +141,7 @@ function groupSection(g) {
     <p>${escapeHtml(change)}</p>`;
   }
   return `<section class="seance-group">
-    <h3>${escapeHtml(g.provider)}: &ldquo;${escapeHtml(g.prompt)}&rdquo;${demoSpan(g.provider)}</h3>
+    <h3>${escapeHtml(providerLabel(g.provider))}: &ldquo;${escapeHtml(g.prompt)}&rdquo;${demoSpan(g.provider)}</h3>
     <p>${escapeHtml(String(g.runCount))} run${g.runCount === 1 ? '' : 's'}.</p>
     ${summary}
   </section>`;
@@ -148,7 +153,7 @@ function runSection(run) {
     : '';
   return `<article class="seance-run">
     <h3>${timeEl(run.timestamp)}${tag}${demoSpan(run.provider)}</h3>
-    <p class="seance-meta">${escapeHtml(run.provider)} &middot; ${escapeHtml(run.prompt)} &middot; ${escapeHtml(yesNo(run.named))}</p>
+    <p class="seance-meta">${escapeHtml(providerLabel(run.provider))} &middot; ${escapeHtml(run.prompt)} &middot; ${escapeHtml(yesNo(run.named))}</p>
     <blockquote class="seance-answer">${escapeHtml(run.answer)}</blockquote>
   </article>`;
 }
@@ -169,17 +174,22 @@ export function seanceReportPage(listing, runs, confirmedDate) {
   if (tagged.length === 0) {
     content = '<p>No runs have been recorded yet.</p>';
   } else {
-    content = `<h2>Before and after</h2>
+    const latest = tagged[tagged.length - 1];
+    const headline = latest.named
+      ? `<p class="seance-result seance-named">${escapeHtml('AI named this business')}</p>`
+      : `<p class="seance-result seance-not-named">${escapeHtml("AI didn't name this business yet")}</p>`;
+    content = `${headline}
+  <h2>Before and after</h2>
   ${groups.map(groupSection).join('\n  ')}
   <h2>All runs, oldest first</h2>
   ${tagged.map(runSection).join('\n  ')}`;
   }
   const body = `<section class="seance">
-  <h1>Seance report: ${escapeHtml(listing.name)}</h1>
+  <h1>Séance report: ${escapeHtml(listing.name)}</h1>
   <p>We ask an AI assistant a plain question about this business&rsquo;s category and city, then record whether the answer names the business.</p>
   ${confirmed}
   ${content}
   <p><a href="/listings/${encodeURIComponent(listing.id)}">Back to the listing</a></p>
 </section>`;
-  return layout({ title: `Seance report: ${listing.name}`, body });
+  return layout({ title: `Séance report: ${listing.name}`, body });
 }

@@ -122,7 +122,7 @@ after(async () => {
 
 const get = (env, p, headers = {}) => fetch(env.base + p, { redirect: 'manual', headers });
 
-const bearer = token => (token === undefined ? {} : { authorization: `Bearer ${token}` });
+const bearer = token => (token == null ? {} : { authorization: `Bearer ${token}` });
 
 const adminPost = (env, p, token = TOKEN) =>
   fetch(env.base + p, { method: 'POST', redirect: 'manual', headers: bearer(token) });
@@ -376,7 +376,7 @@ test('401 with WWW-Authenticate for a missing or wrong token, and nothing change
     token => unpublish(env, SEED_ID, token),
   ];
   for (const attempt of attempts) {
-    for (const token of [undefined, 'wrong-token']) {
+    for (const token of [null, 'wrong-token']) {
       const res = await attempt(token);
       assert.equal(res.status, 401);
       assert.equal(res.headers.get('www-authenticate'), 'Bearer');
@@ -395,7 +395,7 @@ test('401 with WWW-Authenticate for a missing or wrong token, and nothing change
 test('403 on every admin route when no token is configured', async () => {
   const env = await makeEnv({ adminToken: undefined, drafts: [draftEntry(1, { status: 'pending' })], pending: [pendingQueueEntry(1)] });
 
-  for (const token of [undefined, TOKEN]) {
+  for (const token of [null, TOKEN]) {
     assert.equal((await get(env, '/admin/pending', bearer(token))).status, 403);
     assert.equal((await approve(env, 1, token)).status, 403);
     assert.equal((await reject(env, 1, token)).status, 403);

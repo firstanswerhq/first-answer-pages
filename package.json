@@ -5,6 +5,9 @@
   "license": "MIT",
   "type": "module",
   "main": "server/index.js",
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "start": "node server/index.js",
     "test": "node --test"

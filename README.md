@@ -132,8 +132,9 @@ All are optional. With none set, the app runs on port 3000 with mock providers a
 | --- | --- | --- |
 | `PORT` | `3000` | Port to listen on. |
 | `BASE_URL` | `http://localhost:3000` | Public site address used in `/llms.txt` and `/sitemap.xml`. A trailing slash is removed. |
-| `DATA_DIR` | repo `data/` folder | Folder the app reads data from and writes its files to. |
+| `DATA_DIR` | repo `data/` folder | Folder the app writes its files to (drafts, pending, published, verified, quotes, Seance history). Required when `NODE_ENV=production`. The seed files `listings.json` and `categories.json` are always read from the repo `data/` folder when `DATA_DIR` is set. |
 | `NODE_ENV` | unset | `production` changes defaults: trust proxy is `1`, `DEMO_MODE` is off, seed sample listings are left out of `/sitemap.xml` and `/llms.txt`, and photo listing (Rise from the Grave) returns 503 "coming soon" when no vision key is set. |
+| `SITE_NAME` | `First Answer Pages` | The name shown in page headers, page titles, the footer, `/llms.txt`, and the MCP server title. One line, up to 80 characters. |
 | `DEMO_MODE` | `true` unless `NODE_ENV=production` | When on, every page has the `noindex` meta tag and a "Sample listings for demonstration" footer line. |
 | `TRUST_PROXY` | `1` when `NODE_ENV=production`, otherwise unset | Only a whole-number proxy hop count is accepted, for example `1` for Render. `true`, `false`, and subnet lists are ignored with a warning. Set this behind a reverse proxy. Without it every client shares one rate-limit bucket, because they all appear to come from the proxy address. |
 | `ADMIN_TOKEN` | unset | Bearer token for `/admin/*` and `POST /seance/run`. `SEANCE_ADMIN_TOKEN` still works as a fallback name. The admin routes return 403 when no token is set. 10 wrong attempts per hour per client are allowed. |
@@ -196,6 +197,7 @@ The seed data is fictional. The businesses, names, and phone numbers are made up
 Super Pages is the one place the web layer writes files. It writes only these, inside `DATA_DIR`, using a safe write (temp file, then rename):
 
 - `drafts.json` drafts from Rise from the Grave
+- `pending.json` drafts waiting for review
 - `published.json` listings confirmed through Rise from the Grave
 - `verified.json` the Owner-confirmed date for each confirmed listing
 - `quotes.json` quote requests

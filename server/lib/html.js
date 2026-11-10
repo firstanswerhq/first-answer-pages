@@ -3,6 +3,7 @@
  */
 
 import { getCategories } from '../data.js';
+import { DEFAULT_SITE_NAME } from './config.js';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -20,6 +21,19 @@ export function escapeHtml(value) {
 function categoryLabel(slug, categories) {
   const list = Array.isArray(categories) ? categories : getCategories();
   return list.find(c => c.slug === slug)?.label ?? slug;
+}
+
+/**
+ * Replaces every occurrence of the default site name in a finished HTML
+ * string with the escaped custom name. Uses split/join so `$` in the name
+ * is literal. Returns the input unchanged for the default (or empty) name.
+ * @param {string} html
+ * @param {string} siteName
+ * @returns {string}
+ */
+export function applySiteName(html, siteName) {
+  if (typeof siteName !== 'string' || siteName === '' || siteName === DEFAULT_SITE_NAME) return html;
+  return html.split(DEFAULT_SITE_NAME).join(escapeHtml(siteName));
 }
 
 export const DEMO_FOOTER_TEXT = 'Sample listings for demonstration';
@@ -55,12 +69,13 @@ export function markDemo(html) {
  *   `demo` (default false) adds the noindex meta and the sample-listings footer line.
  * @returns {string}
  */
-export function layout({ title, body, jsonLd, scripts, demo = false }) {
-  const page = renderLayout({ title, body, jsonLd, scripts });
+export function layout({ title, body, jsonLd, scripts, demo = false, siteName = DEFAULT_SITE_NAME }) {
+  const page = renderLayout({ title, body, jsonLd, scripts, siteName });
   return demo ? markDemo(page) : page;
 }
 
-function renderLayout({ title, body, jsonLd, scripts }) {
+function renderLayout({ title, body, jsonLd, scripts, siteName }) {
+  const name = escapeHtml(siteName);
   const scriptTags = Array.isArray(scripts) && scripts.length > 0
     ? '\n' + scripts.map(src => `  <script type="module" src="${escapeHtml(src)}"></script>`).join('\n')
     : '';
@@ -80,13 +95,14 @@ function renderLayout({ title, body, jsonLd, scripts }) {
 </head>
 <body>
   <nav class="site-nav">
-    <a href="/">First Answer Pages</a>
+    <a href="/">${name}</a>
+    <a class="nav-cta" href="/rise">List your business free</a>
   </nav>
   <main>
 ${body}
   </main>
   <footer class="site-footer">
-    <p>First Answer Pages. A free local business directory.</p>
+    <p>${name}. A free local business directory.</p>
   </footer>
 </body>
 </html>
@@ -144,7 +160,7 @@ export function quoteForm(listing) {
  */
 function stamp(verification, id) {
   if (!verification || !verification.verifiedDate || !verification.hash) {
-    return '<aside class="stamp stamp-unconfirmed"><p class="stamp-title">Not yet confirmed by the owner</p></aside>';
+    return '<aside class="stamp stamp-unconfirmed"><p class="unconfirmed-note">Not yet confirmed by the owner.</p> <a class="button confirm-cta" href="/rise">Is this your business? Confirm it free →</a></aside>';
   }
   const date = escapeHtml(verification.verifiedDate);
   const hash = escapeHtml(verification.hash);
@@ -202,7 +218,8 @@ export function listingDetail(listing, jsonLd, opts = {}) {
   return `${ld}  <article class="listing-detail">
     <p><a href="/">← Back to directory</a></p>
     <h1>${escapeHtml(listing.name)}</h1>
-    <p>${escapeHtml(listing.description)}</p>${stampBlock}
+    <p>${escapeHtml(listing.description)}</p>
+    <p class="seance-link"><a href="/seance/${encodeURIComponent(listing.id)}">See what AI says about this business</a></p>${stampBlock}
     <dl>
     <dt>Category</dt>
     <dd>${escapeHtml(categoryLabel(listing.category, categories))}</dd>

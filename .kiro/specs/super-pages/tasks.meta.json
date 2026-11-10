@@ -876,6 +876,188 @@
         "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
         "timestamp": 1794332485159
       }
+    ],
+    "16.1 Split read-only seed data from writable data": [
+      {
+        "executionId": "efa56e12-5480-497e-b867-6b49d1493537",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794333589919
+      },
+      {
+        "executionId": "efa56e12-5480-497e-b867-6b49d1493537",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794333669746
+      }
+    ],
+    "16.3 Set engines and start script": [
+      {
+        "executionId": "efa56e12-5480-497e-b867-6b49d1493537",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794333590526
+      },
+      {
+        "executionId": "efa56e12-5480-497e-b867-6b49d1493537",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794333671952
+      }
+    ],
+    "16.6 Answer `OPTIONS /mcp`": [
+      {
+        "executionId": "efa56e12-5480-497e-b867-6b49d1493537",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794333592160
+      },
+      {
+        "executionId": "efa56e12-5480-497e-b867-6b49d1493537",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794333673683
+      }
+    ],
+    "16.7 Remove hard-coded `localhost` from the Rise curl example": [
+      {
+        "executionId": "efa56e12-5480-497e-b867-6b49d1493537",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794333592690
+      },
+      {
+        "executionId": "efa56e12-5480-497e-b867-6b49d1493537",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794333676098
+      }
+    ],
+    "16.2 Add `GET /healthz`": [
+      {
+        "executionId": "efa56e12-5480-497e-b867-6b49d1493537",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794333683336
+      },
+      {
+        "executionId": "efa56e12-5480-497e-b867-6b49d1493537",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794333739669
+      }
+    ],
+    "16.4 Fix the error handler": [
+      {
+        "executionId": "efa56e12-5480-497e-b867-6b49d1493537",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794333684561
+      },
+      {
+        "executionId": "efa56e12-5480-497e-b867-6b49d1493537",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794333741463
+      }
+    ],
+    "16.5 Turn off `x-powered-by` and add security headers": [
+      {
+        "executionId": "efa56e12-5480-497e-b867-6b49d1493537",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794333686132
+      },
+      {
+        "executionId": "efa56e12-5480-497e-b867-6b49d1493537",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794333742996
+      }
+    ],
+    "16.8 Add `SITE_NAME`": [
+      {
+        "executionId": "efa56e12-5480-497e-b867-6b49d1493537",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794333745186
+      },
+      {
+        "executionId": "efa56e12-5480-497e-b867-6b49d1493537",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794333864634
+      }
+    ],
+    "16.9 Write tests for data folders and startup checks": [
+      {
+        "executionId": "efa56e12-5480-497e-b867-6b49d1493537",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794333866863
+      },
+      {
+        "executionId": "8c56a5d5-97bf-4b1d-bc8d-ba717f6ef38a",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794336487325
+      }
+    ],
+    "16.10 Write tests for healthz, engines, and start script": [
+      {
+        "executionId": "efa56e12-5480-497e-b867-6b49d1493537",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794333869074
+      },
+      {
+        "executionId": "8c56a5d5-97bf-4b1d-bc8d-ba717f6ef38a",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794336488552
+      }
+    ],
+    "16.11 Write tests for errors and headers": [
+      {
+        "executionId": "efa56e12-5480-497e-b867-6b49d1493537",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794333871602
+      },
+      {
+        "executionId": "8c56a5d5-97bf-4b1d-bc8d-ba717f6ef38a",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794336489423
+      }
+    ],
+    "16.12 Write tests for the MCP preflight and curl example": [
+      {
+        "executionId": "efa56e12-5480-497e-b867-6b49d1493537",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794333873766
+      },
+      {
+        "executionId": "8c56a5d5-97bf-4b1d-bc8d-ba717f6ef38a",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794336502606
+      },
+      {
+        "executionId": "8c56a5d5-97bf-4b1d-bc8d-ba717f6ef38a",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794336512036
+      }
+    ],
+    "16.13 Write tests for `SITE_NAME`": [
+      {
+        "executionId": "efa56e12-5480-497e-b867-6b49d1493537",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794333876615
+      },
+      {
+        "executionId": "8c56a5d5-97bf-4b1d-bc8d-ba717f6ef38a",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794336490202
+      }
+    ],
+    "17.1 Header link, unconfirmed note, and Séance link": [
+      {
+        "executionId": "8c56a5d5-97bf-4b1d-bc8d-ba717f6ef38a",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794336503699
+      }
+    ],
+    "17.2 Simplify the `/rise` page": [
+      {
+        "executionId": "8c56a5d5-97bf-4b1d-bc8d-ba717f6ef38a",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794336504447
+      }
+    ],
+    "17.5 Séance report wording": [
+      {
+        "executionId": "8c56a5d5-97bf-4b1d-bc8d-ba717f6ef38a",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794336505414
+      }
     ]
   }
 }

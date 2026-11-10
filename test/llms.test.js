@@ -10,7 +10,8 @@ const arbHoursValue = fc.oneof(fc.constant('Closed'), fc.stringMatching(/^\d{1,2
 
 const arbListing = fc.record({
   id: arbId,
-  name: fc.string({ minLength: 2, maxLength: 80 }),
+  // Visible, single-spaced, trimmed: oneLine() leaves these names unchanged.
+  name: fc.stringMatching(/^[A-Za-z0-9]{2,12}( [A-Za-z0-9]{1,12}){0,4}$/),
   category: fc.constantFrom('plumbers', 'electricians', 'restaurants', 'auto-repair', 'hair-salons', 'lawyers'),
   phone: arbPhone,
   hours: fc.dictionary(arbDay, arbHoursValue, { minKeys: 1, maxKeys: 7 }),

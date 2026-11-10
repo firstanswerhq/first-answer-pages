@@ -95,7 +95,7 @@ export function createRiseRouter(ctx) {
 
   router.get('/rise', (req, res) => {
     if (photoListingClosed()) return comingSoon(res);
-    sendPage(res, 200, uploadPage());
+    sendPage(res, 200, uploadPage({ baseUrl: ctx.config.baseUrl }));
   });
 
   router.post('/rise', async (req, res, next) => {

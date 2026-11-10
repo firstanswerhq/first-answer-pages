@@ -765,3 +765,54 @@ test('Property: every draft stored from a mock-provider upload records provider 
     { numRuns: 10 },
   );
 });
+
+// ---- curl example uses the configured public URL --------------------------------
+
+import { readFileSync } from 'node:fs';
+
+/** Like makeEnv, but with a configured public baseUrl. */
+async function makeEnvWithBaseUrl(baseUrl) {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'fap-rise-'));
+  for (const name of ['listings.json', 'categories.json']) {
+    await fs.copyFile(path.join(REPO_DATA, name), path.join(dir, name));
+  }
+  const clock = { t: Date.UTC(2025, 0, 15, 12, 0, 0), now() { return this.t; } };
+  let counter = 0;
+  const app = createApp({
+    dataDir: dir,
+    clock,
+    newId: () => `draft-${++counter}`,
+    visionProvider: createMockVisionProvider(),
+    config: { adminToken: TOKEN, baseUrl },
+  });
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise((resolve, reject) => {
+    server.once('listening', resolve);
+    server.once('error', reject);
+  });
+  const env = { dir, clock, server, base: `http://127.0.0.1:${server.address().port}` };
+  envs.push(env);
+  return env;
+}
+
+test('GET /rise curl example uses the configured baseUrl without a double slash', async () => {
+  const env = await makeEnvWithBaseUrl('https://pages.example.test/');
+  const res = await get(env, '/rise');
+  assert.equal(res.status, 200);
+  const html = await res.text();
+  assert.ok(html.includes('https://pages.example.test/rise'));
+  assert.ok(!html.includes('pages.example.test//rise'));
+  assert.ok(!html.includes('localhost'));
+});
+
+test('rise-html.js source never hardcodes localhost', () => {
+  const src = readFileSync(new URL('../server/lib/rise-html.js', import.meta.url), 'utf8');
+  assert.ok(!src.includes('localhost'));
+});
+
+test('GET /rise escapes HTML characters in baseUrl', async () => {
+  const env = await makeEnvWithBaseUrl('https://x.test/<b>');
+  const html = await (await get(env, '/rise')).text();
+  assert.ok(!html.includes('<b>'));
+  assert.ok(html.includes('https://x.test/&lt;b&gt;/rise'));
+});

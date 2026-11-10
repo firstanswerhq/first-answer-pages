@@ -7,7 +7,7 @@ import { generateLlmsTxt } from '../lib/llms.js';
 import { publicListing } from '../lib/public-listing.js';
 
 /**
- * @param {{ store: object, config: { baseUrl: string } }} ctx
+ * @param {{ store: object, config: { baseUrl: string, siteName?: string } }} ctx
  * @returns {import('express').Router}
  */
 export function createLlmsRouter(ctx) {
@@ -20,7 +20,7 @@ export function createLlmsRouter(ctx) {
       ? store.getListings().filter(l => !store.isSeed(l.id))
       : store.getListings();
     res.status(200).type('text/plain').send(
-      generateLlmsTxt(listings.map(publicListing), config.baseUrl, store.getCategories()),
+      generateLlmsTxt(listings.map(publicListing), config.baseUrl, store.getCategories(), { siteName: config.siteName }),
     );
   });
 

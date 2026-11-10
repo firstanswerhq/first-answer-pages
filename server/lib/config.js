@@ -19,6 +19,26 @@ const REPO_DATA_DIR = path.resolve(
 export const DEFAULT_PROVIDER_TIMEOUT_MS = 30000;
 export const DEFAULT_BASE_URL = 'http://localhost:3000';
 
+export const DEFAULT_SITE_NAME = 'First Answer Pages';
+const MAX_SITE_NAME_LENGTH = 80;
+
+/**
+ * SITE_NAME: single line, control characters removed, trimmed, max 80 chars.
+ * Falls back to the default when unset or empty after cleaning.
+ * @param {string | undefined} value
+ * @returns {string}
+ */
+export function parseSiteName(value) {
+  if (typeof value !== 'string') return DEFAULT_SITE_NAME;
+  const cleaned = value
+    .replace(/[\n\r\u2028\u2029\u0085]|\p{Cc}/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, MAX_SITE_NAME_LENGTH)
+    .trim();
+  return cleaned || DEFAULT_SITE_NAME;
+}
+
 const KNOWN_AI_PROVIDERS = new Set(['openai', 'anthropic']);
 const KNOWN_NOTIFIERS = new Set(['console']);
 
@@ -109,6 +129,19 @@ export function notifierName(env = process.env) {
 }
 
 /**
+ * Fatal startup problems, one line each. Only production has requirements.
+ * @param {Record<string, string | undefined>} [env]
+ * @returns {string[]}
+ */
+export function startupProblems(env = process.env) {
+  if (nonEmpty(env.NODE_ENV) !== 'production') return [];
+  const problems = [];
+  if (!nonEmpty(env.DATA_DIR)) problems.push('DATA_DIR is required in production');
+  if (!nonEmpty(env.BASE_URL)) problems.push('BASE_URL is required in production');
+  return problems;
+}
+
+/**
  * Resolve the full configuration from an env object.
  * The result contains secrets: keep it internal.
  * @param {Record<string, string | undefined>} [env]
@@ -123,7 +156,11 @@ export function configFromEnv(env = process.env, opts = {}) {
   return {
     production,
     demoMode: parseDemoMode(env.DEMO_MODE, production),
+    siteName: parseSiteName(env.SITE_NAME),
+    // Writable files (drafts, pending, published, quotes, seance, verified).
     dataDir: nonEmpty(env.DATA_DIR) ? path.resolve(env.DATA_DIR.trim()) : REPO_DATA_DIR,
+    // Read-only seed files (listings.json, categories.json): always the repo data/ folder.
+    seedDir: REPO_DATA_DIR,
     // ADMIN_TOKEN guards /admin/* and /seance/run; SEANCE_ADMIN_TOKEN is the older fallback name.
     adminToken: nonEmpty(env.ADMIN_TOKEN) || nonEmpty(env.SEANCE_ADMIN_TOKEN),
     baseUrl: (nonEmpty(env.BASE_URL) || DEFAULT_BASE_URL).replace(/\/+$/, ''),

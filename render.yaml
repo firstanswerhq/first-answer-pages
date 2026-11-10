@@ -26,6 +26,8 @@ services:
         value: "200"
       - key: SITE_NAME
         sync: false
+      # BASE_URL is required in production. Set it in Render to the public
+      # address, for example https://your-domain.example (no trailing slash).
       - key: BASE_URL
         sync: false
       - key: ADMIN_TOKEN
