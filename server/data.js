@@ -245,8 +245,11 @@ export function createDataStore({ dataDir, fs, clock = defaultClock, validateFie
       }
 
       // 2. validate; nothing written on failure
-      const fields = draft.fields && typeof draft.fields === 'object' ? draft.fields : {};
-      const failing = failingFields(api.validateFields(fields, categories), fields);
+      const rawFields = draft.fields && typeof draft.fields === 'object' ? draft.fields : {};
+      const checked = api.validateFields(rawFields, categories);
+      // Publish the normalized fields when the validator returns them.
+      const fields = checked && !Array.isArray(checked) && checked.fields ? checked.fields : rawFields;
+      const failing = failingFields(checked, fields);
       if (failing.length > 0) return { status: 422, missingFields: failing };
 
       // 3. reserve id and mark publishing

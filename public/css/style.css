@@ -175,3 +175,70 @@ h1 {
     padding: 0.75rem;
   }
 }
+
+/* Rise from the Grave: upload and review forms */
+.rise-form {
+  margin: 1rem 0;
+  padding: 0.75rem;
+  border: 2px solid var(--color-divider);
+}
+
+.rise-form label {
+  display: block;
+  margin-top: 0.5rem;
+  font-weight: bold;
+}
+
+.rise-form input[type="text"],
+.rise-form select,
+.rise-form textarea {
+  width: 100%;
+  font: inherit;
+  padding: 0.25rem 0.5rem;
+}
+
+.rise-form input[type="text"][size] {
+  width: auto;
+}
+
+.rise-form button {
+  margin-top: 0.75rem;
+  font: inherit;
+  font-weight: bold;
+  padding: 0.3rem 1rem;
+}
+
+.rise-form .hint,
+.rise .hint {
+  font-size: 0.9rem;
+  font-style: italic;
+}
+
+.rise-form .field.missing {
+  padding: 0.25rem 0.5rem;
+  border: 3px solid #8B0000;
+  background: #FFE9A8;
+}
+
+.missing-note {
+  color: #8B0000;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+}
+
+.hours-edit {
+  margin-top: 0.75rem;
+  border: 1px solid var(--color-divider);
+}
+
+.notice {
+  padding: 0.5rem 0.75rem;
+  border: 2px solid #8B0000;
+  font-weight: bold;
+}
+
+.rise pre {
+  overflow-x: auto;
+  padding: 0.5rem;
+  border: 1px solid var(--color-divider);
+}

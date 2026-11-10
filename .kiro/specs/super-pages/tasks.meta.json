@@ -127,6 +127,140 @@
         "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
         "timestamp": 1794278073357
       }
+    ],
+    "2. Checkpoint - Foundation": [
+      {
+        "executionId": "3fb22df9-3e16-4242-81b2-421e1623e0dc",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794278694497
+      }
+    ],
+    "3.1 Create `server/lib/listing-fields.js`": [
+      {
+        "executionId": "3fb22df9-3e16-4242-81b2-421e1623e0dc",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794278698438
+      },
+      {
+        "executionId": "3fb22df9-3e16-4242-81b2-421e1623e0dc",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794278764564
+      }
+    ],
+    "3.2 Create `server/lib/upload.js`": [
+      {
+        "executionId": "3fb22df9-3e16-4242-81b2-421e1623e0dc",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794278700420
+      },
+      {
+        "executionId": "3fb22df9-3e16-4242-81b2-421e1623e0dc",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794278766200
+      }
+    ],
+    "3.4 Create `server/lib/drafts.js` (Draft_Store)": [
+      {
+        "executionId": "3fb22df9-3e16-4242-81b2-421e1623e0dc",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794278703984
+      },
+      {
+        "executionId": "3fb22df9-3e16-4242-81b2-421e1623e0dc",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794278767426
+      }
+    ],
+    "3.3 Create `server/lib/vision.js` and `server/lib/extractor.js`": [
+      {
+        "executionId": "3fb22df9-3e16-4242-81b2-421e1623e0dc",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794278770996
+      },
+      {
+        "executionId": "3fb22df9-3e16-4242-81b2-421e1623e0dc",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794278859861
+      }
+    ],
+    "3.5 Create `server/lib/rise-html.js`, `server/routes/rise.js`, `public/js/rise.js`, and wire into `createApp`": [
+      {
+        "executionId": "3fb22df9-3e16-4242-81b2-421e1623e0dc",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794278863596
+      },
+      {
+        "executionId": "3fb22df9-3e16-4242-81b2-421e1623e0dc",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794278984982
+      }
+    ],
+    "3. Feature 1: Rise from the Grave": [
+      {
+        "executionId": "3fb22df9-3e16-4242-81b2-421e1623e0dc",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794278985786
+      }
+    ],
+    "3.6 Write property tests for listing fields": [
+      {
+        "executionId": "3fb22df9-3e16-4242-81b2-421e1623e0dc",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794278991682
+      },
+      {
+        "executionId": "3fb22df9-3e16-4242-81b2-421e1623e0dc",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794279338735
+      }
+    ],
+    "3.7 Write property test and examples for upload handling": [
+      {
+        "executionId": "3fb22df9-3e16-4242-81b2-421e1623e0dc",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794278993445
+      },
+      {
+        "executionId": "3fb22df9-3e16-4242-81b2-421e1623e0dc",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794279339709
+      }
+    ],
+    "3.8 Write property test for the mock vision provider and vision config": [
+      {
+        "executionId": "3fb22df9-3e16-4242-81b2-421e1623e0dc",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794278994960
+      },
+      {
+        "executionId": "3fb22df9-3e16-4242-81b2-421e1623e0dc",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794279341073
+      }
+    ],
+    "3.9 Write integration tests for the Rise flow": [
+      {
+        "executionId": "3fb22df9-3e16-4242-81b2-421e1623e0dc",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794278996166
+      },
+      {
+        "executionId": "3fb22df9-3e16-4242-81b2-421e1623e0dc",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794279342280
+      }
+    ],
+    "3.10 Write property test for escaping in Rise pages": [
+      {
+        "executionId": "3fb22df9-3e16-4242-81b2-421e1623e0dc",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794278997384
+      },
+      {
+        "executionId": "3fb22df9-3e16-4242-81b2-421e1623e0dc",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794279343859
+      }
     ]
   }
 }

@@ -13,11 +13,13 @@ import { fileURLToPath } from 'node:url';
 import { createDataStore, getDefaultStore } from './data.js';
 import { configFromEnv } from './lib/config.js';
 import { createRateLimiter } from './lib/rate-limiter.js';
+import { createVisionProvider } from './lib/vision.js';
 import { createHomeRouter }     from './routes/home.js';
 import { createListingsRouter } from './routes/listings.js';
 import { createApiRouter }      from './routes/api.js';
 import { createLlmsRouter }     from './routes/llms.js';
 import { createSitemapRouter }  from './routes/sitemap.js';
+import { createRiseRouter }     from './routes/rise.js';
 import { layout }               from './lib/html.js';
 
 /** The only place in server/ that reads the system time. */
@@ -48,7 +50,7 @@ export function createApp(deps = {}) {
 
   const ctx = {
     store,
-    visionProvider: deps.visionProvider,
+    visionProvider: deps.visionProvider ?? createVisionProvider(config),
     notifier: deps.notifier,
     assistantProvider: deps.assistantProvider,
     clock,
@@ -69,6 +71,7 @@ export function createApp(deps = {}) {
   app.use(createApiRouter(ctx));
   app.use(createLlmsRouter(ctx));
   app.use(createSitemapRouter(ctx));
+  app.use(createRiseRouter(ctx));
 
   // Catch-all 404
   app.use((req, res) => {

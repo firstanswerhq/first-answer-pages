@@ -80,11 +80,11 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
     - **Property 13: Rate limiter honours limit, window, and Retry-After**
     - **Validates: Requirements 1.6, 5.15, 6.9, 12.7**
 
-- [ ] 2. Checkpoint - Foundation
+- [x] 2. Checkpoint - Foundation
   - Run `node --test`; all existing tests and the new foundation tests must pass. Ask the user if questions arise.
 
-- [ ] 3. Feature 1: Rise from the Grave
-  - [ ] 3.1 Create `server/lib/listing-fields.js`
+- [x] 3. Feature 1: Rise from the Grave
+  - [x] 3.1 Create `server/lib/listing-fields.js`
     - Export `DAYS`, `normalizePhone`, `mapCategory` (slug or label, any letter case), `normalizeFields(raw, categories)`, `validateFields(fields, categories)`, `makeSlug(name, city, takenIds)`
     - `normalizeFields` discards non-model keys (including `__proto__`), truncates strings to 500 characters and `services` to 20, treats non-objects as empty
     - `validateFields` requires non-empty `name`, `(NNN) NNN-NNNN` phone, known category slug, at least one service, non-empty `serviceArea`, non-empty `description`, non-empty `city`, two uppercase letter `state`, hours keys limited to lowercase day names; failing fields are emptied and listed in `missingFields`; `address` never listed
@@ -92,17 +92,17 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
     - Wire this module into the `publishDraft` validation from task 1.5
     - _Requirements: 3.2, 3.3, 3.4, 3.5, 3.7, 3.8, 4.3_
 
-  - [ ] 3.2 Create `server/lib/upload.js`
+  - [x] 3.2 Create `server/lib/upload.js`
     - Export `detectImageType(bytes)` (JPEG, PNG, WebP signatures), `decodeBase64Image(text)` (strip whitespace and optional `data:...;base64,` prefix, strict alphabet regex, null when invalid), `MAX_IMAGE_BYTES` (5,242,880), `MAX_FORM_BYTES` (8 MiB)
     - _Requirements: 1.1, 1.2, 1.4, 1.5, 1.9, 1.10_
 
-  - [ ] 3.4 Create `server/lib/drafts.js` (Draft_Store)
+  - [x] 3.4 Create `server/lib/drafts.js` (Draft_Store)
     - Create, get, update fields, discard, and status transitions over `store.collection('drafts')`; ids from `newId` (UUID)
     - Discard deletes only drafts with status `draft`; `publishing` or `published` returns 409 (design gap 5)
     - Edits to a draft not in status `draft` return 409
     - _Requirements: 3.6, 4.2, 4.7, 4.8_
 
-  - [ ] 3.3 Create `server/lib/vision.js` and `server/lib/extractor.js`
+  - [x] 3.3 Create `server/lib/vision.js` and `server/lib/extractor.js`
     - `createMockVisionProvider()`: SHA-256 of image bytes indexes a fixture table of fictional businesses, some fixtures missing a field; pure function of input
     - Real adapters: `openai` (OpenAI-compatible chat completions with image data URL, `VISION_BASE_URL`) and `anthropic` (Messages API), built-in `fetch`, `AbortSignal.timeout(30000)`, key only in a header, model from `VISION_MODEL`, strict JSON reply parsed in try/catch
     - `createVisionProvider(env)` follows config rules (mock when no key, in test runs, or no model)
@@ -110,7 +110,7 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
     - Logs carry provider name and status only, never keys, bodies, or image bytes
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 3.1, 3.7_
 
-  - [ ] 3.5 Create `server/lib/rise-html.js`, `server/routes/rise.js`, `public/js/rise.js`, and wire into `createApp`
+  - [x] 3.5 Create `server/lib/rise-html.js`, `server/routes/rise.js`, `public/js/rise.js`, and wire into `createApp`
     - `GET /rise`: no-JS form with a base64 textarea, noscript text with a `curl` example, and the 5 MiB note
     - `POST /rise` order: rate limit `rise:<ip>`; 415 for unsupported type before reading the body; `express.raw` with 5 MiB limit for image types; `express.urlencoded` with 8 MiB limit and `parameterLimit: 10` for the form; 413 on `entity.too.large`; 400 for empty body or field; 400 for bad base64; 415 for signature mismatch; extract; store draft; `303` to `/rise/drafts/:id`; 502 with no draft on extraction failure; hold bytes in request scope only, write nothing to disk
     - `GET /rise/drafts/:id`: editable form with every field and `missingFields` highlighted; headers `Cache-Control: no-store`, `X-Robots-Tag: noindex`, `Referrer-Policy: no-referrer`; 404 for unknown id
@@ -120,7 +120,7 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
     - Drafts never enter the store snapshot, so public routes exclude them by construction
     - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 1.10, 2.6, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8, 4.12_
 
-  - [ ]* 3.6 Write property tests for listing fields
+  - [x]* 3.6 Write property tests for listing fields
     - File `test/listing-fields.test.js`; vision-output generator includes non-objects, extra keys, wrong types, `__proto__`, long strings, oversized arrays
     - **Property 7: Phone normalization**
     - **Property 8: Category mapping yields a known slug or nothing**
@@ -129,22 +129,22 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
     - **Property 11: Listing slugs are URL-safe and unique**
     - **Validates: Requirements 3.2, 3.3, 3.4, 3.5, 3.7, 3.8, 3.9, 3.10, 4.3**
 
-  - [ ]* 3.7 Write property test and examples for upload handling
+  - [x]* 3.7 Write property test and examples for upload handling
     - File `test/upload.test.js`; independent signature oracle; examples for size, type, signature, empty body, bad base64, data-URL prefix
     - **Property 12: Image signature detection and base64 decoding**
     - **Validates: Requirements 1.5, 1.9, 1.10**
 
-  - [ ]* 3.8 Write property test for the mock vision provider and vision config
+  - [x]* 3.8 Write property test for the mock vision provider and vision config
     - File `test/providers.test.js`; `configFromEnv` selection (mock when no key, in test runs); stubbed `globalThis.fetch` checks request shape, timeout, zero calls without a key, key never in logs or responses
     - **Property 14: Mock providers are deterministic** (vision half)
     - **Validates: Requirements 2.1, 2.2, 2.3, 2.4, 2.5, 2.7**
 
-  - [ ]* 3.9 Write integration tests for the Rise flow
+  - [x]* 3.9 Write integration tests for the Rise flow
     - File `test/rise.test.js`; temp `DATA_DIR`, injected mocks, `app.listen(0)` and built-in `fetch`
     - Cover upload to review to edit to confirm, then the listing appearing in `/`, `/listings/:id`, `/llms.txt`, `/sitemap.xml`; draft excluded from all public routes while unconfirmed; 413, 415, 400, 422, 409, 404, 429 with `Retry-After`; provider failure gives 502 and no draft; `listings.json` bytes unchanged; crash-resume of a `publishing` draft yields no duplicate; no image bytes written under the temp dir
     - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 1.10, 2.6, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8, 4.9, 15.8_
 
-  - [ ]* 3.10 Write property test for escaping in Rise pages
+  - [x]* 3.10 Write property test for escaping in Rise pages
     - File `test/render.test.js`, covering the review page and result pages
     - **Property 26: Rendered values are escaped** (Rise pages)
     - **Validates: Requirements 4.12**
