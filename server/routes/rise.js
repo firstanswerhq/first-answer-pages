@@ -34,22 +34,38 @@ function runParser(parser, req, res) {
   });
 }
 
-/** Paragraph under the "Thanks!" heading; the email sentence only when an owner email was given. */
-function pendingMessage(draft) {
+/**
+ * Paragraph under the "Thanks!" heading. The email sentence is a promise, so it
+ * appears only when email is really set up (the resend notifier) and the owner
+ * gave an address.
+ */
+function pendingMessage(draft, config) {
   const email = draft?.fields?.ownerEmail;
   const hasEmail = typeof email === 'string' && email.trim() !== '';
-  return `We'll review your listing, usually within one business day.${hasEmail ? " We'll email you when it's live." : ''}`;
+  const canEmail = config?.notifierName === 'resend';
+  return `We'll review your listing, usually within one business day.${hasEmail && canEmail ? " We'll email you when it's live." : ''}`;
 }
+
+/** The owner's link after approval: point them at the live listing, not an edit form. */
+function livePage(draft) {
+  return messagePage(
+    'Your listing is live',
+    'Your listing has been approved and is live in the directory.',
+    { href: `/listings/${encodeURIComponent(draft.listingId)}`, text: 'See your listing' },
+  );
+}
+
+const isLive = draft => draft?.status === 'published' && typeof draft.listingId === 'string' && draft.listingId !== '';
 const HOME_LINK = { href: '/', text: 'Back to the directory' };
 
 function sendPage(res, status, html) {
   res.status(status).type('html').send(html);
 }
 
-/** Splits services textarea text into trimmed non-empty lines. */
-function parseServices(value) {
+/** Splits services textarea text on new lines and commas into trimmed non-empty items. */
+export function parseServices(value) {
   if (typeof value !== 'string') return [];
-  return value.split(/\r?\n/).map(s => s.trim()).filter(s => s !== '');
+  return value.split(/\r?\n|\r|,/).map(s => s.trim()).filter(s => s !== '');
 }
 
 /** Builds raw listing fields from an urlencoded review-form body. */
@@ -97,6 +113,16 @@ export function createRiseRouter(ctx) {
   // In production, the mock reader must never accept owner uploads.
   const photoListingClosed = () => ctx.config.production === true && ctx.visionProvider?.name === 'mock';
   const comingSoon = res => sendPage(res, 503, messagePage('Photo listing is coming soon', 'Photo listing is coming soon.', HOME_LINK));
+
+  /** Page for an edit that can no longer be saved: live listing, review in progress, or not approved. */
+  async function lockedPage(id) {
+    const found = await drafts.get(id);
+    const draft = found.status === 200 ? found.draft : undefined;
+    if (isLive(draft)) return livePage(draft);
+    if (draft?.status === 'pending') return messagePage('Thanks!', pendingMessage(draft, ctx.config), HOME_LINK);
+    if (draft?.status === 'rejected') return messagePage('Not approved', 'This listing was not approved.', HOME_LINK);
+    return messagePage('Already sent for review', 'This listing was already sent for review, so it can no longer be changed here.', HOME_LINK);
+  }
 
   router.get('/rise', (req, res) => {
     sendPage(res, 200, uploadPage({ photoEnabled: !photoListingClosed(), discarded: req.query.discarded === '1' }));
@@ -219,7 +245,10 @@ export function createRiseRouter(ctx) {
         return sendPage(res, 404, messagePage('Draft not found', 'That draft does not exist or was discarded.'));
       }
       if (found.draft.status === 'pending') {
-        return sendPage(res, 200, messagePage('Thanks!', pendingMessage(found.draft), HOME_LINK));
+        return sendPage(res, 200, messagePage('Thanks!', pendingMessage(found.draft, ctx.config), HOME_LINK));
+      }
+      if (isLive(found.draft)) {
+        return sendPage(res, 200, livePage(found.draft));
       }
       if (found.draft.status === 'rejected') {
         return sendPage(res, 200, messagePage('Not approved', 'This listing was not approved.', HOME_LINK));
@@ -246,7 +275,7 @@ export function createRiseRouter(ctx) {
         return sendPage(res, 404, messagePage('Draft not found', 'That draft does not exist or was discarded.'));
       }
       if (result.status === 409) {
-        return sendPage(res, 409, messagePage('Draft locked', 'This draft was already sent for review or published and can no longer be edited.', HOME_LINK));
+        return sendPage(res, 409, await lockedPage(req.params.id));
       }
       res.redirect(303, `/rise/drafts/${encodeURIComponent(req.params.id)}?saved=1`);
     } catch (err) {
@@ -279,7 +308,7 @@ export function createRiseRouter(ctx) {
           return sendPage(res, 404, messagePage('Draft not found', 'That draft does not exist or was discarded.'));
         }
         if (saved.status === 409) {
-          return sendPage(res, 409, messagePage('Draft locked', 'This draft was already sent for review or published and can no longer be edited.', HOME_LINK));
+          return sendPage(res, 409, await lockedPage(req.params.id));
         }
       }
       const result = await ctx.store.submitDraft(req.params.id);

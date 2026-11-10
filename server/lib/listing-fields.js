@@ -93,6 +93,23 @@ export function mapCategory(input, categories) {
   return '';
 }
 
+/**
+ * Tidy a city typed all in lower (or all in upper) case: "nashville" ->
+ * "Nashville", "st. louis" -> "St. Louis", "winston-salem" -> "Winston-Salem".
+ * Mixed-case input is left exactly as typed. Idempotent.
+ * @param {string} text already cleaned single-line text
+ * @returns {string}
+ */
+export function tidyCity(text) {
+  if (typeof text !== 'string' || text === '') return '';
+  if (/\p{Ll}/u.test(text) && /\p{Lu}/u.test(text)) return text;
+  return text
+    .toLowerCase()
+    .replace(/(^|[\s\-.'\u2019])(\p{Ll})/gu, (_, before, letter) => before + letter.toUpperCase())
+    .slice(0, MAX_STRING)
+    .trim();
+}
+
 function normalizeHours(raw) {
   const out = {};
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return out;
@@ -130,6 +147,7 @@ export function normalizeFields(raw, categories) {
   const out = {};
   for (const key of STRING_KEYS) out[key] = clean(get(key));
   out.description = cleanMultiline(get('description'));
+  out.city = tidyCity(out.city);
   out.phone = normalizePhone(get('phone'));
   out.category = mapCategory(get('category'), categories);
   if (/^[a-z]{2}$/i.test(out.state)) out.state = out.state.toUpperCase();

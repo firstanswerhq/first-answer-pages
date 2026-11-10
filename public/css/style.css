@@ -635,9 +635,33 @@ details.advanced summary {
   white-space: nowrap;
 }
 
-.saved-note {
-  margin-left: 0.5rem;
-  font-weight: bold;
+/* "Saved." sits at the top of the draft page, so a phone sees it after the reload */
+.notice.saved-note {
+  margin: 0.5rem 0 1rem;
+  border-color: #2e7d32;
+  background: #e8f5e9;
+  color: #1b5e20;
+}
+
+/* Neutral tag on a fresh typed-in form (before the first save or confirm) */
+.required-note {
+  color: #555;
+  font-size: 0.85rem;
+  font-weight: normal;
+  text-transform: uppercase;
+}
+
+/* The stamp must fit inside its border on a phone (390px wide) */
+@media (max-width: 480px) {
+  .stamp {
+    padding: 0.4rem 0.6rem;
+    transform: rotate(-1deg);
+  }
+  .stamp-title {
+    font-size: 0.95rem;
+    letter-spacing: 0.02em;
+    white-space: normal;
+  }
 }
 
 details.discard-confirm {

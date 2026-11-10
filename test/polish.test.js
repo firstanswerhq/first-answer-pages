@@ -216,7 +216,8 @@ test('draft page: tel and email inputs, saved note only after a save, review wor
   assert.equal(save.headers.get('location'), `${draftPath}?saved=1`);
 
   const saved = await (await get(env, `${draftPath}?saved=1`)).text();
-  assert.match(saved, /<span class="saved-note"[^>]*>Saved\.<\/span>/);
+  // At the top of the page (owner-flow fix 2), so a phone sees it after the reload.
+  assert.match(saved, /<p class="notice saved-note" role="status">Saved\.<\/p>/);
   const again = await (await get(env, draftPath)).text();
   assert.ok(!again.includes('saved-note'));
 });
@@ -261,7 +262,7 @@ test('property: a query value other than "1" shows no saved note and no discarde
 
 // ---- 3. thank-you page ------------------------------------------------------------
 
-test('thank-you page: one "Thanks!", the review sentence, and the email sentence only with an owner email', async () => {
+test('thank-you page: one "Thanks!", the review sentence, and no email promise while email is not set up', async () => {
   const env = await makeEnv();
   const review = escapeHtml("We'll review your listing, usually within one business day.");
   const emailLine = escapeHtml("We'll email you when it's live.");
@@ -272,7 +273,9 @@ test('thank-you page: one "Thanks!", the review sentence, and the email sentence
   const page = mainOf(await (await get(env, withEmail)).text());
   assert.equal(countOf(page, 'Thanks!'), 1);
   assert.equal(countOf(page, review), 1);
-  assert.equal(countOf(page, emailLine), 1);
+  // No email is sent without the resend notifier, so the page doesn't promise one
+  // (the resend case is covered in owner-flow-fixes.test.js).
+  assert.equal(countOf(page, emailLine), 0);
 
   const without = await newManualDraft(env);
   assert.equal((await postForm(env, `${without}/confirm`, completeForm({ ownerEmail: '' }))).status, 303);
