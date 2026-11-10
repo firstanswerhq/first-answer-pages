@@ -45,7 +45,7 @@ const TRADE_NOUNS = Object.freeze({
   landscapers: 'a landscaper',
   'pressure-washing': 'a pressure washing company',
   'pools-and-concrete': 'a pool and concrete company',
-  'shops-and-restaurants': 'a local shop or restaurant',
+  'shops-and-restaurants': 'a local business',
 });
 
 const META_MAX = 160;
@@ -72,6 +72,8 @@ export function listingMetaDescription(listing) {
   const services = (Array.isArray(listing?.services) ? listing.services : [])
     .filter(x => typeof x === 'string' && x.trim() !== '')
     .map(x => x.replace(/\s+/g, ' ').trim())
+    // "Drain cleaning" reads as "drain cleaning" mid-sentence; acronyms like "HVAC" stay.
+    .map(x => (/^[A-Z][a-z]/.test(x) ? x[0].toLowerCase() + x.slice(1) : x))
     .slice(0, 3);
   const build = list => `${name} is ${trade}${place ? ` in ${place}` : ''}${list.length ? ` offering ${joinList(list)}` : ''}.${phone ? ` Call ${phone}.` : ''}`;
   for (let n = services.length; n >= 0; n--) {

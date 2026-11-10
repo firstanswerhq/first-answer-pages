@@ -356,7 +356,7 @@ test('the login page says where to find the token; whoami says what to look for'
   assert.ok(login.includes('Your admin token is in Render: open your service, then Environment, then ADMIN_TOKEN.'));
   const who = (await request(env, { path: '/admin/whoami', headers: browser() })).text;
   assert.ok(who.includes('What to look for:'));
-  assert.ok(who.includes('change TRUST_PROXY in Render by one and check again'));
+  assert.ok(who.includes('If it matches, you') && who.includes('ask for help before changing TRUST_PROXY'));
 });
 
 // ---- 8. cookie expiry --------------------------------------------------------------------

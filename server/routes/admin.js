@@ -377,8 +377,9 @@ ${preview}
           : '';
         const handled = q.handled === true;
         // Until email is set up, the admin forwards each open quote to the business by hand.
-        const forward = !handled && typeof listing?.ownerEmail === 'string' && listing.ownerEmail.includes('@')
-          ? `<p>Forward to the business: <span class="owner-email">${escapeHtml(listing.ownerEmail)}</span> &middot; <a href="${escapeHtml(forwardHref(listing.ownerEmail, q, siteName))}">Forward to the business</a></p>\n  `
+        // Not when the quote was already emailed, so the business never gets it twice.
+        const forward = !handled && q.emailed !== true && typeof listing?.ownerEmail === 'string' && listing.ownerEmail.includes('@')
+          ? `<p><a href="${escapeHtml(forwardHref(listing.ownerEmail, q, siteName))}">Forward this quote to the business &rarr;</a> (<span class="owner-email">${escapeHtml(listing.ownerEmail)}</span>)</p>\n  `
           : '';
         const action = handled
           ? `<p class="hint">Handled ${escapeHtml(adminTime(q.handledAt ?? ''))}</p>`
@@ -426,7 +427,7 @@ ${preview}
   ${adminNav()}
   <h1>Your IP address</h1>
   <p>Open this page from your phone. Set TRUST_PROXY to the smallest number that shows your real IP address.</p>
-  <p>What to look for: the address after "req.ip" should match the one a site like whatismyipaddress.com shows on the same phone. If it doesn't, change TRUST_PROXY in Render by one and check again.</p>
+  <p>What to look for: the address after "req.ip" should match the one a site like whatismyipaddress.com shows on the same phone (with Wi-Fi off). If it matches, you're done. If it doesn't, ask for help before changing TRUST_PROXY.</p>
   <p>req.ip: <strong>${escapeHtml(req.ip ?? '')}</strong></p>
   <p>req.ips:</p>
   ${list}

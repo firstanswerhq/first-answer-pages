@@ -35,7 +35,7 @@ export function createPagesRouter(ctx) {
   // Never send people to "contact us" without an address to contact.
   const removalPara = contact
     ? '<p>To have a listing, quote request or email removed, contact us and we will delete it.</p>'
-    : '<p>To have a listing, quote request or email removed, reply to any email from us or ask the business that listed you.</p>';
+    : '<p>To have a listing, quote request or email removed, ask the business you contacted, or reply to any email from us.</p>';
 
   // Swap the footer marker in every HTML body (pages, 404s, errors).
   router.use((req, res, next) => {

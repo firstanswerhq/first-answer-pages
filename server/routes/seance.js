@@ -114,7 +114,8 @@ export function createSeanceRouter(ctx) {
         );
       }
       const runs = await history.list(listing.id);
-      res.type('html').send(seanceReportPage(publicListing(listing), runs, ctx.store.getVerifiedDate(listing.id)));
+      const verifiedAt = typeof ctx.store.getVerifiedAt === 'function' ? ctx.store.getVerifiedAt(listing.id) : undefined;
+      res.type('html').send(seanceReportPage(publicListing(listing), runs, ctx.store.getVerifiedDate(listing.id), verifiedAt));
     } catch (err) {
       next(err);
     }

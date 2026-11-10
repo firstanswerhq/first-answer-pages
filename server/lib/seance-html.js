@@ -220,10 +220,11 @@ function runSection(run) {
  * @param {string|null|undefined} confirmedDate
  * @returns {string} full HTML document
  */
-export function seanceReportPage(listing, runs, confirmedDate) {
+export function seanceReportPage(listing, runs, confirmedDate, verifiedAt) {
   const { runs: tagged, groups } = buildHistory(runs, confirmedDate);
+  // Same Central-time date as the listing's Owner-confirmed stamp.
   const confirmed = confirmedDate
-    ? `<p>Owner-confirmed ${escapeHtml(formatStampDate({ verifiedDate: confirmedDate }))}.</p>`
+    ? `<p>Owner-confirmed ${escapeHtml(formatStampDate({ verifiedDate: confirmedDate, verifiedAt }))}.</p>`
     : '<p>Not yet confirmed by the owner.</p>';
   let content;
   if (tagged.length === 0) {

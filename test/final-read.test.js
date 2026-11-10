@@ -189,7 +189,7 @@ test('/privacy never says "contact us" without an address', async () => {
   const without = await makeEnv();
   const plain = mainOf(await (await get(without, '/privacy')).text());
   assert.ok(!plain.includes('contact us'), 'no dead-end "contact us"');
-  assert.ok(plain.includes('reply to any email from us or ask the business that listed you'));
+  assert.ok(plain.includes('ask the business you contacted, or reply to any email from us'));
 
   const withEmail = await makeEnv({ config: { contactEmail: 'hello@example.test' } });
   const page = mainOf(await (await get(withEmail, '/privacy')).text());
@@ -263,11 +263,13 @@ test('/admin/quotes offers "Forward to the business" with an encoded mailto for 
     details: 'Leak under the sink?\nToday if possible.', createdAt: '2026-11-10T19:00:00.000Z', emailed: false, notifier: 'none',
   };
   const handled = { ...quote, id: 'q2', handled: true, handledAt: '2026-11-10T19:30:00.000Z' };
-  const env = await makeEnv({ published: [OWNER], quotes: [quote, handled] });
+  // Already emailed by Resend: no forward link, so the business never gets it twice.
+  const emailed = { ...quote, id: 'q3', emailed: true, notifier: 'resend' };
+  const env = await makeEnv({ published: [OWNER], quotes: [quote, handled, emailed] });
   const html = await (await get(env, '/admin/quotes', bearer)).text();
-  assert.ok(html.includes(`Forward to the business: <span class="owner-email">${escapeHtml(OWNER.ownerEmail)}</span>`));
-  const hrefs = [...html.matchAll(/<a href="(mailto:[^"]*)">Forward to the business<\/a>/g)].map(m => m[1].replace(/&amp;/g, '&'));
-  assert.equal(hrefs.length, 1, 'only the open quote gets a forward link');
+  assert.ok(html.includes(`Forward this quote to the business &rarr;</a> (<span class="owner-email">${escapeHtml(OWNER.ownerEmail)}</span>)`));
+  const hrefs = [...html.matchAll(/<a href="(mailto:[^"]*)">Forward this quote to the business &rarr;<\/a>/g)].map(m => m[1].replace(/&amp;/g, '&'));
+  assert.equal(hrefs.length, 1, 'only the open, not-yet-emailed quote gets a forward link');
   const href = hrefs[0];
   assert.ok(href.startsWith('mailto:owner%2Bjobs@kettle.example?subject='));
   const url = new URL(href);

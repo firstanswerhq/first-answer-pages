@@ -178,7 +178,7 @@ test('home, category and listing pages carry a canonical link and a meta descrip
   const page = (await text(env, `/listings/${OWNER.id}?quote=sent`)).body;
   assert.equal(canonicalOf(page), `${LIVE}/listings/${OWNER.id}`);
   const desc = descriptionOf(page);
-  assert.equal(desc, escapeHtml(`${OWNER.name} is a plumber in Nashville, TN offering Leak repair and Drain cleaning. Call ${OWNER.phone}.`));
+  assert.equal(desc, escapeHtml(`${OWNER.name} is a plumber in Nashville, TN offering leak repair and drain cleaning. Call ${OWNER.phone}.`));
   assert.ok(desc.length <= 200);
   assert.ok(!page.includes('<Co>'), 'the name is escaped in the meta tag');
 });

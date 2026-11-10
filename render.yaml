@@ -49,11 +49,10 @@ services:
         sync: false
       # SEANCE_TIMEOUT_MS (milliseconds) is optional. Default is 120000: one
       # deadline for a Séance question, including a continuation call.
-      # Quote emails. To turn them on, set NOTIFIER to resend in Render and fill
-      # in the three values below. With resend and any of them missing, the app
-      # refuses to start in production.
-      - key: NOTIFIER
-        value: none
+      # Quote emails. To turn them on, add NOTIFIER=resend in Render and fill in
+      # the three values below. NOTIFIER is left out here (unset means no email)
+      # so a later Blueprint sync never resets it. With resend and any of the
+      # three missing, the app refuses to start in production.
       - key: RESEND_API_KEY
         sync: false
       - key: NOTIFY_FROM

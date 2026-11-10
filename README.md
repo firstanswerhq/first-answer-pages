@@ -56,12 +56,12 @@ If it doesn't match, ask for help before changing it. (For developers: the page 
 
 ### 6. Turn on quote emails (recommended before you promote the site)
 
-Until this is on, quote requests are saved but nobody is emailed. Open `/admin/quotes` every day and use **Forward to the business** to send each new quote on yourself.
+Until this is on, quote requests are saved but nobody is emailed. Open `/admin/quotes` every day and use **Forward this quote to the business** to send each new quote on yourself, or call the business if it gave no email.
 
 1. Create a free Resend account (resend.com). Use the email address you use for this business.
-2. In Resend, add and verify your own domain (step 7). Resend shows the DNS records to add at your domain registrar. Emails can only be sent from a verified domain.
+2. Do this after step 7, once your own domain works. In Resend, add and verify your domain. Resend shows the DNS records to add at your domain registrar. Emails can only be sent from a verified domain.
 3. Create a Resend API key.
-4. In Render, open **Environment** and change `NOTIFIER` from `none` to `resend`. Fill in `RESEND_API_KEY` (the key), `NOTIFY_FROM` (for example `Quotes <quotes@your-domain.example>`) and `ADMIN_EMAIL` (where you want a copy of every quote). Save and press **Manual Deploy**.
+4. In Render, open **Environment** and add `NOTIFIER` = `resend` (when it isn't set, no email is sent). Fill in `RESEND_API_KEY` (the key), `NOTIFY_FROM` (for example `Quotes <quotes@your-domain.example>`) and `ADMIN_EMAIL` (where you want a copy of every quote). Save and press **Manual Deploy**.
 
 ### 7. Use your own domain
 
