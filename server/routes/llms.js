@@ -19,8 +19,17 @@ export function createLlmsRouter(ctx) {
     const listings = config.production && typeof store.isSeed === 'function'
       ? store.getListings().filter(l => !store.isSeed(l.id))
       : store.getListings();
+    const confirmedDates = new Map();
+    for (const l of listings) {
+      const date = typeof store.getVerifiedDate === 'function' ? store.getVerifiedDate(l.id) : undefined;
+      if (date) confirmedDates.set(l.id, date);
+    }
     res.status(200).type('text/plain').send(
-      generateLlmsTxt(listings.map(publicListing), config.baseUrl, store.getCategories(), { siteName: config.siteName }),
+      generateLlmsTxt(listings.map(publicListing), config.baseUrl, store.getCategories(), {
+        siteName: config.siteName,
+        confirmed: new Set(confirmedDates.keys()),
+        confirmedDates,
+      }),
     );
   });
 

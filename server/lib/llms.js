@@ -37,11 +37,38 @@ export function generateLlmsTxt(listings, baseUrl, categories, options = {}) {
     groups.get(listing.category).push(listing);
   }
 
+  // Name a city in the header only when every listing is in the same one.
+  const cities = new Map();
+  for (const l of listings) {
+    const city = oneLine(l.city);
+    if (city && !cities.has(city.toLowerCase())) cities.set(city.toLowerCase(), city);
+  }
+  const headerCity = cities.size === 1 ? [...cities.values()][0] : '';
+  const tagline = headerCity ? `Local businesses in ${headerCity}` : 'Local businesses';
+
+  const base = oneLine(baseUrl);
+  const confirmed = options?.confirmed;
+  const confirmedDates = options?.confirmedDates;
+  const isConfirmed = id => {
+    if (typeof confirmed === 'function') return Boolean(confirmed(id));
+    if (confirmed instanceof Set) return confirmed.has(id);
+    return false;
+  };
+  const dateFor = id => {
+    if (!confirmedDates) return '';
+    const d = typeof confirmedDates.get === 'function' ? confirmedDates.get(id) : confirmedDates[id];
+    return oneLine(d);
+  };
+
   const lines = [
     `# ${siteName}`,
-    '# Free local business directory — Nashville, TN',
+    `# Free local business directory — ${tagline}`,
     `# Total listings: ${listings.length}`,
     `# ${baseUrl}`,
+    '',
+    '## How to request a quote',
+    `MCP tool: request_quote at ${base}/mcp (JSON-RPC over POST)`,
+    `HTTP: POST ${base}/api/quotes with a JSON body of id, name, contact, details`,
     '',
   ];
 
@@ -62,9 +89,13 @@ export function generateLlmsTxt(listings, baseUrl, categories, options = {}) {
         `Category: ${label}`,
         `City: ${oneLine(l.city)}, ${oneLine(l.state)}`,
         `Service Area: ${oneLine(l.serviceArea)}`,
-        `Page: ${oneLine(baseUrl)}/listings/${oneLine(l.id)}`,
-        '',
+        `Page: ${base}/listings/${oneLine(l.id)}`,
       );
+      if (isConfirmed(l.id)) {
+        const date = dateFor(l.id);
+        lines.push(`Owner-confirmed: yes${date ? ` (${date})` : ''}`);
+      }
+      lines.push('');
     }
   }
 

@@ -314,6 +314,9 @@ describe('vision adapters (stubbed fetch)', () => {
 
 const PROMPT = 'Who are the best plumbers in Nashville?';
 
+// Providers resolve { answer, provider, model, webSearch }; older stubs may return a string.
+const textOf = r => (typeof r === 'string' ? r : r.answer);
+
 function realAssistantConfig(provider, extra = {}) {
   return configFromEnv({
     SEANCE_PROVIDER: provider,
@@ -328,8 +331,8 @@ describe('mock assistant provider', () => {
     const provider = createMockAssistantProvider();
     await fc.assert(
       fc.asyncProperty(fc.string({ maxLength: 200 }), async (prompt) => {
-        const a = await provider.ask({ prompt });
-        const b = await provider.ask({ prompt });
+        const a = textOf(await provider.ask({ prompt }));
+        const b = textOf(await provider.ask({ prompt }));
         assert.equal(typeof a, 'string');
         assert.ok(a.trim().length > 0);
         assert.equal(a, b);
@@ -340,7 +343,7 @@ describe('mock assistant provider', () => {
 
   test('makes no fetch calls', async () => {
     await withFetch(() => { throw new Error('should not be called'); }, async (calls) => {
-      const answer = await createMockAssistantProvider().ask({ prompt: PROMPT });
+      const answer = textOf(await createMockAssistantProvider().ask({ prompt: PROMPT }));
       assert.equal(typeof answer, 'string');
       assert.equal(calls.length, 0);
     });
@@ -404,7 +407,7 @@ describe('assistant adapters (stubbed fetch)', () => {
     await withFetch(() => jsonResponse(openAiReply('Try Acme Plumbing.')), async (calls) => {
       const provider = createAssistantProvider(realAssistantConfig('openai'));
       assert.equal(provider.name, 'openai');
-      const answer = await provider.ask({ prompt: PROMPT });
+      const answer = textOf(await provider.ask({ prompt: PROMPT }));
       assert.equal(answer, 'Try Acme Plumbing.');
       assert.equal(calls.length, 1);
       const { url, init } = calls[0];
@@ -433,8 +436,8 @@ describe('assistant adapters (stubbed fetch)', () => {
     await withFetch(() => jsonResponse(anthropicReply('Try Acme Plumbing.')), async (calls) => {
       const provider = createAssistantProvider(realAssistantConfig('anthropic'));
       assert.equal(provider.name, 'anthropic');
-      const answer = await provider.ask({ prompt: PROMPT });
-      assert.equal(answer, 'Try Acme Plumbing.');
+      const result = await provider.ask({ prompt: PROMPT });
+      assert.equal(result.answer, 'Try Acme Plumbing.');
       const { url, init } = calls[0];
       assert.equal(url, 'https://api.anthropic.com/v1/messages');
       assert.equal(init.headers['x-api-key'], KEY);
@@ -570,8 +573,8 @@ describe('trade-matched mock assistant', () => {
     await fc.assert(
       fc.asyncProperty(fc.string({ maxLength: 80 }), arbCategory, arbBusinessName, async (prompt, category, businessName) => {
         const args = { prompt, category, businessName };
-        const a = await provider.ask(args);
-        const b = await provider.ask({ ...args });
+        const a = textOf(await provider.ask(args));
+        const b = textOf(await provider.ask({ ...args }));
         assert.equal(typeof a, 'string');
         assert.ok(a.trim().length > 0);
         assert.equal(a, b);
@@ -605,14 +608,135 @@ describe('trade-matched mock assistant', () => {
     let named = 0;
     for (let i = 0; i < total; i++) {
       const businessName = `Zqx Business ${i} Plumbing`;
-      const answer = await provider.ask({
+      const answer = textOf(await provider.ask({
         prompt: `best plumbers in City${i % 25}`,
         category: 'plumbers',
         businessName,
-      });
+      }));
       if (answer.includes(businessName)) named++;
     }
     const share = named / total;
     assert.ok(share >= 0.2 && share <= 0.5, `share was ${share}`);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 3c. Anthropic web search request (task 20.6)
+// ---------------------------------------------------------------------------
+
+describe('anthropic web search request', () => {
+  const askAnthropic = () => createAssistantProvider(realAssistantConfig('anthropic')).ask({ prompt: PROMPT });
+
+  test('sends exactly the web_search tool with max_uses 3 and max_tokens >= 1024', async () => {
+    await withFetch(() => jsonResponse(anthropicReply('ok')), async (calls) => {
+      await askAnthropic();
+      assert.equal(calls.length, 1);
+      const body = JSON.parse(calls[0].init.body);
+      assert.deepEqual(body.tools, [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }]);
+      assert.ok(body.max_tokens >= 1024);
+    });
+  });
+
+  test('sends no anthropic-beta header; key only in x-api-key and never in logs', async () => {
+    await withFetch(() => jsonResponse(anthropicReply('ok')), async (calls) => {
+      const output = await captureOutput(async () => { await askAnthropic(); });
+      const { url, init } = calls[0];
+      const names = Object.keys(init.headers).map(h => h.toLowerCase());
+      assert.ok(!names.includes('anthropic-beta'));
+      assert.equal(init.headers['x-api-key'], KEY);
+      for (const [k, v] of Object.entries(init.headers)) {
+        if (k.toLowerCase() !== 'x-api-key') assert.ok(!String(v).includes(KEY));
+      }
+      assert.ok(!init.body.includes(KEY));
+      assert.ok(!url.includes(KEY));
+      assert.ok(!output.includes(KEY));
+    });
+  });
+
+  test('answer joins text blocks in order and ignores search blocks', async () => {
+    const content = [
+      { type: 'text', text: 'Let me check. ' },
+      { type: 'server_tool_use', id: 'srv_1', name: 'web_search', input: { query: 'plumbers' } },
+      { type: 'web_search_tool_result', tool_use_id: 'srv_1', content: [{ type: 'web_search_result', title: 'IGNORED', url: 'https://x.test' }] },
+      { type: 'text', text: 'Try Acme ' },
+      { type: 'text', text: 'Plumbing.' },
+    ];
+    await withFetch(() => jsonResponse({ content, stop_reason: 'end_turn' }), async () => {
+      const result = await askAnthropic();
+      assert.equal(result.answer, 'Let me check. Try Acme Plumbing.');
+    });
+  });
+
+  test('pause_turn triggers exactly one extra request with assistant content last', async () => {
+    const first = [
+      { type: 'text', text: 'Searching. ' },
+      { type: 'server_tool_use', id: 'srv_1', name: 'web_search', input: { query: 'q' } },
+    ];
+    const replies = [
+      { content: first, stop_reason: 'pause_turn' },
+      { content: [{ type: 'text', text: 'Final answer.' }], stop_reason: 'end_turn' },
+    ];
+    await withFetch(() => jsonResponse(replies.shift()), async (calls) => {
+      const result = await askAnthropic();
+      assert.equal(calls.length, 2);
+      assert.equal(result.answer, 'Final answer.');
+      const second = JSON.parse(calls[1].init.body);
+      assert.deepEqual(second.messages[0], { role: 'user', content: PROMPT });
+      assert.deepEqual(second.messages[second.messages.length - 1], { role: 'assistant', content: first });
+      assert.deepEqual(second.tools, [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }]);
+    });
+  });
+
+  test('a second pause_turn does not loop further', async () => {
+    const paused = { content: [{ type: 'text', text: 'still going' }], stop_reason: 'pause_turn' };
+    await withFetch(() => jsonResponse(paused), async (calls) => {
+      const result = await askAnthropic();
+      assert.equal(calls.length, 2);
+      assert.equal(result.answer, 'still going');
+    });
+  });
+
+  test('openai sends no tools and mock makes no request', async () => {
+    await withFetch(() => jsonResponse(openAiReply('ok')), async (calls) => {
+      const result = await createAssistantProvider(realAssistantConfig('openai')).ask({ prompt: PROMPT });
+      assert.equal(result.webSearch, false);
+      assert.ok(!('tools' in JSON.parse(calls[0].init.body)));
+    });
+    await withFetch(() => { throw new Error('should not be called'); }, async (calls) => {
+      const result = await createMockAssistantProvider().ask({ prompt: PROMPT });
+      assert.equal(result.webSearch, false);
+      assert.equal(calls.length, 0);
+    });
+  });
+
+  test('result is {answer, provider, model, webSearch}', async () => {
+    await withFetch(() => jsonResponse(anthropicReply('Try Acme.')), async () => {
+      const result = await askAnthropic();
+      assert.deepEqual(result, { answer: 'Try Acme.', provider: 'anthropic', model: 'seance-model', webSearch: true });
+    });
+  });
+
+  test('Property: answer is the ordered join of text blocks, whatever other blocks appear', async () => {
+    // **Validates: Requirements 20 (anthropic web search answer extraction)**
+    const arbBlock = fc.oneof(
+      fc.record({ type: fc.constant('text'), text: fc.string({ maxLength: 30 }) }),
+      fc.record({ type: fc.constant('server_tool_use'), id: fc.string({ maxLength: 8 }), name: fc.constant('web_search'), input: fc.record({ query: fc.string({ maxLength: 20 }) }) }),
+      fc.record({ type: fc.constant('web_search_tool_result'), tool_use_id: fc.string({ maxLength: 8 }), content: fc.array(fc.record({ type: fc.constant('web_search_result'), title: fc.string({ maxLength: 20 }) }), { maxLength: 3 }) }),
+    );
+    await fc.assert(
+      fc.asyncProperty(fc.array(arbBlock, { maxLength: 8 }), async (content) => {
+        const expected = content.filter(b => b.type === 'text').map(b => b.text).join('');
+        await withFetch(() => jsonResponse({ content, stop_reason: 'end_turn' }), async () => {
+          if (expected.trim() === '') {
+            await assert.rejects(askAnthropic(), (err) => err instanceof AssistantError && err.code === 'unparseable');
+          } else {
+            const result = await askAnthropic();
+            assert.equal(result.answer, expected);
+            assert.equal(result.webSearch, true);
+          }
+        });
+      }),
+      { numRuns: 100 },
+    );
   });
 });

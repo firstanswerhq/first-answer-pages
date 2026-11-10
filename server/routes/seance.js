@@ -43,6 +43,14 @@ export function createSeanceRouter(ctx) {
           return res.status(429).json({ error: 'Too many runs' });
         }
 
+        if (ctx.assistantProvider?.name !== 'mock') {
+          const budget = ctx.aiBudget.consume();
+          if (!budget.allowed) {
+            res.set('Retry-After', String(budget.retryAfterSeconds));
+            return res.status(429).json({ error: "We have reached today's limit for AI help. Try again tomorrow." });
+          }
+        }
+
         try {
           const run = await runSeance(ctx, id);
           return res.status(201).json({ run });

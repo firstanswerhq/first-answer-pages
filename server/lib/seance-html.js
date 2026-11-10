@@ -147,13 +147,52 @@ function groupSection(g) {
   </section>`;
 }
 
+const DATE_FORMAT = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/Chicago',
+  year: 'numeric',
+  month: 'short',
+  day: 'numeric',
+});
+
+/**
+ * Chicago date as 'Mon D, YYYY', e.g. 'Nov 10, 2026'.
+ * Invalid input is returned unchanged (the caller escapes it).
+ * @param {string} iso
+ * @returns {string}
+ */
+export function formatRunDate(iso) {
+  try {
+    const date = new Date(iso);
+    if (typeof iso !== 'string' || Number.isNaN(date.getTime())) return iso;
+    const p = {};
+    for (const part of DATE_FORMAT.formatToParts(date)) p[part.type] = part.value;
+    return `${p.month} ${p.day}, ${p.year}`;
+  } catch {
+    return iso;
+  }
+}
+
+/** 'Asked Claude (with web search) on Nov 10, 2026.' or '' for demo runs. */
+function askedLine(run) {
+  if (isDemo(run.provider)) return '';
+  const who = run.provider === 'anthropic' ? 'Claude'
+    : run.provider === 'openai' ? 'OpenAI'
+      : providerLabel(run.provider);
+  const search = run.webSearch === true ? ' (with web search)' : '';
+  return `<p class="seance-asked">${escapeHtml(`Asked ${who}${search} on ${formatRunDate(run.timestamp)}.`)}</p>`;
+}
+
 function runSection(run) {
+  const model = typeof run.model === 'string' && run.model !== ''
+    ? ` &middot; ${escapeHtml(run.model)}`
+    : '';
   const tag = run.ownerConfirmation
     ? ` <span class="seance-tag">${escapeHtml(run.ownerConfirmation)}</span>`
     : '';
   return `<article class="seance-run">
     <h3>${timeEl(run.timestamp)}${tag}${demoSpan(run.provider)}</h3>
-    <p class="seance-meta">${escapeHtml(providerLabel(run.provider))} &middot; ${escapeHtml(run.prompt)} &middot; ${escapeHtml(yesNo(run.named))}</p>
+    ${askedLine(run)}
+    <p class="seance-meta">${escapeHtml(providerLabel(run.provider))}${model} &middot; ${escapeHtml(run.prompt)} &middot; ${escapeHtml(yesNo(run.named))}</p>
     <blockquote class="seance-answer">${escapeHtml(run.answer)}</blockquote>
   </article>`;
 }

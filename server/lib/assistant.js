@@ -3,7 +3,9 @@
  * mock and two real adapters.
  *
  * A provider is { name, ask({ prompt, signal, category, businessName }) } and
- * resolves to the assistant's answer as a string. The answer is untrusted text.
+ * resolves to { answer, provider, model, webSearch }. The answer is untrusted
+ * text. webSearch is true only for the Anthropic adapter, which enables the
+ * server-side web_search tool (max 3 uses) and joins all text blocks in order.
  * Only the mock reads category and businessName; real adapters send just the
  * prompt and never the business name.
  *
@@ -93,28 +95,33 @@ function hasOwn(obj, key) {
 export function createMockAssistantProvider() {
   return {
     name: 'mock',
-    async ask({ prompt, category, businessName } = {}) {
-      const name = typeof businessName === 'string' ? businessName.trim() : '';
-      const digest = createHash('sha256')
-        .update(`${String(prompt ?? '')}|${name}`)
-        .digest();
-      const known = typeof category === 'string' && hasOwn(TRADE_ANSWERS, category);
-      if (!known) return NEUTRAL_ANSWERS[digest[0] % NEUTRAL_ANSWERS.length];
-
-      const pool = TRADE_ANSWERS[category];
-      if (name !== '' && digest[0] % 3 === 0) {
-        const trade = TRADE_PHRASES[category];
-        // The sibling name comes from the trade pool, so it is the same trade.
-        const sibling = pool[digest[1] % pool.length]
-          .replace(/^.*mention /, '')
-          .replace(/\.$/, '')
-          .split(/, | and /)[0];
-        return `For ${trade} in Nashville, people often mention ${name}, along with ${sibling}.`;
-      }
-      const choices = [...pool, ...NEUTRAL_ANSWERS];
-      return choices[digest[1] % choices.length];
+    async ask(args = {}) {
+      const answer = mockAnswer(args ?? {});
+      return { answer, provider: 'mock', model: 'mock', webSearch: false };
     },
   };
+}
+
+function mockAnswer({ prompt, category, businessName }) {
+  const name = typeof businessName === 'string' ? businessName.trim() : '';
+  const digest = createHash('sha256')
+    .update(`${String(prompt ?? '')}|${name}`)
+    .digest();
+  const known = typeof category === 'string' && hasOwn(TRADE_ANSWERS, category);
+  if (!known) return NEUTRAL_ANSWERS[digest[0] % NEUTRAL_ANSWERS.length];
+
+  const pool = TRADE_ANSWERS[category];
+  if (name !== '' && digest[0] % 3 === 0) {
+    const trade = TRADE_PHRASES[category];
+    // The sibling name comes from the trade pool, so it is the same trade.
+    const sibling = pool[digest[1] % pool.length]
+      .replace(/^.*mention /, '')
+      .replace(/\.$/, '')
+      .split(/, | and /)[0];
+    return `For ${trade} in Nashville, people often mention ${name}, along with ${sibling}.`;
+  }
+  const choices = [...pool, ...NEUTRAL_ANSWERS];
+  return choices[digest[1] % choices.length];
 }
 
 function logStatus(provider, status) {
@@ -169,25 +176,46 @@ function createOpenAiAssistantProvider({ apiKey, model, baseUrl, timeoutMs }) {
         timeoutMs,
         signal,
       );
-      return requireText(data?.choices?.[0]?.message?.content);
+      const answer = requireText(data?.choices?.[0]?.message?.content);
+      return { answer, provider: 'openai', model, webSearch: false };
     },
   };
+}
+
+const ANTHROPIC_WEB_SEARCH_TOOL = Object.freeze({ type: 'web_search_20250305', name: 'web_search', max_uses: 3 });
+
+/** Concatenate, in order, every text block's text. Other block types are ignored. */
+function joinTextBlocks(data) {
+  if (!Array.isArray(data?.content)) return '';
+  return data.content
+    .filter(b => b?.type === 'text' && typeof b.text === 'string')
+    .map(b => b.text)
+    .join('');
 }
 
 function createAnthropicAssistantProvider({ apiKey, model, timeoutMs }) {
   return {
     name: 'anthropic',
     async ask({ prompt, signal } = {}) {
-      const data = await callProvider(
+      const headers = { 'x-api-key': apiKey, 'anthropic-version': ANTHROPIC_VERSION };
+      const messages = [{ role: 'user', content: String(prompt ?? '') }];
+      const send = (msgs) => callProvider(
         'anthropic',
         ANTHROPIC_URL,
-        { 'x-api-key': apiKey, 'anthropic-version': ANTHROPIC_VERSION },
-        { model, max_tokens: 1024, messages: [{ role: 'user', content: String(prompt ?? '') }] },
+        headers,
+        { model, max_tokens: 1024, messages: msgs, tools: [ANTHROPIC_WEB_SEARCH_TOOL] },
         timeoutMs,
         signal,
       );
-      const block = Array.isArray(data?.content) ? data.content.find(b => b?.type === 'text') : undefined;
-      return requireText(block?.text);
+
+      let data = await send(messages);
+      // pause_turn: the server-side search loop paused mid-turn. Continue exactly
+      // once by resending the user message plus the assistant content so far, then
+      // use the second reply. No further loop, even if it also pauses.
+      if (data?.stop_reason === 'pause_turn' && Array.isArray(data.content)) {
+        data = await send([...messages, { role: 'assistant', content: data.content }]);
+      }
+      return { answer: requireText(joinTextBlocks(data)), provider: 'anthropic', model, webSearch: true };
     },
   };
 }

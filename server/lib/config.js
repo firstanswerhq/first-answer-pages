@@ -76,6 +76,25 @@ function parseTrustProxy(value, production, warn = console.warn) {
   return production ? 1 : undefined;
 }
 
+export const DEFAULT_MAX_AI_CALLS_PER_DAY = 200;
+
+/**
+ * MAX_AI_CALLS_PER_DAY: a plain positive integer. Unset gives the default;
+ * anything else warns (without echoing the value) and gives the default.
+ * @param {string | undefined} value
+ * @param {(msg: string) => void} [warn]
+ * @returns {number}
+ */
+export function parseMaxAiCalls(value, warn = console.warn) {
+  const v = nonEmpty(value);
+  if (v === undefined) return DEFAULT_MAX_AI_CALLS_PER_DAY;
+  if (/^[1-9][0-9]*$/.test(v) && Number.isSafeInteger(Number(v))) return Number(v);
+  warn(
+    `MAX_AI_CALLS_PER_DAY must be a positive whole number; using ${DEFAULT_MAX_AI_CALLS_PER_DAY}.`
+  );
+  return DEFAULT_MAX_AI_CALLS_PER_DAY;
+}
+
 /**
  * DEMO_MODE: 'true'/'1' => true, 'false'/'0' => false (case-insensitive).
  * Unset or unrecognized: true, unless running in production (then false).
@@ -138,6 +157,20 @@ export function startupProblems(env = process.env) {
   const problems = [];
   if (!nonEmpty(env.DATA_DIR)) problems.push('DATA_DIR is required in production');
   if (!nonEmpty(env.BASE_URL)) problems.push('BASE_URL is required in production');
+  for (const prefix of ['VISION', 'SEANCE']) {
+    const name = providerName(env[`${prefix}_PROVIDER`]);
+    if (!name) continue;
+    if (!KNOWN_AI_PROVIDERS.has(name)) {
+      problems.push(`${prefix}_PROVIDER must be openai or anthropic`);
+      continue;
+    }
+    if (!nonEmpty(env[`${prefix}_API_KEY`])) {
+      problems.push(`${prefix}_API_KEY is required when ${prefix}_PROVIDER is set in production`);
+    }
+    if (!nonEmpty(env[`${prefix}_MODEL`])) {
+      problems.push(`${prefix}_MODEL is required when ${prefix}_PROVIDER is set in production`);
+    }
+  }
   return problems;
 }
 
@@ -166,6 +199,7 @@ export function configFromEnv(env = process.env, opts = {}) {
     baseUrl: (nonEmpty(env.BASE_URL) || DEFAULT_BASE_URL).replace(/\/+$/, ''),
     providerTimeoutMs: DEFAULT_PROVIDER_TIMEOUT_MS,
     trustProxy: parseTrustProxy(env.TRUST_PROXY, production, opts.warn ?? console.warn),
+    maxAiCallsPerDay: parseMaxAiCalls(env.MAX_AI_CALLS_PER_DAY, opts.warn ?? console.warn),
     testRun: isTestRun(env),
 
     visionProviderName: vision,

@@ -14,6 +14,7 @@ import { createDataStore, getDefaultStore } from './data.js';
 import { configFromEnv, DEFAULT_SITE_NAME } from './lib/config.js';
 import { createRateLimiter } from './lib/rate-limiter.js';
 import { createVisionProvider } from './lib/vision.js';
+import { createAiBudget } from './lib/ai-budget.js';
 import { createNotifier } from './lib/notifier.js';
 import { createAssistantProvider } from './lib/assistant.js';
 import { createHomeRouter }     from './routes/home.js';
@@ -77,6 +78,7 @@ export function createApp(deps = {}) {
     clock,
     rateLimiter: deps.rateLimiter ?? createRateLimiter({ clock }),
     config,
+    aiBudget: deps.aiBudget ?? createAiBudget({ clock, limit: config.maxAiCallsPerDay ?? 200 }),
     newId: deps.newId ?? (() => randomUUID()),
     a2a: deps.a2a,
   };

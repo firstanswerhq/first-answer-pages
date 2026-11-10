@@ -159,7 +159,16 @@ export function createRiseRouter(ctx) {
         return sendPage(res, 413, messagePage('Image too large', 'The image is larger than 5 MB.'));
       }
 
-      // 6. Extract. Failure stores nothing.
+      // 6. Daily AI cap (real providers only; the mock never consumes).
+      if (ctx.visionProvider?.name !== 'mock') {
+        const budget = ctx.aiBudget.consume();
+        if (!budget.allowed) {
+          res.set('Retry-After', String(budget.retryAfterSeconds));
+          return sendPage(res, 429, messagePage('Try again tomorrow', "We have reached today's limit for AI help. Try again tomorrow."));
+        }
+      }
+
+      // 7. Extract. Failure stores nothing.
       let extracted;
       try {
         extracted = await extractDraft({

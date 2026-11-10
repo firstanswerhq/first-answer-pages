@@ -2,6 +2,7 @@
 // and city, record whether the answer names the business, and keep the history.
 
 const MAX_ANSWER_CODE_POINTS = 4000;
+const MAX_MODEL_CHARS = 100;
 const RUN_FAILED_MESSAGE = 'Seance run failed';
 
 /** Typed error. code is 'not_found' or 'run_failed'. Messages are fixed text. */
@@ -78,8 +79,9 @@ export async function runSeance(ctx, listingId) {
   const timer = setTimeout(() => controller.abort(), ctx.config.providerTimeoutMs);
 
   let raw;
+  let result;
   try {
-    const result = await ctx.assistantProvider.ask({
+    result = await ctx.assistantProvider.ask({
       prompt,
       signal: controller.signal,
       category: listing.category,
@@ -99,11 +101,18 @@ export async function runSeance(ctx, listingId) {
     id: ctx.newId(),
     listingId,
     prompt,
-    provider: ctx.assistantProvider?.name || 'unknown',
+    provider: (typeof result?.provider === 'string' && result.provider !== '' ? result.provider : null)
+      || ctx.assistantProvider?.name || 'unknown',
     timestamp: new Date(ctx.clock.now()).toISOString(),
     answer,
     named: detectNamed(listing.name, answer),
   };
+  if (typeof result?.model === 'string') {
+    const model = Array.from(result.model.replace(/[\u0000-\u001f\u007f-\u009f]/g, ''))
+      .slice(0, MAX_MODEL_CHARS).join('').trim();
+    if (model !== '') run.model = model;
+  }
+  if (typeof result?.webSearch === 'boolean') run.webSearch = result.webSearch;
   await createSeanceStore(ctx.store).append(run);
   return run;
 }

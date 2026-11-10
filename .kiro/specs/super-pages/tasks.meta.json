@@ -1241,6 +1241,178 @@
         "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
         "timestamp": 1794339849519
       }
+    ],
+    "14.7 Checkpoint - Safety and honest demo mode": [
+      {
+        "executionId": "b3e2ba61-a76b-4629-8548-40b3e83ce2b7",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794340639498
+      }
+    ],
+    "14. Launch fixes: Honest demo mode (nothing fake may look real)": [
+      {
+        "executionId": "b3e2ba61-a76b-4629-8548-40b3e83ce2b7",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794340640589
+      }
+    ],
+    "16.14 Checkpoint - Deploy-ready": [
+      {
+        "executionId": "b3e2ba61-a76b-4629-8548-40b3e83ce2b7",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794340641938
+      }
+    ],
+    "16. Launch fixes: Deploy-ready on Render": [
+      {
+        "executionId": "b3e2ba61-a76b-4629-8548-40b3e83ce2b7",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794340642920
+      }
+    ],
+    "18.1 Improve llms.txt": [
+      {
+        "executionId": "b3e2ba61-a76b-4629-8548-40b3e83ce2b7",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794340661457
+      },
+      {
+        "executionId": "b3e2ba61-a76b-4629-8548-40b3e83ce2b7",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794340745144
+      }
+    ],
+    "18.2 Rewrite the README": [
+      {
+        "executionId": "b3e2ba61-a76b-4629-8548-40b3e83ce2b7",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794340665782
+      },
+      {
+        "executionId": "b3e2ba61-a76b-4629-8548-40b3e83ce2b7",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794340746461
+      }
+    ],
+    "18.3 Write tests for llms.txt": [
+      {
+        "executionId": "b3e2ba61-a76b-4629-8548-40b3e83ce2b7",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794340747658
+      },
+      {
+        "executionId": "b3e2ba61-a76b-4629-8548-40b3e83ce2b7",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794341174528
+      }
+    ],
+    "18.4 Write tests for the README": [
+      {
+        "executionId": "b3e2ba61-a76b-4629-8548-40b3e83ce2b7",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794340748809
+      },
+      {
+        "executionId": "b3e2ba61-a76b-4629-8548-40b3e83ce2b7",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794341189366
+      }
+    ],
+    "20.1 Config, model env, and production startup checks": [
+      {
+        "executionId": "b3e2ba61-a76b-4629-8548-40b3e83ce2b7",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794341190048
+      },
+      {
+        "executionId": "b3e2ba61-a76b-4629-8548-40b3e83ce2b7",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794341289042
+      }
+    ],
+    "20.2 Add web search to the Séance anthropic request": [
+      {
+        "executionId": "b3e2ba61-a76b-4629-8548-40b3e83ce2b7",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794341191532
+      },
+      {
+        "executionId": "b3e2ba61-a76b-4629-8548-40b3e83ce2b7",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794341290755
+      }
+    ],
+    "20.3 Add the daily AI call cap": [
+      {
+        "executionId": "b3e2ba61-a76b-4629-8548-40b3e83ce2b7",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794341292159
+      },
+      {
+        "executionId": "b3e2ba61-a76b-4629-8548-40b3e83ce2b7",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794341358236
+      }
+    ],
+    "20.4 Save and show provider and model on each Séance run": [
+      {
+        "executionId": "b3e2ba61-a76b-4629-8548-40b3e83ce2b7",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794341292894
+      },
+      {
+        "executionId": "b3e2ba61-a76b-4629-8548-40b3e83ce2b7",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794341359280
+      }
+    ],
+    "20.5 Write tests for config and startup problems": [
+      {
+        "executionId": "b3e2ba61-a76b-4629-8548-40b3e83ce2b7",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794341360464
+      },
+      {
+        "executionId": "b3e2ba61-a76b-4629-8548-40b3e83ce2b7",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794341510061
+      }
+    ],
+    "20.6 Write tests for the anthropic web search request": [
+      {
+        "executionId": "b3e2ba61-a76b-4629-8548-40b3e83ce2b7",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794341361395
+      },
+      {
+        "executionId": "b3e2ba61-a76b-4629-8548-40b3e83ce2b7",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794341511515
+      }
+    ],
+    "20.7 Write tests for the daily cap": [
+      {
+        "executionId": "b3e2ba61-a76b-4629-8548-40b3e83ce2b7",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794341362294
+      },
+      {
+        "executionId": "b3e2ba61-a76b-4629-8548-40b3e83ce2b7",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794341513064
+      }
+    ],
+    "20.8 Write tests for provider and model on runs and the report": [
+      {
+        "executionId": "b3e2ba61-a76b-4629-8548-40b3e83ce2b7",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794341363220
+      },
+      {
+        "executionId": "b3e2ba61-a76b-4629-8548-40b3e83ce2b7",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794341514196
+      }
     ]
   }
 }

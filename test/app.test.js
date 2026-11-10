@@ -140,3 +140,98 @@ test('quote limit is per client per listing: 4th for same ip+listing is refused'
   // Same client, different listing is still allowed.
   assert.equal(quoteFor('listingB').allowed, true);
 });
+
+// ---------------------------------------------------------------------------
+// README content checks (task 18.4)
+// ---------------------------------------------------------------------------
+
+import { readdirSync } from 'node:fs';
+
+const ROOT_DIR = fileURLToPath(new URL('../', import.meta.url));
+const README_TEXT = readFileSync(path.join(ROOT_DIR, 'README.md'), 'utf8');
+const TEXT_EXTENSIONS = new Set(['.js', '.html', '.css', '.md', '.json']);
+
+/** Every text file (relative to the repo root) under the given top-level folders. */
+function textFilesUnder(folders) {
+  const files = [];
+  for (const folder of folders) {
+    const base = path.join(ROOT_DIR, folder);
+    let entries;
+    try {
+      entries = readdirSync(base, { recursive: true });
+    } catch {
+      continue; // folder missing: nothing to scan
+    }
+    for (const entry of entries) {
+      const full = path.join(base, String(entry));
+      if (!TEXT_EXTENSIONS.has(path.extname(full).toLowerCase())) continue;
+      files.push({ rel: path.join(folder, String(entry)), full });
+    }
+  }
+  return files;
+}
+
+const ENV_VARS_IN_README = [
+  'PORT', 'BASE_URL', 'DATA_DIR', 'ADMIN_TOKEN', 'TRUST_PROXY', 'DEMO_MODE',
+  'SITE_NAME', 'NODE_ENV', 'VISION_PROVIDER', 'VISION_API_KEY', 'VISION_MODEL',
+  'VISION_BASE_URL', 'NOTIFIER', 'SEANCE_PROVIDER', 'SEANCE_API_KEY',
+  'SEANCE_MODEL', 'SEANCE_BASE_URL', 'SEANCE_ADMIN_TOKEN',
+];
+
+test('README mentions every documented environment variable', () => {
+  for (const name of ENV_VARS_IN_README) {
+    assert.ok(new RegExp(`\\b${name}\\b`).test(README_TEXT), `README is missing ${name}`);
+  }
+});
+
+test('README does not use the old product name', () => {
+  assert.ok(!/super\s*pages/i.test(README_TEXT), 'README contains "Super Pages"');
+  assert.ok(!/superpages/i.test(README_TEXT), 'README contains "SUPERPAGES"');
+});
+
+test('README, server/, public/ and mcp/ have no trademarked phone-book names', () => {
+  const files = [
+    { rel: 'README.md', full: path.join(ROOT_DIR, 'README.md') },
+    ...textFilesUnder(['server', 'public', 'mcp']),
+  ];
+  for (const { rel, full } of files) {
+    const text = readFileSync(full, 'utf8');
+    assert.ok(!/yellow\s*pages/i.test(text), `${rel} contains "Yellow Pages"`);
+    assert.ok(!/\bYP\b/.test(text), `${rel} contains the word "YP"`);
+    assert.ok(!/walking[\s-]*fingers/i.test(text), `${rel} mentions walking fingers`);
+  }
+});
+
+test('server/ and public/ contain no "Super Pages" strings', () => {
+  for (const { rel, full } of textFilesUnder(['server', 'public'])) {
+    const text = readFileSync(full, 'utf8');
+    assert.ok(!/super\s*pages/i.test(text), `${rel} contains "Super Pages"`);
+    assert.ok(!/superpages/i.test(text), `${rel} contains "SuperPages"`);
+  }
+});
+
+test('every environment variable read under server/ appears in the README', () => {
+  const patterns = [
+    /process\.env\.([A-Z][A-Z0-9_]*)/g,
+    /\benv\.([A-Z][A-Z0-9_]*)/g,
+    /env\[['"]([A-Z][A-Z0-9_]*)['"]\]/g,
+  ];
+  const found = new Map(); // name -> first file that reads it
+  for (const { rel, full } of textFilesUnder(['server'])) {
+    if (path.extname(full) !== '.js') continue;
+    const text = readFileSync(full, 'utf8');
+    for (const re of patterns) {
+      for (const match of text.matchAll(re)) {
+        if (!found.has(match[1])) found.set(match[1], rel);
+      }
+    }
+  }
+  assert.ok(found.size > 0, 'scan found no environment variables under server/');
+  const names = [...found.keys()].sort().join(', ');
+  for (const [name, rel] of found) {
+    assert.ok(
+      new RegExp(`\\b${name}\\b`).test(README_TEXT),
+      `README does not mention ${name} (read in ${rel}). Names found by scan: ${names}`,
+    );
+  }
+});

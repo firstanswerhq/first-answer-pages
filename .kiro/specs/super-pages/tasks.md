@@ -370,7 +370,7 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
     - Files: `test/trust-proxy.test.js`
     - _Requirements: docs/launch-fixes.md section 13 (13.3)_
 
-- [ ] 14. Launch fixes: Honest demo mode (nothing fake may look real)
+- [x] 14. Launch fixes: Honest demo mode (nothing fake may look real)
   - [x] 14.1 Record the provider and block mock drafts in production
     - Save `provider` on every draft (`server/lib/drafts.js`, `server/routes/rise.js`) and on every Séance run (`server/lib/seance.js`; the field already exists on runs, make sure drafts match and old records without it read as `unknown`)
     - When the vision provider is the mock, show a yellow banner on the draft page: "Demo: no photo reader is connected, so this is a sample business, not your photo." (`server/lib/rise-html.js`, style in `public/css/style.css`)
@@ -412,7 +412,7 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
     - Files: `test/demo-mode.test.js`
     - _Requirements: docs/launch-fixes.md section 14 (14.3)_
 
-  - [ ] 14.7 Checkpoint - Safety and honest demo mode
+  - [x] 14.7 Checkpoint - Safety and honest demo mode
     - Run `node --test`; all tests for tasks 13 and 14 and all pre-existing tests must pass. Ask the user if questions arise.
 
 - [x] 15. Launch fixes: Quotes say only what's true
@@ -467,7 +467,7 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
     - Files: `test/app.test.js`
     - _Requirements: docs/launch-fixes.md section 15 (README fix)_
 
-- [ ] 16. Launch fixes: Deploy-ready on Render
+- [x] 16. Launch fixes: Deploy-ready on Render
   - [x] 16.1 Split read-only seed data from writable data
     - Read `listings.json` and `categories.json` from the repo `data/` folder; write only `drafts`, `pending`, `published`, `quotes`, `seance`, and `verified` files to `DATA_DIR` (update `createDataStore` and `configFromEnv`)
     - Refuse to start when there are 0 categories; in production, refuse to start when `DATA_DIR` or `BASE_URL` is missing (clear one-line error, exit code 1 from `server/index.js`)
@@ -542,7 +542,7 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
     - Files: `test/site-name.test.js`
     - _Requirements: docs/launch-fixes.md section 16 (SITE_NAME)_
 
-  - [ ] 16.14 Checkpoint - Deploy-ready
+  - [x] 16.14 Checkpoint - Deploy-ready
     - Run `node --test`; all tests for tasks 13 to 16 and all pre-existing tests must pass. Ask the user if questions arise.
 
 - [x] 17. Launch fixes: Owner-friendly wording and flow
@@ -652,7 +652,7 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
     - _Requirements: docs/launch-fixes.md section 17 (category page)_
 
 - [ ] 18. Launch fixes: AI basics in llms.txt and the README
-  - [ ] 18.1 Improve llms.txt
+  - [x] 18.1 Improve llms.txt
     - Say how to request a quote: the MCP tool `request_quote` at `/mcp`, and `POST /api/quotes`
     - Mark owner-confirmed listings
     - Do not claim one city in the header when listings span several (list cities, or say "local businesses" when more than one)
@@ -660,21 +660,21 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
     - Files: `server/lib/llms.js`, `server/routes/llms.js`
     - _Requirements: docs/launch-fixes.md section 18 (llms.txt)_
 
-  - [ ] 18.2 Rewrite the README
+  - [x] 18.2 Rewrite the README
     - Do not use "Super Pages" in README or any user-facing text (Thryv owns the SUPERPAGES trademark); the spec folder name `super-pages` stays as an internal id only
     - Call the features "Owner tools" or name each one (Rise from the Grave, Agent-ready, Owner-confirmed stamp, Séance, with the accent in prose)
     - List every env var: `PORT`, `BASE_URL`, `DATA_DIR`, `ADMIN_TOKEN`, `TRUST_PROXY`, `DEMO_MODE`, `SITE_NAME`, `NODE_ENV`, and the provider keys (`VISION_PROVIDER`, `VISION_API_KEY`, `VISION_MODEL`, `VISION_BASE_URL`, `NOTIFIER`, `SEANCE_PROVIDER`, `SEANCE_API_KEY`, `SEANCE_MODEL`, `SEANCE_ADMIN_TOKEN` as a fallback name)
     - Files: `README.md`
     - _Requirements: docs/launch-fixes.md section 18 (README)_
 
-  - [ ] 18.3 Write tests for llms.txt
+  - [x] 18.3 Write tests for llms.txt
     - Extend `test/llms.test.js`
     - Examples: output mentions `request_quote`, `/mcp`, and `POST /api/quotes`; owner-confirmed listings are marked and unconfirmed are not; a multi-city data set does not claim one city in the header; a one-city set may name it
     - **Property: The header never names a single city unless every listing is in that city** (fast-check over generated listing sets)
     - Files: `test/llms.test.js`
     - _Requirements: docs/launch-fixes.md section 18 (llms.txt)_
 
-  - [ ] 18.4 Write tests for the README
+  - [x] 18.4 Write tests for the README
     - Extend `test/app.test.js`
     - Examples: README contains every env var listed in 18.2; README does not contain "Super Pages" or "SUPERPAGES" (case-insensitive); no "Yellow Pages", "YP", or walking-fingers references; user-facing strings under `server/` and `public/` do not contain "Super Pages"
     - **Property: Every env var read by server/lib/config.js appears in the README** (scan `process.env` / `env.NAME` names in `server/` and check each is documented)
@@ -686,6 +686,70 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
 
 - [ ] 19. Final checkpoint - Full suite
   - Run `node --test`; the entire suite, including all pre-existing tests and the tests for tasks 13 to 18, must be green. Ask the user if questions arise.
+
+- [ ] 20. Connect a real AI (Claude, through the Anthropic API)
+  - [x] 20.1 Config, model env, and production startup checks
+    - Verify `server/lib/config.js` already reads `SEANCE_MODEL`; make sure `VISION_MODEL` and `SEANCE_MODEL` come from env alone, with no hard-coded model ids anywhere in `server/`
+    - Add `MAX_AI_CALLS_PER_DAY` to config as `maxAiCallsPerDay` (default 200; must be a positive integer; an invalid value logs a warning that does not echo the value and uses the default)
+    - Document `MAX_AI_CALLS_PER_DAY` in the README env table and in a `render.yaml` comment
+    - In production, `startupProblems` also refuses to start when `VISION_PROVIDER` or `SEANCE_PROVIDER` names a known provider but its key is missing, or (for anthropic) its model is missing, so production never falls back to the mock silently; messages name the variable and never print a key value
+    - Files: `server/lib/config.js`, `README.md`, `render.yaml`
+    - _Requirements: docs/launch-fixes.md section 19 (env for production, cost guard, no silent mock in production)_
+
+  - [x] 20.2 Add web search to the Séance anthropic request
+    - In `server/lib/assistant.js`, for the anthropic provider only, add `tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }]` to the Messages request body; set `max_tokens` to at least 1024; send no beta header; the key goes only in the `x-api-key` header
+    - The answer is all `text` blocks in `content` joined in order; ignore `server_tool_use` and `web_search_tool_result` blocks
+    - If `stop_reason` is `pause_turn`, send the request again once with the assistant content appended as the last assistant message; use the text blocks of the second (final) reply as the answer and document this choice in a code comment
+    - `provider.ask` resolves `{ answer, provider, model, webSearch: true }` for anthropic and `webSearch: false` for openai and mock (mock model is `'mock'`); `runSeance` already accepts the object form
+    - Files: `server/lib/assistant.js`
+    - _Requirements: docs/launch-fixes.md section 19 (Séance web search)_
+
+  - [x] 20.3 Add the daily AI call cap
+    - New `server/lib/ai-budget.js` exporting `createAiBudget({ clock, limit })` with `consume()` returning `{ allowed, remaining, resetsAt }`; count real provider calls per UTC day in memory (resets at UTC midnight and on restart); no new data file, because `test/data-dir.test.js` restricts the writable files
+    - Share one budget between `/rise` (vision, before `extractDraft`) and Séance (before `provider.ask`) through `ctx.aiBudget`, built in `createApp` from `maxAiCallsPerDay`; mock providers never consume budget
+    - Over the cap, `/rise` returns 429 with a friendly page "We have reached today's limit for AI help. Try again tomorrow."; `POST /seance/run` returns 429 JSON `{ error: "We have reached today's limit for AI help. Try again tomorrow." }` with a `Retry-After` header set to the seconds until UTC midnight
+    - Never fall back to the mock when a real provider is configured, in production or otherwise; provider failures keep returning 502 as today
+    - Files: `server/lib/ai-budget.js`, `server/app.js`, `server/routes/rise.js`, `server/routes/seance.js`
+    - _Requirements: docs/launch-fixes.md section 19 (cost guard)_
+
+  - [x] 20.4 Save and show provider and model on each Séance run
+    - `runSeance` stores `provider`, `model`, and `webSearch` on the run (`server/lib/seance.js`)
+    - The report shows "Asked Claude (with web search) on Nov 10, 2026." for anthropic runs with `webSearch`; the label is Claude for provider anthropic and OpenAI for openai; "Demo answer (no AI connected)" stays unchanged for mock; the date uses the Chicago-time formatter in the format `Mon D, YYYY`
+    - The model name appears in the run meta line and in the JSON history; old runs without a model show no model; all values are HTML-escaped
+    - Files: `server/lib/seance.js`, `server/lib/seance-html.js`, `server/routes/seance.js`
+    - _Requirements: docs/launch-fixes.md section 19 (save and show provider and model)_
+
+  - [x] 20.5 Write tests for config and startup problems
+    - New file `test/ai-config.test.js`
+    - Examples: `MAX_AI_CALLS_PER_DAY` unset gives 200; a valid positive integer is used; zero, negative, fractional, and non-numeric values warn and use 200; the warning does not contain the bad value; `SEANCE_MODEL` and `VISION_MODEL` come from env alone; production startup refuses a missing key or missing anthropic model for vision and for Séance; no key value is ever printed
+    - **Property: For any string, `maxAiCallsPerDay` is either that string's positive integer value or 200** (fast-check)
+    - Files: `test/ai-config.test.js`
+    - _Requirements: docs/launch-fixes.md section 19 (env for production, cost guard)_
+
+  - [x] 20.6 Write tests for the anthropic web search request
+    - Extend `test/providers.test.js`, stubbed `fetch` only
+    - Examples: the request body `tools` array contains the `web_search_20250305` tool named `web_search` with `max_uses` 3; `max_tokens` is at least 1024; no `anthropic-beta` header; the key appears only in the `x-api-key` header and never in logs or errors; `text` blocks are joined in order and `server_tool_use` and `web_search_tool_result` blocks are ignored; `pause_turn` triggers exactly one extra request with the assistant content appended as the last assistant message; openai and mock requests have no `tools`
+    - **Property: For any sequence of content blocks, the answer equals the `text` blocks joined in order** (fast-check)
+    - Files: `test/providers.test.js`
+    - _Requirements: docs/launch-fixes.md section 19 (Séance web search, tests)_
+
+  - [x] 20.7 Write tests for the daily cap
+    - New file `test/ai-budget.test.js`
+    - Unit tests with a fake clock: the count resets at UTC midnight; `remaining` and `resetsAt` are correct
+    - **Property: Never more than `limit` calls are allowed per UTC day over arbitrary call times** (fast-check)
+    - Integration with stubbed real providers (`{ name: 'anthropic' }`) and stubbed `fetch` only: `/rise` and `POST /seance/run` share one budget; over the cap both return the friendly 429 message, and the Séance response has `Retry-After`; mock providers never consume budget; with a real provider configured and the cap exhausted, nothing is answered by the mock
+    - Files: `test/ai-budget.test.js`
+    - _Requirements: docs/launch-fixes.md section 19 (cost guard, tests)_
+
+  - [x] 20.8 Write tests for provider and model on runs and the report
+    - Extend `test/seance-history.test.js` and `test/seance.test.js`
+    - Examples: a run stores `provider`, `model`, and `webSearch`; the report shows "Asked Claude (with web search) on Nov 10, 2026."; openai shows OpenAI; mock shows "Demo answer (no AI connected)"; old runs without a model show no model; the model appears in the run meta line and the JSON history
+    - **Property: For any model string, the report escapes it and never emits it as raw HTML** (fast-check)
+    - Files: `test/seance-history.test.js`, `test/seance.test.js`
+    - _Requirements: docs/launch-fixes.md section 19 (save and show provider and model)_
+
+  - [ ] 20.9 Checkpoint - Real AI connected
+    - Run `node --test`; everything must be green, including all pre-existing tests and the tests for tasks 13 to 20. Ask the user if questions arise.
 
 ## Notes
 

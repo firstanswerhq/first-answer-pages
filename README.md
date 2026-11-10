@@ -23,14 +23,15 @@ Routes:
 - `GET /` directory home page (optional `?category=` and `?city=` filters)
 - `GET /listings/:id` one listing page, with JSON-LD
 - `GET /api/listings/:id` one listing as JSON
-- `GET /llms.txt` plain-text feed of all listings
+- `GET /llms.txt` plain-text feed of all listings. It explains how to request a quote (MCP tool or `POST /api/quotes`) and marks owner-confirmed listings with the confirmed date.
 - `GET /sitemap.xml` XML sitemap
+- `GET /healthz` liveness check. Returns `{ "ok": true }`.
 
-Super Pages routes are listed in the next section.
+The owner tools routes are listed in the next section.
 
-## Super Pages
+## Owner tools
 
-Super Pages adds four features on top of the directory.
+Four features help a business owner get listed and help AI assistants use the listing: Rise from the Grave, Agent-ready (MCP and WebMCP), the Owner-confirmed stamp, and the Séance.
 
 ### Rise from the Grave (`/rise`)
 
@@ -56,7 +57,7 @@ Owner confirmation sends a listing to a pending queue. It is public only after a
 - `POST /admin/pending/:id/reject` rejects a pending listing.
 - `POST /admin/listings/:id/unpublish` takes a public listing down.
 
-### Agent-ready: MCP (`/mcp`)
+### Agent-ready: MCP (`/mcp`) and WebMCP
 
 `POST /mcp` is a Model Context Protocol endpoint over plain JSON-RPC 2.0. It takes one message per request (no batches). `GET` and `DELETE` return 405. It has three tools:
 
@@ -100,7 +101,7 @@ Quote requests are also available without MCP: `POST /api/quotes` (JSON) and a p
 
 Each listing page loads `/js/webmcp.js`. In a browser that supports WebMCP, it registers `get_listing` and `request_quote` for that page. `request_quote` always asks the visitor to confirm before anything is sent. In browsers without WebMCP the script does nothing, and the page and its quote form work the same.
 
-### Owner-confirmed stamp (`/api/verify/:id`)
+### The Owner-confirmed stamp (`/api/verify/:id`)
 
 A listing confirmed through Rise from the Grave shows an "Owner-confirmed" stamp with a date and a SHA-256 hash of the listing. The JSON-LD on the page carries the same hash as `identifier` and the date as `dateModified`.
 
@@ -110,9 +111,9 @@ A listing confirmed through Rise from the Grave shows an "Owner-confirmed" stamp
 
 Important: the stamp is a tamper check. It means the listing is unchanged since the owner confirmed it. It does not prove ownership or identity. Nothing in this app checks who confirmed a draft. Real ownership checks, for example a code sent by phone or email to the listed number, are future work.
 
-### The Seance (`/seance/:id`)
+### The Séance (`/seance/:id`)
 
-The Seance asks an AI assistant "best <category> in <city>" for a listing and records whether the answer names the business. Runs are kept as history so you can compare answers before and after the listing went public (after owner confirmation and review).
+The Séance asks an AI assistant "best <category> in <city>" for a listing and records whether the answer names the business. Runs are kept as history so you can compare answers before and after the listing went public (after owner confirmation and review).
 
 - `GET /seance/:id` HTML report for one listing. Works without JavaScript.
 - `GET /api/seance/:id` the same history as JSON.
@@ -126,13 +127,13 @@ No A2A (agent-to-agent) endpoint is built. The app has a small seam where one co
 
 ## Environment variables
 
-All are optional. With none set, the app runs on port 3000 with mock providers and the repo `data/` folder.
+All are optional except in production, where `DATA_DIR` and `BASE_URL` are required (the server will not start without them). With none set, the app runs on port 3000 with mock providers and the repo `data/` folder.
 
 | Variable | Default | What it does |
 | --- | --- | --- |
 | `PORT` | `3000` | Port to listen on. |
 | `BASE_URL` | `http://localhost:3000` | Public site address used in `/llms.txt` and `/sitemap.xml`. A trailing slash is removed. |
-| `DATA_DIR` | repo `data/` folder | Folder the app writes its files to (drafts, pending, published, verified, quotes, Seance history). Required when `NODE_ENV=production`. The seed files `listings.json` and `categories.json` are always read from the repo `data/` folder when `DATA_DIR` is set. |
+| `DATA_DIR` | repo `data/` folder | Folder the app writes its files to (drafts, pending, published, verified, quotes, Séance history). Required when `NODE_ENV=production`. The seed files `listings.json` and `categories.json` are always read from the repo `data/` folder when `DATA_DIR` is set. |
 | `NODE_ENV` | unset | `production` changes defaults: trust proxy is `1`, `DEMO_MODE` is off, seed sample listings are left out of `/sitemap.xml` and `/llms.txt`, and photo listing (Rise from the Grave) returns 503 "coming soon" when no vision key is set. |
 | `SITE_NAME` | `First Answer Pages` | The name shown in page headers, page titles, the footer, `/llms.txt`, and the MCP server title. One line, up to 80 characters. |
 | `DEMO_MODE` | `true` unless `NODE_ENV=production` | When on, every page has the `noindex` meta tag and a "Sample listings for demonstration" footer line. |
@@ -143,20 +144,22 @@ All are optional. With none set, the app runs on port 3000 with mock providers a
 | `VISION_MODEL` | unset | Model name for the vision provider. Required for a real provider. If it is missing, the app logs a warning and uses the mock. |
 | `VISION_BASE_URL` | `https://api.openai.com/v1` | Base URL for an OpenAI-compatible vision API. Only used when `VISION_PROVIDER=openai`. |
 | `NOTIFIER` | unset | `console` writes one JSON line per quote request (quote id and listing id only) to the console. Unset or any other value uses the mock, which sends nothing. |
-| `SEANCE_PROVIDER` | unset | `openai` or `anthropic`. The AI assistant the Seance asks. Any other value uses the mock. |
-| `SEANCE_API_KEY` | unset | API key for the Seance provider. Without it the mock is used. |
-| `SEANCE_MODEL` | unset | Model name for the Seance provider. |
-| `SEANCE_BASE_URL` | `https://api.openai.com/v1` | Base URL for an OpenAI-compatible Seance API. Only used when `SEANCE_PROVIDER=openai`. |
+| `SEANCE_PROVIDER` | unset | `openai` or `anthropic`. The AI assistant the Séance asks. Any other value uses the mock. |
+| `SEANCE_API_KEY` | unset | API key for the Séance provider. Without it the mock is used. |
+| `SEANCE_MODEL` | unset | Model name for the Séance provider. |
+| `SEANCE_BASE_URL` | `https://api.openai.com/v1` | Base URL for an OpenAI-compatible Séance API. Only used when `SEANCE_PROVIDER=openai`. |
+| `MAX_AI_CALLS_PER_DAY` | `200` | Daily cap on real AI provider calls, shared by photo listing and the Séance. Counted per UTC day in memory; resets at midnight UTC and on restart. Over the cap, people see "Try again tomorrow". Must be a positive whole number; anything else logs a warning and uses 200. |
 | `SEANCE_ADMIN_TOKEN` | unset | Older name for `ADMIN_TOKEN`. Used only when `ADMIN_TOKEN` is not set. |
+| `NODE_TEST_CONTEXT` | unset | Set by Node's test runner, not by you. When present, all providers use the mock. Do not set it in production. |
 
 API keys and the admin token are never logged, returned, or stored in data files.
 
 ### Mock providers
 
-The vision, Seance, and notifier each use a mock whenever no key is set (for `NOTIFIER`, whenever it is not `console`). They also always use the mock under the test runner, even if keys are set, so tests never make network calls. A mock makes no network call and gives the same output for the same input.
+The vision provider, Séance, and notifier each use a mock whenever no key is set (for `NOTIFIER`, whenever it is not `console`). They also always use the mock under the test runner, even if keys are set, so tests never make network calls. A mock makes no network call and gives the same output for the same input.
 
 - The mock vision provider returns fictional businesses chosen from the image bytes.
-- The mock Seance gives canned answers, labeled "Demo answer (no AI connected)".
+- The mock Séance gives canned answers, labeled "Demo answer (no AI connected)".
 - The mock notifier keeps quote requests in memory only.
 
 Real provider calls time out after 30 seconds.
@@ -194,16 +197,27 @@ The seed data is fictional. The businesses, names, and phone numbers are made up
 
 ### Files the web layer writes
 
-Super Pages is the one place the web layer writes files. It writes only these, inside `DATA_DIR`, using a safe write (temp file, then rename):
+The owner tools are the one place the web layer writes files. It writes only these, inside `DATA_DIR`, using a safe write (temp file, then rename):
 
 - `drafts.json` drafts from Rise from the Grave
 - `pending.json` drafts waiting for review
 - `published.json` listings confirmed through Rise from the Grave
 - `verified.json` the Owner-confirmed date for each confirmed listing
 - `quotes.json` quote requests
-- `seance.json` Seance run history
+- `seance.json` Séance run history
 
 `listings.json` and `categories.json` are never written by the app. Published listings from `published.json` appear alongside the seed listings. The `data/` folder is never served over HTTP, so a request such as `/data/listings.json` returns 404. Uploaded images are never written anywhere.
+
+## Deploy on Render
+
+`render.yaml` is a Render Blueprint for one web service.
+
+- Node.js 22 is required (`engines` in `package.json` is `22.x`).
+- Build: `npm ci --omit=dev`. Start: `npm start`.
+- Health check: `GET /healthz`.
+- A 1 GB disk is mounted at `/var/data` and `DATA_DIR` points to it, so drafts, pending listings, and quotes survive restarts and deploys.
+- Production settings: `NODE_ENV=production`, `TRUST_PROXY=1`, `DEMO_MODE=false`.
+- Type `BASE_URL`, `SITE_NAME`, `VISION_API_KEY`, and `SEANCE_API_KEY` into Render. They are not committed. Render generates `ADMIN_TOKEN` for you.
 
 ## License
 

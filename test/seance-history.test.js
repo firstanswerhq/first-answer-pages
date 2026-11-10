@@ -647,3 +647,108 @@ test('Property: the headline matches the named value of the run with the greates
     { numRuns: 30 },
   );
 });
+
+// ---- provider and model on runs and the report (task 20.8) ----------------------------
+
+/** Stub assistant: resolves `result` (an object or a string). */
+const stubAssistant = result => ({ name: 'stub', ask: async () => result });
+const withAssistant = (env, assistant) => ({ ...env.ctx, assistantProvider: assistant });
+const providerListing = { id: 'provider-listing', name: 'Provider Plumbing' };
+const providerPage = runs => seanceReportPage(providerListing, runs, null);
+
+test('runSeance stores provider, model, and webSearch from the assistant result', async () => {
+  const env = await startEnv();
+  const run = await runSeance(
+    withAssistant(env, stubAssistant({ answer: 'Hi.', provider: 'anthropic', model: 'claude-test-1', webSearch: true })),
+    LISTING_IDS[0],
+  );
+  assert.equal(run.provider, 'anthropic');
+  assert.equal(run.model, 'claude-test-1');
+  assert.equal(run.webSearch, true);
+  const file = await readSeanceFile(env);
+  assert.deepEqual(file.find(r => r.id === run.id), run);
+});
+
+test('runSeance stores webSearch:false but omits model and webSearch keys when undefined', async () => {
+  const env = await startEnv();
+  const off = await runSeance(
+    withAssistant(env, stubAssistant({ answer: 'Hi.', provider: 'openai', model: 'gpt-test', webSearch: false })),
+    LISTING_IDS[0],
+  );
+  assert.equal(off.webSearch, false);
+
+  const bare = await runSeance(withAssistant(env, stubAssistant({ answer: 'Hi.' })), LISTING_IDS[0]);
+  assert.equal(bare.provider, 'stub');
+  assert.ok(!('model' in bare));
+  assert.ok(!('webSearch' in bare));
+
+  const plain = await runSeance(withAssistant(env, stubAssistant('Just a string.')), LISTING_IDS[0]);
+  assert.equal(plain.answer, 'Just a string.');
+  assert.ok(!('model' in plain));
+  assert.ok(!('webSearch' in plain));
+  const stored = (await readSeanceFile(env)).find(r => r.id === plain.id);
+  assert.ok(!('model' in stored) && !('webSearch' in stored));
+});
+
+test('report shows the asked line with web search for Claude', () => {
+  const html = providerPage([
+    makeRun(providerListing.id, { provider: 'anthropic', model: 'claude-x', webSearch: true, timestamp: '2026-11-10T18:00:00.000Z' }),
+  ]);
+  assert.ok(html.includes('<p class="seance-asked">Asked Claude (with web search) on Nov 10, 2026.</p>'));
+});
+
+test('report asked line omits web search when webSearch is not true', () => {
+  const html = providerPage([
+    makeRun(providerListing.id, { provider: 'anthropic', webSearch: false, timestamp: '2026-11-10T18:00:00.000Z' }),
+  ]);
+  assert.ok(html.includes('<p class="seance-asked">Asked Claude on Nov 10, 2026.</p>'));
+});
+
+test('report labels the openai provider as OpenAI in the asked line', () => {
+  const html = providerPage([
+    makeRun(providerListing.id, { provider: 'openai', model: 'gpt-x', timestamp: '2026-11-10T18:00:00.000Z' }),
+  ]);
+  assert.ok(html.includes('<p class="seance-asked">Asked OpenAI on Nov 10, 2026.</p>'));
+});
+
+test('report has no asked line for mock runs, which show the demo label', () => {
+  const html = providerPage([makeRun(providerListing.id, { provider: 'mock', model: 'demo-model' })]);
+  assert.ok(!html.includes('seance-asked'));
+  assert.ok(html.includes('Demo answer (no AI connected)'));
+});
+
+test('old runs without a model still render', () => {
+  const html = providerPage([makeRun(providerListing.id, { provider: 'openai' })]);
+  assert.ok(html.includes('<p class="seance-meta">openai &middot; best plumbers in Nashville &middot; did not name the business</p>'));
+});
+
+test('the model appears in the meta line and in the JSON history', async () => {
+  const env = await startEnv();
+  const id = LISTING_IDS[0];
+  const history = createSeanceStore(env.store);
+  await history.append(makeRun(id, { provider: 'anthropic', model: 'claude-meta-1', webSearch: true }));
+
+  const html = await (await fetch(`${env.base}/seance/${id}`)).text();
+  assert.ok(html.includes('<p class="seance-meta">anthropic &middot; claude-meta-1 &middot; best plumbers in Nashville'));
+  const json = await (await fetch(`${env.base}/api/seance/${id}`)).json();
+  assert.equal(json.runs[0].model, 'claude-meta-1');
+  assert.equal(json.runs[0].webSearch, true);
+});
+
+test('Property: any model string is HTML-escaped in the report', () => {
+  fc.assert(
+    fc.property(fc.fullUnicodeString({ maxLength: 40 }), s => {
+      const model = `<i>${s}&"'`;
+      const html = providerPage([makeRun(providerListing.id, { provider: 'openai', model })]);
+      assert.ok(!html.includes(model), 'raw model is not present');
+      const escaped = model
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+      assert.ok(html.includes(` &middot; ${escaped} &middot; `));
+    }),
+    { numRuns: 50 },
+  );
+});
