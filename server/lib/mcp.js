@@ -15,7 +15,8 @@ import { submitQuote } from './quotes.js';
 import { verificationFor } from './verifier.js';
 import { publicListing } from './public-listing.js';
 import { DEFAULT_SITE_NAME } from './config.js';
-import { normalizeCategory, normalizeCity } from './search-match.js';
+import { normalizeCategory, normalizeCity, categoryForQuery } from './search-match.js';
+import { filledHours } from './html.js';
 
 export const SUPPORTED_PROTOCOL_VERSIONS = Object.freeze(['2025-06-18', '2025-03-26', '2024-11-05']);
 export const SERVER_INFO = Object.freeze({ name: 'first-answer-pages', version: '0.1.0' });
@@ -25,7 +26,7 @@ export const TOOLS = Object.freeze([
   {
     name: 'search_listings',
     description:
-      'Search the local business directory. Optional filters: category, city, and a text query matched against name, description, and services. Returns up to 25 listings.',
+      'Search the local business directory. Optional filters: category, city, and a text query matched against name, description, services, and the category (so "plumber" finds every plumber). Returns up to 25 listings.',
     inputSchema: SEARCH_LISTINGS_SCHEMA,
   },
   {
@@ -113,7 +114,8 @@ function toolFailure(message) {
 }
 
 function listingUrl(ctx, id) {
-  const base = String(ctx.config?.baseUrl ?? '').replace(/\/+$/, '');
+  // requestBaseUrl comes from the HTTP route (BASE_URL, or the request host when BASE_URL is unset locally).
+  const base = String(ctx.requestBaseUrl ?? ctx.config?.baseUrl ?? '').replace(/\/+$/, '');
   return `${base}/listings/${encodeURIComponent(id)}`;
 }
 
@@ -139,16 +141,25 @@ function nonEmpty(v) {
 }
 
 function searchListings(ctx, args) {
+  const categories = ctx.store.getCategories();
   const rawCategory = nonEmpty(args.category);
   const rawCity = nonEmpty(args.city);
-  const matches = ctx.store.searchListings({
-    category: rawCategory === undefined
-      ? undefined
-      : (normalizeCategory(rawCategory, ctx.store.getCategories()) ?? rawCategory),
-    city: rawCity === undefined ? undefined : (nonEmpty(normalizeCity(rawCity)) ?? rawCity),
-    query: nonEmpty(args.query),
-    limit: SEARCH_LIMIT,
-  });
+  const category = rawCategory === undefined ? undefined : (normalizeCategory(rawCategory, categories) ?? rawCategory);
+  const city = rawCity === undefined ? undefined : (nonEmpty(normalizeCity(rawCity)) ?? rawCity);
+  const query = nonEmpty(args.query);
+
+  let matches;
+  // A query that names a trade ("plumber") also matches every listing in that
+  // category, not just names, descriptions and services that contain the word.
+  const queryCategory = query === undefined ? undefined : categoryForQuery(query, categories);
+  if (queryCategory && (category === undefined || category === queryCategory)) {
+    const textIds = new Set(ctx.store.searchListings({ category, city, query }).map(l => l.id));
+    matches = ctx.store.searchListings({ category, city })
+      .filter(l => l.category === queryCategory || textIds.has(l.id))
+      .slice(0, SEARCH_LIMIT);
+  } else {
+    matches = ctx.store.searchListings({ category, city, query, limit: SEARCH_LIMIT });
+  }
   const listings = matches.map(l => summarize(ctx, l));
   return toolSuccess({ listings, count: listings.length });
 }
@@ -160,7 +171,12 @@ function getListing(ctx, args) {
   const verification = v
     ? { verified: true, verifiedDate: v.verifiedDate, hash: v.hash }
     : { verified: false, verifiedDate: null, hash: null };
-  return toolSuccess({ listing: publicListing(listing), verification });
+  // Hours: only the days the owner filled in, the same as the page and JSON-LD.
+  const out = publicListing(listing);
+  if (out && out.hours && typeof out.hours === 'object') {
+    out.hours = Object.fromEntries(filledHours(out.hours).map(([day, text]) => [day.toLowerCase(), text]));
+  }
+  return toolSuccess({ listing: out, verification });
 }
 
 async function requestQuote(ctx, args, clientIp, id) {

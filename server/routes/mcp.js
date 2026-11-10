@@ -4,6 +4,7 @@
 
 import express, { Router } from 'express';
 import { RULES } from '../lib/rate-limiter.js';
+import { baseUrlFor } from '../lib/base-url.js';
 import {
   handleRpc,
   parseErrorResponse,
@@ -73,7 +74,8 @@ export function createMcpRouter(ctx) {
         const r = invalidRequestResponse();
         return sendJson(res, r.status, r.body);
       }
-      const r = await handleRpc(ctx, message, req.ip);
+      // Absolute listing URLs use BASE_URL, or this request's host when BASE_URL is unset (local runs).
+      const r = await handleRpc({ ...ctx, requestBaseUrl: baseUrlFor(req, ctx.config) }, message, req.ip);
       if (r.body === null) return res.status(r.status).end();
       sendJson(res, r.status, r.body);
     } catch {

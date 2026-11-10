@@ -323,13 +323,15 @@ function hoursRow(html, day) {
   return m ? m[1] : undefined;
 }
 
-test('listingDetail shows hours for Monday and "Closed" for empty, blank, and missing days', () => {
+// Updated by the third review round: a day the owner left blank is left out, never shown as "Closed".
+test('listingDetail shows hours for Monday and leaves out empty, blank, and missing days', () => {
   const html = listingDetail({ ...HOURS_LISTING }, undefined, { categories });
   assert.equal(hoursRow(html, 'Monday'), '7:00 AM - 5:00 PM');
-  for (const day of DAY_NAMES.slice(1)) assert.equal(hoursRow(html, day), 'Closed', day);
+  for (const day of DAY_NAMES.slice(1)) assert.equal(hoursRow(html, day), undefined, day);
+  assert.ok(!html.includes('>Closed<'));
 });
 
-test('listing page: Closed days in the table, and JSON-LD lists only Monday', async () => {
+test('listing page: only Monday in the table, and JSON-LD lists only Monday', async () => {
   const env = await makeEnv({
     files: { 'published.json': JSON.stringify([HOURS_LISTING]) },
     config: { baseUrl: 'http://example.test' },
@@ -338,7 +340,7 @@ test('listing page: Closed days in the table, and JSON-LD lists only Monday', as
   assert.equal(res.status, 200);
   const html = await res.text();
   assert.equal(hoursRow(html, 'Monday'), '7:00 AM - 5:00 PM');
-  for (const day of DAY_NAMES.slice(1)) assert.equal(hoursRow(html, day), 'Closed', day);
+  for (const day of DAY_NAMES.slice(1)) assert.equal(hoursRow(html, day), undefined, day);
 
   const ld = /<script type="application\/ld\+json">\s*([\s\S]*?)\s*<\/script>/.exec(html);
   assert.ok(ld, 'JSON-LD block present');

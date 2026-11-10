@@ -28,6 +28,7 @@ import { createRiseRouter }     from './routes/rise.js';
 import { createMcpRouter }      from './routes/mcp.js';
 import { createSeanceRouter }   from './routes/seance.js';
 import { createAdminRouter }   from './routes/admin.js';
+import { createPagesRouter }    from './routes/pages.js';
 import { mountA2A }             from './routes/a2a.js';
 import { layout, markDemo, applySiteName } from './lib/html.js';
 
@@ -174,6 +175,9 @@ export function createApp(deps = {}) {
     res.set('Cache-Control', 'no-store');
     res.status(200).json({ ok: true });
   });
+
+  // /about, /privacy, /robots.txt, and the footer contact line on every HTML page.
+  app.use(createPagesRouter(ctx));
 
   // IndexNow key file at the site root, so engines can check the key is ours.
   if (ctx.indexNow?.enabled && ctx.indexNow.key) {

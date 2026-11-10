@@ -20,7 +20,7 @@ export function createSitemapRouter(ctx) {
     const listings = config.production && typeof store.isSeed === 'function'
       ? store.getListings().filter(l => !store.isSeed(l.id))
       : store.getListings();
-    res.status(200).type('application/xml').send(generateSitemap(listings.map(publicListing), baseUrlFor(req, config)));
+    res.status(200).type('application/xml').send(generateSitemap(listings.map(publicListing), baseUrlFor(req, config), store.getCategories()));
   });
 
   return router;

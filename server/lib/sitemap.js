@@ -17,10 +17,18 @@ function escapeXml(value) {
 /**
  * @param {object[]} listings
  * @param {string} baseUrl
+ * @param {{ slug: string }[]} [categories]  when given, adds `/?category=<slug>`
+ *   for every category with at least one of `listings`, in category order
  * @returns {string} XML string
  */
-export function generateSitemap(listings, baseUrl) {
-  const urls = [`${baseUrl}/`, ...listings.map(l => `${baseUrl}/listings/${l.id}`)];
+export function generateSitemap(listings, baseUrl, categories) {
+  const used = new Set(listings.map(l => l.category));
+  const categoryUrls = Array.isArray(categories)
+    ? categories
+      .filter(c => c && typeof c.slug === 'string' && used.has(c.slug))
+      .map(c => `${baseUrl}/?category=${encodeURIComponent(c.slug)}`)
+    : [];
+  const urls = [`${baseUrl}/`, ...categoryUrls, ...listings.map(l => `${baseUrl}/listings/${l.id}`)];
 
   const entries = urls.map(url => `  <url>\n    <loc>${escapeXml(url)}</loc>\n  </url>`);
 

@@ -8,6 +8,7 @@ import { layout, listingCard, escapeHtml } from '../lib/html.js';
 import { publicListing } from '../lib/public-listing.js';
 import { DEFAULT_SITE_NAME } from '../lib/config.js';
 import { normalizeCategory, normalizeCity } from '../lib/search-match.js';
+import { baseUrlFor } from '../lib/base-url.js';
 
 /** Reads a query param as a trimmed string, ignoring arrays/objects. */
 function param(value) {
@@ -103,7 +104,16 @@ ${results}`;
       title = `${titleCity ? `${categoryLabel} in ${titleCity}` : categoryLabel} | ${DEFAULT_SITE_NAME}`;
     }
 
-    res.status(200).type('html').send(layout({ title, body }));
+    // Canonical: the home page, or the category page for any filtered view of a
+    // known category (city filters point at the category page).
+    const base = baseUrlFor(req, ctx.config);
+    const canonical = categoryLabel ? `${base}/?category=${encodeURIComponent(category)}` : `${base}/`;
+    const where = city ? ` in ${city}` : '';
+    const description = categoryLabel
+      ? `${categoryLabel}${where}: phone numbers, services and hours. Call them or ask for a quote, free.`
+      : `Free local business directory that AI assistants can read. Find a local business${where}, call them, or ask for a quote.`;
+
+    res.status(200).type('html').send(layout({ title, body, canonical, description }));
   });
 
   return router;

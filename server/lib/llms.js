@@ -6,6 +6,7 @@
 
 import { getCategories } from '../data.js';
 import { DEFAULT_SITE_NAME } from './config.js';
+import { filledHours } from './html.js';
 
 /** Forces a value onto one line: line breaks and control characters become one space. */
 function oneLine(value) {
@@ -91,8 +92,13 @@ export function generateLlmsTxt(listings, baseUrl, categories, options = {}) {
         `Category: ${label}`,
         `City: ${oneLine(l.city)}, ${oneLine(l.state)}`,
         `Service Area: ${oneLine(l.serviceArea)}`,
-        `Page: ${base}/listings/${oneLine(l.id)}`,
       );
+      const services = (Array.isArray(l.services) ? l.services : []).map(oneLine).filter(Boolean);
+      if (services.length > 0) lines.push(`Services: ${services.join('; ')}`);
+      // Only the days the owner filled in; nothing is guessed for a skipped day.
+      const days = filledHours(l.hours).map(([day, text]) => `${day} ${oneLine(text)}`).filter(t => t.trim() !== '');
+      lines.push(`Hours: ${days.length > 0 ? days.join('; ') : 'Call for hours'}`);
+      lines.push(`Page: ${base}/listings/${oneLine(l.id)}`);
       if (isConfirmed(l.id)) {
         const date = dateFor(l.id);
         lines.push(`Owner-confirmed: yes${date ? ` (${date})` : ''}`);

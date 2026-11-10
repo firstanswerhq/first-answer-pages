@@ -66,3 +66,22 @@ export function normalizeCity(input) {
   if (comma && STATES.has(comma[2].toUpperCase())) return comma[1].trim();
   return text;
 }
+
+/**
+ * The category a free-text query names, if any: the whole query, or one of
+ * its words (e.g. "plumber", "emergency plumbing" -> plumbers).
+ * @param {unknown} query
+ * @param {{ slug: string, label: string }[]} categories
+ * @returns {string|undefined}
+ */
+export function categoryForQuery(query, categories) {
+  if (typeof query !== 'string') return undefined;
+  const whole = normalizeCategory(query, categories);
+  if (whole) return whole;
+  for (const word of normalizeText(query).split(' ')) {
+    if (word.length < 3) continue;
+    const slug = normalizeCategory(word, categories);
+    if (slug) return slug;
+  }
+  return undefined;
+}

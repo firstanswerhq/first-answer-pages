@@ -234,6 +234,8 @@ export function configFromEnv(env = process.env, opts = {}) {
     // ADMIN_TOKEN guards /admin/* and /seance/run; SEANCE_ADMIN_TOKEN is the older fallback name.
     adminToken: nonEmpty(env.ADMIN_TOKEN) || nonEmpty(env.SEANCE_ADMIN_TOKEN),
     baseUrl: (nonEmpty(env.BASE_URL) || DEFAULT_BASE_URL).replace(/\/+$/, ''),
+    // CONTACT_EMAIL: shown on /about, /privacy and in the footer when set.
+    contactEmail: nonEmpty(env.CONTACT_EMAIL),
     providerTimeoutMs: DEFAULT_PROVIDER_TIMEOUT_MS,
     // One overall deadline for a Séance question, including a pause_turn resend.
     seanceTimeoutMs: parseSeanceTimeout(env.SEANCE_TIMEOUT_MS, opts.warn ?? console.warn),
