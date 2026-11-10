@@ -3,7 +3,9 @@
  *
  * The day runs midnight to midnight America/Chicago. The cap is a total
  * (MAX_AI_CALLS_PER_DAY) shared by every paid call; photo uploads may use at
- * most min(150, total) of it, so uploads can never block Séance runs. When a
+ * most min(150, total - ceil(total / 4)) of it (at least 1 when the total is
+ * 2 or more), so a quarter of the day is always held back for Séance runs,
+ * even when the total is lowered. When a
  * `file` is given the day's counts are loaded from it at startup and written
  * after each counted call, so a restart does not reset the cap.
  */
@@ -69,14 +71,24 @@ function loadCounts(file) {
 }
 
 /**
+ * The photo-upload share of a daily total: min(150, total - ceil(total / 4)),
+ * at least 1 when the total is 2 or more. A quarter is kept for Séance runs.
+ * @param {number} cap the daily total
+ * @param {number} [photoLimit] override for the 150 ceiling
+ */
+export function photoShare(cap, photoLimit) {
+  const ceiling = Number.isInteger(photoLimit) && photoLimit > 0 ? photoLimit : PHOTO_LIMIT_DEFAULT;
+  const reserved = cap - Math.ceil(cap / 4);
+  const share = Math.min(ceiling, reserved);
+  return cap >= 2 ? Math.max(1, share) : Math.max(0, share);
+}
+
+/**
  * @param {{ clock: { now(): number }, limit?: number, photoLimit?: number, file?: string }} opts
  */
 export function createAiBudget({ clock, limit, photoLimit, file } = {}) {
   const cap = Number.isInteger(limit) && limit > 0 ? limit : DEFAULT_AI_LIMIT;
-  const photoCap = Math.min(
-    Number.isInteger(photoLimit) && photoLimit > 0 ? photoLimit : PHOTO_LIMIT_DEFAULT,
-    cap,
-  );
+  const photoCap = photoShare(cap, photoLimit);
   let dayKey = '';
   let total = 0;
   let photo = 0;

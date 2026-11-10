@@ -15,10 +15,12 @@
  *   401  wrong or missing token, with WWW-Authenticate: Bearer (consumes budget)
  *   403  cookie-authenticated POST whose Origin/Referer host is not ours (CSRF)
  *
- * The cookie value is the SHA-256 hex of the token, never the token itself.
+ * The cookie value is `<issuedAt>.<HMAC-SHA256(token, issuedAt)>` (issuedAt in
+ * ms), never the token itself. The server rejects a cookie older than 12 hours
+ * or with a bad MAC, so a copied cookie stops working on its own.
  */
 
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { DEFAULT_BASE_URL } from './config.js';
 import { RULES } from './rate-limiter.js';
 
@@ -26,7 +28,6 @@ export const ADMIN_COOKIE = 'fap_admin';
 export const ADMIN_COOKIE_MAX_AGE = 12 * 60 * 60; // 12 hours, in seconds
 
 const sha256 = s => createHash('sha256').update(String(s)).digest();
-const sha256Hex = s => createHash('sha256').update(String(s)).digest('hex');
 
 /** True when the Authorization header carries the expected bearer token. */
 export function tokenMatches(header, expected) {
@@ -41,8 +42,17 @@ export function plainTokenMatches(token, expected) {
   return timingSafeEqual(sha256(token), sha256(expected));
 }
 
-/** Cookie value for a token: SHA-256 hex, never the token. */
-export const adminCookieValue = token => sha256Hex(token);
+/** Allowed clock skew for a cookie issued "in the future" (ms). */
+const COOKIE_SKEW_MS = 60 * 1000;
+
+/**
+ * Cookie value for a token issued at `issuedAt` (ms): `<issuedAt>.<hex HMAC>`.
+ * The HMAC key is the token, so changing ADMIN_TOKEN invalidates every cookie.
+ */
+export function adminCookieValue(token, issuedAt) {
+  const t = String(Math.floor(Number(issuedAt)));
+  return `${t}.${createHmac('sha256', String(token)).update(t).digest('hex')}`;
+}
 
 /** Reads one cookie from the Cookie header by hand. */
 export function readCookie(header, name) {
@@ -55,12 +65,24 @@ export function readCookie(header, name) {
   return undefined;
 }
 
-/** True when the request carries a cookie matching SHA-256(expected token). */
-export function cookieMatches(req, expected) {
+/**
+ * True when the request carries a login cookie for the expected token that is
+ * at most 12 hours old (timing-safe MAC compare).
+ * @param {object} req
+ * @param {string} expected the admin token
+ * @param {number} [now] current time in ms (pass ctx.clock.now())
+ */
+export function cookieMatches(req, expected, now = Date.now()) {
   const value = readCookie(req.headers.cookie, ADMIN_COOKIE);
-  if (typeof value !== 'string' || value === '') return false;
-  return timingSafeEqual(sha256(value), sha256(adminCookieValue(expected)));
+  const match = typeof value === 'string' ? /^(\d{1,16})\.([0-9a-f]{64})$/.exec(value) : null;
+  if (!match) return false;
+  const issuedAt = Number(match[1]);
+  const age = now - issuedAt;
+  if (!Number.isFinite(age) || age < -COOKIE_SKEW_MS || age > ADMIN_COOKIE_MAX_AGE * 1000) return false;
+  return timingSafeEqual(sha256(value), sha256(adminCookieValue(expected, issuedAt)));
 }
+
+const clockNow = ctx => (typeof ctx?.clock?.now === 'function' ? Number(ctx.clock.now()) : Date.now());
 
 /**
  * Secure is always set in production. Outside production it is set only when
@@ -73,7 +95,7 @@ function secureFlag(ctx, req) {
 export function setAdminCookie(ctx, req, res, token) {
   const secure = secureFlag(ctx, req) ? '; Secure' : '';
   res.append('Set-Cookie',
-    `${ADMIN_COOKIE}=${adminCookieValue(token)}; HttpOnly${secure}; SameSite=Strict; Path=/admin; Max-Age=${ADMIN_COOKIE_MAX_AGE}`);
+    `${ADMIN_COOKIE}=${adminCookieValue(token, clockNow(ctx))}; HttpOnly${secure}; SameSite=Strict; Path=/admin; Max-Age=${ADMIN_COOKIE_MAX_AGE}`);
 }
 
 export function clearAdminCookie(ctx, req, res) {
@@ -137,7 +159,7 @@ export function requireAdmin(ctx, { cookie = false } = {}) {
     const hasBearer = typeof req.headers.authorization === 'string';
     if (tokenMatches(req.headers.authorization, expected)) return next();
 
-    if (cookie && cookieMatches(req, expected)) {
+    if (cookie && cookieMatches(req, expected, clockNow(ctx))) {
       const safe = req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS';
       if (!safe && !sameOrigin(ctx, req)) {
         return res.status(403).json({ error: 'Forbidden' });

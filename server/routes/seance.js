@@ -15,6 +15,58 @@ import { messagePage } from '../lib/rise-html.js';
 import { publicListing } from '../lib/public-listing.js';
 
 /**
+ * One Séance run for a listing, shared by POST /seance/run (bearer token) and
+ * the admin page's "Run AI check" button (login cookie). Same checks, same
+ * rate limits, same daily AI budget. Never throws for expected failures.
+ * @param {object} ctx resolved dependencies from createApp
+ * @param {string} id listing id
+ * @param {string} ip client address for the per-IP rate limit
+ * @returns {Promise<{ status: number, json: object, retryAfterSeconds?: number,
+ *   reason?: 'notfound'|'off'|'busy'|'limit'|'failed', run?: object }>}
+ */
+export async function runSeanceForListing(ctx, id, ip) {
+  if (typeof id !== 'string' || id === '' || !ctx.store.findById(id)) {
+    return { status: 404, json: { error: 'Listing not found' }, reason: 'notfound' };
+  }
+
+  // In production the demo assistant must never answer; nothing is counted or run.
+  if (ctx.config.production === true && ctx.assistantProvider?.name === 'mock') {
+    return { status: 503, json: { error: 'Séance is not connected' }, reason: 'off' };
+  }
+
+  const limited = ctx.rateLimiter.consumeAll([
+    { key: `seance:${ip}`, ...RULES.seance },
+    { key: `seance-listing:${id}`, ...RULES['seance-listing'] },
+  ]);
+  if (!limited.allowed) {
+    return { status: 429, json: { error: 'Too many runs' }, retryAfterSeconds: limited.retryAfterSeconds, reason: 'busy' };
+  }
+
+  if (ctx.assistantProvider?.name !== 'mock') {
+    const budget = ctx.aiBudget.consume({ kind: 'seance' });
+    if (!budget.allowed) {
+      return {
+        status: 429,
+        json: { error: "We have reached today's limit for AI help. Try again tomorrow." },
+        retryAfterSeconds: budget.retryAfterSeconds,
+        reason: 'limit',
+      };
+    }
+  }
+
+  try {
+    const run = await runSeance(ctx, id);
+    return { status: 201, json: { run }, run };
+  } catch (e) {
+    if (e instanceof SeanceError) {
+      if (e.code === 'not_found') return { status: 404, json: { error: 'Listing not found' }, reason: 'notfound' };
+      return { status: 502, json: { error: 'run failed' }, reason: 'failed' };
+    }
+    throw e;
+  }
+}
+
+/**
  * @param {object} ctx resolved dependencies from createApp
  * @returns {import('express').Router}
  */
@@ -32,40 +84,9 @@ export function createSeanceRouter(ctx) {
         if (typeof id !== 'string' || id === '') {
           return res.status(400).json({ error: 'id is required' });
         }
-        if (!ctx.store.findById(id)) return res.status(404).json({ error: 'Listing not found' });
-
-        // In production the demo assistant must never answer; nothing is counted or run.
-        if (ctx.config.production === true && ctx.assistantProvider?.name === 'mock') {
-          return res.status(503).json({ error: 'Séance is not connected' });
-        }
-
-        const limited = ctx.rateLimiter.consumeAll([
-          { key: `seance:${req.ip}`, ...RULES.seance },
-          { key: `seance-listing:${id}`, ...RULES['seance-listing'] },
-        ]);
-        if (!limited.allowed) {
-          res.set('Retry-After', String(limited.retryAfterSeconds));
-          return res.status(429).json({ error: 'Too many runs' });
-        }
-
-        if (ctx.assistantProvider?.name !== 'mock') {
-          const budget = ctx.aiBudget.consume({ kind: 'seance' });
-          if (!budget.allowed) {
-            res.set('Retry-After', String(budget.retryAfterSeconds));
-            return res.status(429).json({ error: "We have reached today's limit for AI help. Try again tomorrow." });
-          }
-        }
-
-        try {
-          const run = await runSeance(ctx, id);
-          return res.status(201).json({ run });
-        } catch (e) {
-          if (e instanceof SeanceError) {
-            if (e.code === 'not_found') return res.status(404).json({ error: 'Listing not found' });
-            return res.status(502).json({ error: 'run failed' });
-          }
-          throw e;
-        }
+        const result = await runSeanceForListing(ctx, id, req.ip);
+        if (result.retryAfterSeconds !== undefined) res.set('Retry-After', String(result.retryAfterSeconds));
+        return res.status(result.status).json(result.json);
       } catch (e) {
         next(e);
       }

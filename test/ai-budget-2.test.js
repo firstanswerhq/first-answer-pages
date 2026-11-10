@@ -60,11 +60,12 @@ test('limit 200: photo is denied after 150 photo calls, Séance still runs until
   assert.equal(budget.peek().remaining, 0);
 });
 
-test('limit 100: the photo cap is min(150, 100) = 100', () => {
+test('limit 100: the photo cap is min(150, 100 - 25) = 75, so Séance keeps 25', () => {
   const budget = createAiBudget({ clock: clockAt(), limit: 100 });
-  assert.equal(budget.photoLimit, 100);
-  for (let i = 0; i < 100; i++) assert.equal(budget.consume({ kind: 'photo' }).allowed, true);
+  assert.equal(budget.photoLimit, 75);
+  for (let i = 0; i < 75; i++) assert.equal(budget.consume({ kind: 'photo' }).allowed, true);
   assert.equal(budget.consume({ kind: 'photo' }).allowed, false);
+  for (let i = 0; i < 25; i++) assert.equal(budget.consume({ kind: 'seance' }).allowed, true, `seance ${i}`);
   assert.equal(budget.consume({ kind: 'seance' }).allowed, false, 'the total is spent');
 });
 
@@ -169,7 +170,8 @@ test('persistence: a second budget on the same file sees limit-3 on the same day
 
     const second = createAiBudget({ clock, limit: 10, file });
     assert.equal(second.peek().remaining, 7);
-    assert.equal(second.peek({ kind: 'photo' }).remaining, 7);
+    // Photo share for 10 is 10 - ceil(10/4) = 7; one photo used leaves 6.
+    assert.equal(second.peek({ kind: 'photo' }).remaining, 6);
 
     clock.t += DAY_MS;
     assert.equal(second.peek().remaining, 10, 'zero used on the next Chicago day');
@@ -233,7 +235,7 @@ test('persistence: no file is written when nothing was consumed', async () => {
 
 // ---- property -----------------------------------------------------------------------------
 
-test('Property: for any interleaving, totals stay within the limit and photo calls within min(150, limit) per Chicago day', () => {
+test('Property: for any interleaving, totals stay within the limit and photo calls within the photo share per Chicago day', () => {
   // **Validates: task 21.2 (photo share, daily reset)**
   const opArb = fc.record({
     kind: fc.constantFrom('photo', 'seance'),
@@ -246,7 +248,9 @@ test('Property: for any interleaving, totals stay within the limit and photo cal
       (limit, ops) => {
         const clock = clockAt(NOON);
         const budget = createAiBudget({ clock, limit });
-        const photoCap = Math.min(150, limit);
+        // Photo share: min(150, limit - ceil(limit / 4)), at least 1 when limit >= 2.
+        const share = Math.min(150, limit - Math.ceil(limit / 4));
+        const photoCap = limit >= 2 ? Math.max(1, share) : Math.max(0, share);
         assert.equal(budget.photoLimit, photoCap);
         const perDay = new Map();
         for (const { kind, step } of ops) {
