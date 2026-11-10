@@ -11,14 +11,16 @@ import { getCategories } from '../data.js';
  *
  * @param {object[]} listings
  * @param {string} baseUrl  e.g. "https://firstanswerpages.com"
+ * @param {object[]} [categories]  defaults to the default store's categories
  * @returns {string}
  */
-export function generateLlmsTxt(listings, baseUrl) {
-  const labels = new Map(getCategories().map(c => [c.slug, c.label]));
+export function generateLlmsTxt(listings, baseUrl, categories) {
+  const categoryList = Array.isArray(categories) ? categories : getCategories();
+  const labels = new Map(categoryList.map(c => [c.slug, c.label]));
 
   // Group by category slug, canonical category order first, unknown slugs after
   const groups = new Map();
-  for (const { slug } of getCategories()) groups.set(slug, []);
+  for (const { slug } of categoryList) groups.set(slug, []);
   for (const listing of listings) {
     if (!groups.has(listing.category)) groups.set(listing.category, []);
     groups.get(listing.category).push(listing);

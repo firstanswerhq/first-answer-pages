@@ -17,18 +17,24 @@ export function escapeHtml(value) {
 }
 
 /** Returns the display label for a category slug (falls back to the slug). */
-function categoryLabel(slug) {
-  return getCategories().find(c => c.slug === slug)?.label ?? slug;
+function categoryLabel(slug, categories) {
+  const list = Array.isArray(categories) ? categories : getCategories();
+  return list.find(c => c.slug === slug)?.label ?? slug;
 }
 
 /**
  * Wraps page content in the full HTML shell (head, nav, footer).
  *
- * @param {{ title: string, body: string, jsonLd?: string }} options
+ * @param {{ title: string, body: string, jsonLd?: string, scripts?: string[] }} options
  *   `jsonLd` is an optional serialized JSON-LD string placed in the head.
+ *   `scripts` is an optional list of module script URLs (deferred by default).
  * @returns {string}
  */
-export function layout({ title, body, jsonLd }) {
+export function layout({ title, body, jsonLd, scripts }) {
+  const scriptTags = Array.isArray(scripts) && scripts.length > 0
+    ? '\n' + scripts.map(src => `  <script type="module" src="${escapeHtml(src)}"></script>`).join('\n')
+    : '';
+
   // Prevent "</script>" sequences in JSON from closing the script block early
   const ldBlock = jsonLd
     ? `\n  <script type="application/ld+json">\n${jsonLd.replace(/</g, '\\u003c')}\n  </script>`
@@ -40,7 +46,7 @@ export function layout({ title, body, jsonLd }) {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${escapeHtml(title)}</title>
-  <link rel="stylesheet" href="/css/style.css">${ldBlock}
+  <link rel="stylesheet" href="/css/style.css">${ldBlock}${scriptTags}
 </head>
 <body>
   <nav class="site-nav">
@@ -61,12 +67,14 @@ ${body}
  * Renders a compact listing card for the home page directory.
  *
  * @param {object} listing
+ * @param {object[]} [categories]  defaults to the default store's categories
+ *   (ignored when not an array, so it is safe to use with Array#map)
  * @returns {string}
  */
-export function listingCard(listing) {
+export function listingCard(listing, categories) {
   return `<article class="listing-card">
   <h3><strong>${escapeHtml(listing.name)}</strong> <span class="phone">${escapeHtml(listing.phone)}</span></h3>
-  <p>${escapeHtml(listing.city)}, ${escapeHtml(listing.state)} &middot; ${escapeHtml(categoryLabel(listing.category))}</p>
+  <p>${escapeHtml(listing.city)}, ${escapeHtml(listing.state)} &middot; ${escapeHtml(categoryLabel(listing.category, categories))}</p>
   <p><a href="/listings/${encodeURIComponent(listing.id)}">View details →</a></p>
 </article>`;
 }
@@ -78,10 +86,13 @@ export function listingCard(listing) {
  * block at the top of the fragment when layout() is not given the jsonLd.
  *
  * @param {object} listing
- * @param {string} jsonLd  serialized JSON-LD string
+ * @param {string} [jsonLd]  serialized JSON-LD string
+ * @param {{ categories?: object[] }} [opts]  optional extras; categories
+ *   default to the default store's categories
  * @returns {string}
  */
-export function listingDetail(listing, jsonLd) {
+export function listingDetail(listing, jsonLd, opts = {}) {
+  const categories = opts?.categories;
   // Match hour keys case-insensitively ('monday' or 'Monday'); display capitalized names
   const hoursByDay = new Map(
     Object.entries(listing.hours ?? {}).map(([key, value]) => [key.toLowerCase(), value]),
@@ -109,7 +120,7 @@ export function listingDetail(listing, jsonLd) {
     <p>${escapeHtml(listing.description)}</p>
     <dl>
     <dt>Category</dt>
-    <dd>${escapeHtml(categoryLabel(listing.category))}</dd>
+    <dd>${escapeHtml(categoryLabel(listing.category, categories))}</dd>
     <dt>Phone</dt>
     <dd>${escapeHtml(listing.phone)}</dd>${addressRow}
     <dt>Service area</dt>

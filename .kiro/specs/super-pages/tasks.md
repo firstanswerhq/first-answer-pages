@@ -2,14 +2,14 @@
 
 ## Overview
 
-Plain JavaScript ES modules on Node 22 and plain Express, as set by the design. The plan follows the design's build order: step 0 foundation (`createApp` factory, data store, safe JSON writer, rate limiter, config, canonical form and verifier), then Rise from the Grave, Agent-ready, the Owner-verified stamp, and the Seance. A README and full-suite checkpoint close the plan.
+Plain JavaScript ES modules on Node 22 and plain Express, as set by the design. The plan follows the design's build order: step 0 foundation (`createApp` factory, data store, safe JSON writer, rate limiter, config, canonical form and verifier), then Rise from the Grave, Agent-ready, the Owner-confirmed stamp, and the Seance. The stamp is a tamper check, not proof of ownership or identity; real ownership checks are future work. A README and full-suite checkpoint close the plan.
 
 Each feature carries its own fast-check property tests as optional sub-tasks. Tests use `node:test` and `fast-check`, live in `test/`, use mocks and a temporary `DATA_DIR`, and make no network calls. Checkpoints between features run `node --test`.
 
 ## Tasks
 
-- [ ] 1. Step 0: Foundation (no UI, no new endpoints)
-  - [ ] 1.1 Create `server/lib/json-file.js`
+- [x] 1. Step 0: Foundation (no UI, no new endpoints)
+  - [x] 1.1 Create `server/lib/json-file.js`
     - Export `readJsonFile(path, fallback, { fs })` and `updateJsonFile(path, mutator, { fs })`
     - Module-level per-path promise queue; failed write must not block later writes
     - Read-modify-write inside the queue; bad JSON aborts the update and never overwrites the file
@@ -17,28 +17,28 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
     - Optional injectable `fs` for tests
     - _Requirements: 4.10, 4.11, 14.4, 14.8_
 
-  - [ ] 1.2 Create `server/lib/rate-limiter.js`
+  - [x] 1.2 Create `server/lib/rate-limiter.js`
     - Export `createRateLimiter({ clock })` with `consume(key, { limit, windowMs })` and a peek-then-record path for the two-key quote check
     - Sliding-window log; `retryAfterSeconds` is an integer clamped to 1 through `ceil(windowMs / 1000)`
     - Prune empty keys and cap total keys (about 10,000) with least-recently-used eviction
     - Export the `RULES` constant table (`rise`, `mcp`, `quote`, `quote-listing`, `seance`, `seance-listing`)
     - _Requirements: 1.6, 5.15, 6.9, 12.7, 14.6_
 
-  - [ ] 1.3 Create `server/lib/config.js`
+  - [x] 1.3 Create `server/lib/config.js`
     - Export `configFromEnv(env)` and `isTestRun(env)` (true when `NODE_TEST_CONTEXT` is set)
     - Resolve `dataDir` (`DATA_DIR` or repo `data/`), `adminToken`, `baseUrl`, `providerTimeoutMs` (30000), and `TRUST_PROXY`
     - Provider selection helpers return the mock unless the provider name is known, the key is set, and it is not a test run; a real vision provider without `VISION_MODEL` warns and falls back to the mock
     - Never log or return key values
     - _Requirements: 2.1, 2.3, 2.4, 2.7, 6.6, 12.1, 12.3, 12.4, 12.6, 14.3_
 
-  - [ ] 1.4 Create `server/lib/canonical.js` and `server/lib/verifier.js`
+  - [x] 1.4 Create `server/lib/canonical.js` and `server/lib/verifier.js`
     - `canonicalize(value)`: sorted keys by code point (not UTF-16 unit), no whitespace, array order kept, `undefined` object values omitted, non-finite numbers and non-JSON types throw `TypeError`
     - `hashListing(listing, verifiedDate)`: strip `verifiedDate` and `verificationHash`, hash `canonicalize({ listing, verifiedDate })` with `node:crypto` SHA-256, lowercase hex
     - `verificationFor(store, listing)` returns `null` when no Verified_Date, else `{ verifiedDate, hash }`; `checkHash(current, supplied)` trims and compares case-insensitively, returns `null` when supplied is absent and `false` for non-strings
     - Hash computed on every call, no cache
     - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 10.9_
 
-  - [ ] 1.5 Refactor `server/data.js` into `createDataStore({ dataDir, fs })` with legacy exports
+  - [x] 1.5 Refactor `server/data.js` into `createDataStore({ dataDir, fs })` with legacy exports
     - Synchronous construction loading `listings.json`, `categories.json`, `published.json`, `verified.json`; missing file gives `[]` or `{}`; corrupt file throws; `_comment` entries filtered; seed id wins on collision with a stderr warning
     - Methods: `getListings`, `getCategories`, `findById`, `searchListings({ category, city, query, limit })`, `getVerifiedDate`, `publishDraft`, `updatePublished`, `reload`, `withLock(name, fn)`, `collection(name)` with allow-list `drafts`, `quotes`, `seance` only
     - `publishDraft` runs the design's sequence inside `withLock('publish')`: validate (422 on failure, nothing written), reserve id and mark `publishing`, append to `published.json` unless present, write `verified.json[id]` using `clock` UTC date, mark draft `published`, then swap the in-memory snapshot; idempotent on a `published` draft, 409 for other statuses
@@ -47,7 +47,7 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
     - Keep legacy exports `getListings`, `getCategories`, `findById`, `filterListings`, `groupByCategory` backed by a lazily created default store; keep `process.exit(1)` on default-store load failure
     - _Requirements: 4.3, 4.5, 4.9, 4.11, 5.4, 5.19, 9.4, 10.10, 14.1, 14.2, 14.3_
 
-  - [ ] 1.6 Convert `server/app.js` and routes to the `createApp(deps)` factory
+  - [x] 1.6 Convert `server/app.js` and routes to the `createApp(deps)` factory
     - `createApp({ dataDir, visionProvider, notifier, assistantProvider, clock, rateLimiter, config, newId, a2a })`; missing deps come from `configFromEnv`; keep `export default createApp()` so `import app from '../server/app.js'` still works; `server/index.js` unchanged
     - Resolve a `ctx` bag and pass it to route factories: `createHomeRouter`, `createListingsRouter`, `createApiRouter`, `createLlmsRouter`, `createSitemapRouter`; routes import no providers and read no `process.env`
     - Apply `TRUST_PROXY` through `app.set('trust proxy', ...)` when set
@@ -56,26 +56,26 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
     - All existing tests must still pass
     - _Requirements: 14.3, 14.6, 14.7_
 
-  - [ ]* 1.7 Write property tests for canonical form
+  - [x]* 1.7 Write property tests for canonical form
     - File `test/canonical.test.js`; include known-vector examples and astral-character key ordering
     - **Property 1: Canonical form is independent of key order**
     - **Property 2: Canonical form round trip**
     - **Validates: Requirements 9.1, 9.6, 9.9**
 
-  - [ ]* 1.8 Write property tests for the verifier
+  - [x]* 1.8 Write property tests for the verifier
     - File `test/verifier.test.js`; compute the expected digest independently with `node:crypto`; mutation generators avoid `verifiedDate` and `verificationHash` and filter out equal-JSON mutations
     - **Property 3: Verification hash is deterministic and well formed**
     - **Property 4: Verification hash is sensitive to every change**
     - **Property 5: Derived fields do not enter the hash**
     - **Validates: Requirements 9.2, 9.3, 9.5, 9.7, 9.8**
 
-  - [ ]* 1.9 Write property test and failure-injection examples for the JSON writer
+  - [x]* 1.9 Write property test and failure-injection examples for the JSON writer
     - File `test/json-file.test.js`; injected `fs` with random delays between read and rename
     - Example tests: failed rename leaves previous content intact and removes the temp file; a corrupt file is not overwritten; missing file reads as fallback
     - **Property 25: Concurrent writes lose nothing**
     - **Validates: Requirements 4.10, 14.4, 14.8**
 
-  - [ ]* 1.10 Write property tests for the rate limiter
+  - [x]* 1.10 Write property tests for the rate limiter
     - File `test/rate-limiter.test.js`; fake clock; include the two-key atomic quote check example
     - **Property 13: Rate limiter honours limit, window, and Retry-After**
     - **Validates: Requirements 1.6, 5.15, 6.9, 12.7**
@@ -226,9 +226,9 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
 - [ ] 6. Checkpoint - Agent-ready
   - Run `node --test`; existing tests and all new tests must pass. Ask the user if questions arise.
 
-- [ ] 7. Feature 3: Owner-verified stamp
+- [ ] 7. Feature 3: Owner-confirmed stamp
   - [ ] 7.1 Add the stamp, JSON-LD fields, and stamp CSS
-    - `listingDetail(listing, jsonLd, { verification })` renders an `<aside class="stamp">` with the Verified_Date and the hash in `<code data-hash="...">`; unverified listings show "Not yet verified by the owner"
+    - `listingDetail(listing, jsonLd, { verification })` renders an `<aside class="stamp">` with the text "Owner-confirmed <date>" (the Verified_Date) and the hash in `<code data-hash="...">`, labeled as unchanged since the owner confirmed it, with no identity or ownership claim; listings with no Verified_Date show "Not yet confirmed by the owner"
     - `buildSchema(listing, verification)` adds `identifier` (hash string) and `dateModified` (Verified_Date) only when `verification` is non-null; required-field checks unchanged
     - Add stamp styles to `public/css/style.css` in the existing hand-made style (bordered, slightly rotated rubber-stamp look in black and dark red on the paper-yellow page)
     - JSON-LD output must never contain a literal `</script`
@@ -243,7 +243,7 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
 
   - [ ]* 7.3 Write property test and examples for the verification flow
     - File `test/verify.test.js`; publish a generated valid listing into a temp store, read the stamp hash from the rendered page, then call the verify endpoint (exact, upper-cased, whitespace-padded), edit via `store.updatePublished` and expect `match: false` with a different `hash`
-    - Examples: stamp and JSON-LD `identifier` and `dateModified` for verified listings; absence for unverified listings; 404; `match: null`; `/api/listings/:id` additions
+    - Examples: stamp text "Owner-confirmed <date>" and JSON-LD `identifier` and `dateModified` for listings with a Verified_Date; the text "Not yet confirmed by the owner" and absence of `identifier` and `dateModified` for listings without one; the stamp markup contains no "Verified" wording; 404; `match: null`; `/api/listings/:id` additions
     - **Property 6: Stamp hash verifies until the listing changes**
     - **Validates: Requirements 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 10.8, 10.9, 10.11, 10.12**
 
@@ -252,7 +252,7 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
     - **Property 26: Rendered values are escaped** (Listing_Page, quote result page)
     - **Validates: Requirements 4.12, 6.10**
 
-- [ ] 8. Checkpoint - Owner-verified stamp
+- [ ] 8. Checkpoint - Owner-confirmed stamp
   - Run `node --test`; existing tests and all new tests must pass. Ask the user if questions arise.
 
 - [ ] 9. Feature 4: The Seance
@@ -272,7 +272,7 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
 
   - [ ] 9.3 Create `server/lib/seance-html.js` and `server/routes/seance.js`, and wire into `createApp`
     - `POST /seance/run` (JSON `{ id }`): 403 when no `SEANCE_ADMIN_TOKEN` configured; 401 for missing or wrong bearer token (SHA-256 both values then `crypto.timingSafeEqual`); 404 unknown listing; rate limits `seance:<ip>` (10 per hour) and `seance-listing:<id>` (1 per 10 minutes) consumed before the provider call, 429 with `Retry-After`; 502 `{ error: 'run failed' }` on provider failure
-    - `GET /seance/:id` HTML report and `GET /api/seance/:id` JSON, both 404 for unknown listings; runs oldest to newest; group by `(provider, prompt)` with first labeled "before", last "after", and whether `named` changed; tag each run "before verification" or "after verification" by UTC date against the Verified_Date (same date counts as after); empty state says no runs recorded; works without JavaScript; escape answers with `escapeHtml`
+    - `GET /seance/:id` HTML report and `GET /api/seance/:id` JSON, both 404 for unknown listings; runs oldest to newest; group by `(provider, prompt)` with first labeled "before", last "after", and whether `named` changed; tag each run "before owner confirmation" or "after owner confirmation" by UTC date against the Verified_Date (same date counts as after); empty state says no runs recorded; works without JavaScript; escape answers with `escapeHtml`
     - _Requirements: 11.2, 11.6, 12.7, 12.8, 12.9, 13.1, 13.2, 13.3, 13.4, 13.5, 13.6, 13.7, 13.8_
 
   - [ ]* 9.4 Write property tests for name detection
@@ -284,7 +284,7 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
   - [ ]* 9.5 Write property tests and report tests for the Seance history
     - File `test/seance-history.test.js`
     - Property tests include concurrent appends and a 4,000-character truncation round trip
-    - Examples: report ordering, before and after labels, before and after verification tags, empty state, 401, 403, 429 with `Retry-After`, 502 stores nothing, JSON matches HTML history, answer escaped
+    - Examples: report ordering, before and after labels, before and after owner confirmation tags, empty state, 401, 403, 429 with `Retry-After`, 502 stores nothing, JSON matches HTML history, answer escaped
     - **Property 23: Seance history is append-only and ordered**
     - **Property 24: Seance round trip**
     - **Validates: Requirements 11.5, 12.7, 12.8, 12.9, 13.1, 13.2, 13.3, 13.4, 13.5, 13.6, 13.7, 13.9, 13.10**
@@ -306,6 +306,7 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
   - [ ] 11.1 Update `README.md`
     - Document every environment variable: `VISION_PROVIDER`, `VISION_API_KEY`, `VISION_MODEL`, `VISION_BASE_URL`, `NOTIFIER`, `SEANCE_PROVIDER`, `SEANCE_API_KEY`, `SEANCE_MODEL`, `SEANCE_ADMIN_TOKEN`, `DATA_DIR`, plus `PORT`, `BASE_URL`, and `TRUST_PROXY` (without it every client shares one rate-limit bucket behind a proxy)
     - Describe new routes (`/rise`, `/mcp`, `/api/verify/:id`, `/seance/:id`), the storage relaxation, and the `curl` upload example
+    - Add a note that the "Owner-confirmed" stamp is a tamper check (the listing is unchanged since the owner confirmed it), not proof of ownership or identity, and that real ownership checks (a phone or email code sent to the listed number) are future work
     - Use "old printed phone book", "classic phone-book look", or "local business directory"; never the trademarked terms
     - _Requirements: 14.5, 14.7_
 

@@ -24,9 +24,11 @@ function isPresent(listing, field) {
  * Throws a descriptive Error if any required field is missing.
  *
  * @param {object} listing
+ * @param {{ verifiedDate: string, hash: string } | null} [verification]
+ *   when non-null, adds `identifier` (hash) and `dateModified` (verifiedDate)
  * @returns {object} JSON-LD LocalBusiness object
  */
-export function buildSchema(listing) {
+export function buildSchema(listing, verification) {
   for (const field of REQUIRED_FIELDS) {
     if (!isPresent(listing, field)) {
       throw new Error(`Schema_Builder: missing required field: ${field}`);
@@ -42,7 +44,7 @@ export function buildSchema(listing) {
     address.streetAddress = listing.address;
   }
 
-  return {
+  const schema = {
     '@context': 'https://schema.org',
     '@type': 'LocalBusiness',
     name: listing.name,
@@ -57,4 +59,9 @@ export function buildSchema(listing) {
       })),
     },
   };
+  if (verification && verification.hash && verification.verifiedDate) {
+    schema.identifier = verification.hash;
+    schema.dateModified = verification.verifiedDate;
+  }
+  return schema;
 }

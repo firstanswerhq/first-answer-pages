@@ -2,7 +2,9 @@
 
 ## Overview
 
-Super Pages extends the finished `listings-and-ai-readable-pages` build with four features, built in this order: Rise from the Grave (photo to draft listing), Agent-ready (MCP server, quote requests, WebMCP), the Owner-verified stamp (SHA-256 of a canonical listing), and the Seance (does an AI assistant name this business, with history).
+Super Pages extends the finished `listings-and-ai-readable-pages` build with four features, built in this order: Rise from the Grave (photo to draft listing), Agent-ready (MCP server, quote requests, WebMCP), the Owner-confirmed stamp (SHA-256 of a canonical listing), and the Seance (does an AI assistant name this business, with history).
+
+**The stamp does not prove ownership.** Nothing in this design checks that the person who confirms a draft owns the business, so the stamp never claims identity verification. The hash is a tamper check: it shows the listing is unchanged since the owner confirmed it. Real ownership checks, such as a phone or email code sent to the listed number, are future work. Code identifiers (`verifiedDate`, `Verified_Date`, `Verification_Hash`, `Verifier`, `verified.json`, `/api/verify/:id`, the JSON `verified` boolean) keep their names; only visible wording and prose use "Owner-confirmed".
 
 The existing app is a module-level singleton: `server/app.js` builds one Express `app`, `server/data.js` reads JSON once at import, and routes import `data.js` functions directly. That shape cannot support injected mocks, a temporary `DATA_DIR`, or a refreshable cache. The central design move is to turn it into a factory (`createApp(deps)`) over an instance-based data store, while keeping every existing import path and test working unchanged.
 
@@ -38,7 +40,7 @@ The existing app is a module-level singleton: `server/app.js` builds one Express
 
 ### Build order and the Verifier dependency
 
-The requested order is Rise, Agent-ready, Verified stamp, Seance. Two things cross that order:
+The requested order is Rise, Agent-ready, Owner-confirmed stamp, Seance. Two things cross that order:
 
 - Requirement 5.6, Requirement 10.12, and the MCP `get_listing` result need a Verification_Hash. Rise confirmation also writes `verified.json` (Requirement 10.10).
 - Every feature needs the injectable app, the store, and the safe writer.
@@ -50,7 +52,7 @@ So the plan is a foundation step, then the four features:
 | 0. Foundation | `createApp` refactor, `createDataStore`, `json-file.js`, `rate-limiter.js`, `config.js`, **`canonical.js` and `verifier.js` (pure hash functions plus the `verified` map in the store)**. No UI, no endpoint. Existing tests stay green. |
 | 1. Rise | Upload, vision providers, extractor, validator, drafts, review, confirm/publish. Confirm sets the Verified_Date through the store. |
 | 2. Agent-ready | `/mcp`, tool validator, quotes, notifier, WebMCP script, listing-page quote form. `get_listing` calls the real Verifier from step 0. |
-| 3. Verified stamp | Stamp element, JSON-LD `identifier` and `dateModified`, `GET /api/verify/:id`, verification fields in `/api/listings/:id`. |
+| 3. Owner-confirmed stamp | Stamp element, JSON-LD `identifier` and `dateModified`, `GET /api/verify/:id`, verification fields in `/api/listings/:id`. |
 | 4. Seance | Prompts, detection, assistant providers, history, report, admin trigger. |
 
 If step 0 is cut for time, the fallback is a stub `verifier.js` exporting `verificationFor(listing) -> null`; `get_listing` then returns `verification: null`. The real module replaces it in step 3 with no interface change. Step 0 is small (two pure functions and a map lookup), so building it early is the recommendation.
@@ -173,7 +175,7 @@ store.collection(name)         // name in { drafts, quotes, seance }: { read, up
 6. Set the draft to `status: 'published'`, `listingId: id`.
 7. Swap the in-memory snapshot.
 
-A crash between steps leaves a draft in `publishing`; re-confirming completes the remaining steps without duplicating. A listing visible without a Verified_Date (crash between 4 and 5) renders as unverified until the retry, which is the safe direction.
+A crash between steps leaves a draft in `publishing`; re-confirming completes the remaining steps without duplicating. A listing visible without a Verified_Date (crash between 4 and 5) renders as "Not yet confirmed by the owner" until the retry, which is the safe direction.
 
 ### Write serialization and atomic writes
 
@@ -277,6 +279,8 @@ hash = createHash('sha256').update(input, 'utf8').digest('hex');        // lower
 ```
 
 `canonicalize` returns a string and `update(..., 'utf8')` encodes it, so the bytes hashed are the UTF-8 of the canonical text. The hash is computed on every call from the current snapshot; no cache (Requirement 9.5), since a listing is a few hundred bytes.
+
+The hash is a tamper check only: a matching hash means the listing is unchanged since the owner confirmed it. It is not proof of ownership or identity.
 
 `verificationFor(store, listing)` returns `null` when the store has no Verified_Date for the listing id, else `{ verifiedDate, hash }`. Unverified listings have no hash (Requirement 9.4 treats no entry as unverified).
 
@@ -417,9 +421,9 @@ Behaviour:
 
 The listing page always renders the plain HTML quote form (Requirement 7.9) and a `<script type="module" src="/js/webmcp.js">` through `layout({ scripts })`.
 
-### Verified stamp, JSON-LD, and verify endpoint
+### Owner-confirmed stamp, JSON-LD, and verify endpoint
 
-- `listingDetail(listing, jsonLd, { verification })` renders a `<aside class="stamp">` with `Verified <date>` and the hash in a `<code data-hash="...">`; unverified listings show "Not yet verified by the owner" instead. CSS is added to `public/css/style.css` in the existing hand-made style (a bordered, slightly rotated rubber-stamp look in black and dark red on the paper-yellow page).
+- `listingDetail(listing, jsonLd, { verification })` renders a `<aside class="stamp">` with `Owner-confirmed <date>` and the hash in a `<code data-hash="...">`, labeled as unchanged since the owner confirmed it (no claim of identity or ownership verification); listings with no Verified_Date show "Not yet confirmed by the owner" instead. CSS is added to `public/css/style.css` in the existing hand-made style (a bordered, slightly rotated rubber-stamp look in black and dark red on the paper-yellow page).
 - `buildSchema(listing, verification)` adds `identifier` (the hash as a plain string) and `dateModified` (the Verified_Date) only when `verification` is non-null. `identifier` is a schema.org `Text` here for simplicity and so tests can compare it directly to the hash. The existing required-field checks are unchanged.
 - `GET /api/verify/:id?hash=...` returns 200 `{ id, verified, verifiedDate, hash, match }`. For a verified listing `hash` is the current hash and `match` is `true`, `false`, or `null` (no `hash` parameter); comparison is case-insensitive after trimming. For a published but unverified listing, `verified: false`, `verifiedDate: null`, `hash: null`, and `match` is `null` without a parameter or `false` with one. Unknown id gives 404 `{ error: 'Listing not found' }`. A non-string `hash` (repeated parameter) is treated as a non-match.
 - `GET /api/listings/:id` returns the stored listing and, only for verified listings, adds `verifiedDate` and `verificationHash`. The hash never includes these two added fields because `verifier.js` strips them (Requirement 9.3).
@@ -434,7 +438,7 @@ The listing page always renders the plain HTML quote form (Requirement 7.9) and 
 - `runSeance(ctx, listingId)`: check the token and rate limits in the route, build the prompt, call `assistantProvider.ask` with a 30 s abort, truncate the answer to 4,000 characters (by code point), detect, and append `{ id, listingId, prompt, provider, timestamp, answer, named }` to `seance.json` through the queue. Provider failure or timeout stores nothing and the route returns 502 `{ error: 'run failed' }`. Rate limits are consumed before the provider call so failed calls still count toward the cost cap.
 - `POST /seance/run` takes JSON `{ id }`. Auth: no `SEANCE_ADMIN_TOKEN` configured gives 403; missing or wrong bearer token gives 401. The comparison hashes both values with SHA-256 and uses `crypto.timingSafeEqual`.
 - The seance store is append-only. It exposes `append(run)` and `list(listingId)`; there is no update or delete method, which is how Requirement 13.1 is enforced. Because the per-file queue serializes read-modify-write, concurrent appends are not lost.
-- Report (`GET /seance/:id`, `GET /api/seance/:id`): runs ordered oldest to newest (file order, which equals append order). Groups by `(provider, prompt)`; a group with two or more runs shows first as "before", last as "after", and whether `named` changed. Each run is tagged "before verification" or "after verification" by comparing its UTC date to the Verified_Date (same date counts as after). No runs: states that none are recorded. Assistant answers are escaped via `escapeHtml`.
+- Report (`GET /seance/:id`, `GET /api/seance/:id`): runs ordered oldest to newest (file order, which equals append order). Groups by `(provider, prompt)`; a group with two or more runs shows first as "before", last as "after", and whether `named` changed. Each run is tagged "before owner confirmation" or "after owner confirmation" by comparing its UTC date to the Verified_Date (same date counts as after). No runs: states that none are recorded. Assistant answers are escaped via `escapeHtml`.
 
 ## Components and Interfaces
 
@@ -719,7 +723,7 @@ Property-based testing applies to this feature: it has pure functions with large
 | `test/tool-validator.test.js` | Property 15 |
 | `test/mcp.test.js` | Properties 16, 17; `initialize`, `tools/list`, `tools/call` flow; 405; 413; unknown tool or method |
 | `test/quotes.test.js` | Properties 18, 19, 20; notifier success and failure; quote rate limits; no-JS form post |
-| `test/seance.test.js` | Properties 21, 22, 23, 24; report ordering, before/after, before/after verification, empty state, auth 401 and 403 |
+| `test/seance.test.js` | Properties 21, 22, 23, 24; report ordering, before/after, before/after owner confirmation, empty state, auth 401 and 403 |
 | `test/json-file.test.js` | Property 25; failure-injection example for atomic write; corrupt file is not overwritten |
 | `test/render.test.js` | Property 26 over the pure render functions |
 | `test/webmcp.test.js` | WebMCP_Script with stubbed globals (below) |

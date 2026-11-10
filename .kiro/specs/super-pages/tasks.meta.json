@@ -1,0 +1,132 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1.1 Create `server/lib/json-file.js`": [
+      {
+        "executionId": "99af1c5d-bda3-45af-9181-4d6134859b2b",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794276892481
+      },
+      {
+        "executionId": "99af1c5d-bda3-45af-9181-4d6134859b2b",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794276966916
+      }
+    ],
+    "1.2 Create `server/lib/rate-limiter.js`": [
+      {
+        "executionId": "99af1c5d-bda3-45af-9181-4d6134859b2b",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794276893916
+      },
+      {
+        "executionId": "99af1c5d-bda3-45af-9181-4d6134859b2b",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794276968349
+      }
+    ],
+    "1.3 Create `server/lib/config.js`": [
+      {
+        "executionId": "99af1c5d-bda3-45af-9181-4d6134859b2b",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794276895214
+      },
+      {
+        "executionId": "99af1c5d-bda3-45af-9181-4d6134859b2b",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794276969710
+      }
+    ],
+    "1.4 Create `server/lib/canonical.js` and `server/lib/verifier.js`": [
+      {
+        "executionId": "99af1c5d-bda3-45af-9181-4d6134859b2b",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794276896324
+      },
+      {
+        "executionId": "99af1c5d-bda3-45af-9181-4d6134859b2b",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794276970808
+      }
+    ],
+    "1.5 Refactor `server/data.js` into `createDataStore({ dataDir, fs })` with legacy exports": [
+      {
+        "executionId": "99af1c5d-bda3-45af-9181-4d6134859b2b",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794276977477
+      },
+      {
+        "executionId": "99af1c5d-bda3-45af-9181-4d6134859b2b",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794277074688
+      }
+    ],
+    "1.6 Convert `server/app.js` and routes to the `createApp(deps)` factory": [
+      {
+        "executionId": "99af1c5d-bda3-45af-9181-4d6134859b2b",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794277078279
+      },
+      {
+        "executionId": "99af1c5d-bda3-45af-9181-4d6134859b2b",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794277648888
+      }
+    ],
+    "1. Step 0: Foundation (no UI, no new endpoints)": [
+      {
+        "executionId": "99af1c5d-bda3-45af-9181-4d6134859b2b",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794277649624
+      }
+    ],
+    "1.7 Write property tests for canonical form": [
+      {
+        "executionId": "99af1c5d-bda3-45af-9181-4d6134859b2b",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794277659052
+      },
+      {
+        "executionId": "99af1c5d-bda3-45af-9181-4d6134859b2b",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794278068682
+      }
+    ],
+    "1.8 Write property tests for the verifier": [
+      {
+        "executionId": "99af1c5d-bda3-45af-9181-4d6134859b2b",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794277660057
+      },
+      {
+        "executionId": "99af1c5d-bda3-45af-9181-4d6134859b2b",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794278070042
+      }
+    ],
+    "1.9 Write property test and failure-injection examples for the JSON writer": [
+      {
+        "executionId": "99af1c5d-bda3-45af-9181-4d6134859b2b",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794277661878
+      },
+      {
+        "executionId": "99af1c5d-bda3-45af-9181-4d6134859b2b",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794278071916
+      }
+    ],
+    "1.10 Write property tests for the rate limiter": [
+      {
+        "executionId": "99af1c5d-bda3-45af-9181-4d6134859b2b",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794277663777
+      },
+      {
+        "executionId": "99af1c5d-bda3-45af-9181-4d6134859b2b",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794278073357
+      }
+    ]
+  }
+}

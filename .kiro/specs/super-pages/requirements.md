@@ -6,10 +6,14 @@ Super Pages extends First Answer Pages, the finished spec `listings-and-ai-reada
 
 1. **Rise from the Grave**: an owner uploads a photo of an old phone-book ad, business card, or truck door. A vision model extracts the business details into a DRAFT listing. The owner reviews and confirms the draft before it is published.
 2. **Agent-ready**: an MCP server at `/mcp` (Streamable HTTP) exposes `search_listings`, `get_listing`, and `request_quote`. Listing pages register matching WebMCP tools in the browser. An A2A agent card is published only when a real agent endpoint backs it.
-3. **Owner-verified stamp**: a SHA-256 hash of a canonical JSON form of each listing plus its verified date is shown on the page, included in the JSON-LD, and checkable at `GET /api/verify/:id`.
+3. **Owner-confirmed stamp**: a SHA-256 hash of a canonical JSON form of each listing plus its confirmation date is shown on the page as "Owner-confirmed <date>", included in the JSON-LD, and checkable at `GET /api/verify/:id`. The hash is a tamper check: it shows the listing is unchanged since the owner confirmed it.
 4. **The Seance**: the system runs AI-assistant prompts such as "best plumbers in Nashville" and reports whether a business was named, with before/after history.
 
 The classic phone-book look is kept. A Halloween skin is a separate later layer and is out of scope for this spec. The words "Yellow Pages" and "YP", and any walking-fingers logo, are not used anywhere in this feature.
+
+### Stamp Does Not Prove Ownership
+
+The Owner-confirmed stamp does not prove that the person who confirmed a Draft owns the business, and it is not identity verification. Nothing in this spec checks who the confirming person is. The Verification_Hash only shows that the Listing is unchanged since the owner confirmed it. Real ownership checks, such as a phone or email code sent to the listed number, are future work and out of scope for this spec. The identifiers `verifiedDate`, `Verified_Date`, `Verification_Hash`, `Verifier`, `verified.json`, and `/api/verify/:id` are kept for stability; they are internal names, and the visible wording is "Owner-confirmed".
 
 ### Storage Rule Relaxation
 
@@ -41,9 +45,9 @@ Node.js 22, plain Express, plain JavaScript ES modules, JSON files in `data/`, b
 - **WebMCP_Script**: The optional browser script in `public/js/` that registers tools through `navigator.modelContext`.
 - **Agent_Card**: The A2A agent card JSON document served at `/.well-known/agent-card.json`.
 - **Canonical_Form**: The deterministic JSON serialization of a Listing used for hashing: object keys sorted recursively in code-point order, no insignificant whitespace, UTF-8 encoded, array order preserved.
-- **Verified_Date**: The ISO 8601 calendar date (`YYYY-MM-DD`) on which an Owner last confirmed a Listing.
-- **Verification_Hash**: The lowercase hexadecimal SHA-256 digest of the Canonical_Form of a Listing together with its Verified_Date.
-- **Verifier**: The Server component that computes a Verification_Hash and handles `GET /api/verify/:id`.
+- **Verified_Date**: The ISO 8601 calendar date (`YYYY-MM-DD`) on which an Owner last confirmed a Listing. It is shown to visitors as "Owner-confirmed <date>". It does not prove that the confirming person owns the business.
+- **Verification_Hash**: The lowercase hexadecimal SHA-256 digest of the Canonical_Form of a Listing together with its Verified_Date. It is a tamper check showing the Listing is unchanged since the owner confirmed it, and it is not proof of ownership or identity.
+- **Verifier**: The Server component that computes a Verification_Hash and handles `GET /api/verify/:id`. It checks for changes to a Listing and does not check who owns the business.
 - **Seance**: The feature that runs AI-assistant prompts and records whether a business was named.
 - **Seance_Prompt**: A prompt string built from the template `best <category> in <city>`.
 - **Assistant_Provider**: A pluggable module that sends a Seance_Prompt to an AI assistant and returns its text answer.
@@ -198,7 +202,7 @@ Node.js 22, plain Express, plain JavaScript ES modules, JSON files in `data/`, b
 
 ### Requirement 9: Canonical Form and Verification Hash
 
-**User Story:** As a person or AI agent reading a listing, I want a verifiable stamp, so that I can tell the data has not changed since the owner verified it.
+**User Story:** As a person or AI agent reading a listing, I want a checkable stamp, so that I can tell the data is unchanged since the owner confirmed it.
 
 #### Acceptance Criteria
 
@@ -212,15 +216,15 @@ Node.js 22, plain Express, plain JavaScript ES modules, JSON files in `data/`, b
 8. FOR ALL Listings, changing any single field value, adding a field, removing a field, or changing the Verified_Date SHALL change the Verification_Hash (sensitivity property).
 9. FOR ALL Listings, parsing the Canonical_Form as JSON and canonicalizing the result again SHALL produce the identical string (round-trip property).
 
-### Requirement 10: Verified Stamp Display and Verification Endpoint
+### Requirement 10: Owner-Confirmed Stamp Display and Verification Endpoint
 
-**User Story:** As a visitor, I want to see the stamp and check it, so that I can trust the listing.
+**User Story:** As a visitor, I want to see the stamp and check it, so that I can tell the listing is unchanged since the owner confirmed it.
 
 #### Acceptance Criteria
 
-1. WHEN a Listing_Page is rendered for a verified Listing, THE Server SHALL display the Verified_Date and the Verification_Hash on the page in a stamp element styled to match the classic phone-book look.
-2. WHEN a Listing_Page is rendered for a verified Listing, THE Server SHALL include the Verification_Hash and Verified_Date in the JSON-LD as `identifier` and `dateModified` properties, with the existing required fields unchanged.
-3. IF a Listing is unverified, THEN THE Server SHALL render the Listing_Page with the text "Not yet verified by the owner" in place of the stamp and SHALL omit `identifier` and `dateModified` from the JSON-LD.
+1. WHEN a Listing_Page is rendered for an owner-confirmed Listing, THE Server SHALL display the text "Owner-confirmed <date>", where <date> is the Verified_Date, and the Verification_Hash, labeled as unchanged since the owner confirmed it, in a stamp element styled to match the classic phone-book look, and the stamp SHALL contain no claim of identity or ownership verification.
+2. WHEN a Listing_Page is rendered for an owner-confirmed Listing, THE Server SHALL include the Verification_Hash and Verified_Date in the JSON-LD as `identifier` and `dateModified` properties, with the existing required fields unchanged.
+3. IF a Listing has no Verified_Date, THEN THE Server SHALL render the Listing_Page with the text "Not yet confirmed by the owner" in place of the stamp and SHALL omit `identifier` and `dateModified` from the JSON-LD.
 4. WHEN a client requests `GET /api/verify/:id` with an optional `hash` query parameter, THE Verifier SHALL respond with HTTP status 200 and a JSON body containing `id`, `verified`, `verifiedDate`, `hash` (the current Verification_Hash), and `match`.
 5. WHEN the `hash` query parameter equals the current Verification_Hash, THE Verifier SHALL set `match` to `true`.
 6. WHEN the `hash` query parameter is supplied and differs from the current Verification_Hash, THE Verifier SHALL set `match` to `false`.
@@ -272,7 +276,7 @@ Node.js 22, plain Express, plain JavaScript ES modules, JSON files in `data/`, b
 2. THE Server SHALL serve an HTML report at `GET /seance/:id` for a Listing showing each Seance_Run in order from oldest to newest, with the date, provider, prompt, and a named or not-named result, and the page SHALL work without JavaScript.
 3. THE Server SHALL serve the same history as JSON at `GET /api/seance/:id`.
 4. WHEN at least two Seance_Runs exist for the same Listing, provider, and prompt, THE report SHALL show the first run as "before" and the most recent run as "after", and SHALL state whether the result changed.
-5. WHEN a Listing has a Verified_Date, THE report SHALL mark runs dated before the Verified_Date as "before verification" and runs on or after it as "after verification".
+5. WHEN a Listing has a Verified_Date, THE report SHALL mark runs dated before the Verified_Date as "before owner confirmation" and runs on or after it as "after owner confirmation".
 6. IF no Seance_Runs exist for a Listing, THEN THE report SHALL state that no runs have been recorded.
 7. IF the `id` does not match a published Listing, THEN THE Server SHALL respond with HTTP status 404.
 8. THE Server SHALL escape assistant answer text when rendering HTML.
@@ -303,7 +307,7 @@ Node.js 22, plain Express, plain JavaScript ES modules, JSON files in `data/`, b
 1. THE test suite SHALL use `node:test` and `fast-check`, with files in `test/` named `*.test.js`, runnable with `node --test`.
 2. THE test suite SHALL include property tests for Rise from the Grave covering extraction validation (Requirement 3, criteria 9 and 10) and phone normalization.
 3. THE test suite SHALL include property tests for Agent-ready covering MCP tool input validation (Requirement 5, criteria 16 and 17) and quote validation (Requirement 6, criteria 11 and 12).
-4. THE test suite SHALL include property tests for the Owner-verified stamp covering canonical-hash stability, determinism, sensitivity, and round-trip (Requirement 9, criteria 6 to 9, and Requirement 10, criterion 11).
+4. THE test suite SHALL include property tests for the Owner-confirmed stamp covering canonical-hash stability, determinism, sensitivity, and round-trip (Requirement 9, criteria 6 to 9, and Requirement 10, criterion 11).
 5. THE test suite SHALL include property tests for the Seance covering name detection and history append (Requirement 11, criteria 7 and 8, and Requirement 13, criteria 9 and 10).
 6. THE test suite SHALL use the Mock_Vision_Provider, Mock_Notifier, and Mock_Assistant_Provider and make no network calls.
 7. THE test suite SHALL use a temporary `DATA_DIR` so tests never modify files in `data/`.

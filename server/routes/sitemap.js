@@ -3,14 +3,19 @@
  */
 
 import { Router } from 'express';
-import { getListings } from '../data.js';
 import { generateSitemap } from '../lib/sitemap.js';
 
-const router = Router();
+/**
+ * @param {{ store: object, config: { baseUrl: string } }} ctx
+ * @returns {import('express').Router}
+ */
+export function createSitemapRouter(ctx) {
+  const router = Router();
+  const { store, config } = ctx;
 
-router.get('/sitemap.xml', (req, res) => {
-  const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
-  res.status(200).type('application/xml').send(generateSitemap(getListings(), baseUrl));
-});
+  router.get('/sitemap.xml', (req, res) => {
+    res.status(200).type('application/xml').send(generateSitemap(store.getListings(), config.baseUrl));
+  });
 
-export default router;
+  return router;
+}
