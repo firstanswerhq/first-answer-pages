@@ -1,0 +1,177 @@
+/* First Answer Pages: classic phone-book look. Hand-written, no frameworks. */
+
+:root {
+  --color-page-bg: #FDF3C0; /* paper yellow */
+  --color-text:    #1A1A1A; /* near-black */
+  --color-divider: #333333;
+  --color-link:    #0000EE; /* classic blue hyperlink */
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Georgia, serif;
+  line-height: 1.4;
+  color: var(--color-text);
+  background: var(--color-page-bg);
+}
+
+a {
+  color: var(--color-link);
+}
+
+/* Nav and footer */
+.site-nav {
+  padding: 0.75rem 1.5rem;
+  border-bottom: 4px double var(--color-divider);
+  font-size: 1.3rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.site-nav a {
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+main {
+  max-width: 60rem;
+  margin: 0 auto;
+  padding: 1rem 1.5rem 2rem;
+}
+
+.site-footer {
+  padding: 0.75rem 1.5rem;
+  border-top: 4px double var(--color-divider);
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+h1 {
+  margin: 0.5rem 0;
+  font-size: 2rem;
+  text-transform: uppercase;
+}
+
+.tagline {
+  margin-top: 0;
+  font-style: italic;
+}
+
+/* Filters */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-end;
+  margin: 1rem 0 1.5rem;
+  padding: 0.75rem;
+  border: 2px solid var(--color-divider);
+}
+
+.filters label {
+  display: flex;
+  flex-direction: column;
+  font-weight: bold;
+}
+
+.filters select,
+.filters input,
+.filters button {
+  font: inherit;
+  padding: 0.25rem 0.5rem;
+}
+
+.no-results {
+  font-weight: bold;
+}
+
+/* Directory: two columns */
+.directory {
+  columns: 2;
+  column-gap: 2rem;
+  column-rule: 1px solid var(--color-divider);
+}
+
+.category-head {
+  margin: 0 0 0.75rem;
+  font-size: 1.4rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  border-bottom: 3px solid var(--color-divider);
+  break-after: avoid;
+}
+
+.category {
+  margin-bottom: 1.5rem;
+}
+
+.listing-card {
+  break-inside: avoid;
+  margin-bottom: 1rem;
+}
+
+.listing-card h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: bold;
+}
+
+.listing-card p {
+  margin: 0.1rem 0;
+}
+
+/* Single listing page */
+.listing-detail dl {
+  margin: 1rem 0;
+}
+
+.listing-detail dt {
+  margin-top: 0.75rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  font-size: 0.9rem;
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.listing-detail dd {
+  margin: 0.25rem 0 0;
+}
+
+.listing-detail ul {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.hours {
+  border-collapse: collapse;
+}
+
+.hours th,
+.hours td {
+  padding: 0.15rem 1rem 0.15rem 0;
+  text-align: left;
+}
+
+.hours th {
+  font-weight: bold;
+}
+
+.message {
+  padding: 1rem 0;
+}
+
+/* Narrow screens: single column */
+@media (max-width: 600px) {
+  .directory {
+    columns: 1;
+  }
+
+  main {
+    padding: 0.75rem;
+  }
+}

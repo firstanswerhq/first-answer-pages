@@ -96,7 +96,7 @@ export function listingDetail(listing, jsonLd) {
     .join('\n');
 
   const addressRow = listing.address
-    ? `\n    <dt>Address</dt>\n    <dd>${escapeHtml(listing.address)}, ${escapeHtml(listing.city)}, ${escapeHtml(listing.state)}</dd>`
+    ? `\n    <dt>Address</dt>\n    <dd>${escapeHtml(listing.address)}</dd>`
     : `\n    <dt>City</dt>\n    <dd>${escapeHtml(listing.city)}, ${escapeHtml(listing.state)}</dd>`;
 
   const ld = jsonLd

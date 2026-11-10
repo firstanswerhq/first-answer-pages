@@ -71,26 +71,26 @@ Build First Answer Pages from scratch: a server-rendered local business director
 - [x] 5. Checkpoint — verify generator modules
   - Ensure all tests written so far pass with `node --test`; ask the user if anything is unclear before continuing.
 
-- [ ] 6. Express application
-  - [~] 6.1 Create `server/app.js` — set up Express: register `express.static('public')`, import and mount all five route modules, register a generic 404 HTML handler, and register a 500 error-handler middleware that returns a generic "Something went wrong" HTML page without a stack trace
+- [x] 6. Express application
+  - [x] 6.1 Create `server/app.js` — set up Express: register `express.static('public')`, import and mount all five route modules, register a generic 404 HTML handler, and register a 500 error-handler middleware that returns a generic "Something went wrong" HTML page without a stack trace
     - _Requirements: (error handling defined in design)_
-  - [~] 6.2 Create `server/index.js` — import the Express app from `server/app.js`, bind to `process.env.PORT` (default `3000`), and start listening; log the port to stdout on startup
+  - [x] 6.2 Create `server/index.js` — import the Express app from `server/app.js`, bind to `process.env.PORT` (default `3000`), and start listening; log the port to stdout on startup
     - _Requirements: (startup behavior defined in design)_
 
-- [ ] 7. Routes
-  - [~] 7.1 Create `server/routes/home.js` — handle `GET /`; read `category` and `city` from `req.query`; call `filterListings` then `groupByCategory`; render category sections with `listingCard` per listing; show a "no results found" message when the filtered set is empty; return `text/html` 200
+- [x] 7. Routes
+  - [x] 7.1 Create `server/routes/home.js` — handle `GET /`; read `category` and `city` from `req.query`; call `filterListings` then `groupByCategory`; render category sections with `listingCard` per listing; show a "no results found" message when the filtered set is empty; return `text/html` 200
     - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8_
-  - [~] 7.2 Create `server/routes/listings.js` — handle `GET /listings/:id`; call `findById`; return 404 HTML if not found; otherwise call `buildSchema`, serialize with `JSON.stringify`, call `listingDetail` + `layout`, return `text/html` 200
+  - [x] 7.2 Create `server/routes/listings.js` — handle `GET /listings/:id`; call `findById`; return 404 HTML if not found; otherwise call `buildSchema`, serialize with `JSON.stringify`, call `listingDetail` + `layout`, return `text/html` 200
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 3.1_
-  - [~] 7.3 Create `server/routes/api.js` — handle `GET /api/listings/:id`; call `findById`; return 404 JSON `{ "error": "Listing not found" }` if not found; return 200 JSON with full listing object if found; always set `Content-Type: application/json`
+  - [x] 7.3 Create `server/routes/api.js` — handle `GET /api/listings/:id`; call `findById`; return 404 JSON `{ "error": "Listing not found" }` if not found; return 200 JSON with full listing object if found; always set `Content-Type: application/json`
     - _Requirements: 4.1, 4.2, 4.3, 4.4_
-  - [~] 7.4 Create `server/routes/llms.js` — handle `GET /llms.txt`; derive `baseUrl` from `process.env.BASE_URL` (default `'http://localhost:3000'`); call `generateLlmsTxt`; return `text/plain` 200
+  - [x] 7.4 Create `server/routes/llms.js` — handle `GET /llms.txt`; derive `baseUrl` from `process.env.BASE_URL` (default `'http://localhost:3000'`); call `generateLlmsTxt`; return `text/plain` 200
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5_
-  - [~] 7.5 Create `server/routes/sitemap.js` — handle `GET /sitemap.xml`; derive `baseUrl` from `process.env.BASE_URL`; call `generateSitemap`; return `application/xml` 200
+  - [x] 7.5 Create `server/routes/sitemap.js` — handle `GET /sitemap.xml`; derive `baseUrl` from `process.env.BASE_URL`; call `generateSitemap`; return `application/xml` 200
     - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5_
 
-- [ ] 8. CSS styling
-  - [~] 8.1 Create `public/css/style.css` — implement the old phone-book aesthetic using the CSS variables and rules defined in the design:
+- [x] 8. CSS styling
+  - [x] 8.1 Create `public/css/style.css` — implement the old phone-book aesthetic using the CSS variables and rules defined in the design:
     - CSS custom properties: `--color-page-bg: #FDF3C0`, `--color-text: #1A1A1A`, `--color-divider: #333333`, `--color-link: #0000EE`
     - Body: `font-family: Georgia, serif; background: var(--color-page-bg)`
     - Two-column directory grid via CSS `columns: 2; column-gap: 2rem` with a `@media (max-width: 600px)` breakpoint falling back to single column

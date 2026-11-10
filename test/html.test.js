@@ -30,3 +30,25 @@ test('listingDetail renders 7 hours rows for lowercase hour keys', () => {
   assert.ok(html.includes('<th scope="row">Monday</th><td>8am–5pm</td>'));
   assert.ok(html.includes('<th scope="row">Sunday</th><td>Closed</td>'));
 });
+
+test('listingDetail shows a full address as-is without repeating city and state', () => {
+  const address = '412 Dickerson Pike, Nashville, TN 37207';
+  const listing = {
+    id: 'test-business',
+    name: 'Test Business',
+    category: 'plumbers',
+    phone: '(555) 555-0100',
+    hours: { monday: '8am–5pm' },
+    services: ['Drain cleaning'],
+    serviceArea: 'Nashville',
+    description: 'We fix pipes.',
+    city: 'Nashville',
+    state: 'TN',
+    address,
+  };
+
+  const html = listingDetail(listing);
+  assert.equal(html.split(address).length - 1, 1);
+  assert.ok(html.includes(`<dd>${address}</dd>`));
+  assert.ok(!html.includes(`${address}, Nashville, TN`));
+});
