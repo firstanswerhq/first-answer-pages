@@ -271,7 +271,7 @@ test('upload, review, edit, confirm, approve: listing appears on every public ro
   const published = await readJson(env, 'published.json', []);
   assert.equal(published.filter(l => l.id === COMPLETE_ID).length, 1);
   const verified = await readJson(env, 'verified.json', {});
-  assert.equal(verified[COMPLETE_ID], '2025-01-15');
+  assert.equal(verified[COMPLETE_ID].verifiedDate, '2025-01-15');
   const drafts = await readJson(env, 'drafts.json', []);
   assert.equal(drafts[0].status, 'published');
   assert.equal(drafts[0].listingId, COMPLETE_ID);
@@ -513,7 +513,7 @@ async function assertSingleListing(env) {
   assert.equal(drafts[0].status, 'published');
   assert.equal(drafts[0].listingId, COMPLETE_ID);
   const verified = await readJson(env, 'verified.json', {});
-  assert.equal(verified[COMPLETE_ID], '2025-01-15');
+  assert.equal(verified[COMPLETE_ID].verifiedDate, '2025-01-15');
 }
 
 /** pending.json entry left behind by a crash during approval. */
@@ -815,4 +815,188 @@ test('GET /rise escapes HTML characters in baseUrl', async () => {
   const html = await (await get(env, '/rise')).text();
   assert.ok(!html.includes('<b>'));
   assert.ok(html.includes('https://x.test/&lt;b&gt;/rise'));
+});
+
+// ---- /rise page: photo-first upload form -----------------------------------------
+
+test('GET /rise leads with the photo picker and tucks base64 under a closed Advanced section', async () => {
+  const env = await makeEnv();
+  const res = await get(env, '/rise');
+  assert.equal(res.status, 200);
+  const html = await res.text();
+
+  assert.ok(html.includes('Take or choose a photo'));
+
+  const detailsAt = html.indexOf('<details class="advanced">');
+  const summaryAt = html.indexOf('<summary>Advanced</summary>');
+  const fieldAt = html.indexOf('name="imageBase64"');
+  const closeAt = html.indexOf('</details>');
+  assert.ok(detailsAt >= 0, 'details element present');
+  assert.ok(detailsAt < summaryAt, 'summary follows details');
+  assert.ok(summaryAt < fieldAt, 'textarea follows summary');
+  assert.ok(fieldAt < closeAt, 'textarea sits inside details');
+  assert.ok(html.includes('id="imageBase64"'));
+
+  // The details element is collapsed by default.
+  assert.ok(!/<details[^>]*\sopen[\s>=]/.test(html));
+
+  assert.ok(html.includes('5 MB'));
+  assert.ok(!html.includes('5 MiB'));
+  assert.ok(html.includes('a business card, flyer, sign or storefront'));
+});
+
+test('GET /rise form still posts urlencoded to /rise and the file input accepts the three image types', async () => {
+  const env = await makeEnv();
+  const html = await (await get(env, '/rise')).text();
+
+  const form = html.match(/<form[^>]*id="rise-form"[^>]*>/);
+  assert.ok(form, 'form with id rise-form');
+  assert.ok(form[0].includes('method="POST"'));
+  assert.ok(form[0].includes('action="/rise"'));
+  assert.ok(form[0].includes('enctype="application/x-www-form-urlencoded"'));
+
+  const file = html.match(/<input[^>]*id="imageFile"[^>]*>/);
+  assert.ok(file, 'file input with id imageFile');
+  assert.ok(file[0].includes('type="file"'));
+  assert.ok(file[0].includes('accept="image/jpeg,image/png,image/webp"'));
+});
+
+test('no-JS path: POSTing the form with a valid tiny image in imageBase64 redirects with 303', async () => {
+  const env = await makeEnv();
+  const res = await postForm(env, '/rise', new URLSearchParams({
+    imageBase64: completeJpeg.toString('base64'),
+  }));
+  assert.equal(res.status, 303);
+  assert.equal(res.headers.get('location'), '/rise/drafts/draft-1');
+});
+
+test('GET /rise loads /js/rise.js as a module script and the script is served', async () => {
+  const env = await makeEnv();
+  const html = await (await get(env, '/rise')).text();
+  assert.ok(html.includes('<script type="module" src="/js/rise.js"></script>'));
+  const js = await get(env, '/js/rise.js');
+  assert.equal(js.status, 200);
+});
+
+test('user-facing size text says MB, never MiB, in rise-html.js and public/js/rise.js', () => {
+  for (const rel of ['../server/lib/rise-html.js', '../public/js/rise.js']) {
+    const src = readFileSync(new URL(rel, import.meta.url), 'utf8');
+    assert.ok(!src.includes('MiB'), `${rel} must not mention MiB`);
+  }
+});
+
+// ---- confirm saves submitted edits (task 17.11) ----------------------------------------
+
+import { validateFields } from '../server/lib/listing-fields.js';
+
+const EDITED_DESCRIPTION = 'Edited before confirm.';
+
+test('confirm with an edited body saves the edits, queues the draft, and approval publishes the edited text', async () => {
+  const env = await makeEnv();
+  assert.equal((await upload(env, completeJpeg)).status, 303);
+
+  const confirm = await postForm(env, '/rise/drafts/draft-1/confirm',
+    reviewForm({ ...COMPLETE_FIELDS, description: EDITED_DESCRIPTION }));
+  assert.equal(confirm.status, 303);
+  assert.equal(confirm.headers.get('location'), '/rise/drafts/draft-1');
+
+  const drafts = await readJson(env, 'drafts.json', []);
+  assert.equal(drafts[0].status, 'pending');
+  assert.equal(drafts[0].fields.description, EDITED_DESCRIPTION);
+  assert.equal((await readJson(env, 'pending.json', [])).length, 1);
+
+  const page = await get(env, '/rise/drafts/draft-1');
+  assert.equal(page.status, 200);
+  assert.match(await page.text(), PENDING_MESSAGE);
+  assert.equal((await get(env, `/listings/${COMPLETE_ID}`)).status, 404);
+
+  assert.equal((await approve(env, 'draft-1')).status, 200);
+  const published = (await readJson(env, 'published.json', [])).find(l => l.id === COMPLETE_ID);
+  assert.equal(published.description, EDITED_DESCRIPTION);
+  const listing = await get(env, `/listings/${COMPLETE_ID}`);
+  assert.equal(listing.status, 200);
+  assert.ok((await listing.text()).includes(EDITED_DESCRIPTION));
+});
+
+test('review page is one form with Save changes and Confirm buttons using the right formaction values', async () => {
+  const env = await makeEnv();
+  assert.equal((await upload(env, completeJpeg)).status, 303);
+  const html = await (await get(env, '/rise/drafts/draft-1')).text();
+
+  // The separate discard form is the only other form.
+  const editForms = html.match(/<form\b(?![^>]*\bdiscard\b)[^>]*>/g) ?? [];
+  assert.equal(editForms.length, 1, 'exactly one edit form');
+  const formStart = html.indexOf(editForms[0]);
+  const formEnd = html.indexOf('</form>', formStart);
+  const formHtml = html.slice(formStart, formEnd);
+
+  const save = formHtml.match(/<button[^>]*formaction="([^"]*)"[^>]*>\s*Save changes\s*<\/button>/);
+  const send = formHtml.match(/<button[^>]*formaction="([^"]*)"[^>]*>\s*Confirm and send for review\s*<\/button>/);
+  assert.ok(save, 'Save changes button inside the form');
+  assert.ok(send, 'Confirm button inside the same form');
+  assert.equal(save[1], '/rise/drafts/draft-1');
+  assert.equal(send[1], '/rise/drafts/draft-1/confirm');
+});
+
+test('confirm with an edit that empties a required field returns 422, queues nothing, and keeps the saved values', async () => {
+  const env = await makeEnv();
+  assert.equal((await upload(env, completeJpeg)).status, 303);
+
+  const submitted = { ...COMPLETE_FIELDS, description: '' };
+  const res = await postForm(env, '/rise/drafts/draft-1/confirm', reviewForm(submitted));
+  assert.equal(res.status, 422);
+  assert.deepEqual(await readJson(env, 'pending.json', []), []);
+
+  const categories = await readJson(env, 'categories.json', []);
+  const expected = JSON.parse(JSON.stringify(validateFields(riseFieldsFromForm(reviewForm(submitted)), categories).fields));
+  const drafts = await readJson(env, 'drafts.json', []);
+  assert.equal(drafts[0].status, 'draft');
+  assert.equal(drafts[0].fields.description, '');
+  assert.deepEqual(drafts[0].fields, expected);
+  assert.equal((await get(env, `/listings/${COMPLETE_ID}`)).status, 404);
+});
+
+/** Mirrors fieldsFromForm in server/routes/rise.js for a URLSearchParams body. */
+function riseFieldsFromForm(params) {
+  const str = key => params.get(key) ?? '';
+  const hours = {};
+  for (const day of ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']) {
+    hours[day] = str(`hours_${day}`);
+  }
+  return {
+    name: str('name'),
+    category: str('category'),
+    phone: str('phone'),
+    services: str('services').split(/\r?\n/).map(s => s.trim()).filter(s => s !== ''),
+    serviceArea: str('serviceArea'),
+    description: str('description'),
+    city: str('city'),
+    state: str('state'),
+    address: str('address'),
+    ownerEmail: str('ownerEmail'),
+    hours,
+  };
+}
+
+test('Property: stored draft fields after confirm-with-edits equal validateFields of the submitted form', async () => {
+  const env = await makeProdEnv({ production: false });
+  const categories = await readJson(env, 'categories.json', []);
+  const textArb = fc.stringMatching(/^[A-Za-z0-9][A-Za-z0-9 ]{0,30}[A-Za-z0-9]$/);
+
+  await fc.assert(
+    fc.asyncProperty(textArb, textArb, textArb, async (name, serviceArea, description) => {
+      const before = (await readJson(env, 'drafts.json', [])).length;
+      assert.equal((await upload(env, completeJpeg)).status, 303);
+      const id = `draft-${before + 1}`;
+
+      const submitted = reviewForm({ ...COMPLETE_FIELDS, name, serviceArea, description });
+      const res = await postForm(env, `/rise/drafts/${id}/confirm`, submitted);
+      assert.equal(res.status, 303);
+
+      const stored = (await readJson(env, 'drafts.json', [])).find(d => d.id === id);
+      const expected = JSON.parse(JSON.stringify(validateFields(riseFieldsFromForm(submitted), categories).fields));
+      assert.deepEqual(stored.fields, expected);
+    }),
+    { numRuns: 10 },
+  );
 });

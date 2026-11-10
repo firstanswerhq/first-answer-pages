@@ -292,7 +292,10 @@ test('approve publishes the listing everywhere and writes the Owner-confirmed st
   assert.deepEqual(await res.json(), { ok: true, listingId: listingId(1) });
 
   await assertVisible(env, 1);
-  assert.equal((await readJson(env, 'verified.json', {}))[listingId(1)], '2025-01-15');
+  assert.deepEqual((await readJson(env, 'verified.json', {}))[listingId(1)], {
+    verifiedDate: '2025-01-15',
+    verifiedAt: '2025-01-15T12:00:00.000Z',
+  });
   const published = await readJson(env, 'published.json', []);
   assert.deepEqual(published.map(l => l.id), [listingId(1)]);
   assert.equal((await readJson(env, 'pending.json', []))[0].status, 'approved');

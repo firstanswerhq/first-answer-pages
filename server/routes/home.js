@@ -45,19 +45,36 @@ export function createHomeRouter(ctx) {
   <button type="submit">Search</button>
 </form>`;
 
+    // Page heading for filtered views, e.g. "Plumbers in Nashville".
+    const categoryLabel = category ? categories.find(c => c.slug === category)?.label ?? '' : '';
+    let pageHeading = '';
+    if (categoryLabel && city) pageHeading = `${categoryLabel} in ${city}`;
+    else if (categoryLabel) pageHeading = categoryLabel;
+    else if (city) pageHeading = `Businesses in ${city}`;
+
     let results;
     if (filtered.length === 0) {
       results = '<p class="no-results">No results found. Try a different category or city.</p>';
+    } else if (categoryLabel && grouped.size <= 1) {
+      // One category selected: a single heading over the whole grid.
+      results = `<div class="directory-single">
+<h2 class="category-title">${escapeHtml(pageHeading)}</h2>
+<div class="category-grid">
+${filtered.map(l => listingCard(l, categories)).join('\n')}
+</div>
+</div>`;
     } else {
       const sections = [];
+      const headTag = pageHeading ? 'h3' : 'h2';
       for (const [slug, group] of grouped) {
         const label = categories.find(c => c.slug === slug)?.label ?? slug;
         sections.push(`<section class="category">
-<h2 class="category-head">${escapeHtml(label)}</h2>
+<${headTag} class="category-head">${escapeHtml(label)}</${headTag}>
 ${group.map(l => listingCard(l, categories)).join('\n')}
 </section>`);
       }
-      results = `<div class="directory">\n${sections.join('\n')}\n</div>`;
+      const title = pageHeading ? `<h2 class="category-title">${escapeHtml(pageHeading)}</h2>\n` : '';
+      results = `<div class="directory">\n${title}${sections.join('\n')}\n</div>`;
     }
 
     const body = `<h1>Local Business Directory</h1>

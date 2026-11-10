@@ -112,7 +112,7 @@ describe('applySiteName', () => {
   });
 
   test('is safe for $& and $1 in names', () => {
-    assert.equal(applySiteName('x First Answer Pages y', 'Cost $& $1'), 'x Cost $& $1 y');
+    assert.equal(applySiteName('x First Answer Pages y', 'Cost $& $1'), 'x Cost $&amp; $1 y');
     assert.equal(applySiteName('First Answer Pages', "$1 $' $`"), escapeHtml("$1 $' $`"));
   });
 });

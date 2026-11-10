@@ -258,14 +258,15 @@ test('Property 26 (quote result pages): 422 page escapes echoed argument; sent p
         assert.ok(badHtml.includes(escapeHtml(extraKey)), 'escaped argument missing from 422 page');
         assert.ok(!badHtml.includes(extraKey), 'raw argument leaked into 422 page');
         assert.ok(!badHtml.includes('<b id="x">'), 'raw marker tag leaked into 422 page');
-        assert.equal(countScriptOpens(badHtml), 0, '<script in 422 page');
+        // The 422 page is the listing page again (form kept), so it has the same scripts as the sent page.
+        assert.equal(countScriptOpens(badHtml), sentBaseline, 'extra <script in 422 page');
 
         // Invalid contact with dangerous name/details: static message, nothing echoed raw.
         const badContact = await post({ name: text, contact: text, details: text });
         assert.equal(badContact.status, 422);
         const contactHtml = await badContact.text();
         assert.ok(!contactHtml.includes('<b id="x">'), 'raw marker tag leaked into contact 422 page');
-        assert.equal(countScriptOpens(contactHtml), 0, '<script in contact 422 page');
+        assert.equal(countScriptOpens(contactHtml), sentBaseline, 'extra <script in contact 422 page');
 
         // Valid quote with dangerous name/details: redirect, then the sent page leaks nothing.
         const ok = await post({ name: text.slice(0, 90) || 'Pat', contact: '615-555-0100', details: text });

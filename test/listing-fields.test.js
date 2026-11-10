@@ -456,3 +456,50 @@ test('single-line fields turn line breaks into one space', () => {
   assert.deepEqual(out.services, ['fix pipes']);
   assert.equal(out.hours.monday, '9am 5pm');
 });
+
+// ---------------------------------------------------------------------------
+// Categories file (task 17.11)
+// ---------------------------------------------------------------------------
+
+const NEW_CATEGORIES = [
+  { slug: 'cleaners', label: 'Cleaners' },
+  { slug: 'landscapers', label: 'Landscapers' },
+  { slug: 'pressure-washing', label: 'Pressure Washing' },
+  { slug: 'pools-and-concrete', label: 'Pools and Concrete' },
+  { slug: 'shops-and-restaurants', label: 'Shops and Restaurants' },
+  { slug: 'other', label: 'Other' },
+];
+const ORIGINAL_SLUGS = ['plumbers', 'electricians', 'restaurants', 'auto-repair', 'hair-salons', 'lawyers'];
+
+test('categories.json has the six new categories with the expected labels', () => {
+  const onDisk = JSON.parse(
+    readFileSync(new URL('../data/categories.json', import.meta.url), 'utf8')
+  );
+  for (const expected of NEW_CATEGORIES) {
+    const found = onDisk.find((c) => c.slug === expected.slug);
+    assert.ok(found, `missing category ${expected.slug}`);
+    assert.equal(found.label, expected.label);
+  }
+});
+
+test('categories.json slugs are unique and URL-safe, and the original six remain', () => {
+  const onDisk = JSON.parse(
+    readFileSync(new URL('../data/categories.json', import.meta.url), 'utf8')
+  );
+  const all = onDisk.map((c) => c.slug);
+  assert.equal(new Set(all).size, all.length, 'slugs are unique');
+  for (const s of all) assert.match(s, SLUG_RE);
+  for (const s of ORIGINAL_SLUGS) assert.ok(all.includes(s), `original slug ${s} still present`);
+});
+
+test('mapCategory resolves each new slug and label in any letter case', () => {
+  for (const { slug, label } of NEW_CATEGORIES) {
+    assert.equal(mapCategory(slug, categories), slug);
+    assert.equal(mapCategory(slug.toUpperCase(), categories), slug);
+    assert.equal(mapCategory(label, categories), slug);
+    assert.equal(mapCategory(label.toLowerCase(), categories), slug);
+    assert.equal(mapCategory(label.toUpperCase(), categories), slug);
+  }
+  assert.equal(mapCategory('pressure washing', categories), 'pressure-washing');
+  assert.equal(mapCategory('Pools and Concrete', categories), 'pools-and-concrete');
+});

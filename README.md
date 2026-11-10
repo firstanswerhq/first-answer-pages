@@ -36,8 +36,8 @@ Super Pages adds four features on top of the directory.
 
 Turn a photo of a business card, sign, or flyer into a listing. Upload the image, review the draft the app extracts, fix any field, and confirm. A confirmed listing is public after review (see "Review before anything goes live" below). Nothing is public until the owner confirms and an admin approves.
 
-- `GET /rise` upload page. It works without JavaScript: paste the image as base64 text, or use `curl`.
-- `POST /rise` accepts a raw JPEG, PNG, or WebP body (up to 5 MiB) or a form post with a base64 field (up to 8 MiB). On success it redirects to the draft review page.
+- `GET /rise` upload page. It works without JavaScript: open "Advanced" and paste the image as base64 text, or use `curl`.
+- `POST /rise` accepts a raw JPEG, PNG, or WebP body (up to 5 MB) or a form post with a base64 field (up to 8 MB). On success it redirects to the draft review page.
 - `GET /rise/drafts/:id` edit page for one draft.
 - `POST /rise/drafts/:id` saves edits. `POST /rise/drafts/:id/confirm` sends the listing to the pending queue for review. `POST /rise/drafts/:id/discard` throws the draft away.
 

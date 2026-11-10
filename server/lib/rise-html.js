@@ -144,14 +144,12 @@ ${row('ownerEmail', `<input type="email" id="f-ownerEmail" name="ownerEmail" val
       <legend>Hours</legend>
 ${hoursRows}
     </fieldset>
-    <button type="submit">Save changes</button>
-  </form>
-
-  <form class="rise-form confirm" method="POST" action="${base}/confirm">
-    <h2>Publish</h2>
-    <p>Confirming sends this listing to us for review. Once we approve it, it goes live and is marked Owner-confirmed. This is not an ownership check. We do not verify who you are or that the business is yours.</p>
-    <p>Save your changes first. Confirm sends the saved draft.</p>
-    <button type="submit">Confirm and send for review</button>
+    <div class="confirm">
+      <h2>Publish</h2>
+      <p>Confirming saves your changes and sends this listing to us for review. Once we approve it, it goes live and is marked Owner-confirmed. This is not an ownership check. We do not verify who you are or that the business is yours.</p>
+      <button type="submit" formaction="${base}">Save changes</button>
+      <button type="submit" formaction="${base}/confirm">Confirm and send for review</button>
+    </div>
   </form>
 
   <form class="rise-form discard" method="POST" action="${base}/discard">

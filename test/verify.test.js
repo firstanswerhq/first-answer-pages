@@ -177,7 +177,7 @@ test('confirmed listing page shows the stamp and JSON-LD identifier and dateModi
 
   const stamp = stampBlock(html);
   assert.ok(stamp, 'stamp present');
-  assert.ok(stamp.includes('Owner-confirmed 2025-01-15'));
+  assert.ok(stamp.includes('Owner-confirmed Jan 15, 2025'));
   assert.ok(!/verified/i.test(stamp), 'no "Verified" wording in the stamp markup');
 
   const hash = stampHash(html);

@@ -617,7 +617,7 @@ test('Property: confirmation page and MCP message carry any trusted phone, HTML-
         assert.equal(res.status, 200);
         const html = await res.text();
         assert.ok(html.includes(escapeHtml(sentenceFor(phone))), 'escaped sentence missing');
-        if (phone.includes('<')) assert.ok(!html.includes(phone), 'raw phone leaked into the page');
+        if (escapeHtml(phone) !== phone) assert.ok(!html.includes(sentenceFor(phone)), 'raw phone leaked into the page');
 
         const mcp = await (await callMcp(env, {
           id: 'phone-prop', name: 'Pat Jones', contact: 'pat@example.com', details: 'Leak under the sink.',
@@ -632,4 +632,107 @@ test('Property: confirmation page and MCP message carry any trusted phone, HTML-
     }),
     { numRuns: 30 },
   );
+});
+
+// ---- quote form errors and success box (task 17.14) -------------------------
+
+const permissiveLimiter = () => ({
+  consume: () => ({ allowed: true }),
+  consumeAll: () => ({ allowed: true }),
+  peek: () => ({ allowed: true }),
+});
+
+const countOf = (text, needle) => text.split(needle).length - 1;
+
+test('422 re-render: invalid contact shows the full listing page, kept values, and the error alert', async () => {
+  const env = await makeEnv({ rateLimiter: permissiveLimiter() });
+  const res = await postForm(env, `/listings/${L0}/quote`, {
+    name: 'Pat <b>Jones</b>', contact: 'nope', details: 'Leak under "sink" & more',
+  });
+  assert.equal(res.status, 422);
+  const html = await res.text();
+  assert.ok(html.includes('Nashville Pipe Pros') || html.includes('<article class="listing-detail">'), 'listing page missing');
+  assert.ok(html.includes('<article class="listing-detail">'));
+  assert.ok(html.includes('<form class="quote-form"'));
+  assert.ok(html.includes(`value="${escapeHtml('Pat <b>Jones</b>')}"`), 'name not kept');
+  assert.ok(html.includes(`>${escapeHtml('Leak under "sink" & more')}</textarea>`), 'details not kept');
+  assert.match(html, /<p class="form-error" role="alert">Please enter a phone number or email\.<\/p>/);
+  assert.equal((await readQuotesFile(env)).length, 0);
+});
+
+test('422 re-render: blank name and empty details give their own messages', async () => {
+  const env = await makeEnv({ rateLimiter: permissiveLimiter() });
+
+  const noName = await postForm(env, `/listings/${L0}/quote`, {
+    name: '   ', contact: VALID.contact, details: VALID.details,
+  });
+  assert.equal(noName.status, 422);
+  assert.match(await noName.text(), /<p class="form-error" role="alert">Please enter your name\.<\/p>/);
+
+  const noDetails = await postForm(env, `/listings/${L0}/quote`, {
+    name: VALID.name, contact: VALID.contact, details: '',
+  });
+  assert.equal(noDetails.status, 422);
+  const html = await noDetails.text();
+  assert.match(html, /<p class="form-error" role="alert">Please tell the business what you need\.<\/p>/);
+  assert.ok(html.includes(`value="${VALID.name}"`));
+
+  assert.equal((await readQuotesFile(env)).length, 0);
+});
+
+test('303 then ?quote=sent shows the success box before the listing article and after <main>', async () => {
+  const env = await makeEnv({ rateLimiter: permissiveLimiter() });
+  const res = await postForm(env, `/listings/${L0}/quote`, {
+    name: VALID.name, contact: VALID.contact, details: VALID.details,
+  });
+  assert.equal(res.status, 303);
+  const html = await (await fetch(env.base + res.headers.get('location'))).text();
+
+  const seed = JSON.parse(await fs.readFile(path.join(REPO_DATA, 'listings.json'), 'utf8'));
+  const phone = seed.find(l => l && l.id === L0).phone;
+  const box = `<p class="notice success-box" role="status">${escapeHtml(sentenceFor(phone))}</p>`;
+  const boxAt = html.indexOf(box);
+  assert.ok(boxAt >= 0, 'success box missing');
+  const mainAt = html.indexOf('<main>');
+  const articleAt = html.indexOf('<article class="listing-detail">');
+  assert.ok(mainAt >= 0 && articleAt >= 0);
+  assert.ok(mainAt < boxAt, 'box must come after <main>');
+  assert.ok(boxAt < articleAt, 'box must come before the listing article');
+});
+
+test('Property: the 422 page re-shows name and details escaped and adds no script tags', async () => {
+  // **Validates: Requirements 6.2, 6.3**
+  const env = await makeEnv({ rateLimiter: permissiveLimiter() });
+  const baseline = await (await fetch(`${env.base}/listings/${L0}`)).text();
+  const baseScripts = countOf(baseline, '<script');
+
+  const textArb = fc.oneof(
+    fc.string(),
+    fc.fullUnicodeString(),
+    fc.constantFrom(
+      '<script>alert(1)</script>',
+      'say "hi" & \'bye\'',
+      "O'Brien & Sons",
+      '"><script>alert(1)</script>',
+      '</textarea><script>alert(1)</script>',
+    ),
+  );
+
+  await fc.assert(
+    fc.asyncProperty(textArb, textArb, async (name, details) => {
+      const res = await postForm(env, `/listings/${L0}/quote`, { name, contact: 'nope', details });
+      assert.equal(res.status, 422);
+      const html = await res.text();
+
+      // The route keeps at most 2000 characters and applies no trimming.
+      const keptName = name.slice(0, 2000);
+      const keptDetails = details.slice(0, 2000);
+      assert.ok(html.includes(`value="${escapeHtml(keptName)}"`), 'name not re-shown escaped');
+      assert.ok(html.includes(`>${escapeHtml(keptDetails)}</textarea>`), 'details not re-shown escaped');
+      assert.ok(!html.includes('<script>alert(1)</script>'), 'raw script from input leaked');
+      assert.equal(countOf(html, '<script'), baseScripts);
+    }),
+    { numRuns: 25 },
+  );
+  assert.equal((await readQuotesFile(env)).length, 0);
 });

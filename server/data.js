@@ -167,7 +167,16 @@ export function createDataStore({ dataDir, seedDir, fs, clock = defaultClock, va
   const findById = id => state.listings.find(l => l.id === id);
   /** True when `id` is a sample (seed) listing from listings.json. */
   const isSeed = id => seed.some(l => l.id === id);
-  const getVerifiedDate = id => (Object.hasOwn(state.verified, id) ? state.verified[id] : undefined);
+  // verified.json values: legacy 'YYYY-MM-DD' string, or { verifiedDate, verifiedAt }.
+  const verifiedEntry = id => (Object.hasOwn(state.verified, id) ? state.verified[id] : undefined);
+  const getVerifiedDate = id => {
+    const v = verifiedEntry(id);
+    return v && typeof v === 'object' ? v.verifiedDate : v;
+  };
+  const getVerifiedAt = id => {
+    const v = verifiedEntry(id);
+    return v && typeof v === 'object' && typeof v.verifiedAt === 'string' ? v.verifiedAt : undefined;
+  };
 
   function searchListings({ category, city, query, limit } = {}) {
     const q = typeof query === 'string' ? query.trim().toLowerCase() : '';
@@ -293,7 +302,9 @@ export function createDataStore({ dataDir, seedDir, fs, clock = defaultClock, va
       // 5. verified date (UTC, from the clock); keep an earlier date on retry
       let date;
       const verifiedNext = await updateJsonFile(file('verified.json'), map => {
-        if (!Object.hasOwn(map, id)) map[id] = todayUtc();
+        if (!Object.hasOwn(map, id)) {
+          map[id] = { verifiedDate: todayUtc(), verifiedAt: new Date(clock.now()).toISOString() };
+        }
         date = map[id];
       }, { ...io, fallback: {} });
 
@@ -469,7 +480,7 @@ export function createDataStore({ dataDir, seedDir, fs, clock = defaultClock, va
   }
 
   return {
-    getListings, getCategories, findById, searchListings, getVerifiedDate, isSeed,
+    getListings, getCategories, findById, searchListings, getVerifiedDate, getVerifiedAt, isSeed,
     publishDraft, submitDraft, rejectDraft, unpublish, updatePublished, reload, withLock, collection,
     pruneExpired,
   };

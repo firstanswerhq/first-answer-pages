@@ -28,12 +28,15 @@ export function hashListing(listing, verifiedDate) {
 /**
  * @param {{ getVerifiedDate(id: string): string|undefined|null }} store
  * @param {object} listing
- * @returns {{ verifiedDate: string, hash: string }|null} null when unverified
+ * @returns {{ verifiedDate: string, hash: string, verifiedAt?: string }|null} null when unverified
  */
 export function verificationFor(store, listing) {
   const verifiedDate = store.getVerifiedDate(listing.id);
   if (!verifiedDate) return null;
-  return { verifiedDate, hash: hashListing(listing, verifiedDate) };
+  const result = { verifiedDate, hash: hashListing(listing, verifiedDate) };
+  const verifiedAt = typeof store.getVerifiedAt === 'function' ? store.getVerifiedAt(listing.id) : undefined;
+  if (verifiedAt) result.verifiedAt = verifiedAt;
+  return result;
 }
 
 /**

@@ -457,3 +457,101 @@ a.button {
 .seance-link {
   margin: 0.5rem 0;
 }
+
+/* Launch fixes 17.2: simple /rise page */
+.rise-form label.big-button {
+  display: block;
+  margin: 1rem 0 0.5rem;
+  padding: 1.25rem 1rem;
+  border: 3px solid var(--color-text);
+  background: var(--color-text);
+  color: #fff8dc;
+  font-size: 1.5rem;
+  font-weight: bold;
+  text-align: center;
+  cursor: pointer;
+}
+
+.rise-form label.big-button:hover,
+.rise-form .visually-hidden-file:focus + .hint,
+.rise-form label.big-button:focus-within {
+  background: #fff8dc;
+  color: var(--color-text);
+}
+
+.rise-form .visually-hidden-file {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+}
+
+.rise-form .visually-hidden-file:focus-visible ~ details,
+.rise-form .visually-hidden-file:focus-visible {
+  outline: 3px solid var(--color-text);
+}
+
+details.advanced {
+  margin-top: 1rem;
+}
+
+details.advanced summary {
+  cursor: pointer;
+  font-weight: bold;
+}
+
+/* Filtered view heading ("Plumbers in Nashville") with one grid under it */
+.category-title {
+  column-span: all;
+  margin: 0 0 1rem;
+  font-size: 1.6rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  border-bottom: 3px solid var(--color-divider);
+}
+
+.category-grid {
+  columns: 2;
+  column-gap: 2rem;
+  column-rule: 1px solid var(--color-divider);
+}
+
+@media (max-width: 600px) {
+  .category-grid {
+    columns: 1;
+  }
+}
+
+/* Launch fixes 17.3: save and confirm buttons share one form */
+.rise-form .confirm button {
+  margin-right: 0.75rem;
+}
+
+/* Séance report headline */
+.seance-result {
+  font-weight: bold;
+  padding: 0.6rem 0.8rem;
+  border-left: 6px solid #000;
+  margin: 1rem 0;
+}
+.seance-named {
+  color: #1b5e20;
+  background: #e8f5e9;
+  border-left-color: #2e7d32;
+}
+.seance-not-named {
+  color: #7a4f00;
+  background: #fff3cd;
+  border-left-color: #b7791f;
+}
+
+/* Owner-confirmed stamp: hash tucked under a toggle */
+.stamp-details summary {
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+/* Quote form error and success box (task 17.6) */
+.form-error { color: #7a1f0f; border-left: 4px solid #7a1f0f; padding: 0.4rem 0.75rem; margin: 0.75rem 0; font-weight: bold; }
+.success-box { background: #e8f5e9; border: 2px solid #2e7d32; padding: 0.75rem 1rem; margin: 0 0 1rem; }

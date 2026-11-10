@@ -529,7 +529,7 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
     - Files: `test/errors-headers.test.js`
     - _Requirements: docs/launch-fixes.md section 16 (error handler, headers)_
 
-  - [-] 16.12 Write tests for the MCP preflight and curl example
+  - [x] 16.12 Write tests for the MCP preflight and curl example
     - Extend `test/mcp.test.js` and `test/rise.test.js`
     - Examples: `OPTIONS /mcp` returns 204 with `Access-Control-Allow-Origin: *` and allowed headers containing `content-type`, `accept`, `mcp-session-id`; `/rise` HTML shows `BASE_URL` in the curl example and the string `localhost` appears nowhere in `server/lib/rise-html.js`
     - Files: `test/mcp.test.js`, `test/rise.test.js`
@@ -545,106 +545,106 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
   - [ ] 16.14 Checkpoint - Deploy-ready
     - Run `node --test`; all tests for tasks 13 to 16 and all pre-existing tests must pass. Ask the user if questions arise.
 
-- [ ] 17. Launch fixes: Owner-friendly wording and flow
-  - [-] 17.1 Header link, unconfirmed note, and Séance link
+- [x] 17. Launch fixes: Owner-friendly wording and flow
+  - [x] 17.1 Header link, unconfirmed note, and Séance link
     - Add a header link "List your business free" pointing to `/rise` in `layout()`
     - On every unconfirmed listing, replace the large "NOT YET CONFIRMED BY THE OWNER" box with a smaller note plus a button "Is this your business? Confirm it free →" linking to `/rise`
     - Add a link "See what AI says about this business" to the listing's Séance report (`/seance/:id`)
     - Files: `server/lib/html.js`, `public/css/style.css`
     - _Requirements: docs/launch-fixes.md section 17 (header, unconfirmed note, Séance link)_
 
-  - [-] 17.2 Simplify the `/rise` page
+  - [x] 17.2 Simplify the `/rise` page
     - One big "Take or choose a photo" button; hide the base64 text box under an "Advanced" disclosure (`<details>`); say "5 MB", not "5 MiB"; say "a business card, flyer, sign or storefront"
     - Page still works without JavaScript
     - Files: `server/lib/rise-html.js`, `public/js/rise.js`, `public/css/style.css`
     - _Requirements: docs/launch-fixes.md section 17 (/rise page)_
 
-  - [ ] 17.3 Draft page confirm flow and categories
+  - [x] 17.3 Draft page confirm flow and categories
     - Confirm saves the edited fields first, then sends the draft for approval, so edits cannot be lost
     - Add categories for cleaners, landscapers, pressure washing, pools and concrete, shops and restaurants, plus "Other" to `data/categories.json` (JSON only, unique slugs, existing slugs untouched)
     - After confirming, show: "Thanks! We'll review your listing and it will be live soon."
     - Files: `server/routes/rise.js`, `server/lib/rise-html.js`, `data/categories.json`
     - _Requirements: docs/launch-fixes.md section 17 (draft page)_
 
-  - [ ] 17.4 Owner-confirmed stamp date and details toggle
+  - [x] 17.4 Owner-confirmed stamp date and details toggle
     - Keep the visible wording "Owner-confirmed <date>"; show the date as "Nov 9, 2026" in America/Chicago time (store the confirmation timestamp, for example `verifiedAt`, in `verified.json` alongside the existing UTC `verifiedDate`; the hash input is unchanged)
     - Move the hash and the verify link under a small "Details for AI tools" toggle (`<details>`)
     - Update stamp assertions in `test/verify.test.js` and `test/render.test.js` to the new date format
     - Files: `server/lib/html.js`, `server/data.js`, `server/lib/verifier.js`, `test/verify.test.js`, `test/render.test.js`
     - _Requirements: docs/launch-fixes.md section 17 (Owner-confirmed stamp)_
 
-  - [-] 17.5 Séance report wording
+  - [x] 17.5 Séance report wording
     - Make the result the headline: "AI named this business" in green, or "AI didn't name this business yet" in amber
     - Hide the word "mock" (the "Demo answer (no AI connected)" label stays)
     - Use the name Séance with its accent in headings; show times in local time (America/Chicago)
     - Files: `server/lib/seance-html.js`, `public/css/style.css`
     - _Requirements: docs/launch-fixes.md section 17 (Séance report)_
 
-  - [ ] 17.6 Quote form errors and success box
+  - [x] 17.6 Quote form errors and success box
     - On error, re-render the form with the visitor's entries kept (escaped) and the message "Please enter a phone number or email."
     - Show the success message at the top of the page in a neutral or green box
     - Files: `server/routes/listings.js`, `server/lib/html.js`, `public/css/style.css`
     - _Requirements: docs/launch-fixes.md section 17 (quote form)_
 
-  - [ ] 17.7 Tappable phone numbers
+  - [x] 17.7 Tappable phone numbers
     - Render phone numbers as `tel:` links (digits only in the `href`) on listing pages, home, and category pages
     - Files: `server/lib/html.js`
     - _Requirements: docs/launch-fixes.md section 17 (tel links)_
 
-  - [ ] 17.8 Category page heading
+  - [x] 17.8 Category page heading
     - Heading like "Plumbers in Nashville" with the listing grid under one heading
     - Files: `server/routes/home.js`, `server/lib/html.js`, `public/css/style.css`
     - _Requirements: docs/launch-fixes.md section 17 (category page)_
 
-  - [ ] 17.9 Write tests for the header link, unconfirmed note, and Séance link
+  - [x] 17.9 Write tests for the header link, unconfirmed note, and Séance link
     - New file `test/nav-and-notes.test.js`
     - Examples: "List your business free" links to `/rise` on every page; unconfirmed listing shows the small note and the "Is this your business? Confirm it free →" button and not the old large box text; confirmed listing shows neither; "See what AI says about this business" links to `/seance/:id`
     - **Property: Every public listing page has the Séance link for its own id** (fast-check over listing ids)
     - Files: `test/nav-and-notes.test.js`
     - _Requirements: docs/launch-fixes.md section 17 (header, unconfirmed note, Séance link)_
 
-  - [ ] 17.10 Write tests for the `/rise` page
+  - [x] 17.10 Write tests for the `/rise` page
     - Extend `test/rise.test.js`
     - Examples: "Take or choose a photo" present; base64 textarea sits inside a `<details>` titled "Advanced"; "5 MB" present and "5 MiB" absent; "a business card, flyer, sign or storefront" present
     - Files: `test/rise.test.js`
     - _Requirements: docs/launch-fixes.md section 17 (/rise page)_
 
-  - [ ] 17.11 Write tests for the draft page flow and categories
+  - [x] 17.11 Write tests for the draft page flow and categories
     - Extend `test/rise.test.js` and `test/listing-fields.test.js`
     - Examples: confirm with edited fields saves the edits and the pending entry carries them; the thank-you text is shown; the new categories (cleaners, landscapers, pressure washing, pools and concrete, shops and restaurants, other) exist with unique slugs and `mapCategory` resolves them
     - **Property: Confirm never loses edits** (fast-check over edited field values; the draft fields after confirm equal the submitted normalized fields)
     - Files: `test/rise.test.js`, `test/listing-fields.test.js`
     - _Requirements: docs/launch-fixes.md section 17 (draft page)_
 
-  - [ ] 17.12 Write tests for the stamp date and details toggle
+  - [x] 17.12 Write tests for the stamp date and details toggle
     - New file `test/stamp-display.test.js`
     - **Property: The stamp date is formatted in America/Chicago and matches an independent oracle** (fast-check over timestamps, including daylight saving boundaries and 00:00 to 06:00 UTC where the Chicago date is the day before)
     - Examples: wording "Owner-confirmed Nov 9, 2026"; hash and verify link are inside `<details>` "Details for AI tools"; hash value unchanged by the display change
     - Files: `test/stamp-display.test.js`
     - _Requirements: docs/launch-fixes.md section 17 (Owner-confirmed stamp)_
 
-  - [ ] 17.13 Write tests for the Séance report wording
+  - [x] 17.13 Write tests for the Séance report wording
     - Extend `test/seance-history.test.js`
     - Examples: named result shows "AI named this business" with the green class; not named shows "AI didn't name this business yet" with the amber class; the word "mock" is absent from the HTML; times shown in America/Chicago; "Séance" with the accent in headings
     - **Property: The headline matches the latest run's `named` value** (fast-check over run histories)
     - Files: `test/seance-history.test.js`
     - _Requirements: docs/launch-fixes.md section 17 (Séance report)_
 
-  - [ ] 17.14 Write tests for quote form errors and success box
+  - [x] 17.14 Write tests for quote form errors and success box
     - Extend `test/quotes.test.js`
     - Examples: invalid contact re-renders the form with name and details kept and "Please enter a phone number or email."; success message appears at the top in a neutral or green box
     - **Property: Re-shown entries are escaped and equal the submitted values** (fast-check over arbitrary strings including `<script>` and quotes)
     - Files: `test/quotes.test.js`
     - _Requirements: docs/launch-fixes.md section 17 (quote form)_
 
-  - [ ] 17.15 Write tests for tappable phone numbers
+  - [x] 17.15 Write tests for tappable phone numbers
     - New file `test/tel-links.test.js`
     - **Property: Every rendered phone is a tel: link whose href holds only digits and an optional leading plus** (fast-check over valid phones; link text is the display form)
     - Examples: link present on listing, home, and category pages
     - Files: `test/tel-links.test.js`
     - _Requirements: docs/launch-fixes.md section 17 (tel links)_
 
-  - [ ] 17.16 Write tests for the category page heading
+  - [x] 17.16 Write tests for the category page heading
     - New file `test/category-page.test.js`
     - Examples: heading "Plumbers in Nashville" for the matching category and city; one heading above the grid; escaped output
     - **Property: The category heading names the category label and the city, escaped** (fast-check over categories and cities)

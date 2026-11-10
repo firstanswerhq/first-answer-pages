@@ -115,12 +115,19 @@ export function createRiseRouter(ctx) {
         return sendPage(res, 415, messagePage('Unsupported file type', `Send a ${ACCEPTED_IMAGE_TYPES.join(', ')} image.`));
       }
 
-      // 3. Read the body with the matching limit.
+      // 3. Read the body with the matching limit. A declared length over the
+      // limit is refused from the header alone, so a client can't hold the
+      // connection open by announcing a huge body and never sending it.
+      const declared = Number(req.headers['content-length']);
+      if (Number.isFinite(declared) && declared > (isImage ? MAX_IMAGE_BYTES : MAX_FORM_BYTES)) {
+        res.set('Connection', 'close');
+        return sendPage(res, 413, messagePage('Image too large', 'The upload is larger than 5 MB.'));
+      }
       try {
         await runParser(isImage ? rawParser : formParser, req, res);
       } catch (err) {
         if (err && err.type === 'entity.too.large') {
-          return sendPage(res, 413, messagePage('Image too large', 'The upload is larger than 5 MiB.'));
+          return sendPage(res, 413, messagePage('Image too large', 'The upload is larger than 5 MB.'));
         }
         return sendPage(res, 400, messagePage('Upload could not be read', 'The upload could not be read. Please try again.'));
       }
@@ -149,7 +156,7 @@ export function createRiseRouter(ctx) {
         return sendPage(res, 415, messagePage('Unsupported file type', 'The file content does not match a JPEG, PNG, or WebP image.'));
       }
       if (bytes.length > MAX_IMAGE_BYTES) {
-        return sendPage(res, 413, messagePage('Image too large', 'The image is larger than 5 MiB.'));
+        return sendPage(res, 413, messagePage('Image too large', 'The image is larger than 5 MB.'));
       }
 
       // 6. Extract. Failure stores nothing.
@@ -225,6 +232,25 @@ export function createRiseRouter(ctx) {
         const existing = await drafts.get(req.params.id);
         if (existing.status === 200 && draftProvider(existing.draft) === 'mock') {
           return sendPage(res, 409, messagePage('Cannot confirm', 'This draft came from the demo photo reader and cannot be sent for review in production.', HOME_LINK));
+        }
+      }
+      // Save any submitted edits first so they cannot be lost.
+      try {
+        await runParser(draftFormParser, req, res);
+      } catch (err) {
+        if (err && err.type === 'entity.too.large') {
+          return sendPage(res, 413, messagePage('Form too large', 'The form is too large.'));
+        }
+        return sendPage(res, 400, messagePage('Form could not be read', 'The form could not be read. Please try again.'));
+      }
+      if (req.body && typeof req.body === 'object' && Object.keys(req.body).length > 0) {
+        const { fields, missingFields } = validateFields(fieldsFromForm(req.body), ctx.store.getCategories());
+        const saved = await drafts.updateFields(req.params.id, fields, missingFields);
+        if (saved.status === 404) {
+          return sendPage(res, 404, messagePage('Draft not found', 'That draft does not exist or was discarded.'));
+        }
+        if (saved.status === 409) {
+          return sendPage(res, 409, messagePage('Draft locked', 'This draft was already sent for review or published and can no longer be edited.', HOME_LINK));
         }
       }
       const result = await ctx.store.submitDraft(req.params.id);

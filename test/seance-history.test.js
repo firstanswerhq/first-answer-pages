@@ -25,7 +25,7 @@ import fc from 'fast-check';
 import { createApp } from '../server/app.js';
 import { createRateLimiter } from '../server/lib/rate-limiter.js';
 import { createSeanceStore, runSeance } from '../server/lib/seance.js';
-import { formatRunTime } from '../server/lib/seance-html.js';
+import { formatRunTime, seanceReportPage } from '../server/lib/seance-html.js';
 
 const REPO_DATA = fileURLToPath(new URL('../data/', import.meta.url));
 const START = Date.UTC(2025, 0, 15, 12, 0, 0);
@@ -539,4 +539,111 @@ test('an assistant answer containing <script> is escaped in the HTML report', as
   const html = await (await fetch(`${env.base}/seance/${id}`)).text();
   assert.ok(!html.includes('<script>alert(1)'), 'raw script tag is not present');
   assert.ok(html.includes('&lt;script&gt;alert(1)&lt;/script&gt;'), 'script tag is escaped');
+});
+
+// ---- report wording (task 17.13) ----------------------------------------------------
+
+const NAMED_P = '<p class="seance-result seance-named">AI named this business</p>';
+const NOT_NAMED_P = '<p class="seance-result seance-not-named">AI didn&#39;t name this business yet</p>';
+
+const reportListing = { id: 'wording-listing', name: 'Wording Plumbing' };
+const reportPage = runs => seanceReportPage(reportListing, runs, null);
+
+test('wording: latest run named shows the green headline and not the other text', () => {
+  const html = reportPage([
+    makeRun(reportListing.id, { timestamp: '2025-01-01T00:00:00.000Z', named: false }),
+    makeRun(reportListing.id, { timestamp: '2025-02-01T00:00:00.000Z', named: true }),
+  ]);
+  assert.ok(html.includes(NAMED_P));
+  assert.ok(html.includes('seance-named'));
+  assert.ok(!html.includes('seance-not-named'));
+  assert.ok(!html.includes('AI didn&#39;t name this business yet'));
+});
+
+test('wording: latest run not named shows the amber headline with an escaped apostrophe', () => {
+  const html = reportPage([
+    makeRun(reportListing.id, { timestamp: '2025-01-01T00:00:00.000Z', named: true }),
+    makeRun(reportListing.id, { timestamp: '2025-02-01T00:00:00.000Z', named: false }),
+  ]);
+  assert.ok(html.includes(NOT_NAMED_P));
+  assert.ok(html.includes('AI didn&#39;t name this business yet'));
+  assert.ok(!html.includes('seance-named'));
+  assert.ok(!html.includes('AI named this business'));
+});
+
+test('wording: the headline follows the latest run by timestamp, not array order', () => {
+  const html = reportPage([
+    makeRun(reportListing.id, { timestamp: '2025-03-01T00:00:00.000Z', named: true }),
+    makeRun(reportListing.id, { timestamp: '2025-01-01T00:00:00.000Z', named: false }),
+  ]);
+  assert.ok(html.includes(NAMED_P));
+});
+
+test('wording: with no runs there is no headline element', () => {
+  const html = reportPage([]);
+  assert.ok(!html.includes('seance-result'));
+  assert.ok(!html.includes('AI named this business'));
+  assert.match(html, /No runs have been recorded yet\./);
+});
+
+test('wording: the word mock is absent for mock runs and the demo label is present', () => {
+  const html = reportPage([
+    makeRun(reportListing.id, { provider: 'mock', timestamp: '2025-01-01T00:00:00.000Z' }),
+    makeRun(reportListing.id, { provider: 'mock', timestamp: '2025-02-01T00:00:00.000Z' }),
+  ]);
+  assert.ok(!/mock/i.test(html));
+  assert.ok(html.includes('Demo answer (no AI connected)'));
+});
+
+test('wording: times are shown in America/Chicago with CST and CDT', () => {
+  const winter = reportPage([makeRun(reportListing.id, { timestamp: '2026-11-10T05:05:00.000Z' })]);
+  assert.ok(winter.includes('Nov 9, 2026, 11:05 PM CST'));
+  const summer = reportPage([makeRun(reportListing.id, { timestamp: '2025-07-01T12:00:00.000Z' })]);
+  assert.ok(summer.includes('Jul 1, 2025, 7:00 AM CDT'));
+});
+
+test('wording: h1 and title say Séance report with the accent, and the page declares utf-8', () => {
+  const html = reportPage([makeRun(reportListing.id)]);
+  assert.ok(html.includes('<h1>Séance report: Wording Plumbing</h1>'));
+  assert.match(html, /<title>[^<]*Séance report[^<]*<\/title>/);
+  assert.ok(html.includes('<meta charset="utf-8">'));
+});
+
+test('wording: the headline appears before the Before and after heading', () => {
+  for (const named of [true, false]) {
+    const html = reportPage([makeRun(reportListing.id, { named })]);
+    const headline = html.indexOf('seance-result');
+    const heading = html.indexOf('Before and after');
+    assert.ok(headline >= 0 && heading >= 0 && headline < heading);
+  }
+});
+
+test('Property: the headline matches the named value of the run with the greatest timestamp', () => {
+  const runsArb = fc.uniqueArray(
+    fc.record({
+      timestamp: fc.date({ min: new Date('2024-01-01T00:00:00Z'), max: new Date('2026-12-31T23:59:59Z') })
+        .filter(d => !Number.isNaN(d.getTime()))
+        .map(d => d.toISOString()),
+      named: fc.boolean(),
+      provider: fc.constantFrom('mock', 'openai', 'anthropic'),
+    }),
+    { minLength: 1, maxLength: 8, selector: r => r.timestamp },
+  );
+
+  fc.assert(
+    fc.property(runsArb, fields => {
+      const runs = fields.map(f => makeRun(reportListing.id, f));
+      const latest = runs.reduce((a, b) => (b.timestamp > a.timestamp ? b : a));
+      const expectedClass = latest.named ? 'seance-named' : 'seance-not-named';
+      const otherClass = latest.named ? 'seance-not-named' : 'seance-named';
+
+      for (const order of [runs, [...runs].reverse()]) {
+        const html = reportPage(order);
+        assert.equal(html.split('class="seance-result').length - 1, 1);
+        assert.equal(html.split(`class="seance-result ${expectedClass}"`).length - 1, 1);
+        assert.ok(!html.includes(`class="seance-result ${otherClass}"`));
+      }
+    }),
+    { numRuns: 30 },
+  );
 });

@@ -19,6 +19,12 @@ function messagePage(title, text, backHref) {
   });
 }
 
+const QUOTE_ERRORS = {
+  contact: 'Please enter a phone number or email.',
+  name: 'Please enter your name.',
+  details: 'Please tell the business what you need.',
+};
+
 /**
  * @param {object} ctx
  * @returns {import('express').Router}
@@ -26,6 +32,24 @@ function messagePage(title, text, backHref) {
 export function createListingsRouter(ctx) {
   const router = Router();
   const { store } = ctx;
+
+  /** Full listing page; shared by GET and the 422 quote re-render. */
+  function renderListingPage(stored, { sent = false, error, values } = {}) {
+    const listing = publicListing(stored);
+    // hashListing strips ownerEmail too, so this equals /api/verify/:id
+    const verification = verificationFor(store, listing);
+    const jsonLd = JSON.stringify(buildSchema(listing, verification), null, 2);
+    const sentNotice = sent
+      ? `<p class="notice success-box" role="status">${escapeHtml(`Thanks! Your request is saved and we'll pass it to the business. If you need help sooner, call them at ${listing.phone}.`)}</p>\n`
+      : '';
+    // JSON-LD goes to layout() only, so the page has exactly one ld+json block
+    return layout({
+      title: `${listing.name} | First Answer Pages`,
+      body: sentNotice + listingDetail(listing, undefined, { categories: store.getCategories(), verification }) + '\n' + quoteForm(listing, { error, values }),
+      jsonLd,
+      scripts: ['/js/webmcp.js'],
+    });
+  }
 
   router.post('/listings/:id/quote', (req, res, next) => {
     // 404 first so unknown ids never reach body parsing
@@ -60,11 +84,11 @@ export function createListingsRouter(ctx) {
           back,
         ));
       }
-      return res.status(422).type('html').send(messagePage(
-        'Request not sent',
-        `Please check the ${result.argument} field. ${result.message}`,
-        back,
-      ));
+      const kept = field => (typeof body[field] === 'string' ? body[field].slice(0, 2000) : '');
+      return res.status(422).type('html').send(renderListingPage(store.findById(id), {
+        error: QUOTE_ERRORS[result.argument] || `Please check the ${result.argument} field.`,
+        values: { name: kept('name'), contact: kept('contact'), details: kept('details') },
+      }));
     } catch (err) {
       next(err);
     }
@@ -81,20 +105,7 @@ export function createListingsRouter(ctx) {
     }
 
     try {
-      const listing = publicListing(stored);
-      // hashListing strips ownerEmail too, so this equals /api/verify/:id
-      const verification = verificationFor(store, listing);
-      const jsonLd = JSON.stringify(buildSchema(listing, verification), null, 2);
-      const sentNotice = req.query.quote === 'sent'
-        ? `\n<p class="notice" role="status">${escapeHtml(`Thanks! Your request is saved and we'll pass it to the business. If you need help sooner, call them at ${listing.phone}.`)}</p>`
-        : '';
-      // JSON-LD goes to layout() only, so the page has exactly one ld+json block
-      res.status(200).type('html').send(layout({
-        title: `${listing.name} | First Answer Pages`,
-        body: listingDetail(listing, undefined, { categories: store.getCategories(), verification }) + sentNotice + '\n' + quoteForm(listing),
-        jsonLd,
-        scripts: ['/js/webmcp.js'],
-      }));
+      res.status(200).type('html').send(renderListingPage(stored, { sent: req.query.quote === 'sent' }));
     } catch (err) {
       next(err);
     }

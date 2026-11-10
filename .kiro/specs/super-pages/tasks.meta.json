@@ -1024,6 +1024,11 @@
         "executionId": "8c56a5d5-97bf-4b1d-bc8d-ba717f6ef38a",
         "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
         "timestamp": 1794336512036
+      },
+      {
+        "executionId": "8c56a5d5-97bf-4b1d-bc8d-ba717f6ef38a",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794338906345
       }
     ],
     "16.13 Write tests for `SITE_NAME`": [
@@ -1043,6 +1048,11 @@
         "executionId": "8c56a5d5-97bf-4b1d-bc8d-ba717f6ef38a",
         "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
         "timestamp": 1794336503699
+      },
+      {
+        "executionId": "8c56a5d5-97bf-4b1d-bc8d-ba717f6ef38a",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794338924033
       }
     ],
     "17.2 Simplify the `/rise` page": [
@@ -1050,6 +1060,11 @@
         "executionId": "8c56a5d5-97bf-4b1d-bc8d-ba717f6ef38a",
         "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
         "timestamp": 1794336504447
+      },
+      {
+        "executionId": "8c56a5d5-97bf-4b1d-bc8d-ba717f6ef38a",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794338931994
       }
     ],
     "17.5 Séance report wording": [
@@ -1057,6 +1072,174 @@
         "executionId": "8c56a5d5-97bf-4b1d-bc8d-ba717f6ef38a",
         "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
         "timestamp": 1794336505414
+      },
+      {
+        "executionId": "8c56a5d5-97bf-4b1d-bc8d-ba717f6ef38a",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794338954730
+      }
+    ],
+    "17.3 Draft page confirm flow and categories": [
+      {
+        "executionId": "8c56a5d5-97bf-4b1d-bc8d-ba717f6ef38a",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794338970520
+      },
+      {
+        "executionId": "8c56a5d5-97bf-4b1d-bc8d-ba717f6ef38a",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794339182822
+      }
+    ],
+    "17.4 Owner-confirmed stamp date and details toggle": [
+      {
+        "executionId": "8c56a5d5-97bf-4b1d-bc8d-ba717f6ef38a",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794338975236
+      },
+      {
+        "executionId": "8c56a5d5-97bf-4b1d-bc8d-ba717f6ef38a",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794339184106
+      }
+    ],
+    "17.8 Category page heading": [
+      {
+        "executionId": "8c56a5d5-97bf-4b1d-bc8d-ba717f6ef38a",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794338984900
+      },
+      {
+        "executionId": "8c56a5d5-97bf-4b1d-bc8d-ba717f6ef38a",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794339185145
+      }
+    ],
+    "17.6 Quote form errors and success box": [
+      {
+        "executionId": "8c56a5d5-97bf-4b1d-bc8d-ba717f6ef38a",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794339186167
+      },
+      {
+        "executionId": "8c56a5d5-97bf-4b1d-bc8d-ba717f6ef38a",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794339543048
+      }
+    ],
+    "17.7 Tappable phone numbers": [
+      {
+        "executionId": "8c56a5d5-97bf-4b1d-bc8d-ba717f6ef38a",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794339187159
+      },
+      {
+        "executionId": "8c56a5d5-97bf-4b1d-bc8d-ba717f6ef38a",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794339546265
+      }
+    ],
+    "17.9 Write tests for the header link, unconfirmed note, and Séance link": [
+      {
+        "executionId": "8c56a5d5-97bf-4b1d-bc8d-ba717f6ef38a",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794339552754
+      },
+      {
+        "executionId": "8c56a5d5-97bf-4b1d-bc8d-ba717f6ef38a",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794339708466
+      }
+    ],
+    "17.10 Write tests for the `/rise` page": [
+      {
+        "executionId": "8c56a5d5-97bf-4b1d-bc8d-ba717f6ef38a",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794339558367
+      },
+      {
+        "executionId": "8c56a5d5-97bf-4b1d-bc8d-ba717f6ef38a",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794339709710
+      }
+    ],
+    "17.12 Write tests for the stamp date and details toggle": [
+      {
+        "executionId": "8c56a5d5-97bf-4b1d-bc8d-ba717f6ef38a",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794339561700
+      },
+      {
+        "executionId": "8c56a5d5-97bf-4b1d-bc8d-ba717f6ef38a",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794339711754
+      }
+    ],
+    "17.13 Write tests for the Séance report wording": [
+      {
+        "executionId": "8c56a5d5-97bf-4b1d-bc8d-ba717f6ef38a",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794339571781
+      },
+      {
+        "executionId": "8c56a5d5-97bf-4b1d-bc8d-ba717f6ef38a",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794339713142
+      }
+    ],
+    "17.14 Write tests for quote form errors and success box": [
+      {
+        "executionId": "8c56a5d5-97bf-4b1d-bc8d-ba717f6ef38a",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794339582096
+      },
+      {
+        "executionId": "8c56a5d5-97bf-4b1d-bc8d-ba717f6ef38a",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794339714151
+      }
+    ],
+    "17.11 Write tests for the draft page flow and categories": [
+      {
+        "executionId": "8c56a5d5-97bf-4b1d-bc8d-ba717f6ef38a",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794339715585
+      },
+      {
+        "executionId": "8c56a5d5-97bf-4b1d-bc8d-ba717f6ef38a",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794339847034
+      }
+    ],
+    "17.15 Write tests for tappable phone numbers": [
+      {
+        "executionId": "8c56a5d5-97bf-4b1d-bc8d-ba717f6ef38a",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794339716422
+      },
+      {
+        "executionId": "8c56a5d5-97bf-4b1d-bc8d-ba717f6ef38a",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794339848121
+      }
+    ],
+    "17.16 Write tests for the category page heading": [
+      {
+        "executionId": "8c56a5d5-97bf-4b1d-bc8d-ba717f6ef38a",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794339717496
+      },
+      {
+        "executionId": "8c56a5d5-97bf-4b1d-bc8d-ba717f6ef38a",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794339848836
+      }
+    ],
+    "17. Launch fixes: Owner-friendly wording and flow": [
+      {
+        "executionId": "8c56a5d5-97bf-4b1d-bc8d-ba717f6ef38a",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794339849519
       }
     ]
   }

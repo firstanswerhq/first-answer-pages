@@ -4,5 +4,11 @@
   { "slug": "restaurants",  "label": "Restaurants" },
   { "slug": "auto-repair",  "label": "Auto Repair" },
   { "slug": "hair-salons",  "label": "Hair Salons" },
-  { "slug": "lawyers",      "label": "Lawyers" }
+  { "slug": "lawyers",      "label": "Lawyers" },
+  { "slug": "cleaners",     "label": "Cleaners" },
+  { "slug": "landscapers",  "label": "Landscapers" },
+  { "slug": "pressure-washing", "label": "Pressure Washing" },
+  { "slug": "pools-and-concrete", "label": "Pools and Concrete" },
+  { "slug": "shops-and-restaurants", "label": "Shops and Restaurants" },
+  { "slug": "other",        "label": "Other" }
 ]

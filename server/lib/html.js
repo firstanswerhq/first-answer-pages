@@ -17,6 +17,22 @@ export function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
+/**
+ * Renders a phone number as a tappable tel: link. The href keeps only digits
+ * and a leading '+'; the display text is the escaped original. With no digits,
+ * returns just the escaped text.
+ * @param {string} phone
+ * @returns {string}
+ */
+export function telLink(phone) {
+  const text = String(phone ?? '');
+  const trimmed = text.trim();
+  const digits = trimmed.replace(/\D/g, '');
+  if (digits === '') return escapeHtml(text);
+  const href = (trimmed.startsWith('+') ? '+' : '') + digits;
+  return `<a class="tel" href="tel:${href}">${escapeHtml(text)}</a>`;
+}
+
 /** Returns the display label for a category slug (falls back to the slug). */
 function categoryLabel(slug, categories) {
   const list = Array.isArray(categories) ? categories : getCategories();
@@ -119,7 +135,7 @@ ${body}
  */
 export function listingCard(listing, categories) {
   return `<article class="listing-card">
-  <h3><strong>${escapeHtml(listing.name)}</strong> <span class="phone">${escapeHtml(listing.phone)}</span></h3>
+  <h3><strong>${escapeHtml(listing.name)}</strong> <span class="phone">${telLink(listing.phone)}</span></h3>
   <p>${escapeHtml(listing.city)}, ${escapeHtml(listing.state)} &middot; ${escapeHtml(categoryLabel(listing.category, categories))}</p>
   <p><a href="/listings/${encodeURIComponent(listing.id)}">View details →</a></p>
 </article>`;
@@ -132,19 +148,24 @@ export function listingCard(listing, categories) {
  * @param {{ id: string, name: string }} listing
  * @returns {string}
  */
-export function quoteForm(listing) {
+export function quoteForm(listing, opts = {}) {
   const id = escapeHtml(listing.id);
   const name = escapeHtml(listing.name);
+  const values = opts.values || {};
+  const keptName = escapeHtml(values.name ?? '');
+  const keptContact = escapeHtml(values.contact ?? '');
+  const keptDetails = escapeHtml(values.details ?? '');
+  const errorHtml = opts.error ? `\n  <p class="form-error" role="alert">${escapeHtml(opts.error)}</p>` : '';
   return `<section class="quote-request">
   <h2>Ask for a quote</h2>
-  <p class="hint">Tell ${name} what you need. Leave a phone number or email so they can reach you.</p>
+  <p class="hint">Tell ${name} what you need. Leave a phone number or email so they can reach you.</p>${errorHtml}
   <form class="quote-form" method="post" action="/listings/${encodeURIComponent(listing.id)}/quote" data-listing-id="${id}" data-listing-name="${name}">
     <label for="quote-name">Your name</label>
-    <input id="quote-name" name="name" type="text" required maxlength="100" autocomplete="name">
+    <input id="quote-name" name="name" type="text" required maxlength="100" autocomplete="name" value="${keptName}">
     <label for="quote-contact">Phone or email</label>
-    <input id="quote-contact" name="contact" type="text" required maxlength="254" autocomplete="off">
+    <input id="quote-contact" name="contact" type="text" required maxlength="254" autocomplete="off" value="${keptContact}">
     <label for="quote-details">What do you need done?</label>
-    <textarea id="quote-details" name="details" rows="5" required maxlength="2000"></textarea>
+    <textarea id="quote-details" name="details" rows="5" required maxlength="2000">${keptDetails}</textarea>
     <button type="submit">Send request</button>
   </form>
 </section>`;
@@ -162,15 +183,40 @@ function stamp(verification, id) {
   if (!verification || !verification.verifiedDate || !verification.hash) {
     return '<aside class="stamp stamp-unconfirmed"><p class="unconfirmed-note">Not yet confirmed by the owner.</p> <a class="button confirm-cta" href="/rise">Is this your business? Confirm it free →</a></aside>';
   }
-  const date = escapeHtml(verification.verifiedDate);
+  const date = escapeHtml(formatStampDate(verification));
   const hash = escapeHtml(verification.hash);
   const href = `/api/verify/${encodeURIComponent(id)}?hash=${encodeURIComponent(verification.hash)}`;
   return `<aside class="stamp">
       <p class="stamp-title">Owner-confirmed ${date}</p>
+      <details class="stamp-details"><summary>Details for AI tools</summary>
       <p class="stamp-note">Tamper check: unchanged since the owner confirmed it. This is not proof of ownership.</p>
       <p class="stamp-hash"><code data-hash="${hash}">${hash}</code></p>
       <p class="stamp-note"><a href="${escapeHtml(href)}">Check this hash</a></p>
+      </details>
     </aside>`;
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/**
+ * Display date for the stamp, e.g. "Nov 9, 2026". Uses America/Chicago when a
+ * confirmation timestamp exists; a legacy date-only value is shown as-is.
+ *
+ * @param {{ verifiedDate?: string, verifiedAt?: string }} verification
+ * @returns {string}
+ */
+export function formatStampDate(verification) {
+  const at = verification && verification.verifiedAt ? new Date(verification.verifiedAt) : null;
+  if (at && !Number.isNaN(at.getTime())) {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Chicago', month: 'short', day: 'numeric', year: 'numeric',
+    }).formatToParts(at);
+    const get = type => parts.find(p => p.type === type)?.value;
+    return `${get('month')} ${get('day')}, ${get('year')}`;
+  }
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(verification?.verifiedDate ?? ''));
+  if (!m) return String(verification?.verifiedDate ?? '');
+  return `${MONTHS[Number(m[2]) - 1]} ${Number(m[3])}, ${m[1]}`;
 }
 
 /**
@@ -224,7 +270,7 @@ export function listingDetail(listing, jsonLd, opts = {}) {
     <dt>Category</dt>
     <dd>${escapeHtml(categoryLabel(listing.category, categories))}</dd>
     <dt>Phone</dt>
-    <dd>${escapeHtml(listing.phone)}</dd>${addressRow}
+    <dd>${telLink(listing.phone)}</dd>${addressRow}
     <dt>Service area</dt>
     <dd>${escapeHtml(listing.serviceArea)}</dd>
     <dt>Services</dt>
