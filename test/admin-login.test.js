@@ -14,7 +14,6 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -24,12 +23,15 @@ import fc from 'fast-check';
 import { createApp } from '../server/app.js';
 import { DEFAULT_BASE_URL } from '../server/lib/config.js';
 import { createRateLimiter } from '../server/lib/rate-limiter.js';
+import { adminCookieValue } from '../server/lib/admin-auth.js';
 
 const REPO_DATA = fileURLToPath(new URL('../data/', import.meta.url));
 const TOKEN = 'admin login/token &=+ %20';
-const COOKIE_VALUE = createHash('sha256').update(TOKEN).digest('hex');
-const COOKIE = `fap_admin=${COOKIE_VALUE}`;
 const HOUR = 60 * 60 * 1000;
+// Every app starts its fake clock here, so a cookie issued at T0 matches a real login.
+const T0 = Date.UTC(2026, 10, 10, 20, 30, 0);
+const COOKIE_VALUE = adminCookieValue(TOKEN, T0);
+const COOKIE = `fap_admin=${COOKIE_VALUE}`;
 const SUBMITTED_AT = '2026-11-10T20:15:00.000Z'; // 2:15 PM in Chicago (CST)
 
 const HTML_ACCEPT = 'text/html,application/xhtml+xml';
@@ -81,7 +83,7 @@ async function startEnv({ config = {}, limiter = 'permissive' } = {}) {
   await fs.writeFile(path.join(dir, 'drafts.json'), JSON.stringify(drafts));
   await fs.writeFile(path.join(dir, 'pending.json'), JSON.stringify(pending));
 
-  const clock = { t: Date.UTC(2026, 10, 10, 20, 30, 0), now() { return this.t; } };
+  const clock = { t: T0, now() { return this.t; } };
   const rateLimiter = limiter === 'fake'
     ? createRateLimiter({ clock })
     : { consume: () => ({ allowed: true }), consumeAll: () => ({ allowed: true }), peek: () => ({ allowed: true }) };
@@ -223,8 +225,8 @@ test('POST /admin/login with the right token: 303 to /admin/pending and a safe c
 
   assert.equal(res.setCookie.length, 1);
   const [cookie] = res.setCookie;
-  assert.ok(cookie.startsWith(`fap_admin=${COOKIE_VALUE}; `), 'value is the SHA-256 hex of the token');
-  assert.match(COOKIE_VALUE, /^[0-9a-f]{64}$/);
+  assert.ok(cookie.startsWith(`fap_admin=${COOKIE_VALUE}; `), 'value is <issuedAt>.<HMAC of issuedAt>');
+  assert.match(COOKIE_VALUE, /^\d+\.[0-9a-f]{64}$/);
   assert.ok(!cookie.includes(TOKEN) && !cookie.includes(encodeURIComponent(TOKEN)), 'token must not be in the cookie');
 
   const attrs = cookie.split('; ').slice(1);
@@ -390,6 +392,7 @@ test('cookie POST reject also needs a matching Referer when Origin is absent', a
     method: 'POST',
     path: '/admin/pending/d1/reject',
     headers: { cookie: COOKIE, accept: HTML_ACCEPT, referer: `${origin(env)}/admin/pending` },
+    body: 'confirm=yes', // the confirm page's "Yes, reject" button
   });
   assert.equal(res.status, 303);
   assert.equal(res.headers.location, '/admin/pending?note=rejected');
@@ -461,7 +464,7 @@ test('pending page shows Chicago time without a zone name, and no "curl" or "moc
   assert.ok(!/\b(?:CST|CDT|UTC|GMT)\b/.test(res.text), 'no zone name');
   assert.ok(!/curl/i.test(res.text), 'no "curl"');
   assert.ok(!/mock/i.test(res.text), 'no "mock"');
-  assert.ok(res.text.includes('Provider: Demo photo reader'));
+  assert.ok(res.text.includes('Source: Demo photo reader'));
 });
 
 test('the quotes page has no "curl" or "mock" either', async () => {

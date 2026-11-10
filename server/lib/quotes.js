@@ -89,3 +89,23 @@ export async function submitQuote(ctx, args, clientIp) {
 
   return { status: 'ok', quoteId: quote.id };
 }
+
+/**
+ * Mark a saved quote handled (admin). Saves handled: true and handledAt.
+ * @param {object} ctx resolved app context
+ * @param {string} quoteId
+ * @returns {Promise<{ status: 200 | 404 }>}
+ */
+export async function markQuoteHandled(ctx, quoteId) {
+  let found = false;
+  const at = new Date(ctx.clock.now()).toISOString();
+  await ctx.store.collection('quotes').update(list => {
+    const q = list.find(x => x && typeof x === 'object' && x.id === quoteId);
+    if (q) {
+      found = true;
+      q.handled = true;
+      if (typeof q.handledAt !== 'string') q.handledAt = at;
+    }
+  });
+  return { status: found ? 200 : 404 };
+}

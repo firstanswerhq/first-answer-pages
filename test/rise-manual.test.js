@@ -186,7 +186,7 @@ test('production with the mock vision provider: /rise shows only type-it-in and 
   assert.equal((await readJson(env, 'drafts.json', []))[0].provider, 'manual');
 });
 
-test('a manual draft can be confirmed and approved in production, and the admin page says "Typed in by owner"', async () => {
+test('a manual draft can be confirmed and approved in production, and the admin page says "Typed in by the owner"', async () => {
   const env = await startEnv({ visionProvider: createMockVisionProvider(), config: PRODUCTION });
   assert.equal((await postManual(env)).status, 303);
 
@@ -219,7 +219,7 @@ test('a manual draft can be confirmed and approved in production, and the admin 
   assert.equal(pending.status, 200);
   const pendingHtml = await pending.text();
   assert.ok(pendingHtml.includes('Typed Plumbing'));
-  assert.ok(pendingHtml.includes('Typed in by owner'));
+  assert.ok(pendingHtml.includes('Typed in by the owner'));
   assert.ok(!/mock/i.test(pendingHtml));
 
   const approve = await fetch(`${env.base}/admin/pending/draft-1/approve`, {

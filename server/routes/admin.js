@@ -8,8 +8,10 @@
  *   GET  /admin/quotes                     HTML list of saved quotes, newest first
  *   GET  /admin/whoami                     req.ip, req.ips and the trust proxy setting
  *   POST /admin/pending/:id/approve        publish the draft
- *   POST /admin/pending/:id/reject         reject, publish nothing
- *   POST /admin/listings/:id/unpublish     take a published listing down
+ *   POST /admin/pending/:id/reject         reject, publish nothing (browser: asks first)
+ *   POST /admin/listings/:id/unpublish     take a published listing down (browser: asks first)
+ *   POST /admin/listings/:id/seance        "Run AI check": one Séance run, then the report
+ *   POST /admin/quotes/:id/handled         mark a saved quote handled
  *
  * The pending entry id is the draft id.
  * Every /admin page accepts the login cookie or the bearer header (see
@@ -27,6 +29,9 @@ import { layout, escapeHtml } from '../lib/html.js';
 import { draftProvider } from '../lib/drafts.js';
 import { formatRunTime } from '../lib/seance-html.js';
 import { indexNowNote } from '../lib/indexnow.js';
+import { DAYS } from '../lib/listing-fields.js';
+import { markQuoteHandled } from '../lib/quotes.js';
+import { runSeanceForListing } from './seance.js';
 
 /** Fixed notes for /admin/pending?note=...; never echo the query value. */
 const NOTES = Object.freeze({
@@ -38,10 +43,84 @@ const NOTES = Object.freeze({
   invalid: 'That listing is missing required fields, so it was not approved.',
   demo: 'This draft came from the demo photo reader and cannot be approved in production.',
   failed: 'That could not be done.',
+  seanceoff: 'The AI check is not connected yet (no AI key is set).',
+  seancebusy: 'That listing was checked very recently. Please try again later.',
+  seancelimit: "Today's limit for AI checks is reached. Try again tomorrow.",
+  seancefailed: 'The AI check could not finish. Please try again later.',
+});
+
+/** Fixed notes for /admin/quotes?note=... */
+const QUOTE_NOTES = Object.freeze({
+  handled: 'Marked handled.',
+  notfound: 'That quote was not found.',
 });
 
 /** Provider name as shown to people. */
-const providerText = name => (name === 'mock' ? 'Demo photo reader' : name === 'manual' ? 'Typed in by owner' : name);
+function providerText(name) {
+  if (name === 'mock') return 'Demo photo reader';
+  if (name === 'manual') return 'Typed in by the owner';
+  if (name === 'anthropic') return 'Read from a photo by Claude';
+  if (name === 'openai') return 'Read from a photo by AI';
+  return 'Unknown source';
+}
+
+/** The last 10 digits of a phone number, for duplicate checks ('' when too short). */
+function phoneKey(phone) {
+  const digits = String(phone ?? '').replace(/\D/g, '');
+  return digits.length >= 7 ? digits.slice(-10) : '';
+}
+
+/** tel: href for a phone number; US 10-digit numbers get +1. */
+function telHref(phone) {
+  const text = String(phone ?? '').trim();
+  const digits = text.replace(/\D/g, '');
+  if (digits.length === 10) return `tel:+1${digits}`;
+  if (digits.length === 11 && digits.startsWith('1')) return `tel:+${digits}`;
+  return `tel:${text.startsWith('+') ? '+' : ''}${digits}`;
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** mailto: href with the local part and domain encoded separately (the @ stays literal). */
+function mailtoHref(email, params = {}) {
+  const [local, domain] = String(email).split('@');
+  const query = new URLSearchParams(params).toString().replace(/\+/g, '%20');
+  return `mailto:${encodeURIComponent(local)}@${encodeURIComponent(domain ?? '')}${query ? `?${query}` : ''}`;
+}
+
+/** A customer's contact as a tel: or mailto: link when it looks like one, else plain text. */
+function contactHtml(contact) {
+  const text = String(contact ?? '').trim();
+  if (EMAIL_RE.test(text)) return `<a href="${escapeHtml(mailtoHref(text))}">${escapeHtml(text)}</a>`;
+  const digits = text.replace(/\D/g, '');
+  if (/^[\d\s().+-]+$/.test(text) && digits.length >= 7 && digits.length <= 15) {
+    return `<a href="${escapeHtml(telHref(text))}">${escapeHtml(text)}</a>`;
+  }
+  return escapeHtml(text);
+}
+
+/** Hours as "Monday: 9-5" lines, filled days only. */
+function hoursHtml(hours) {
+  const byDay = new Map(Object.entries(hours && typeof hours === 'object' ? hours : {})
+    .map(([k, v]) => [String(k).toLowerCase(), typeof v === 'string' ? v.trim() : '']));
+  const rows = DAYS.filter(d => byDay.get(d)).map(d => `${d[0].toUpperCase()}${d.slice(1)}: ${escapeHtml(byDay.get(d))}`);
+  return rows.length ? rows.join('<br>') : 'None given';
+}
+
+/** A small "are you sure" page; the button posts confirm=yes back to the same action. */
+function confirmPage({ title, question, action, button }) {
+  const body = `<section class="admin">
+  ${adminNav()}
+  <h1>${escapeHtml(title)}</h1>
+  <p>${escapeHtml(question)}</p>
+  <form method="POST" action="${escapeHtml(action)}">
+    <input type="hidden" name="confirm" value="yes">
+    <button type="submit" class="admin-button">${escapeHtml(button)}</button>
+  </form>
+  <p><a href="/admin/pending">Cancel</a></p>
+</section>`;
+  return layout({ title, body });
+}
 
 /** Central time without the zone name, e.g. 'Nov 10, 2026, 2:15 PM'. */
 function adminTime(iso) {
@@ -67,6 +146,7 @@ function loginPage(error) {
     <input type="password" id="token" name="token" autocomplete="current-password" required>
     <button type="submit" class="admin-button">Log in</button>
   </form>
+  <p class="hint">Your admin token is in Render: open your service, then Environment, then ADMIN_TOKEN.</p>
 </section>`;
   return layout({ title: 'Admin log in', body });
 }
@@ -106,7 +186,8 @@ export function createAdminRouter(ctx) {
 
   router.post('/admin/logout', (req, res) => {
     // Only a logged-in browser needs the origin check; anyone else just lands on the login page.
-    if (ctx.config.adminToken && cookieMatches(req, ctx.config.adminToken) && !sameOrigin(ctx, req)) {
+    if (ctx.config.adminToken && cookieMatches(req, ctx.config.adminToken, ctx.clock?.now?.() ?? Date.now())
+      && !sameOrigin(ctx, req)) {
       return res.status(403).json({ error: 'Forbidden' });
     }
     clearAdminCookie(ctx, req, res);
@@ -147,24 +228,66 @@ export function createAdminRouter(ctx) {
       // Owner listings that are live now (the store's snapshot; sample listings are never unpublishable).
       const published = ctx.store.getListings().filter(l => l && typeof l.id === 'string' && !ctx.store.isSeed(l.id));
 
-      const items = entries.map(e => {
-        const f = byId.get(e.draftId)?.fields ?? {};
+      const categories = ctx.store.getCategories();
+      const categoryLabel = slug => categories.find(c => c.slug === slug)?.label ?? String(slug ?? '');
+
+      // Duplicate check by phone (last 10 digits): live listings and the other pending entries.
+      const liveByPhone = new Map();
+      for (const l of ctx.store.getListings()) {
+        const key = phoneKey(l?.phone);
+        if (key && !liveByPhone.has(key)) liveByPhone.set(key, l);
+      }
+      const pendingFields = entries.map(e => ({ entry: e, f: byId.get(e.draftId)?.fields ?? {} }));
+
+      const items = pendingFields.map(({ entry: e, f }) => {
         const provider = providerText(draftProvider(byId.get(e.draftId)));
         const id = encodeURIComponent(e.id);
-        return `<li class="pending-item">
+        const key = phoneKey(f.phone);
+        const dupes = [];
+        if (key && liveByPhone.has(key)) {
+          const l = liveByPhone.get(key);
+          const href = `/listings/${encodeURIComponent(l.id)}`;
+          dupes.push(`Possible duplicate of ${escapeHtml(l.name ?? l.id)} (<a href="${href}">${escapeHtml(href)}</a>)`);
+        }
+        for (const other of pendingFields) {
+          if (other.entry.id === e.id || !key || phoneKey(other.f.phone) !== key) continue;
+          const href = `#pending-${encodeURIComponent(other.entry.id)}`;
+          dupes.push(`Possible duplicate of ${escapeHtml(other.f.name ?? '(no name)')} (<a href="${href}">waiting for review below</a>)`);
+        }
+        const services = Array.isArray(f.services) ? f.services.filter(x => typeof x === 'string' && x.trim()) : [];
+        const row = (label, value) => `    <dt>${label}</dt><dd>${value}</dd>`;
+        const preview = [
+          row('Services', services.length ? escapeHtml(services.join(', ')) : 'None given'),
+          row('Description', f.description ? escapeHtml(f.description).replace(/\n/g, '<br>') : 'None given'),
+          row('Hours', hoursHtml(f.hours)),
+          row('Service area', f.serviceArea ? escapeHtml(f.serviceArea) : 'None given'),
+          ...(f.address ? [row('Address', escapeHtml(f.address))] : []),
+          ...(f.website ? [row('Website', escapeHtml(f.website))] : []),
+          ...(f.ownerEmail ? [row('Owner email (private)', escapeHtml(f.ownerEmail))] : []),
+        ].join('\n');
+        return `<li class="pending-item" id="pending-${escapeHtml(e.id)}">
   <h2>${escapeHtml(f.name ?? '(no name)')}</h2>
-  <p>${escapeHtml(f.category ?? '')} &middot; ${escapeHtml(f.city ?? '')}, ${escapeHtml(f.state ?? '')} &middot; ${escapeHtml(f.phone ?? '')}</p>
-  <p class="hint">Submitted ${escapeHtml(adminTime(e.submittedAt ?? ''))} &middot; Provider: ${escapeHtml(provider)}${f.ownerEmail ? ` &middot; Owner email (private): ${escapeHtml(f.ownerEmail)}` : ''}</p>
+  <p>${escapeHtml(categoryLabel(f.category))} &middot; ${escapeHtml(f.city ?? '')}, ${escapeHtml(f.state ?? '')} &middot; ${escapeHtml(f.phone ?? '')}</p>
+${dupes.map(d => `  <p class="admin-warning notice" role="note">${d}</p>`).join('\n')}
+  <dl class="admin-preview">
+${preview}
+  </dl>
+  <p class="hint">Submitted ${escapeHtml(adminTime(e.submittedAt ?? ''))} &middot; Source: ${escapeHtml(provider)}</p>
   <form method="POST" action="/admin/pending/${id}/approve"><button type="submit" class="admin-button">Approve</button></form>
   <form method="POST" action="/admin/pending/${id}/reject"><button type="submit" class="admin-button admin-button-secondary">Reject</button></form>
 </li>`;
       }).join('\n');
 
-      const liveItems = published.map(l => `<li class="pending-item">
+      const liveItems = published.map(l => {
+        const lid = encodeURIComponent(l.id);
+        return `<li class="pending-item">
   <h2>${escapeHtml(l.name ?? l.id)}</h2>
-  <p><a href="/listings/${encodeURIComponent(l.id)}">View listing</a></p>
-  <form method="POST" action="/admin/listings/${encodeURIComponent(l.id)}/unpublish"><button type="submit" class="admin-button admin-button-secondary">Unpublish</button></form>
-</li>`).join('\n');
+  <p>${escapeHtml(categoryLabel(l.category))} &middot; ${escapeHtml(l.city ?? '')}, ${escapeHtml(l.state ?? '')} &middot; ${escapeHtml(l.phone ?? '')}</p>
+  <p><a href="/listings/${lid}">View listing</a></p>
+  <form method="POST" action="/admin/listings/${lid}/seance"><button type="submit" class="admin-button">Run AI check (Séance)</button></form>
+  <form method="POST" action="/admin/listings/${lid}/unpublish"><button type="submit" class="admin-button admin-button-secondary">Unpublish</button></form>
+</li>`;
+      }).join('\n');
 
       const noteKey = typeof req.query.note === 'string' && Object.hasOwn(NOTES, req.query.note) ? req.query.note : '';
       const noteId = typeof req.query.id === 'string' ? req.query.id : '';
@@ -178,7 +301,17 @@ export function createAdminRouter(ctx) {
       const pingLine = (noteKey === 'approved' || noteKey === 'unpublished') && noteId
         ? `<p class="hint">${escapeHtml(pingEntry ? indexNowNote(pingEntry) : `Bing not notified (${ctx.indexNow?.reason || 'off'}).`)}</p>`
         : '';
-      const note = noteKey ? `<p class="admin-note" role="status">${escapeHtml(NOTES[noteKey])}${link}</p>${pingLine}` : '';
+      // After approve: remind the admin to tell the owner (selectable address plus a mailto link).
+      const approvedListing = noteKey === 'approved' && noteId ? ctx.store.findById(noteId) : undefined;
+      const ownerEmail = typeof approvedListing?.ownerEmail === 'string' ? approvedListing.ownerEmail : '';
+      const base = String(ctx.config.baseUrl ?? '').replace(/\/+$/, '');
+      const ownerLine = ownerEmail
+        ? `<p class="hint">Let the owner know it's live: <span class="owner-email">${escapeHtml(ownerEmail)}</span> &middot; <a href="${escapeHtml(mailtoHref(ownerEmail, {
+          subject: 'Your listing is live',
+          body: `Good news: your listing is live at ${base}/listings/${encodeURIComponent(noteId)}`,
+        }))}">Email the owner</a></p>`
+        : '';
+      const note = noteKey ? `<p class="admin-note" role="status">${escapeHtml(NOTES[noteKey])}${link}</p>${ownerLine}${pingLine}` : '';
 
       const body = `<section class="admin">
   ${adminNav()}
@@ -201,7 +334,7 @@ export function createAdminRouter(ctx) {
         .filter(q => q && typeof q === 'object')
         .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
 
-      const items = quotes.map(q => {
+      const item = q => {
         const listing = ctx.store.findById(q.listingId);
         const target = listing
           ? `<a href="/listings/${encodeURIComponent(q.listingId)}">${escapeHtml(listing.name)}</a> (${escapeHtml(q.listingId)})`
@@ -209,21 +342,37 @@ export function createAdminRouter(ctx) {
         const emailed = q.emailed === true
           ? 'yes'
           : q.notifier === 'resend' ? 'no (sending failed)' : 'no (email not set up)';
-        const business = listing
-          ? `<p>Business phone: ${escapeHtml(listing.phone ?? '')} &middot; Owner email (private): ${listing.ownerEmail ? escapeHtml(listing.ownerEmail) : 'none'}</p>\n  `
+        const businessPhone = listing?.phone
+          ? `<a href="${escapeHtml(telHref(listing.phone))}">${escapeHtml(listing.phone)}</a>`
           : '';
+        const business = listing
+          ? `<p>Business phone: ${businessPhone} &middot; Owner email (private): ${listing.ownerEmail ? escapeHtml(listing.ownerEmail) : 'none'}</p>\n  `
+          : '';
+        const handled = q.handled === true;
+        const action = handled
+          ? `<p class="hint">Handled ${escapeHtml(adminTime(q.handledAt ?? ''))}</p>`
+          : `<form method="POST" action="/admin/quotes/${encodeURIComponent(q.id ?? '')}/handled"><button type="submit" class="admin-button admin-button-secondary">Mark handled</button></form>`;
         return `<li class="pending-item">
   <h2>${target}</h2>
   ${business}<p>Quote ${escapeHtml(q.id ?? '')} &middot; ${escapeHtml(adminTime(q.createdAt ?? ''))} &middot; Emailed: ${emailed}</p>
-  <p>From: ${escapeHtml(q.name ?? '')} &middot; Contact: ${escapeHtml(q.contact ?? '')}</p>
+  <p>From: ${escapeHtml(q.name ?? '')} &middot; Contact: ${contactHtml(q.contact)}</p>
   <p class="quote-details">${escapeHtml(q.details ?? '')}</p>
+  ${action}
 </li>`;
-      }).join('\n');
+      };
+      const open = quotes.filter(q => q.handled !== true);
+      const done = quotes.filter(q => q.handled === true);
+      const noteKey = typeof req.query.note === 'string' && Object.hasOwn(QUOTE_NOTES, req.query.note) ? req.query.note : '';
+      const note = noteKey ? `<p class="admin-note" role="status">${escapeHtml(QUOTE_NOTES[noteKey])}</p>` : '';
 
       const body = `<section class="admin">
   ${adminNav()}
   <h1>Saved quote requests</h1>
-  ${quotes.length === 0 ? '<p>No quote requests yet.</p>' : `<ul class="pending-list">\n${items}\n</ul>`}
+  ${note}
+  ${open.length === 0
+    ? `<p>${quotes.length === 0 ? 'No quote requests yet.' : 'No open quote requests.'}</p>`
+    : `<ul class="pending-list">\n${open.map(item).join('\n')}\n</ul>`}
+  ${done.length === 0 ? '' : `<h2>Handled</h2>\n  <ul class="pending-list">\n${done.map(item).join('\n')}\n</ul>`}
 </section>`;
       res.type('html').send(layout({ title: 'Saved quote requests', body }));
     } catch (err) {
@@ -246,6 +395,7 @@ export function createAdminRouter(ctx) {
   ${adminNav()}
   <h1>Your IP address</h1>
   <p>Open this page from your phone. Set TRUST_PROXY to the smallest number that shows your real IP address.</p>
+  <p>What to look for: the address after "req.ip" should match the one a site like whatismyipaddress.com shows on the same phone. If it doesn't, change TRUST_PROXY in Render by one and check again.</p>
   <p>req.ip: <strong>${escapeHtml(req.ip ?? '')}</strong></p>
   <p>req.ips:</p>
   ${list}
@@ -318,11 +468,23 @@ export function createAdminRouter(ctx) {
     }
   });
 
-  router.post('/admin/pending/:id/reject', async (req, res, next) => {
+  router.post('/admin/pending/:id/reject', form, async (req, res, next) => {
     try {
       const entry = (await pendingEntries()).find(e => e && e.id === req.params.id);
       if (!entry) return reply(req, res, { status: 404, json: { error: 'Pending entry not found' }, note: 'notfound' });
       if (entry.status !== 'pending') return reply(req, res, { status: 409, json: { error: 'Entry is not pending' }, note: 'notpending' });
+
+      // Browsers ask first; API clients (bearer / JSON) act right away as before.
+      if (wantsHtml(req) && req.body?.confirm !== 'yes') {
+        const drafts = await ctx.store.collection('drafts').read();
+        const name = (Array.isArray(drafts) ? drafts : []).find(d => d && d.id === entry.draftId)?.fields?.name || 'this listing';
+        return res.type('html').send(confirmPage({
+          title: 'Reject this listing?',
+          question: `Reject ${name}? This can't be undone.`,
+          action: `/admin/pending/${encodeURIComponent(entry.id)}/reject`,
+          button: 'Yes, reject',
+        }));
+      }
 
       const result = await ctx.store.rejectDraft(entry.draftId);
       if (result.status === 404) return reply(req, res, { status: 404, json: { error: 'Draft not found' }, note: 'notfound' });
@@ -333,14 +495,58 @@ export function createAdminRouter(ctx) {
     }
   });
 
-  router.post('/admin/listings/:id/unpublish', async (req, res, next) => {
+  router.post('/admin/listings/:id/unpublish', form, async (req, res, next) => {
     try {
+      if (wantsHtml(req) && req.body?.confirm !== 'yes') {
+        const live = ctx.store.findById(req.params.id);
+        if (!live || ctx.store.isSeed(live.id)) {
+          return reply(req, res, { status: live ? 409 : 404, json: { error: live ? 'Cannot unpublish' : 'Listing not found' }, note: live ? 'failed' : 'notfound' });
+        }
+        return res.type('html').send(confirmPage({
+          title: 'Unpublish this listing?',
+          question: `Unpublish ${live.name || 'this listing'}? It comes off the site right away. This can't be undone.`,
+          action: `/admin/listings/${encodeURIComponent(live.id)}/unpublish`,
+          button: 'Yes, unpublish',
+        }));
+      }
       const result = await ctx.store.unpublish(req.params.id);
       if (result.status === 404) return reply(req, res, { status: 404, json: { error: 'Listing not found' }, note: 'notfound' });
       if (result.status !== 200) return reply(req, res, { status: 409, json: { error: result.error ?? 'Cannot unpublish' }, note: 'failed' });
       // The removed page now 404s; telling Bing lets it drop the page sooner.
       ping([`/listings/${encodeURIComponent(req.params.id)}`, '/llms.txt', '/sitemap.xml'], req.params.id);
       reply(req, res, { json: { ok: true }, note: 'unpublished', id: req.params.id });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // "Run AI check" from the admin page: the same Séance run as POST /seance/run.
+  router.post('/admin/listings/:id/seance', async (req, res, next) => {
+    try {
+      const result = await runSeanceForListing(ctx, req.params.id, req.ip);
+      if (!wantsHtml(req)) {
+        if (result.retryAfterSeconds !== undefined) res.set('Retry-After', String(result.retryAfterSeconds));
+        return res.status(result.status).json(result.json);
+      }
+      if (result.status === 201) return res.redirect(303, `/seance/${encodeURIComponent(req.params.id)}`);
+      const note = {
+        notfound: 'notfound', off: 'seanceoff', busy: 'seancebusy', limit: 'seancelimit', failed: 'seancefailed',
+      }[result.reason] ?? 'seancefailed';
+      return res.redirect(303, `/admin/pending?note=${note}`);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.post('/admin/quotes/:id/handled', async (req, res, next) => {
+    try {
+      const result = await markQuoteHandled(ctx, req.params.id);
+      if (!wantsHtml(req)) {
+        return result.status === 200
+          ? res.json({ ok: true })
+          : res.status(404).json({ error: 'Quote not found' });
+      }
+      return res.redirect(303, `/admin/quotes?note=${result.status === 200 ? 'handled' : 'notfound'}`);
     } catch (err) {
       next(err);
     }

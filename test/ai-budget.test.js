@@ -83,7 +83,7 @@ test('the count resets at Chicago midnight', () => {
   assert.equal(budget.consume().allowed, true);
 });
 
-test('photo uploads are held to min(150, limit) and never block Séance runs', () => {
+test('photo uploads are held to the photo share and never block Séance runs', () => {
   const budget = createAiBudget({ clock: fakeClock(), limit: 4, photoLimit: 2 });
   assert.equal(budget.consume({ kind: 'photo' }).allowed, true);
   assert.equal(budget.consume({ kind: 'photo' }).allowed, true);
@@ -92,7 +92,10 @@ test('photo uploads are held to min(150, limit) and never block Séance runs', (
   assert.equal(budget.consume({ kind: 'seance' }).allowed, true);
   assert.equal(budget.consume({ kind: 'seance' }).allowed, false);
   assert.equal(createAiBudget({ clock: fakeClock(), limit: 1000 }).photoLimit, 150);
-  assert.equal(createAiBudget({ clock: fakeClock(), limit: 10 }).photoLimit, 10);
+  // A lower total still keeps a quarter for Séance: 10 - ceil(10/4) = 7.
+  assert.equal(createAiBudget({ clock: fakeClock(), limit: 10 }).photoLimit, 7);
+  assert.equal(createAiBudget({ clock: fakeClock(), limit: 100 }).photoLimit, 75);
+  assert.equal(createAiBudget({ clock: fakeClock(), limit: 2 }).photoLimit, 1);
 });
 
 test('the day count is saved to the file and restored; a corrupt file starts at zero', async () => {

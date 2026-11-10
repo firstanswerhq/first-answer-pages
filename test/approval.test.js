@@ -597,7 +597,7 @@ test('GET /admin/pending shows the provider of each draft', async () => {
   const res = await get(env, '/admin/pending', bearer(TOKEN));
   assert.equal(res.status, 200);
   const html = await res.text();
-  assert.ok(html.includes('Provider: Demo photo reader'));
+  assert.ok(html.includes('Source: Demo photo reader'));
   assert.ok(!/mock/i.test(html), 'the word mock is never shown');
-  assert.ok(html.includes('Provider: unknown'), 'legacy draft without provider reads as unknown');
+  assert.ok(html.includes('Source: Unknown source'), 'legacy draft without provider reads as an unknown source');
 });
