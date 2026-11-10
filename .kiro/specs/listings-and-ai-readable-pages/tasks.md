@@ -100,8 +100,8 @@ Build First Answer Pages from scratch: a server-rendered local business director
     - Nav and footer styling consistent with the phone-book look
     - _Requirements: 1.2, 1.3, 2.2 (aesthetic defined in design)_
 
-- [ ] 9. Unit and integration tests
-  - [ ]* 9.1 Write unit tests for the data layer in `test/listings.test.js` using `node:test` and `fast-check`:
+- [x] 9. Unit and integration tests
+  - [x]* 9.1 Write unit tests for the data layer in `test/listings.test.js` using `node:test` and `fast-check`:
     - `findById` with a known id → returns correct listing
     - `findById` with unknown id → returns `undefined`
     - `groupByCategory` with mixed listings → categories appear in the order defined by `categories.json`
@@ -111,22 +111,22 @@ Build First Answer Pages from scratch: a server-rendered local business director
     - **Property 13: City filtering is case-insensitive** — `filterListings({ city })` returns all and only listings matching the city case-insensitively — **Validates: Requirements 1.5**
     - **Property 14: Combined filtering is a logical intersection** — `filterListings({ category, city })` returns exactly the intersection of both filters — **Validates: Requirements 1.6**
     - _Requirements: 1.4, 1.5, 1.6_
-  - [ ]* 9.2 Write integration tests for the JSON API in `test/api.test.js` using `node:test`:
+  - [x]* 9.2 Write integration tests for the JSON API in `test/api.test.js` using `node:test`:
     - `GET /api/listings/nashville-pipe-pros` → 200, correct JSON body, `application/json` header
     - `GET /api/listings/does-not-exist` → 404, `{ "error": "Listing not found" }`, `application/json` header
     - Use Node.js built-in `fetch` to call the server started in a `before` hook; close the server in an `after` hook
     - _Requirements: 4.1, 4.2, 4.3, 4.4_
 
-- [~] 10. Checkpoint — full test suite
+- [x] 10. Checkpoint — full test suite
   - Run `node --test` and ensure all tests pass; ask the user if any failures need investigation before proceeding.
 
-- [ ] 11. MCP placeholder and README
-  - [~] 11.1 Create `mcp/index.js` — a placeholder ES module with a comment explaining this is the future MCP server entry point; export nothing; do not wire it into the main server
+- [x] 11. MCP placeholder and README
+  - [x] 11.1 Create `mcp/index.js` — a placeholder ES module with a comment explaining this is the future MCP server entry point; export nothing; do not wire it into the main server
     - _Requirements: (structure.md MCP placeholder rule)_
-  - [~] 11.2 Create `README.md` — document: project overview, how to install (`npm install`), how to run (`npm start`), how to run tests (`node --test`), environment variables (`PORT`, `BASE_URL`), data file location and format, and a note that seed data is fictional
+  - [x] 11.2 Create `README.md` — document: project overview, how to install (`npm install`), how to run (`npm start`), how to run tests (`node --test`), environment variables (`PORT`, `BASE_URL`), data file location and format, and a note that seed data is fictional
     - _Requirements: none — developer documentation_
 
-- [~] 12. Final checkpoint
+- [x] 12. Final checkpoint
   - Ensure all tests pass with `node --test`; verify the server starts without errors; ask the user if anything needs adjustment.
 
 ## Notes
