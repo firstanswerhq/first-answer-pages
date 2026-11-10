@@ -34,11 +34,11 @@ Build First Answer Pages from scratch: a server-rendered local business director
   - [x] 3.4 Add `groupByCategory(listings)` to `server/data.js` — returns a `Map<slug, Listing[]>` with keys ordered by the sequence in `categories.json`; categories with zero listings still appear if they exist in the map iteration (or can be omitted — caller decides)
     - _Requirements: 1.1, 1.2_
 
-- [ ] 4. Generator modules
-  - [~] 4.1 Create `server/lib/schema.js` — export `buildSchema(listing)` that maps Listing fields to a schema.org LocalBusiness JSON-LD object per the field-mapping table in the design; validate all required fields before building and throw `new Error('Schema_Builder: missing required field: <fieldName>')` on any missing field
+- [x] 4. Generator modules
+  - [x] 4.1 Create `server/lib/schema.js` — export `buildSchema(listing)` that maps Listing fields to a schema.org LocalBusiness JSON-LD object per the field-mapping table in the design; validate all required fields before building and throw `new Error('Schema_Builder: missing required field: <fieldName>')` on any missing field
     - Required constants: `"@context": "https://schema.org"`, `"@type": "LocalBusiness"`, `address["@type"]: "PostalAddress"`, `hasOfferCatalog["@type"]: "OfferCatalog"`
     - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
-  - [ ]* 4.2 Write property tests for Schema Builder in `test/schema.test.js`
+  - [x]* 4.2 Write property tests for Schema Builder in `test/schema.test.js`
     - Use the `arbListing` arbitrary defined in the design document
     - **Property 1: Schema Builder preserves required constants** — `@context` equals `"https://schema.org"`, `@type` equals `"LocalBusiness"` — **Validates: Requirements 3.3, 8.1, 8.2**
     - **Property 2: Schema Builder field mapping is correct** — `name`, `telephone`, `description` match listing fields — **Validates: Requirements 3.2, 8.3, 8.4**
@@ -46,29 +46,29 @@ Build First Answer Pages from scratch: a server-rendered local business director
     - **Property 4: Schema Builder throws for missing required fields** — removing any required field causes an Error to be thrown — **Validates: Requirements 3.5**
     - Each `fc.assert` call must include a comment: `// Feature: listings-and-ai-readable-pages, Property N: <title>`
     - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5_
-  - [~] 4.3 Create `server/lib/llms.js` — export `generateLlmsTxt(listings, baseUrl)` that produces a plain-text string; starts with a header block (site name, purpose, total listing count, base URL); then for each category, outputs a `## Category` heading followed by listing entries sorted alphabetically by name (case-insensitive) within the category; each entry includes name, phone, category label, city+state, serviceArea, and page URL
+  - [x] 4.3 Create `server/lib/llms.js` — export `generateLlmsTxt(listings, baseUrl)` that produces a plain-text string; starts with a header block (site name, purpose, total listing count, base URL); then for each category, outputs a `## Category` heading followed by listing entries sorted alphabetically by name (case-insensitive) within the category; each entry includes name, phone, category label, city+state, serviceArea, and page URL
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5_
-  - [ ]* 4.4 Write property tests for the llms.txt generator in `test/llms.test.js`
+  - [x]* 4.4 Write property tests for the llms.txt generator in `test/llms.test.js`
     - Use `arbListing` and `fc.array(arbListing, { minLength: 1 })` as input
     - **Property 5: llms.txt contains every listing's name** — output string contains each listing's `name` — **Validates: Requirements 5.2, 9.1**
     - **Property 6: llms.txt contains every listing's page URL** — output contains `{baseUrl}/listings/{id}` for every listing — **Validates: Requirements 5.3, 9.2**
     - **Property 7: llms.txt entry count equals listing count** — number of listing entries equals `listings.length` — **Validates: Requirements 9.3**
     - **Property 8: llms.txt entries are alphabetically ordered within categories** — names within each category block appear in case-insensitive alphabetical order — **Validates: Requirements 5.5**
     - _Requirements: 9.1, 9.2, 9.3_
-  - [~] 4.5 Create `server/lib/sitemap.js` — export `generateSitemap(listings, baseUrl)` that returns a Sitemap Protocol 0.9 XML string; the home page `<url>` entry appears first, followed by one `<url>` per listing in array order
+  - [x] 4.5 Create `server/lib/sitemap.js` — export `generateSitemap(listings, baseUrl)` that returns a Sitemap Protocol 0.9 XML string; the home page `<url>` entry appears first, followed by one `<url>` per listing in array order
     - _Requirements: 6.1, 6.2, 6.3, 6.4_
-  - [ ]* 4.6 Write property tests for the Sitemap generator in `test/sitemap.test.js`
+  - [x]* 4.6 Write property tests for the Sitemap generator in `test/sitemap.test.js`
     - **Property 9: Sitemap contains every listing's page URL** — XML contains `{baseUrl}/listings/{id}` for every listing — **Validates: Requirements 6.2, 10.1**
     - **Property 10: Sitemap has well-formed XML structure** — output contains `<urlset` and `xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"` — **Validates: Requirements 6.4, 10.2**
     - **Property 11: Sitemap URL count equals listing count plus one** — count of `<url>` elements equals `listings.length + 1` — **Validates: Requirements 6.3, 10.3**
     - _Requirements: 10.1, 10.2, 10.3_
-  - [~] 4.7 Create `server/lib/html.js` — export three functions:
+  - [x] 4.7 Create `server/lib/html.js` — export three functions:
     - `layout({ title, body })` — full HTML shell with `<head>` (charset, viewport, title, stylesheet link, optional ld+json slot), `<nav>` with home link, `<main>`, and `<footer>`
     - `listingCard(listing)` — compact card for the home page: name in bold, phone, city, category, "View details →" link to `/listings/:id`; uses `<article class="listing-card">`
     - `listingDetail(listing, jsonLd)` — full listing body with all fields in `<dl>` style, hours table, services list, back link; injects `jsonLd` into a `<script type="application/ld+json">` inside the head slot
     - _Requirements: 1.3, 2.2, 2.3, 2.4, 3.1_
 
-- [~] 5. Checkpoint — verify generator modules
+- [x] 5. Checkpoint — verify generator modules
   - Ensure all tests written so far pass with `node --test`; ask the user if anything is unclear before continuing.
 
 - [ ] 6. Express application
