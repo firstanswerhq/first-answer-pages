@@ -34,6 +34,11 @@ export function createSeanceRouter(ctx) {
         }
         if (!ctx.store.findById(id)) return res.status(404).json({ error: 'Listing not found' });
 
+        // In production the demo assistant must never answer; nothing is counted or run.
+        if (ctx.config.production === true && ctx.assistantProvider?.name === 'mock') {
+          return res.status(503).json({ error: 'Séance is not connected' });
+        }
+
         const limited = ctx.rateLimiter.consumeAll([
           { key: `seance:${req.ip}`, ...RULES.seance },
           { key: `seance-listing:${id}`, ...RULES['seance-listing'] },
@@ -44,7 +49,7 @@ export function createSeanceRouter(ctx) {
         }
 
         if (ctx.assistantProvider?.name !== 'mock') {
-          const budget = ctx.aiBudget.consume();
+          const budget = ctx.aiBudget.consume({ kind: 'seance' });
           if (!budget.allowed) {
             res.set('Retry-After', String(budget.retryAfterSeconds));
             return res.status(429).json({ error: "We have reached today's limit for AI help. Try again tomorrow." });

@@ -6,6 +6,7 @@ import { Router } from 'express';
 import { groupListings } from '../data.js';
 import { layout, listingCard, escapeHtml } from '../lib/html.js';
 import { publicListing } from '../lib/public-listing.js';
+import { normalizeCategory, normalizeCity } from '../lib/search-match.js';
 
 /** Reads a query param as a trimmed string, ignoring arrays/objects. */
 function param(value) {
@@ -21,9 +22,11 @@ export function createHomeRouter(ctx) {
   const { store } = ctx;
 
   router.get('/', (req, res) => {
-    const category = param(req.query.category);
-    const city = param(req.query.city);
     const categories = store.getCategories();
+    const rawCategory = param(req.query.category);
+    // Any forgiving form ("plumber", "Auto Repair") maps to the slug; unknown stays as typed.
+    const category = normalizeCategory(rawCategory, categories) ?? rawCategory;
+    const city = normalizeCity(param(req.query.city));
 
     const filtered = store.searchListings({ category, city }).map(publicListing);
     const grouped = groupListings(filtered, categories);
@@ -54,7 +57,12 @@ export function createHomeRouter(ctx) {
 
     let results;
     if (filtered.length === 0) {
-      results = '<p class="no-results">No results found. Try a different category or city.</p>';
+      const trade = categoryLabel ? categoryLabel.toLowerCase() : 'businesses';
+      if (!city && (categoryLabel || !category)) {
+        results = `<p class="no-results">No ${escapeHtml(trade)} listed yet. Are you one? <a href="/rise">List your business free &rarr;</a></p>`;
+      } else {
+        results = '<p class="no-results">No results found. Try a different category or city.</p>';
+      }
     } else if (categoryLabel && grouped.size <= 1) {
       // One category selected: a single heading over the whole grid.
       results = `<div class="directory-single">

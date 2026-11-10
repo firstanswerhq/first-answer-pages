@@ -634,14 +634,19 @@ test('Property: the headline matches the named value of the run with the greates
     fc.property(runsArb, fields => {
       const runs = fields.map(f => makeRun(reportListing.id, f));
       const latest = runs.reduce((a, b) => (b.timestamp > a.timestamp ? b : a));
-      const expectedClass = latest.named ? 'seance-named' : 'seance-not-named';
-      const otherClass = latest.named ? 'seance-not-named' : 'seance-named';
+      // A demo (mock) run gets the gray headline whatever its named value.
+      const all = ['seance-named', 'seance-not-named', 'seance-demo'];
+      const expectedClass = latest.provider === 'mock'
+        ? 'seance-demo'
+        : latest.named ? 'seance-named' : 'seance-not-named';
 
       for (const order of [runs, [...runs].reverse()]) {
         const html = reportPage(order);
         assert.equal(html.split('class="seance-result').length - 1, 1);
         assert.equal(html.split(`class="seance-result ${expectedClass}"`).length - 1, 1);
-        assert.ok(!html.includes(`class="seance-result ${otherClass}"`));
+        for (const other of all.filter(c => c !== expectedClass)) {
+          assert.ok(!html.includes(`class="seance-result ${other}"`));
+        }
       }
     }),
     { numRuns: 30 },

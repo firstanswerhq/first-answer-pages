@@ -9,6 +9,7 @@
 import express from 'express';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 
 import { createDataStore, getDefaultStore } from './data.js';
 import { configFromEnv, DEFAULT_SITE_NAME } from './lib/config.js';
@@ -55,8 +56,13 @@ export function createApp(deps = {}) {
   // Tests that pass dataDir keep their seed files in that dir; the env-driven
   // app reads seeds from the repo data/ folder and writes to DATA_DIR.
   const seedDir = deps.seedDir ?? (deps.dataDir ? deps.dataDir : config.seedDir);
-  const store = deps.dataDir || deps.clock || deps.seedDir
-    ? createDataStore({ dataDir: deps.dataDir ?? config.dataDir, seedDir, clock })
+  // Sample listings are loaded only in demo mode. A config override that
+  // disagrees with the environment also gets its own store.
+  const envDemoMode = configFromEnv(process.env, { warn: () => {} }).demoMode;
+  const store = deps.dataDir || deps.clock || deps.seedDir || config.demoMode !== envDemoMode
+    ? createDataStore({
+      dataDir: deps.dataDir ?? config.dataDir, seedDir, clock, includeSamples: Boolean(config.demoMode),
+    })
     : getDefaultStore();
 
   if (store.getCategories().length === 0) {
@@ -78,7 +84,12 @@ export function createApp(deps = {}) {
     clock,
     rateLimiter: deps.rateLimiter ?? createRateLimiter({ clock }),
     config,
-    aiBudget: deps.aiBudget ?? createAiBudget({ clock, limit: config.maxAiCallsPerDay ?? 200 }),
+    // The day's count is kept in DATA_DIR/ai-budget.json (written only when a real provider call is counted).
+    aiBudget: deps.aiBudget ?? createAiBudget({
+      clock,
+      limit: config.maxAiCallsPerDay ?? 200,
+      file: path.join(deps.dataDir ?? config.dataDir, 'ai-budget.json'),
+    }),
     newId: deps.newId ?? (() => randomUUID()),
     a2a: deps.a2a,
   };

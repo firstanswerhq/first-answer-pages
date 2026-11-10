@@ -182,6 +182,22 @@ function askedLine(run) {
   return `<p class="seance-asked">${escapeHtml(`Asked ${who}${search} on ${formatRunDate(run.timestamp)}.`)}</p>`;
 }
 
+/**
+ * 'Sources: <a>Title</a>, ...' for a run, or '' when it has none. Only http(s)
+ * URLs become links (checked again here); title and URL are escaped.
+ */
+function sourcesLine(run) {
+  if (!Array.isArray(run.sources)) return '';
+  const links = run.sources
+    .filter(s => s && typeof s.url === 'string' && /^https?:\/\//i.test(s.url.trim()))
+    .map(s => {
+      const url = s.url.trim();
+      const title = typeof s.title === 'string' && s.title !== '' ? s.title : url;
+      return `<a href="${escapeHtml(url)}" rel="noopener noreferrer nofollow">${escapeHtml(title)}</a>`;
+    });
+  return links.length > 0 ? `\n    <p class="seance-sources">Sources: ${links.join(', ')}</p>` : '';
+}
+
 function runSection(run) {
   const model = typeof run.model === 'string' && run.model !== ''
     ? ` &middot; ${escapeHtml(run.model)}`
@@ -193,7 +209,7 @@ function runSection(run) {
     <h3>${timeEl(run.timestamp)}${tag}${demoSpan(run.provider)}</h3>
     ${askedLine(run)}
     <p class="seance-meta">${escapeHtml(providerLabel(run.provider))}${model} &middot; ${escapeHtml(run.prompt)} &middot; ${escapeHtml(yesNo(run.named))}</p>
-    <blockquote class="seance-answer">${escapeHtml(run.answer)}</blockquote>
+    <blockquote class="seance-answer">${escapeHtml(run.answer)}</blockquote>${sourcesLine(run)}
   </article>`;
 }
 
@@ -214,9 +230,11 @@ export function seanceReportPage(listing, runs, confirmedDate) {
     content = '<p>No runs have been recorded yet.</p>';
   } else {
     const latest = tagged[tagged.length - 1];
-    const headline = latest.named
-      ? `<p class="seance-result seance-named">${escapeHtml('AI named this business')}</p>`
-      : `<p class="seance-result seance-not-named">${escapeHtml("AI didn't name this business yet")}</p>`;
+    const headline = isDemo(latest.provider)
+      ? `<p class="seance-result seance-demo">${escapeHtml(latest.named ? 'Demo answer: AI named this business' : "Demo answer: AI didn't name this business yet")}</p>`
+      : latest.named
+        ? `<p class="seance-result seance-named">${escapeHtml('AI named this business')}</p>`
+        : `<p class="seance-result seance-not-named">${escapeHtml("AI didn't name this business yet")}</p>`;
     content = `${headline}
   <h2>Before and after</h2>
   ${groups.map(groupSection).join('\n  ')}

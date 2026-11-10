@@ -76,7 +76,7 @@ export async function runSeance(ctx, listingId) {
 
   const prompt = buildPrompt(listing, ctx.store.getCategories());
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), ctx.config.providerTimeoutMs);
+  const timer = setTimeout(() => controller.abort(), ctx.config.seanceTimeoutMs ?? ctx.config.providerTimeoutMs);
 
   let raw;
   let result;
@@ -86,6 +86,8 @@ export async function runSeance(ctx, listingId) {
       signal: controller.signal,
       category: listing.category,
       businessName: listing.name,
+      // A pause_turn resend is a second paid call; the provider asks before sending it.
+      consumeExtra: () => ctx.aiBudget?.consume({ kind: 'seance' })?.allowed === true,
     });
     raw = typeof result === 'string' ? result : result?.answer;
     if (typeof raw !== 'string') throw new Error('bad provider result');
@@ -113,6 +115,12 @@ export async function runSeance(ctx, listingId) {
     if (model !== '') run.model = model;
   }
   if (typeof result?.webSearch === 'boolean') run.webSearch = result.webSearch;
+  if (Array.isArray(result?.sources)) {
+    const sources = result.sources
+      .filter(s => typeof s?.url === 'string' && /^https?:\/\//i.test(s.url) && typeof s.title === 'string')
+      .map(s => ({ url: s.url, title: s.title }));
+    if (sources.length > 0) run.sources = sources;
+  }
   await createSeanceStore(ctx.store).append(run);
   return run;
 }

@@ -100,7 +100,9 @@ const defaultClock = { now: () => new Date() };
  * @param {{ dataDir: string, fs?: object, clock?: { now(): Date|number },
  *           validateFields?: Function, makeSlug?: Function }} options
  */
-export function createDataStore({ dataDir, seedDir, fs, clock = defaultClock, validateFields, makeSlug } = {}) {
+export function createDataStore({
+  dataDir, seedDir, fs, clock = defaultClock, validateFields, makeSlug, includeSamples = true,
+} = {}) {
   if (typeof dataDir !== 'string' || dataDir === '') {
     throw new TypeError('createDataStore requires a dataDir');
   }
@@ -118,7 +120,11 @@ export function createDataStore({ dataDir, seedDir, fs, clock = defaultClock, va
   let state;
 
   function load() {
-    seed = withoutComments(expectArray(loadSync(fsImpl, seedFile('listings.json'), []), 'listings.json'));
+    // Sample (fictional) listings are loaded only when includeSamples is true
+    // (demo mode). In production the store holds approved owner listings only.
+    seed = includeSamples
+      ? withoutComments(expectArray(loadSync(fsImpl, seedFile('listings.json'), []), 'listings.json'))
+      : [];
     categories = Object.freeze(expectArray(loadSync(fsImpl, seedFile('categories.json'), []), 'categories.json'));
     const published = withoutComments(
       expectArray(loadSync(fsImpl, file('published.json'), []), 'published.json'),
@@ -496,8 +502,8 @@ let defaultStore;
 export function getDefaultStore() {
   if (!defaultStore) {
     try {
-      const { dataDir, seedDir } = configFromEnv(process.env, { warn: () => {} });
-      defaultStore = createDataStore({ dataDir, seedDir });
+      const { dataDir, seedDir, demoMode } = configFromEnv(process.env, { warn: () => {} });
+      defaultStore = createDataStore({ dataDir, seedDir, includeSamples: demoMode });
     } catch (err) {
       process.stderr.write(`[data] Failed to load data files: ${err.message}\n`);
       process.exit(1);

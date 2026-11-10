@@ -709,10 +709,10 @@ describe('anthropic web search request', () => {
     });
   });
 
-  test('result is {answer, provider, model, webSearch}', async () => {
+  test('result is {answer, provider, model, webSearch, sources}', async () => {
     await withFetch(() => jsonResponse(anthropicReply('Try Acme.')), async () => {
       const result = await askAnthropic();
-      assert.deepEqual(result, { answer: 'Try Acme.', provider: 'anthropic', model: 'seance-model', webSearch: true });
+      assert.deepEqual(result, { answer: 'Try Acme.', provider: 'anthropic', model: 'seance-model', webSearch: true, sources: [] });
     });
   });
 

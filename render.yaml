@@ -44,3 +44,16 @@ services:
         value: claude-sonnet-5-5
       - key: SEANCE_API_KEY
         sync: false
+      # SEANCE_TIMEOUT_MS (milliseconds) is optional. Default is 120000: one
+      # deadline for a Séance question, including a continuation call.
+      # Quote emails. To turn them on, set NOTIFIER to resend in Render and fill
+      # in the three values below. With resend and any of them missing, the app
+      # refuses to start in production.
+      - key: NOTIFIER
+        value: none
+      - key: RESEND_API_KEY
+        sync: false
+      - key: NOTIFY_FROM
+        sync: false
+      - key: ADMIN_EMAIL
+        sync: false

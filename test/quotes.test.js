@@ -17,7 +17,7 @@ import fc from 'fast-check';
 
 import { createApp } from '../server/app.js';
 import { createDataStore } from '../server/data.js';
-import { createMockNotifier } from '../server/lib/notifier.js';
+import { createMockNotifier, createResendNotifier } from '../server/lib/notifier.js';
 import { createRateLimiter } from '../server/lib/rate-limiter.js';
 import { submitQuote } from '../server/lib/quotes.js';
 import { escapeHtml } from '../server/lib/html.js';
@@ -733,6 +733,252 @@ test('Property: the 422 page re-shows name and details escaped and adds no scrip
       assert.equal(countOf(html, '<script'), baseScripts);
     }),
     { numRuns: 25 },
+  );
+  assert.equal((await readQuotesFile(env)).length, 0);
+});
+
+// ---- notifier integration and /admin/quotes (task 21.4) ---------------------
+
+const ADMIN_TOKEN = 'quotes-notify-admin-token';
+const RESEND_KEY = 'resend-secret-key-do-not-leak';
+const OWNER_EMAIL = 'owner@example.com';
+const PUB_ID = 'quillfeather-plumbing';
+const PUB_LISTING = Object.freeze({
+  id: PUB_ID,
+  name: 'Quillfeather Plumbing',
+  category: 'plumbers',
+  phone: '(615) 555-0142',
+  services: ['Leak repair'],
+  serviceArea: 'Greater Springfield',
+  description: 'We fix pipes and leaks.',
+  city: 'Springfield',
+  state: 'TN',
+  ownerEmail: OWNER_EMAIL,
+});
+
+/**
+ * App with a published listing that has a private owner email, an admin
+ * token, and either an injected notifier or a notifier chosen by config.
+ */
+async function makeNotifyEnv({ notifier, config = {} } = {}) {
+  const dir = await makeDataDir();
+  await fs.writeFile(path.join(dir, 'published.json'), JSON.stringify([PUB_LISTING]));
+  let n = 0;
+  const app = createApp({
+    dataDir: dir,
+    clock: makeClock(),
+    newId: () => `n-${++n}`,
+    notifier,
+    rateLimiter: permissiveLimiter(),
+    config: { providerTimeoutMs: 1000, adminToken: ADMIN_TOKEN, ...config },
+  });
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise((resolve, reject) => {
+    server.once('listening', resolve);
+    server.once('error', reject);
+  });
+  servers.push(server);
+  return { dir, base: `http://127.0.0.1:${server.address().port}` };
+}
+
+const adminQuotesPage = async env => {
+  const res = await fetch(`${env.base}/admin/quotes`, { headers: { authorization: `Bearer ${ADMIN_TOKEN}` } });
+  assert.equal(res.status, 200);
+  return res.text();
+};
+
+const sendPubQuote = env => postForm(env, `/listings/${PUB_ID}/quote`, {
+  name: VALID.name, contact: VALID.contact, details: VALID.details,
+});
+
+/** Capture process.stderr.write while fn runs; always restores it. */
+async function withStderr(fn) {
+  const original = process.stderr.write;
+  const chunks = [];
+  process.stderr.write = chunk => { chunks.push(String(chunk)); return true; };
+  try {
+    await fn();
+  } finally {
+    process.stderr.write = original;
+  }
+  return chunks.join('');
+}
+
+test('no email set up (notifier none): the quote claims no email and /admin/quotes says so', async () => {
+  const env = await makeNotifyEnv({ config: { notifierName: 'none' } });
+  const res = await sendPubQuote(env);
+  assert.equal(res.status, 303);
+  assert.equal(res.headers.get('location'), `/listings/${PUB_ID}?quote=sent`);
+
+  const [stored] = await readQuotesFile(env);
+  assert.equal(stored.listingId, PUB_ID);
+  assert.notEqual(stored.emailed, true, 'must not claim an email was sent');
+  assert.equal(stored.emailed, false);
+  assert.equal(stored.notifier, 'none');
+  assert.equal(stored.notified, false);
+
+  const html = await adminQuotesPage(env);
+  assert.ok(html.includes('Emailed: no (email not set up)'));
+  assert.ok(!html.includes('Emailed: yes'));
+  assert.ok(html.includes('Quillfeather Plumbing'), 'business name');
+  assert.ok(html.includes('(615) 555-0142'), 'business phone');
+  assert.ok(html.includes(OWNER_EMAIL), 'owner email (private)');
+  assert.ok(html.includes(escapeHtml(VALID.name)));
+});
+
+test('resend success: /admin/quotes says "Emailed: yes", the owner and admin are emailed, the key stays private', async () => {
+  const calls = [];
+  const fetchStub = async (url, init) => { calls.push({ url, init }); return { ok: true, status: 200 }; };
+  const notifier = createResendNotifier({
+    apiKey: RESEND_KEY, from: 'quotes@example.test', adminEmail: 'admin@example.test', fetch: fetchStub,
+  });
+  const env = await makeNotifyEnv({ notifier });
+
+  let res;
+  const stderr = await withStderr(async () => { res = await sendPubQuote(env); });
+  assert.equal(res.status, 303);
+  assert.equal(res.headers.get('location'), `/listings/${PUB_ID}?quote=sent`);
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, 'https://api.resend.com/emails');
+  assert.deepEqual(JSON.parse(calls[0].init.body).to, [OWNER_EMAIL, 'admin@example.test']);
+
+  const [stored] = await readQuotesFile(env);
+  assert.equal(stored.emailed, true);
+  assert.equal(stored.notifier, 'resend');
+  assert.equal(stored.notified, true);
+
+  const html = await adminQuotesPage(env);
+  assert.ok(html.includes('Emailed: yes'));
+  assert.ok(!html.includes('Emailed: no'));
+
+  const onDisk = await fs.readFile(path.join(env.dir, 'quotes.json'), 'utf8');
+  for (const [label, text] of [['admin page', html], ['stderr', stderr], ['quotes.json', onDisk]]) {
+    assert.ok(!text.includes(RESEND_KEY), `key leaked in ${label}`);
+  }
+});
+
+test('resend failure: /admin/quotes says "sending failed", the visitor still gets the normal redirect, the key stays private', async () => {
+  const failures = {
+    'http error': async () => ({ ok: false, status: 500 }),
+    'network error': async () => { throw new Error(`connect failed using ${RESEND_KEY}`); },
+  };
+  for (const [label, fetchStub] of Object.entries(failures)) {
+    const notifier = createResendNotifier({
+      apiKey: RESEND_KEY, from: 'quotes@example.test', adminEmail: 'admin@example.test', fetch: fetchStub,
+    });
+    const env = await makeNotifyEnv({ notifier });
+
+    let res;
+    const stderr = await withStderr(async () => { res = await sendPubQuote(env); });
+    assert.equal(res.status, 303, label);
+    assert.equal(res.headers.get('location'), `/listings/${PUB_ID}?quote=sent`, label);
+
+    const quotes = await readQuotesFile(env);
+    assert.equal(quotes.length, 1, `${label}: the quote is still saved`);
+    assert.equal(quotes[0].emailed, false, label);
+    assert.equal(quotes[0].notifier, 'resend', label);
+
+    const html = await adminQuotesPage(env);
+    assert.ok(html.includes('Emailed: no (sending failed)'), label);
+    assert.ok(!html.includes('Emailed: yes'), label);
+    assert.ok(!html.includes('email not set up'), label);
+
+    const onDisk = await fs.readFile(path.join(env.dir, 'quotes.json'), 'utf8');
+    for (const [where, text] of [['admin page', html], ['stderr', stderr], ['quotes.json', onDisk]]) {
+      assert.ok(!text.includes(RESEND_KEY), `${label}: key leaked in ${where}`);
+    }
+  }
+});
+
+// ---- quote page: refresh, 422 markup, empty contact (task 21.4) -------------
+
+test('GET /listings/:id/quote redirects 303 to the listing; an unknown id is 404', async () => {
+  const env = await makeEnv({ rateLimiter: permissiveLimiter() });
+  const res = await fetch(`${env.base}/listings/${L0}/quote`, { redirect: 'manual' });
+  assert.equal(res.status, 303);
+  assert.equal(res.headers.get('location'), `/listings/${L0}`);
+  await res.arrayBuffer();
+
+  const missing = await fetch(`${env.base}/listings/no-such-listing/quote`, { redirect: 'manual' });
+  assert.equal(missing.status, 404);
+  await missing.arrayBuffer();
+  assert.equal((await readQuotesFile(env)).length, 0);
+});
+
+test('422 page: the error box is focusable, labelled as an alert, and comes before the listing detail', async () => {
+  const env = await makeEnv({ rateLimiter: permissiveLimiter() });
+  const res = await postForm(env, `/listings/${L0}/quote`, {
+    name: VALID.name, contact: 'nope', details: VALID.details,
+  });
+  assert.equal(res.status, 422);
+  const html = await res.text();
+
+  assert.match(html, /<div id="quote-error" role="alert" tabindex="-1"/);
+  assert.ok(html.includes('id="quote-error"'));
+  assert.ok(html.includes('role="alert"'));
+  assert.ok(html.includes('tabindex="-1"'));
+  assert.ok(html.includes('id="quote-form"'));
+  assert.equal(countOf(html, 'id="quote-error"'), 1);
+
+  const errorAt = html.indexOf('id="quote-error"');
+  const formAt = html.indexOf('id="quote-form"');
+  const detailAt = html.indexOf('<article class="listing-detail">');
+  assert.ok(detailAt >= 0);
+  assert.ok(errorAt < detailAt, 'error box must come before the listing detail');
+  assert.ok(formAt < detailAt, 'form must come before the listing detail');
+  assert.ok(errorAt < formAt, 'error box must come before the form');
+
+  // A normal page has the form after the detail and no error box.
+  const plain = await (await fetch(`${env.base}/listings/${L0}`)).text();
+  assert.ok(!plain.includes('id="quote-error"'));
+  assert.ok(plain.indexOf('<article class="listing-detail">') < plain.indexOf('id="quote-form"'));
+});
+
+const EMPTY_CONTACT = 'Please enter a phone number or email.';
+
+test('empty contact: the API, MCP and form all say "Please enter a phone number or email."', async () => {
+  const env = await makeEnv({ rateLimiter: permissiveLimiter() });
+
+  for (const contact of ['', '   ']) {
+    const api = await postJson(env, '/api/quotes', { ...VALID, contact });
+    assert.equal(api.status, 422, JSON.stringify(contact));
+    const body = await api.json();
+    assert.equal(body.argument, 'contact');
+    assert.equal(body.error, EMPTY_CONTACT);
+    assert.ok(!body.error.includes('characters'));
+
+    const mcp = await (await callMcp(env, { ...VALID, contact })).json();
+    assert.equal(mcp.error.code, -32602);
+    assert.equal(mcp.error.message, `Invalid argument: contact: ${EMPTY_CONTACT}`);
+    assert.ok(!mcp.error.message.includes('characters'));
+
+    const form = await postForm(env, `/listings/${L0}/quote`, { ...VALID, contact });
+    assert.equal(form.status, 422);
+    const html = await form.text();
+    assert.ok(html.includes(`<p class="form-error" role="alert">${EMPTY_CONTACT}</p>`));
+    assert.ok(!html.includes('characters'));
+  }
+  assert.equal((await readQuotesFile(env)).length, 0);
+});
+
+test('Property: a contact with nothing but spaces and control characters gets the plain-language message', async () => {
+  const env = await makeEnv({ rateLimiter: permissiveLimiter() });
+  const blankArb = fc.array(fc.constantFrom(' ', '\t', '\u0007', '\u0000', '\u007f'), { maxLength: 12 })
+    .map(a => a.join(''));
+
+  await fc.assert(
+    fc.asyncProperty(blankArb, async contact => {
+      const api = await postJson(env, '/api/quotes', { ...VALID, contact });
+      assert.equal(api.status, 422);
+      const body = await api.json();
+      assert.equal(body.argument, 'contact');
+      assert.equal(body.error, EMPTY_CONTACT);
+
+      const mcp = await (await callMcp(env, { ...VALID, contact })).json();
+      assert.equal(mcp.error.message, `Invalid argument: contact: ${EMPTY_CONTACT}`);
+    }),
+    { numRuns: 15 },
   );
   assert.equal((await readQuotesFile(env)).length, 0);
 });

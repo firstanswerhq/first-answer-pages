@@ -30,7 +30,21 @@ export const DEMO_BANNER_TEXT = 'Demo: no photo reader is connected, so this is 
  * Page for the upload form: GET /rise.
  * @param {{ baseUrl?: string }} [opts] public site URL used in the curl example
  */
-export function uploadPage({ baseUrl } = {}) {
+export function uploadPage({ baseUrl, photoEnabled = true } = {}) {
+  const typeItIn = `<form class="rise-form type-it-in" method="POST" action="/rise/manual">
+    <button type="submit">No photo? Type it in</button>
+  </form>`;
+  if (!photoEnabled) {
+    const manualBody = `<section class="rise">
+  <h1>List your business free</h1>
+  <p class="tagline">Type in your business name, phone, hours and what you do. It takes a few minutes.</p>
+  <p>You get to look over every field before anything is published.</p>
+  <form class="rise-form type-it-in" method="POST" action="/rise/manual">
+    <button type="submit">Type it in</button>
+  </form>
+</section>`;
+    return layout({ title: 'List your business free: First Answer Pages', body: manualBody });
+  }
   const site = typeof baseUrl === 'string' && baseUrl.trim() !== ''
     ? baseUrl.trim().replace(/\/+$/, '')
     : 'https://YOUR-SITE';
@@ -55,6 +69,7 @@ export function uploadPage({ baseUrl } = {}) {
     <p class="hint">Picking a photo needs JavaScript. Without it, open Advanced above and paste the image as base64 text, or send the file with curl:</p>
     <pre>curl --data-binary @ad.jpg -H "Content-Type: image/jpeg" -i ${riseUrl}</pre>
   </noscript>
+  ${typeItIn}
 </section>`;
   return layout({ title: 'Rise from the Grave: First Answer Pages', body, scripts: ['/js/rise.js'] });
 }

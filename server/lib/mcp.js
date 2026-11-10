@@ -15,6 +15,7 @@ import { submitQuote } from './quotes.js';
 import { verificationFor } from './verifier.js';
 import { publicListing } from './public-listing.js';
 import { DEFAULT_SITE_NAME } from './config.js';
+import { normalizeCategory, normalizeCity } from './search-match.js';
 
 export const SUPPORTED_PROTOCOL_VERSIONS = Object.freeze(['2025-06-18', '2025-03-26', '2024-11-05']);
 export const SERVER_INFO = Object.freeze({ name: 'first-answer-pages', version: '0.1.0' });
@@ -40,6 +41,31 @@ export const TOOLS = Object.freeze([
     inputSchema: REQUEST_QUOTE_SCHEMA,
   },
 ]);
+
+/**
+ * The tool list for one server: search_listings lists the valid category
+ * slugs as an enum (advertised only; the validator does not enforce it, so
+ * "plumber" or "Plumbers" still work).
+ */
+export function buildTools(ctx) {
+  let slugs = [];
+  try {
+    slugs = (ctx?.store?.getCategories?.() ?? []).map(c => c?.slug).filter(s => typeof s === 'string' && s !== '');
+  } catch {
+    slugs = [];
+  }
+  if (slugs.length === 0) return TOOLS;
+  return TOOLS.map(t => (t.name !== 'search_listings' ? t : {
+    ...t,
+    inputSchema: {
+      ...t.inputSchema,
+      properties: {
+        ...t.inputSchema.properties,
+        category: { ...t.inputSchema.properties.category, enum: slugs },
+      },
+    },
+  }));
+}
 
 const E_PARSE = -32700;
 const E_INVALID_REQUEST = -32600;
@@ -113,9 +139,13 @@ function nonEmpty(v) {
 }
 
 function searchListings(ctx, args) {
+  const rawCategory = nonEmpty(args.category);
+  const rawCity = nonEmpty(args.city);
   const matches = ctx.store.searchListings({
-    category: nonEmpty(args.category),
-    city: nonEmpty(args.city),
+    category: rawCategory === undefined
+      ? undefined
+      : (normalizeCategory(rawCategory, ctx.store.getCategories()) ?? rawCategory),
+    city: rawCity === undefined ? undefined : (nonEmpty(normalizeCity(rawCity)) ?? rawCity),
     query: nonEmpty(args.query),
     limit: SEARCH_LIMIT,
   });
@@ -151,7 +181,7 @@ async function callTool(ctx, id, params, clientIp) {
   if (!isPlainObject(params) || typeof params.name !== 'string') {
     return rpcError(id, E_PARAMS, 'Invalid params: name is required');
   }
-  const tool = TOOLS.find(t => t.name === params.name);
+  const tool = buildTools(ctx).find(t => t.name === params.name);
   if (!tool) return rpcError(id, E_PARAMS, `Unknown tool: ${params.name}`);
 
   const args = params.arguments === undefined ? {} : params.arguments;
@@ -205,7 +235,7 @@ export async function handleRpc(ctx, message, clientIp) {
       case 'ping':
         return rpcResult(id, {});
       case 'tools/list':
-        return rpcResult(id, { tools: TOOLS.map(t => ({ ...t })) });
+        return rpcResult(id, { tools: buildTools(ctx).map(t => ({ ...t })) });
       case 'tools/call':
         return await callTool(ctx, id, params, clientIp);
       default:

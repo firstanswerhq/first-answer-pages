@@ -8,6 +8,7 @@ import { layout, listingDetail, quoteForm, escapeHtml } from '../lib/html.js';
 import { submitQuote } from '../lib/quotes.js';
 import { verificationFor } from '../lib/verifier.js';
 import { publicListing } from '../lib/public-listing.js';
+import { createSeanceStore } from '../lib/seance.js';
 
 const formParser = express.urlencoded({ extended: false, limit: '16kb', parameterLimit: 10 });
 
@@ -33,19 +34,35 @@ export function createListingsRouter(ctx) {
   const router = Router();
   const { store } = ctx;
 
+  const seanceHistory = createSeanceStore(store);
+
+  /** True when the listing has at least one Séance run. A missing or unreadable history counts as none. */
+  async function hasSeanceRuns(id) {
+    try {
+      return (await seanceHistory.list(id)).length > 0;
+    } catch {
+      return false;
+    }
+  }
+
   /** Full listing page; shared by GET and the 422 quote re-render. */
-  function renderListingPage(stored, { sent = false, error, values } = {}) {
+  function renderListingPage(stored, { sent = false, error, values, hasSeance = false } = {}) {
     const listing = publicListing(stored);
     // hashListing strips ownerEmail too, so this equals /api/verify/:id
     const verification = verificationFor(store, listing);
-    const jsonLd = JSON.stringify(buildSchema(listing, verification), null, 2);
+    const jsonLd = JSON.stringify(buildSchema(listing, verification, { baseUrl: ctx.config?.baseUrl }), null, 2);
     const sentNotice = sent
       ? `<p class="notice success-box" role="status">${escapeHtml(`Thanks! Your request is saved and we'll pass it to the business. If you need help sooner, call them at ${listing.phone}.`)}</p>\n`
       : '';
     // JSON-LD goes to layout() only, so the page has exactly one ld+json block
+    const detail = listingDetail(listing, undefined, {
+      categories: store.getCategories(), verification, hasSeanceRuns: hasSeance,
+    });
+    const form = quoteForm(listing, { error, values });
+    // After a failed submit the error and form come first so a phone shows them without scrolling.
     return layout({
       title: `${listing.name} | First Answer Pages`,
-      body: sentNotice + listingDetail(listing, undefined, { categories: store.getCategories(), verification }) + '\n' + quoteForm(listing, { error, values }),
+      body: sentNotice + (error ? form + '\n' + detail : detail + '\n' + form),
       jsonLd,
       scripts: ['/js/webmcp.js'],
     });
@@ -88,13 +105,22 @@ export function createListingsRouter(ctx) {
       return res.status(422).type('html').send(renderListingPage(store.findById(id), {
         error: QUOTE_ERRORS[result.argument] || `Please check the ${result.argument} field.`,
         values: { name: kept('name'), contact: kept('contact'), details: kept('details') },
+        hasSeance: await hasSeanceRuns(id),
       }));
     } catch (err) {
       next(err);
     }
   });
 
-  router.get('/listings/:id', (req, res, next) => {
+  // A refresh or a copied link after a failed submit lands here; send people to the listing.
+  router.get('/listings/:id/quote', (req, res) => {
+    if (!store.findById(req.params.id)) {
+      return res.status(404).type('html').send(messagePage('Listing not found', 'There is no listing with that address.', '/'));
+    }
+    res.redirect(303, `/listings/${encodeURIComponent(req.params.id)}`);
+  });
+
+  router.get('/listings/:id', async (req, res, next) => {
     const stored = store.findById(req.params.id);
 
     if (!stored) {
@@ -105,7 +131,10 @@ export function createListingsRouter(ctx) {
     }
 
     try {
-      res.status(200).type('html').send(renderListingPage(stored, { sent: req.query.quote === 'sent' }));
+      res.status(200).type('html').send(renderListingPage(stored, {
+        sent: req.query.quote === 'sent',
+        hasSeance: await hasSeanceRuns(stored.id),
+      }));
     } catch (err) {
       next(err);
     }

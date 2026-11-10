@@ -252,6 +252,62 @@ h1 {
   margin-right: 0.5rem;
 }
 
+.admin-button {
+  font: inherit;
+  font-weight: bold;
+  min-height: 3rem;
+  padding: 0.5rem 1.5rem;
+  background: #FFE600;
+  color: #000;
+  border: 2px solid #000;
+  cursor: pointer;
+}
+
+.admin-button:hover,
+.admin-button:focus {
+  background: #fff8dc;
+}
+
+.admin-button-secondary {
+  background: #fff;
+}
+
+.admin-nav {
+  margin-bottom: 1rem;
+}
+
+.admin-nav .admin-logout {
+  display: inline-block;
+  margin-left: 1rem;
+}
+
+.admin-note {
+  padding: 0.75rem;
+  background: #dff5df;
+  color: #000;
+  border: 2px solid #1b6b1b;
+}
+
+.admin-error {
+  padding: 0.75rem;
+  background: #fff;
+  border: 2px solid #000;
+  font-weight: bold;
+}
+
+.admin-login label,
+.admin-login input {
+  display: block;
+  font: inherit;
+  margin-bottom: 0.75rem;
+}
+
+.admin-login input {
+  width: 100%;
+  max-width: 24rem;
+  padding: 0.5rem;
+}
+
 .demo-banner {
   margin: 0.75rem 0;
   padding: 0.5rem 0.75rem;
@@ -544,6 +600,19 @@ details.advanced summary {
   color: #7a4f00;
   background: #fff3cd;
   border-left-color: #b7791f;
+}
+/* Demo answers are gray: not green, not amber */
+.seance-demo {
+  color: #555;
+}
+.seance-result.seance-demo {
+  background: #eee;
+  border-left-color: #888;
+}
+.seance-sources {
+  margin: 0.25rem 0 0;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
 }
 
 /* Owner-confirmed stamp: hash tucked under a toggle */

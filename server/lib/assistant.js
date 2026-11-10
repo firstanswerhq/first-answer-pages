@@ -2,10 +2,13 @@
  * assistant.js — assistant providers for the Seance check: a deterministic
  * mock and two real adapters.
  *
- * A provider is { name, ask({ prompt, signal, category, businessName }) } and
- * resolves to { answer, provider, model, webSearch }. The answer is untrusted
+ * A provider is { name, ask({ prompt, signal, category, businessName, consumeExtra }) }
+ * and resolves to { answer, provider, model, webSearch } (the Anthropic adapter
+ * adds sources: [{ url, title }], at most 8, http(s) only). The answer is untrusted
  * text. webSearch is true only for the Anthropic adapter, which enables the
  * server-side web_search tool (max 3 uses) and joins all text blocks in order.
+ * consumeExtra() is called before a pause_turn resend (a second paid call); when
+ * it returns anything but true the first reply is used instead.
  * Only the mock reads category and businessName; real adapters send just the
  * prompt and never the business name.
  *
@@ -131,7 +134,8 @@ function logStatus(provider, status) {
 /** One fetch call; returns parsed response JSON. Logs name and status only. */
 async function callProvider(name, url, headers, body, timeoutMs, outerSignal) {
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  // timeoutMs null: the caller owns the deadline and passes it in outerSignal.
+  const timer = typeof timeoutMs === 'number' ? setTimeout(() => ctrl.abort(), timeoutMs) : undefined;
   const signal = outerSignal ? AbortSignal.any([ctrl.signal, outerSignal]) : ctrl.signal;
   try {
     let res;
@@ -193,31 +197,94 @@ function joinTextBlocks(data) {
     .join('');
 }
 
+const MAX_SOURCES = 8;
+const MAX_SOURCE_TITLE_CHARS = 200;
+
+/**
+ * Citations from the text blocks (`block.citations[]` with url and title),
+ * deduped by URL, at most 8. Only http: and https: URLs are kept. A title that
+ * is missing or not a string falls back to the URL's hostname.
+ * @returns {{ url: string, title: string }[]}
+ */
+export function collectSources(data) {
+  if (!Array.isArray(data?.content)) return [];
+  const seen = new Set();
+  const sources = [];
+  for (const block of data.content) {
+    if (block?.type !== 'text' || !Array.isArray(block.citations)) continue;
+    for (const c of block.citations) {
+      if (sources.length >= MAX_SOURCES) return sources;
+      if (typeof c?.url !== 'string') continue;
+      let parsed;
+      try {
+        parsed = new URL(c.url.trim());
+      } catch {
+        continue;
+      }
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') continue;
+      if (seen.has(parsed.href)) continue;
+      seen.add(parsed.href);
+      const title = typeof c.title === 'string'
+        ? Array.from(c.title.replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ').replace(/\s+/g, ' ').trim())
+          .slice(0, MAX_SOURCE_TITLE_CHARS).join('').trim()
+        : '';
+      sources.push({ url: parsed.href, title: title || parsed.hostname });
+    }
+  }
+  return sources;
+}
+
 function createAnthropicAssistantProvider({ apiKey, model, timeoutMs }) {
   return {
     name: 'anthropic',
-    async ask({ prompt, signal } = {}) {
+    async ask({ prompt, signal, consumeExtra } = {}) {
       const headers = { 'x-api-key': apiKey, 'anthropic-version': ANTHROPIC_VERSION };
       const messages = [{ role: 'user', content: String(prompt ?? '') }];
+      // One overall deadline for the whole ask: the first call and any resend.
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+      const overall = signal ? AbortSignal.any([ctrl.signal, signal]) : ctrl.signal;
       const send = (msgs) => callProvider(
         'anthropic',
         ANTHROPIC_URL,
         headers,
         { model, max_tokens: 1024, messages: msgs, tools: [ANTHROPIC_WEB_SEARCH_TOOL] },
-        timeoutMs,
-        signal,
+        null,
+        overall,
       );
 
-      let data = await send(messages);
-      // pause_turn: the server-side search loop paused mid-turn. Continue exactly
-      // once by resending the user message plus the assistant content so far, then
-      // use the second reply. No further loop, even if it also pauses.
-      if (data?.stop_reason === 'pause_turn' && Array.isArray(data.content)) {
-        data = await send([...messages, { role: 'assistant', content: data.content }]);
+      try {
+        let data = await send(messages);
+        // pause_turn: the server-side search loop paused mid-turn. Continue exactly
+        // once by resending the user message plus the assistant content so far, then
+        // use the second reply. No further loop, even if it also pauses. The resend
+        // is a second paid call: when the caller has no budget left for it, the
+        // first reply is used as it is.
+        if (data?.stop_reason === 'pause_turn' && Array.isArray(data.content) && extraAllowed(consumeExtra)) {
+          data = await send([...messages, { role: 'assistant', content: data.content }]);
+        }
+        return {
+          answer: requireText(joinTextBlocks(data)),
+          provider: 'anthropic',
+          model,
+          webSearch: true,
+          sources: collectSources(data),
+        };
+      } finally {
+        clearTimeout(timer);
       }
-      return { answer: requireText(joinTextBlocks(data)), provider: 'anthropic', model, webSearch: true };
     },
   };
+}
+
+/** True when there is no budget callback, or it grants one more call. Never throws. */
+function extraAllowed(consumeExtra) {
+  if (typeof consumeExtra !== 'function') return true;
+  try {
+    return consumeExtra() === true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -228,7 +295,8 @@ function createAnthropicAssistantProvider({ apiKey, model, timeoutMs }) {
 export function createAssistantProvider(config, { warn = console.warn } = {}) {
   const name = config?.assistantProviderName;
   const a = config?.assistant ?? {};
-  const timeoutMs = config?.providerTimeoutMs ?? DEFAULT_PROVIDER_TIMEOUT_MS;
+  // Séance has its own, longer deadline; hand-built configs fall back to providerTimeoutMs.
+  const timeoutMs = config?.seanceTimeoutMs ?? config?.providerTimeoutMs ?? DEFAULT_PROVIDER_TIMEOUT_MS;
   if ((name === 'openai' || name === 'anthropic') && a.apiKey) {
     if (!a.model) {
       warn(`SEANCE_PROVIDER=${name} requires SEANCE_MODEL; using the mock assistant provider.`);

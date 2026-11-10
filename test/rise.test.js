@@ -666,11 +666,15 @@ test('real-provider draft review page shows no demo banner', async () => {
   assert.ok(!html.includes('demo-banner'));
 });
 
-test('in production with the mock provider, GET /rise is 503 "coming soon"', async () => {
+test('in production with the mock provider, GET /rise shows only the type-it-in option', async () => {
   const env = await makeProdEnv();
   const res = await get(env, '/rise');
-  assert.equal(res.status, 503);
-  assert.ok((await res.text()).includes('Photo listing is coming soon'));
+  assert.equal(res.status, 200);
+  const html = await res.text();
+  assert.ok(html.includes('List your business free'));
+  assert.ok(html.includes('action="/rise/manual"'));
+  assert.ok(!html.includes('Photo listing is coming soon'));
+  assert.ok(!html.includes('id="rise-form"'));
 });
 
 test('in production with the mock provider, POST /rise is 503 and stores no draft', async () => {

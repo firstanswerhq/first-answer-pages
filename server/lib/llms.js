@@ -72,6 +72,8 @@ export function generateLlmsTxt(listings, baseUrl, categories, options = {}) {
     '',
   ];
 
+  if (listings.length === 0) lines.push('No businesses are listed yet.', '');
+
   for (const [slug, group] of groups) {
     if (group.length === 0) continue;
     const label = oneLine(labels.get(slug) ?? slug);

@@ -40,6 +40,7 @@ export const REQUEST_QUOTE_SCHEMA = {
 };
 
 const ARGUMENTS = 'arguments';
+const EMPTY_CONTACT_MESSAGE = 'Please enter a phone number or email.';
 
 function isPlainObject(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -52,6 +53,7 @@ function fail(argument, message) {
 function checkString(schema, name, value) {
   if (typeof value !== 'string') return fail(name, `${name} must be a string`);
   if (Object.hasOwn(schema, 'minLength') && value.length < schema.minLength) {
+    if (name === 'contact') return fail(name, EMPTY_CONTACT_MESSAGE);
     return fail(name, `${name} must be at least ${schema.minLength} characters`);
   }
   if (Object.hasOwn(schema, 'maxLength') && value.length > schema.maxLength) {
@@ -151,6 +153,7 @@ export function validateQuoteArgs(args, store) {
     if (name.length < 1 || name.length > 100) {
       return fail('name', 'name must be 1 to 100 characters');
     }
+    if (contact.length === 0) return fail('contact', EMPTY_CONTACT_MESSAGE);
     if (!isEmail(contact) && !isPhone(contact)) {
       return fail('contact', 'contact must be an email address or a phone number');
     }

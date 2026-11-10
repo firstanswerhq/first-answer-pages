@@ -94,8 +94,23 @@ export function createRiseRouter(ctx) {
   const comingSoon = res => sendPage(res, 503, messagePage('Photo listing is coming soon', 'Photo listing is coming soon.', HOME_LINK));
 
   router.get('/rise', (req, res) => {
-    if (photoListingClosed()) return comingSoon(res);
-    sendPage(res, 200, uploadPage({ baseUrl: ctx.config.baseUrl }));
+    sendPage(res, 200, uploadPage({ baseUrl: ctx.config.baseUrl, photoEnabled: !photoListingClosed() }));
+  });
+
+  // Type it in: an empty draft with the same edit page. Never uses the AI budget.
+  router.post('/rise/manual', async (req, res, next) => {
+    try {
+      const limited = ctx.rateLimiter.consume(`rise:${req.ip}`, RULES.rise);
+      if (!limited.allowed) {
+        res.set('Retry-After', String(limited.retryAfterSeconds));
+        return sendPage(res, 429, messagePage('Too many uploads', `Please wait ${limited.retryAfterSeconds} seconds and try again.`));
+      }
+      const { missingFields } = validateFields({}, ctx.store.getCategories());
+      const created = await drafts.create({ fields: {}, missingFields, provider: 'manual' });
+      res.redirect(303, `/rise/drafts/${encodeURIComponent(created.draft.id)}`);
+    } catch (err) {
+      next(err);
+    }
   });
 
   router.post('/rise', async (req, res, next) => {
@@ -161,7 +176,7 @@ export function createRiseRouter(ctx) {
 
       // 6. Daily AI cap (real providers only; the mock never consumes).
       if (ctx.visionProvider?.name !== 'mock') {
-        const budget = ctx.aiBudget.consume();
+        const budget = ctx.aiBudget.consume({ kind: 'photo' });
         if (!budget.allowed) {
           res.set('Retry-After', String(budget.retryAfterSeconds));
           return sendPage(res, 429, messagePage('Try again tomorrow', "We have reached today's limit for AI help. Try again tomorrow."));

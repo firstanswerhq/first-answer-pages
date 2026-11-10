@@ -74,11 +74,82 @@ export function createConsoleNotifier({ write = line => process.stdout.write(lin
 }
 
 /**
+ * Sends nothing and says so. Used when no email is set up.
+ */
+export function createNoneNotifier() {
+  return {
+    name: 'none',
+    async notify() {
+      return { notifier: 'none', sent: false };
+    },
+  };
+}
+
+const RESEND_URL = 'https://api.resend.com/emails';
+const EMAIL_RE = /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/;
+
+/** Plain-text email body. Control characters removed; no HTML in plain text. */
+function plainText(value) {
+  return String(value ?? '').replace(CONTROL, '').trim();
+}
+
+/**
+ * Emails each quote with Resend: to the owner (when the listing has a valid
+ * ownerEmail) and always to the admin. notify() never throws and never
+ * includes the key in its result.
+ * @param {{ apiKey: string, from: string, adminEmail: string, fetch?: typeof fetch, timeoutMs?: number }} opts
+ */
+export function createResendNotifier({ apiKey, from, adminEmail, fetch: fetchImpl = globalThis.fetch, timeoutMs = 10000 }) {
+  return {
+    name: 'resend',
+    async notify({ quote, listing }) {
+      const fail = error => ({ notifier: 'resend', sent: false, error });
+      const to = [adminEmail];
+      const owner = typeof listing?.ownerEmail === 'string' ? listing.ownerEmail.trim() : '';
+      if (owner && owner.length <= 254 && EMAIL_RE.test(owner) && owner.toLowerCase() !== String(adminEmail).toLowerCase()) {
+        to.unshift(owner);
+      }
+      const business = plainText(listing?.name);
+      const text = [
+        `New quote request for ${business}`,
+        `From: ${plainText(quote.name)}`,
+        `Contact: ${plainText(quote.contact)}`,
+        '',
+        'Details:',
+        plainText(quote.details),
+      ].join('\n');
+
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const res = await fetchImpl(RESEND_URL, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ from, to, subject: `New quote request: ${business}`.replace(/\s+/g, ' ').slice(0, 200), text }),
+          signal: controller.signal,
+        });
+        if (!res.ok) return fail(`http_${res.status}`);
+        return { notifier: 'resend', sent: true };
+      } catch (err) {
+        // Name only: messages could echo request details.
+        return fail(err?.name === 'AbortError' ? 'TimeoutError' : (err?.name ?? 'Error'));
+      } finally {
+        clearTimeout(timer);
+      }
+    },
+  };
+}
+
+/**
  * Pick a notifier from resolved config (config.notifierName).
  * @param {{ notifierName?: string }} config
  */
 export function createNotifier(config = {}) {
   if (config.notifierName === 'console') return createConsoleNotifier();
+  if (config.notifierName === 'none') return createNoneNotifier();
+  if (config.notifierName === 'resend' && config.resend) {
+    return createResendNotifier({ ...config.resend, timeoutMs: config.providerTimeoutMs });
+  }
   // Test runs keep every payload; otherwise cap memory.
   const testRun = config.testRun ?? isTestRun();
   return createMockNotifier(testRun ? {} : { maxSent: MOCK_MAX_SENT });

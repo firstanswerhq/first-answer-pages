@@ -143,12 +143,16 @@ All are optional except in production, where `DATA_DIR` and `BASE_URL` are requi
 | `VISION_API_KEY` | unset | API key for the vision provider. Without it the mock is used. |
 | `VISION_MODEL` | unset | Model name for the vision provider. Required for a real provider. If it is missing, the app logs a warning and uses the mock. |
 | `VISION_BASE_URL` | `https://api.openai.com/v1` | Base URL for an OpenAI-compatible vision API. Only used when `VISION_PROVIDER=openai`. |
-| `NOTIFIER` | unset | `console` writes one JSON line per quote request (quote id and listing id only) to the console. Unset or any other value uses the mock, which sends nothing. |
+| `NOTIFIER` | `none` | `none` saves quotes and sends no email; `/admin/quotes` shows "Emailed: no (email not set up)". `resend` emails each quote through Resend. `console` writes one JSON line per quote request (quote id and listing id only) to the console. Any other value logs a warning and uses `none`. In production, `resend` without the three settings below refuses to start; elsewhere it falls back to `none` with a warning. |
+| `RESEND_API_KEY` | unset | Resend API key. Needed when `NOTIFIER=resend`. Never logged. |
+| `NOTIFY_FROM` | unset | Sender address for quote emails, for example `Quotes <quotes@your-domain.example>`. Needed when `NOTIFIER=resend`. |
+| `ADMIN_EMAIL` | unset | Every quote email also goes to this address. Needed when `NOTIFIER=resend`. The listing's private owner email, if set, gets it too. |
 | `SEANCE_PROVIDER` | unset | `openai` or `anthropic`. The AI assistant the Séance asks. Any other value uses the mock. |
 | `SEANCE_API_KEY` | unset | API key for the Séance provider. Without it the mock is used. |
 | `SEANCE_MODEL` | unset | Model name for the Séance provider. |
 | `SEANCE_BASE_URL` | `https://api.openai.com/v1` | Base URL for an OpenAI-compatible Séance API. Only used when `SEANCE_PROVIDER=openai`. |
-| `MAX_AI_CALLS_PER_DAY` | `200` | Daily cap on real AI provider calls, shared by photo listing and the Séance. Counted per UTC day in memory; resets at midnight UTC and on restart. Over the cap, people see "Try again tomorrow". Must be a positive whole number; anything else logs a warning and uses 200. |
+| `SEANCE_TIMEOUT_MS` | `120000` | How long one Séance question may take, in milliseconds. One deadline covers the first call and any resend. The photo reader keeps 30 seconds. Must be a positive whole number; anything else logs a warning and uses 120000. |
+| `MAX_AI_CALLS_PER_DAY` | `200` | Daily cap on paid AI provider calls, shared by photo listing and the Séance. Every paid call counts, including the second call when a Séance answer needs a continuation. Photo uploads may use at most 150 of the total (or the whole cap if it is lower), so uploads never block Séance runs. The day runs midnight to midnight Central time (America/Chicago). The count is saved in `DATA_DIR/ai-budget.json`, so a restart does not reset it. Over the cap, people see "Try again tomorrow". Must be a positive whole number; anything else logs a warning and uses 200. |
 | `SEANCE_ADMIN_TOKEN` | unset | Older name for `ADMIN_TOKEN`. Used only when `ADMIN_TOKEN` is not set. |
 | `NODE_TEST_CONTEXT` | unset | Set by Node's test runner, not by you. When present, all providers use the mock. Do not set it in production. |
 
@@ -156,13 +160,15 @@ API keys and the admin token are never logged, returned, or stored in data files
 
 ### Mock providers
 
-The vision provider, Séance, and notifier each use a mock whenever no key is set (for `NOTIFIER`, whenever it is not `console`). They also always use the mock under the test runner, even if keys are set, so tests never make network calls. A mock makes no network call and gives the same output for the same input.
+The vision provider, Séance, and notifier each use a mock whenever no key is set (for `NOTIFIER`, `none` sends nothing and says so). They also always use the mock under the test runner, even if keys are set, so tests never make network calls. A mock makes no network call and gives the same output for the same input.
 
 - The mock vision provider returns fictional businesses chosen from the image bytes.
 - The mock Séance gives canned answers, labeled "Demo answer (no AI connected)".
 - The mock notifier keeps quote requests in memory only.
 
-Real provider calls time out after 30 seconds.
+Photo reader calls time out after 30 seconds. Séance questions get 120 seconds (`SEANCE_TIMEOUT_MS`).
+
+In production the Séance never runs on the mock: `POST /seance/run` answers 503 "Séance is not connected" until a real provider is set. Séance answers that used web search list their sources under the answer.
 
 ### Rate limits
 
@@ -205,6 +211,7 @@ The owner tools are the one place the web layer writes files. It writes only the
 - `verified.json` the Owner-confirmed date for each confirmed listing
 - `quotes.json` quote requests
 - `seance.json` Séance run history
+- `ai-budget.json` the day's count of paid AI calls (written only when a real provider call is counted)
 
 `listings.json` and `categories.json` are never written by the app. Published listings from `published.json` appear alongside the seed listings. The `data/` folder is never served over HTTP, so a request such as `/data/listings.json` returns 404. Uploaded images are never written anywhere.
 

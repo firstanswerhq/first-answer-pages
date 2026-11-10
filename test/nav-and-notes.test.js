@@ -62,6 +62,24 @@ await fs.writeFile(
   path.join(dir, 'published.json'),
   JSON.stringify([CONFIRMED_ID, ...generatedIds].map(publishedListing)),
 );
+// The Séance link shows only for listings with at least one run: give these one each.
+const NO_RUNS_ID = 'no-runs-test-shop';
+await fs.writeFile(
+  path.join(dir, 'published.json'),
+  JSON.stringify([CONFIRMED_ID, NO_RUNS_ID, ...generatedIds].map(publishedListing)),
+);
+await fs.writeFile(
+  path.join(dir, 'seance.json'),
+  JSON.stringify([...SEED_IDS, CONFIRMED_ID, ...generatedIds].map((listingId, i) => ({
+    id: `run-${i}`,
+    listingId,
+    prompt: 'best plumbers in Nashville',
+    provider: 'fake',
+    timestamp: '2025-01-01T00:00:00.000Z',
+    answer: 'An answer.',
+    named: false,
+  }))),
+);
 await fs.writeFile(
   path.join(dir, 'verified.json'),
   JSON.stringify({
@@ -162,7 +180,14 @@ for (const id of [UNCONFIRMED_ID, CONFIRMED_ID]) {
   });
 }
 
-test('Property: every public listing page links to /seance/<its id>', async () => {
+test('a listing with no Séance runs has no Séance link', async () => {
+  const { res, html } = await get(`/listings/${NO_RUNS_ID}`);
+  assert.equal(res.status, 200);
+  assert.ok(!html.includes('See what AI says about this business'));
+  assert.ok(!html.includes('seance-link'));
+});
+
+test('Property: every public listing page with runs links to /seance/<its id>', async () => {
   const ids = [...SEED_IDS, CONFIRMED_ID, ...generatedIds];
   await fc.assert(
     fc.asyncProperty(fc.constantFrom(...ids), async id => {

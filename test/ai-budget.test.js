@@ -21,6 +21,7 @@ const LISTING_ID = 'nashville-pipe-pros';
 const LIMIT_MESSAGE = "We have reached today's limit for AI help. Try again tomorrow.";
 const DAY_MS = 24 * 60 * 60 * 1000;
 const NOON = Date.UTC(2025, 0, 15, 12, 0, 0);
+const CHICAGO_DAY = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' });
 
 function fakeClock(t = NOON) {
   return { t, now() { return this.t; } };
@@ -50,27 +51,71 @@ test('peek() reports state without consuming', () => {
   assert.equal(peeked.remaining, 0);
 });
 
-test('resetsAt and retryAfterSeconds point at the next UTC midnight', () => {
+// NOON is 6:00 AM CST on Jan 15, so Chicago midnight is 18 hours away (06:00 UTC).
+test('resetsAt and retryAfterSeconds point at the next Chicago midnight', () => {
   const budget = createAiBudget({ clock: fakeClock(), limit: 1 });
   const r = budget.consume();
-  assert.equal(r.resetsAt, '2025-01-16T00:00:00.000Z');
-  assert.equal(r.retryAfterSeconds, 12 * 60 * 60);
+  assert.equal(r.resetsAt, '2025-01-16T06:00:00.000Z');
+  assert.equal(r.retryAfterSeconds, 18 * 60 * 60);
+});
+
+test('Chicago midnight follows daylight saving time (CDT is UTC-5)', () => {
+  // 12:00 UTC on Jul 15 is 7:00 AM CDT; midnight CDT is 05:00 UTC the next day.
+  const budget = createAiBudget({ clock: fakeClock(Date.UTC(2025, 6, 15, 12, 0, 0)), limit: 1 });
+  const r = budget.consume();
+  assert.equal(r.resetsAt, '2025-07-16T05:00:00.000Z');
+  assert.equal(r.retryAfterSeconds, 17 * 60 * 60);
 });
 
 test('retryAfterSeconds is at least 1 right before midnight', () => {
-  const budget = createAiBudget({ clock: fakeClock(Date.UTC(2025, 0, 15, 23, 59, 59, 999)), limit: 1 });
+  const budget = createAiBudget({ clock: fakeClock(Date.UTC(2025, 0, 16, 5, 59, 59, 999)), limit: 1 });
   assert.equal(budget.peek().retryAfterSeconds, 1);
 });
 
-test('the count resets at UTC midnight', () => {
-  const clock = fakeClock(Date.UTC(2025, 0, 15, 23, 59, 0));
+test('the count resets at Chicago midnight', () => {
+  const clock = fakeClock(Date.UTC(2025, 0, 16, 5, 59, 0));
   const budget = createAiBudget({ clock, limit: 2 });
   assert.equal(budget.consume().allowed, true);
   assert.equal(budget.consume().allowed, true);
   assert.equal(budget.consume().allowed, false);
-  clock.t = Date.UTC(2025, 0, 16, 0, 0, 0);
+  clock.t = Date.UTC(2025, 0, 16, 6, 0, 0);
   assert.equal(budget.peek().remaining, 2);
   assert.equal(budget.consume().allowed, true);
+});
+
+test('photo uploads are held to min(150, limit) and never block Séance runs', () => {
+  const budget = createAiBudget({ clock: fakeClock(), limit: 4, photoLimit: 2 });
+  assert.equal(budget.consume({ kind: 'photo' }).allowed, true);
+  assert.equal(budget.consume({ kind: 'photo' }).allowed, true);
+  assert.equal(budget.consume({ kind: 'photo' }).allowed, false);
+  assert.equal(budget.consume({ kind: 'seance' }).allowed, true);
+  assert.equal(budget.consume({ kind: 'seance' }).allowed, true);
+  assert.equal(budget.consume({ kind: 'seance' }).allowed, false);
+  assert.equal(createAiBudget({ clock: fakeClock(), limit: 1000 }).photoLimit, 150);
+  assert.equal(createAiBudget({ clock: fakeClock(), limit: 10 }).photoLimit, 10);
+});
+
+test('the day count is saved to the file and restored; a corrupt file starts at zero', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'fap-budget-file-'));
+  try {
+    const file = path.join(dir, 'ai-budget.json');
+    const clock = fakeClock();
+    const first = createAiBudget({ clock, limit: 3, file });
+    first.consume({ kind: 'photo' });
+    first.consume({ kind: 'seance' });
+    await first.flush();
+    assert.deepEqual(JSON.parse(await fs.readFile(file, 'utf8')), { day: '2025-01-15', total: 2, photo: 1 });
+
+    const restarted = createAiBudget({ clock, limit: 3, file });
+    assert.equal(restarted.peek().remaining, 1);
+    clock.t += DAY_MS; // a new Chicago day ignores yesterday's saved count
+    assert.equal(restarted.peek().remaining, 3);
+
+    await fs.writeFile(file, '{not json');
+    assert.equal(createAiBudget({ clock: fakeClock(), limit: 3, file }).peek().remaining, 3);
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
 });
 
 test('invalid limit falls back to the default', () => {
@@ -78,7 +123,7 @@ test('invalid limit falls back to the default', () => {
   assert.equal(budget.limit, 200);
 });
 
-test('Property: never more than `limit` calls allowed per UTC day', () => {
+test('Property: never more than `limit` calls allowed per Chicago day', () => {
   // **Validates: daily AI cap**
   fc.assert(
     fc.property(
@@ -92,7 +137,7 @@ test('Property: never more than `limit` calls allowed per UTC day', () => {
         for (const step of offsets) {
           t += step % (DAY_MS / 2); // time only moves forward
           clock.t = t;
-          const day = new Date(t).toISOString().slice(0, 10);
+          const day = CHICAGO_DAY.format(new Date(t));
           if (budget.consume().allowed) {
             allowedPerDay.set(day, (allowedPerDay.get(day) ?? 0) + 1);
           }
@@ -199,7 +244,7 @@ test('/rise and /seance/run share one budget; over the cap /rise returns a 429 p
 
   const res = await postRise(env);
   assert.equal(res.status, 429);
-  assert.equal(res.headers.get('retry-after'), String(12 * 60 * 60));
+  assert.equal(res.headers.get('retry-after'), String(18 * 60 * 60));
   assert.match(res.headers.get('content-type'), /html/);
   assert.match(await res.text(), /Try again tomorrow/);
   assert.equal(env.calls.vision, 1);
@@ -213,7 +258,7 @@ test('over the cap POST /seance/run returns 429 JSON with Retry-After', async ()
 
   const res = await postSeance(env);
   assert.equal(res.status, 429);
-  assert.equal(res.headers.get('retry-after'), String(12 * 60 * 60));
+  assert.equal(res.headers.get('retry-after'), String(18 * 60 * 60));
   assert.deepEqual(await res.json(), { error: LIMIT_MESSAGE });
   assert.equal(env.calls.assistant, 1);
 });

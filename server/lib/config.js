@@ -95,6 +95,23 @@ export function parseMaxAiCalls(value, warn = console.warn) {
   return DEFAULT_MAX_AI_CALLS_PER_DAY;
 }
 
+export const DEFAULT_SEANCE_TIMEOUT_MS = 120000;
+
+/**
+ * SEANCE_TIMEOUT_MS: a plain positive integer (milliseconds). Unset gives the
+ * default; anything else warns (without echoing the value) and gives the default.
+ * @param {string | undefined} value
+ * @param {(msg: string) => void} [warn]
+ * @returns {number}
+ */
+export function parseSeanceTimeout(value, warn = console.warn) {
+  const v = nonEmpty(value);
+  if (v === undefined) return DEFAULT_SEANCE_TIMEOUT_MS;
+  if (/^[1-9][0-9]*$/.test(v) && Number.isSafeInteger(Number(v))) return Number(v);
+  warn(`SEANCE_TIMEOUT_MS must be a positive whole number; using ${DEFAULT_SEANCE_TIMEOUT_MS}.`);
+  return DEFAULT_SEANCE_TIMEOUT_MS;
+}
+
 /**
  * DEMO_MODE: 'true'/'1' => true, 'false'/'0' => false (case-insensitive).
  * Unset or unrecognized: true, unless running in production (then false).
@@ -137,14 +154,29 @@ export function assistantProviderName(env = process.env) {
   return name;
 }
 
+const RESEND_VARS = ['RESEND_API_KEY', 'NOTIFY_FROM', 'ADMIN_EMAIL'];
+
 /**
- * Notifier name: 'console' | 'mock'. Mock when unset, unknown, or in a
- * test run.
+ * Notifier name: 'mock' (test runs) | 'console' | 'resend' | 'none'.
+ * Unset gives none. An unknown value warns (never echoed) and gives none.
+ * Resend with a missing setting warns and gives none (production refuses to
+ * start instead; see startupProblems). Warnings never contain values.
+ * @param {Record<string, string | undefined>} env
+ * @param {{ warn?: (msg: string) => void }} [opts]
  */
-export function notifierName(env = process.env) {
+export function notifierName(env = process.env, { warn = console.warn } = {}) {
   if (isTestRun(env)) return 'mock';
   const name = providerName(env.NOTIFIER);
-  return name && KNOWN_NOTIFIERS.has(name) ? name : 'mock';
+  if (name === undefined || name === 'none') return 'none';
+  if (KNOWN_NOTIFIERS.has(name)) return name;
+  if (name === 'resend') {
+    const missing = RESEND_VARS.filter(v => !nonEmpty(env[v]));
+    if (missing.length === 0) return 'resend';
+    warn(`NOTIFIER=resend needs ${missing.join(', ')}; using none (no emails will be sent).`);
+    return 'none';
+  }
+  warn('NOTIFIER must be none or resend; using none.');
+  return 'none';
 }
 
 /**
@@ -157,6 +189,11 @@ export function startupProblems(env = process.env) {
   const problems = [];
   if (!nonEmpty(env.DATA_DIR)) problems.push('DATA_DIR is required in production');
   if (!nonEmpty(env.BASE_URL)) problems.push('BASE_URL is required in production');
+  if (providerName(env.NOTIFIER) === 'resend') {
+    for (const v of RESEND_VARS) {
+      if (!nonEmpty(env[v])) problems.push(`${v} is required when NOTIFIER=resend in production`);
+    }
+  }
   for (const prefix of ['VISION', 'SEANCE']) {
     const name = providerName(env[`${prefix}_PROVIDER`]);
     if (!name) continue;
@@ -183,7 +220,7 @@ export function startupProblems(env = process.env) {
 export function configFromEnv(env = process.env, opts = {}) {
   const vision = visionProviderName(env, opts);
   const assistant = assistantProviderName(env);
-  const notifier = notifierName(env);
+  const notifier = notifierName(env, opts);
   const production = nonEmpty(env.NODE_ENV) === 'production';
 
   return {
@@ -198,6 +235,8 @@ export function configFromEnv(env = process.env, opts = {}) {
     adminToken: nonEmpty(env.ADMIN_TOKEN) || nonEmpty(env.SEANCE_ADMIN_TOKEN),
     baseUrl: (nonEmpty(env.BASE_URL) || DEFAULT_BASE_URL).replace(/\/+$/, ''),
     providerTimeoutMs: DEFAULT_PROVIDER_TIMEOUT_MS,
+    // One overall deadline for a Séance question, including a pause_turn resend.
+    seanceTimeoutMs: parseSeanceTimeout(env.SEANCE_TIMEOUT_MS, opts.warn ?? console.warn),
     trustProxy: parseTrustProxy(env.TRUST_PROXY, production, opts.warn ?? console.warn),
     maxAiCallsPerDay: parseMaxAiCalls(env.MAX_AI_CALLS_PER_DAY, opts.warn ?? console.warn),
     testRun: isTestRun(env),
@@ -205,6 +244,15 @@ export function configFromEnv(env = process.env, opts = {}) {
     visionProviderName: vision,
     assistantProviderName: assistant,
     notifierName: notifier,
+    // Only populated for the resend notifier.
+    resend:
+      notifier === 'resend'
+        ? {
+            apiKey: nonEmpty(env.RESEND_API_KEY),
+            from: nonEmpty(env.NOTIFY_FROM),
+            adminEmail: nonEmpty(env.ADMIN_EMAIL),
+          }
+        : undefined,
 
     // Only populated for a real provider; mock needs none of this.
     vision:
@@ -238,6 +286,7 @@ export function redactConfig(config) {
   return {
     ...config,
     adminToken: mark(config.adminToken),
+    ...(config.resend && { resend: { ...config.resend, apiKey: mark(config.resend.apiKey) } }),
     vision: { ...config.vision, ...(config.vision.apiKey !== undefined && { apiKey: mark(config.vision.apiKey) }) },
     assistant: {
       ...config.assistant,

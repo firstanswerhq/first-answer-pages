@@ -63,15 +63,28 @@ export async function submitQuote(ctx, args, clientIp) {
   }
 
   const listing = ctx.store.findById(listingId);
+  // The mock notifier (tests) keeps the original stored shape; real ones also
+  // record which notifier ran and whether an email actually went out.
+  const record = ctx.notifier?.name !== 'mock';
+  const saveResult = (fields) => quotes.update(list => {
+    const stored = list.find(q => q.id === quote.id);
+    if (stored) Object.assign(stored, fields);
+  });
   try {
-    await notifyWithTimeout(ctx.notifier, { quote, listing }, ctx.config.providerTimeoutMs);
-    await quotes.update(list => {
-      const stored = list.find(q => q.id === quote.id);
-      if (stored) stored.notified = true;
+    const result = await notifyWithTimeout(ctx.notifier, { quote, listing }, ctx.config.providerTimeoutMs);
+    const sent = result?.sent === true;
+    await saveResult({
+      notified: result?.sent !== false,
+      ...(record && { notifier: result?.notifier ?? ctx.notifier.name, emailed: sent }),
     });
   } catch (err) {
     // Name only: messages could echo user text.
     process.stderr.write(`[quote] notify failed: ${err?.name ?? 'Error'}\n`);
+    if (record) {
+      try {
+        await saveResult({ notifier: ctx.notifier?.name ?? 'none', emailed: false });
+      } catch { /* the quote itself is already saved */ }
+    }
   }
 
   return { status: 'ok', quoteId: quote.id };

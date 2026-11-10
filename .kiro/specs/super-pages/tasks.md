@@ -684,7 +684,7 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
   - [ ] 18.5 Checkpoint - AI basics and README
     - Run `node --test`; all tests for tasks 13 to 18 and all pre-existing tests must pass. Ask the user if questions arise.
 
-- [ ] 19. Final checkpoint - Full suite
+- [x] 19. Final checkpoint - Full suite
   - Run `node --test`; the entire suite, including all pre-existing tests and the tests for tasks 13 to 18, must be green. Ask the user if questions arise.
 
 - [ ] 20. Connect a real AI (Claude, through the Anthropic API)
@@ -751,6 +751,73 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
   - [ ] 20.9 Checkpoint - Real AI connected
     - Run `node --test`; everything must be green, including all pre-existing tests and the tests for tasks 13 to 20. Ask the user if questions arise.
 
+- [ ] 21. Second review round: launch blockers
+  - [x] 21.1 Blockers
+    - No sample businesses in production: in `createDataStore` (`server/data.js`) load the sample listings from `data/listings.json` only when `includeSamples` is true, passed from config (`DEMO_MODE`); with `NODE_ENV=production` and `DEMO_MODE=false` every page, the sitemap, llms.txt, MCP `search_listings` and `get_listing`, and `POST /api/quotes` / `request_quote` see only approved owner listings, and a sample id returns 404
+    - Empty states: the home page and every category page with no listings say "No {trade} listed yet. Are you one? List your business free →" with the link going to `/rise`; llms.txt with 0 listings still reads cleanly
+    - Admin works from a browser: add `GET /admin/login` (one password box for the admin token) and `POST /admin/login`, which on the right token sets an `HttpOnly; Secure; SameSite=Strict; Path=/admin` cookie for 12 hours holding a SHA-256 of the token (never the token), plus `POST /admin/logout`; every `/admin/*` page accepts the cookie or the bearer header
+    - Approve, Reject and Unpublish become normal HTML form posts that redirect back to `/admin/pending` with a green note ("Approved. View listing →"); JSON responses stay for requests that send `Accept: application/json` or the bearer header
+    - Every cookie-authenticated POST is rejected unless the `Origin` (or `Referer`) host matches `BASE_URL`
+    - Admin pages show dates in America/Chicago time ("Nov 10, 2026, 2:15 PM"), use bigger buttons, never use the word "mock" (say "Demo photo reader"), and have no curl text
+    - A correct admin token is never locked out: in `server/lib/admin-auth.js` check the token first and only count and throttle wrong attempts, so a correct token works even when that IP is throttled
+    - Add a `NOTIFIER` setting: `none` (default) or `resend` (needs `RESEND_API_KEY`, `NOTIFY_FROM`, `ADMIN_EMAIL`; send with built-in `fetch` to Resend's email API, to the owner's `ownerEmail` if set and always to `ADMIN_EMAIL`; the key is never logged); save on each quote which notifier ran and whether it succeeded
+    - `/admin/quotes` shows "Emailed: yes / no (email not set up)", the business name, phone and owner email next to each quote, newest first; link `/admin/quotes` from `/admin/pending`; the visitor message stays as it is
+    - The quote page survives a refresh: `GET /listings/:id/quote` redirects to `/listings/:id`; on a 422 the re-rendered page gives the error box `id="quote-error"`, `role="alert"` and `tabindex="-1"` and shows the form section first on a phone (or redirects with `#quote-form`); the API error for an empty contact reads "Please enter a phone number or email."
+    - Files: `server/data.js`, `server/lib/config.js`, `server/lib/admin-auth.js`, `server/lib/quotes.js`, `server/lib/notifier.js`, `server/lib/html.js`, `server/app.js`, `server/routes/`, `render.yaml`, `README.md`
+    - _Requirements: docs/launch-fixes.md section 20 (21.1 Blockers)_
+
+  - [x] 21.2 Should-fix
+    - Séance gets its own timeout: `SEANCE_TIMEOUT_MS` (default 120000) covers the first call and the `pause_turn` resend; the photo reader keeps 30 seconds
+    - Séance shows its sources: collect `citations[].url` and `title` from the text blocks, dedupe by URL, keep at most 8, only http(s) URLs, save them on the run as `sources`, and show them under the answer as escaped links ("Sources: …")
+    - The cap counts every paid call: consume a second unit before a `pause_turn` resend (if none is left, use the first reply); `MAX_AI_CALLS_PER_DAY` stays the total and photo uploads may use at most 150 of it; the day resets at midnight America/Chicago; persist the day's count in `DATA_DIR/ai-budget.json` so a restart does not reset it; update the writable-file allow list in `test/data-dir.test.js` to include `ai-budget.json`
+    - No mock Séance in production: if the assistant provider is the mock and `NODE_ENV=production`, `/seance/run` returns 503 "Séance is not connected", like `/rise` does
+    - The photo button shows the server's own message: in `public/js/rise.js`, on a non-ok response show the text of the response page's main message (for example "Try again tomorrow"), not "The upload was refused (status 429)"; disable the button and show "Reading your photo… this takes about 10 seconds" while uploading
+    - Type it in instead: `/rise` gets a second button, "No photo? Type it in", that opens an empty draft with the same edit fields; in production with no vision key `/rise` shows only the type-it-in option
+    - Search is forgiving: MCP `search_listings` lists the valid category slugs as an enum in its input schema; category matching ignores case and accepts the slug, the display name, and singular or plural ("plumber", "Plumbers", "plumbing" match plumbers); city matching ignores case and a trailing state ("Nashville, TN" matches Nashville); the site's search behaves the same
+    - Séance link only when there is something to see: show "See what AI says about this business" only when the listing has at least one Séance run; a demo run's headline reads "Demo answer: AI named this business" (or "didn't name"), in gray, not green or amber, and the details line never shows the word "mock"
+    - Richer JSON-LD: add `url` (the listing's full URL), `telephone` in +1 format (`+16155550177`), `areaServed` from the service area, `openingHoursSpecification` from the hours, `streetAddress` without the city, state or ZIP repeated, and a specific `@type` by category (plumbers Plumber, electricians Electrician, hvac HVACBusiness, roofers RoofingContractor, landscapers and cleaners HomeAndConstructionBusiness, restaurants Restaurant, shops Store, otherwise LocalBusiness)
+    - Files: `server/lib/config.js`, `server/lib/assistant.js`, `server/lib/seance.js`, `server/lib/seance-html.js`, `server/lib/ai-budget.js`, `server/lib/schema.js`, `server/lib/listing-fields.js`, `server/lib/mcp.js`, `server/app.js`, `server/routes/`, `public/js/rise.js`, `test/data-dir.test.js`
+    - _Requirements: docs/launch-fixes.md section 20 (21.2 Should-fix)_
+
+  - [ ] 21.3 Owner wording and polish
+    - `/rise` heading reads "List your business free" (no "Rise from the Grave" anywhere an owner sees it); remove the "Advanced / Image as text (base64)" box from the page (the API keeps accepting it)
+    - Draft page: phone input `type="tel"` and email input `type="email"`, styled like the other fields and full width; "Save changes" shows "Saved." next to the button; the confirm error says "Please fix the highlighted fields, then press Confirm again."; replace "This is not an ownership check…" with "We review every listing before it goes live."; Discard asks "Discard this draft?" on the page itself (no browser dialog) and then shows "Draft discarded."
+    - Thank-you page: one "Thanks!" only, then "We'll review your listing, usually within one business day. We'll email you when it's live." (the email sentence only when an owner email was given)
+    - Categories: merge "Restaurants" into "Shops and Restaurants" so there is one; category pages get a real `<title>` like "Plumbers in Nashville | {SITE_NAME}"; Séance questions use a natural phrase per category ("pool and concrete companies", "businesses" for Other)
+    - Stamp: keep "Owner-confirmed Nov 10, 2026" on one line (`white-space: nowrap` on the date); hours: a day with no hours shows "Closed"
+    - Listing ids: a new listing's id is the name only when the city is already in the name (no `bellevue-plumbing-co-bellevue`)
+    - llms.txt and the sitemap use `BASE_URL`; when it is not set (local only), fall back to the actual host and port of the request
+    - Specs: change the titles inside `.kiro/specs/super-pages/*.md` from "Super Pages" to "Owner tools" (keep the folder name); change "honours" to "honors" in `server/app.js`
+    - README "Deploy on Render" section: Starter plan and 1 GB disk are paid monthly (link to Render's pricing page, no quoted price), New → Blueprint → pick the repo, which env vars to type in (`BASE_URL`, `SITE_NAME`, the two Anthropic keys, optional `RESEND_API_KEY`/`NOTIFY_FROM`/`ADMIN_EMAIL`), where to find the generated `ADMIN_TOKEN` (the service's Environment tab), that `autoDeploy: false` means pressing "Manual Deploy" after each change, how to log in at `/admin/login`, and the TRUST_PROXY check
+    - TRUST_PROXY check: at startup in production log `trust proxy = N`; add `GET /admin/whoami` (admin only) showing `req.ip` and `req.ips`
+    - Files: `server/lib/rise-html.js`, `server/lib/html.js`, `server/lib/seance.js`, `server/lib/sitemap.js`, `server/lib/llms.js`, `server/lib/drafts.js`, `server/app.js`, `server/routes/`, `public/css/style.css`, `public/js/rise.js`, `data/categories.json`, `README.md`, `.kiro/specs/super-pages/*.md`
+    - _Requirements: docs/launch-fixes.md section 20 (21.3 Owner wording and polish)_
+
+  - [x] 21.4 Write tests for the blockers
+    - New and extended test files, `node:test` and `fast-check`, temporary `DATA_DIR`, stubbed `fetch` only
+    - Examples: production config (`NODE_ENV=production`, `DEMO_MODE=false`) gives 0 listings on the home page, categories, MCP and sitemap and 404 for a sample id; `POST /api/quotes` and `request_quote` refuse sample ids; empty-state text and `/rise` link on home and category pages; llms.txt with 0 listings; `/admin/login` sets the cookie with `HttpOnly; Secure; SameSite=Strict; Path=/admin` and stores a SHA-256, not the token; logout clears it; cookie POST with a wrong or missing Origin is rejected; form posts redirect with the green note and JSON is kept for `Accept: application/json`; Chicago dates, no "mock", no curl text on admin pages; `NOTIFIER=none` never claims it sent anything; `resend` uses stubbed fetch, sends to the owner and `ADMIN_EMAIL`, and never logs the key; `/admin/quotes` content and order; `GET /listings/:id/quote` redirects; the 422 page has `id="quote-error"`, `role="alert"`, `tabindex="-1"`; the empty-contact API message
+    - **Property: For any sample listing id, production config yields 404 and no appearance in pages, sitemap, llms.txt, MCP, or the quote API** (fast-check)
+    - **Property: A correct admin token is accepted regardless of prior wrong attempts** (fast-check)
+    - Files: `test/production-samples.test.js`, `test/admin-auth.test.js`, `test/admin-login.test.js`, `test/quotes.test.js`
+    - _Requirements: docs/launch-fixes.md section 20 (21.1 Blockers)_
+
+  - [-] 21.5 Write tests for the should-fix items
+    - Stubbed `fetch` only; extend existing test files where they fit
+    - Examples: `SEANCE_TIMEOUT_MS` default 120000 and override, photo reader keeps 30 seconds; sources are saved on the run and shown as escaped links; non-http(s) URLs are dropped; the `pause_turn` resend consumes a second unit and falls back to the first reply when none is left; photo uploads stop at 150 and never block Séance; the day resets at Chicago midnight; `ai-budget.json` survives a restart; `test/data-dir.test.js` allow list includes `ai-budget.json`; mock Séance in production returns 503 "Séance is not connected"; `public/js/rise.js` shows the server's message and the "Reading your photo…" text; the type-it-in button opens an empty draft; production with no vision key shows only type-it-in; MCP `search_listings` schema has the category enum; "Nashville, TN" matches Nashville; the Séance link shows only with runs; the demo headline is gray and never says "mock"; JSON-LD has `url`, +1 `telephone`, `areaServed`, `openingHoursSpecification`, a clean `streetAddress`, and the right `@type` per category with `LocalBusiness` as fallback
+    - **Property: For any citation list, sources are deduped by URL, at most 8, and http(s) only** (fast-check)
+    - **Property: For any category, its slug, display name, singular and plural in any letter case all match that category** (fast-check)
+    - Files: `test/seance-sources.test.js`, `test/ai-budget.test.js`, `test/data-dir.test.js`, `test/providers.test.js`, `test/search.test.js`, `test/mcp.test.js`, `test/schema.test.js`, `test/seance-history.test.js`
+    - _Requirements: docs/launch-fixes.md section 20 (21.2 Should-fix)_
+
+  - [ ] 21.6 Write tests for owner wording and polish
+    - Examples: `/rise` heading and no "Rise from the Grave" or base64 box; phone `type="tel"` and email `type="email"`; "Saved.", the confirm error text, "We review every listing before it goes live.", inline discard confirmation and "Draft discarded."; one "Thanks!" and the email sentence only with an owner email; one merged restaurants category; category page `<title>`; natural Séance phrase per category; stamp date `nowrap`; "Closed" for a day with no hours; listing id rule (no `bellevue-plumbing-co-bellevue`); llms.txt and sitemap use `BASE_URL` and fall back to the request host and port; spec titles say "Owner tools"; "honors" in `server/app.js`; `GET /admin/whoami` is admin only and shows `req.ip` and `req.ips`; production startup logs `trust proxy = N`
+    - **Property: For any business name and city, the generated listing id contains the city once at most and is a valid slug** (fast-check)
+    - Files: `test/rise-wording.test.js`, `test/listing-ids.test.js`, `test/llms.test.js`, `test/sitemap.test.js`, `test/admin-login.test.js`
+    - _Requirements: docs/launch-fixes.md section 20 (21.3 Owner wording and polish)_
+
+  - [ ] 21.7 Checkpoint - Second review round
+    - Run `node --test`; everything must be green, including all pre-existing tests and the tests for tasks 13 to 21. Ask the user if questions arise.
+
 ## Notes
 
 - Tasks marked with `*` are optional test sub-tasks and can be skipped for a faster MVP; each property test runs at least 100 iterations (200 for Properties 1 to 4 and 9) and carries the comment `// Feature: super-pages, Property N: <title>`.
@@ -768,6 +835,7 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
 - Tasks 13 to 18 come from `docs/launch-fixes.md` (sections 13 to 18) and are built in order; every sub-task has required (not optional) tests. Task 19 is the final checkpoint and is not a section of that file. Launch-fix tasks cite "docs/launch-fixes.md section N" instead of requirement numbers.
 - The approval queue (13.1) changes Rise confirm: confirm goes to `pending`, then admin approve publishes. `store.publishDraft` stays as the internal publish step that approve calls. The visible wording "Owner-confirmed" stays.
 - Trademark: never use "Super Pages" in the README or any user-facing text. The spec folder name `super-pages` is an internal id and stays.
+- Task 21 comes from `docs/launch-fixes.md` section 20 (the second review round). Sub-tasks 21.1 to 21.3 are built before their tests (21.4 to 21.6); every sub-task has required (not optional) tests, and 21.7 is the checkpoint.
 - After completing this plan, begin executing tasks by opening this file and clicking "Start task" next to a task item.
 
 ## Task Dependency Graph
@@ -814,7 +882,16 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
     { "id": 36, "tasks": ["17.8"] },
     { "id": 37, "tasks": ["17.9", "17.10", "17.11", "17.12", "17.13", "17.14", "17.15", "17.16"] },
     { "id": 38, "tasks": ["18.1", "18.2"] },
-    { "id": 39, "tasks": ["18.3", "18.4"] }
+    { "id": 39, "tasks": ["18.3", "18.4"] },
+    { "id": 40, "tasks": ["20.1"] },
+    { "id": 41, "tasks": ["20.2"] },
+    { "id": 42, "tasks": ["20.3"] },
+    { "id": 43, "tasks": ["20.4"] },
+    { "id": 44, "tasks": ["20.5", "20.6", "20.7", "20.8"] },
+    { "id": 45, "tasks": ["21.1"] },
+    { "id": 46, "tasks": ["21.2"] },
+    { "id": 47, "tasks": ["21.3"] },
+    { "id": 48, "tasks": ["21.4", "21.5", "21.6"] }
   ]
 }
 ```

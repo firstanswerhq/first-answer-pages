@@ -23,6 +23,8 @@ import { createMockVisionProvider } from '../server/lib/vision.js';
 const REPO_DATA = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'data');
 const SEED_FILES = ['listings.json', 'categories.json'];
 const WRITABLE_FILES = ['drafts.json', 'pending.json', 'published.json', 'quotes.json', 'seance.json', 'verified.json'];
+// Files the app may create. ai-budget.json is written only when a real provider call is counted.
+const ALLOWED_FILES = [...WRITABLE_FILES, 'ai-budget.json'];
 
 // ---- helpers ------------------------------------------------------------------
 
@@ -291,7 +293,7 @@ describe('writable files stay in DATA_DIR', () => {
             const files = await fs.readdir(dataDir);
             assert.ok(files.every(f => !f.endsWith('.tmp')), `leftover tmp file in ${files}`);
             for (const f of files) {
-              assert.ok(WRITABLE_FILES.includes(f), `unexpected file in DATA_DIR: ${f}`);
+              assert.ok(ALLOWED_FILES.includes(f), `unexpected file in DATA_DIR: ${f}`);
             }
             assert.deepEqual((await fs.readdir(seedDir)).sort(), [...SEED_FILES].sort());
             assertSame(seedBefore, await snapshot(seedDir, SEED_FILES), 'seedDir');

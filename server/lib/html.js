@@ -155,11 +155,13 @@ export function quoteForm(listing, opts = {}) {
   const keptName = escapeHtml(values.name ?? '');
   const keptContact = escapeHtml(values.contact ?? '');
   const keptDetails = escapeHtml(values.details ?? '');
-  const errorHtml = opts.error ? `\n  <p class="form-error" role="alert">${escapeHtml(opts.error)}</p>` : '';
+  const errorHtml = opts.error
+    ? `\n  <div id="quote-error" role="alert" tabindex="-1" autofocus><p class="form-error" role="alert">${escapeHtml(opts.error)}</p></div>`
+    : '';
   return `<section class="quote-request">
   <h2>Ask for a quote</h2>
   <p class="hint">Tell ${name} what you need. Leave a phone number or email so they can reach you.</p>${errorHtml}
-  <form class="quote-form" method="post" action="/listings/${encodeURIComponent(listing.id)}/quote" data-listing-id="${id}" data-listing-name="${name}">
+  <form class="quote-form" method="post" action="/listings/${encodeURIComponent(listing.id)}/quote" id="quote-form" data-listing-id="${id}" data-listing-name="${name}">
     <label for="quote-name">Your name</label>
     <input id="quote-name" name="name" type="text" required maxlength="100" autocomplete="name" value="${keptName}">
     <label for="quote-contact">Phone or email</label>
@@ -231,6 +233,7 @@ export function formatStampDate(verification) {
  *   optional extras; categories default to the default store's categories.
  *   When the `verification` key is present, the stamp (or the unconfirmed
  *   notice for null) is rendered; when absent, output is unchanged.
+ *   The Séance link is rendered only when `hasSeanceRuns` is true.
  * @returns {string}
  */
 export function listingDetail(listing, jsonLd, opts = {}) {
@@ -261,11 +264,15 @@ export function listingDetail(listing, jsonLd, opts = {}) {
     ? '\n    ' + stamp(opts.verification, listing.id)
     : '';
 
+  // The Séance link shows only when the caller says this listing has at least one run.
+  const seanceLink = opts?.hasSeanceRuns === true
+    ? `\n    <p class="seance-link"><a href="/seance/${encodeURIComponent(listing.id)}">See what AI says about this business</a></p>`
+    : '';
+
   return `${ld}  <article class="listing-detail">
     <p><a href="/">← Back to directory</a></p>
     <h1>${escapeHtml(listing.name)}</h1>
-    <p>${escapeHtml(listing.description)}</p>
-    <p class="seance-link"><a href="/seance/${encodeURIComponent(listing.id)}">See what AI says about this business</a></p>${stampBlock}
+    <p>${escapeHtml(listing.description)}</p>${seanceLink}${stampBlock}
     <dl>
     <dt>Category</dt>
     <dd>${escapeHtml(categoryLabel(listing.category, categories))}</dd>

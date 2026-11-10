@@ -18,8 +18,27 @@ if (form && area) {
 
   const say = text => { if (status) status.textContent = text; };
 
+  const GENERIC_ERROR = 'We could not read that photo. Please try again.';
+
+  // The server's own message: the first heading/paragraph in section.message.
+  function serverMessage(html) {
+    try {
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const parts = [...doc.querySelectorAll('section.message h1, section.message p')]
+        .map(el => el.textContent.trim())
+        .filter(t => t !== '');
+      // Prefer the sentence; the paragraph before the back link.
+      const text = parts.length > 1 ? parts[1] : parts[0];
+      return text || GENERIC_ERROR;
+    } catch {
+      return GENERIC_ERROR;
+    }
+  }
+
   async function send(file) {
-    say('Reading your photo...');
+    picker.disabled = true;
+    say('Reading your photo\u2026 this takes about 10 seconds');
+    let done = false;
     try {
       const res = await fetch('/rise', {
         method: 'POST',
@@ -27,12 +46,22 @@ if (form && area) {
         body: file,
       });
       if (res.redirected) {
+        done = true;
         location.href = res.url;
         return;
       }
-      say(res.ok ? 'Done.' : `The upload was refused (status ${res.status}).`);
+      if (res.ok) {
+        say('Done.');
+      } else {
+        say(serverMessage(await res.text()));
+      }
     } catch {
-      say('Upload failed. Try again, or open Advanced and paste the image as text.');
+      say(GENERIC_ERROR);
+    } finally {
+      if (!done) {
+        picker.disabled = false;
+        picker.value = '';
+      }
     }
   }
 
