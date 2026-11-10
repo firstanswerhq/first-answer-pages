@@ -8,6 +8,46 @@ import { layout, escapeHtml } from './html.js';
 
 export const TAG_BEFORE = 'before owner confirmation';
 export const TAG_AFTER = 'after owner confirmation';
+export const DEMO_LABEL = 'Demo answer (no AI connected)';
+
+/** True for runs answered by the mock provider. Computed, never stored. */
+const isDemo = providerName => providerName === 'mock';
+
+const demoSpan = providerName =>
+  isDemo(providerName) ? ` <span class="seance-demo">${DEMO_LABEL}</span>` : '';
+
+const TIME_FORMAT = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'UTC',
+  year: 'numeric',
+  month: 'short',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+});
+
+/**
+ * Readable UTC time, e.g. 'Nov 10, 2026, 5:05 AM UTC'.
+ * Invalid input is returned unchanged (the caller escapes it).
+ * @param {string} isoString
+ * @returns {string}
+ */
+export function formatRunTime(isoString) {
+  try {
+    const date = new Date(isoString);
+    if (typeof isoString !== 'string' || Number.isNaN(date.getTime())) return isoString;
+    const p = {};
+    for (const part of TIME_FORMAT.formatToParts(date)) p[part.type] = part.value;
+    const period = String(p.dayPeriod ?? '').replace(/[\u202f\u00a0]/g, ' ').trim();
+    return `${p.month} ${p.day}, ${p.year}, ${p.hour}:${p.minute} ${period} UTC`;
+  } catch {
+    return isoString;
+  }
+}
+
+/** <time> element: raw ISO in datetime, readable text as content. Both escaped. */
+function timeEl(iso) {
+  return `<time datetime="${escapeHtml(iso)}">${escapeHtml(formatRunTime(iso))}</time>`;
+}
 
 /**
  * Orders runs oldest to newest (stable for equal timestamps).
@@ -66,7 +106,11 @@ export function groupRuns(runs) {
  */
 export function buildHistory(runs, confirmedDate) {
   const ordered = sortRuns(Array.isArray(runs) ? runs : []);
-  const tagged = ordered.map(run => ({ ...run, ownerConfirmation: tagRun(run, confirmedDate) }));
+  const tagged = ordered.map(run => ({
+    ...run,
+    ownerConfirmation: tagRun(run, confirmedDate),
+    demo: isDemo(run.provider),
+  }));
   const groups = groupRuns(ordered).map(g => ({
     provider: g.provider,
     prompt: g.prompt,
@@ -88,11 +132,11 @@ function groupSection(g) {
     const change = g.namedChanged
       ? `The answer changed: the first run (before) ${yesNo(g.before.named)}; the latest run (after) ${yesNo(g.after.named)}.`
       : `No change: both the first run (before) and the latest run (after) ${yesNo(g.after.named)}.`;
-    summary = `<p><strong>Before:</strong> ${escapeHtml(g.before.timestamp)}. <strong>After:</strong> ${escapeHtml(g.after.timestamp)}.</p>
+    summary = `<p><strong>Before:</strong> ${timeEl(g.before.timestamp)}. <strong>After:</strong> ${timeEl(g.after.timestamp)}.</p>
     <p>${escapeHtml(change)}</p>`;
   }
   return `<section class="seance-group">
-    <h3>${escapeHtml(g.provider)}: &ldquo;${escapeHtml(g.prompt)}&rdquo;</h3>
+    <h3>${escapeHtml(g.provider)}: &ldquo;${escapeHtml(g.prompt)}&rdquo;${demoSpan(g.provider)}</h3>
     <p>${escapeHtml(String(g.runCount))} run${g.runCount === 1 ? '' : 's'}.</p>
     ${summary}
   </section>`;
@@ -103,7 +147,7 @@ function runSection(run) {
     ? ` <span class="seance-tag">${escapeHtml(run.ownerConfirmation)}</span>`
     : '';
   return `<article class="seance-run">
-    <h3>${escapeHtml(run.timestamp)}${tag}</h3>
+    <h3>${timeEl(run.timestamp)}${tag}${demoSpan(run.provider)}</h3>
     <p class="seance-meta">${escapeHtml(run.provider)} &middot; ${escapeHtml(run.prompt)} &middot; ${escapeHtml(yesNo(run.named))}</p>
     <blockquote class="seance-answer">${escapeHtml(run.answer)}</blockquote>
   </article>`;

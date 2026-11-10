@@ -299,11 +299,11 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
     - **Property 26: Rendered values are escaped** (Seance report)
     - **Validates: Requirements 13.8**
 
-- [ ] 10. Checkpoint - The Seance
+- [x] 10. Checkpoint - The Seance
   - Run `node --test`; existing tests and all new tests must pass. Ask the user if questions arise.
 
-- [ ] 11. Documentation and final checks
-  - [ ] 11.1 Update `README.md`
+- [x] 11. Documentation and final checks
+  - [x] 11.1 Update `README.md`
     - Document every environment variable: `VISION_PROVIDER`, `VISION_API_KEY`, `VISION_MODEL`, `VISION_BASE_URL`, `NOTIFIER`, `SEANCE_PROVIDER`, `SEANCE_API_KEY`, `SEANCE_MODEL`, `SEANCE_ADMIN_TOKEN`, `DATA_DIR`, plus `PORT`, `BASE_URL`, and `TRUST_PROXY` (without it every client shares one rate-limit bucket behind a proxy)
     - Describe new routes (`/rise`, `/mcp`, `/api/verify/:id`, `/seance/:id`), the storage relaxation, and the `curl` upload example
     - Add a note that the "Owner-confirmed" stamp is a tamper check (the listing is unchanged since the owner confirmed it), not proof of ownership or identity, and that real ownership checks (a phone or email code sent to the listed number) are future work

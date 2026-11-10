@@ -16,7 +16,8 @@ export class SeanceError extends Error {
 /**
  * @param {{ category?: string, city?: string }} listing
  * @param {{ slug: string, label: string }[]} categories
- * @returns {string} `best <category label> in <city>`
+ * @returns {string} `best <category label, lowercased> in <city>`; the city keeps
+ *   its stored casing, and an unknown category falls back to the lowercased slug
  */
 export function buildPrompt(listing, categories) {
   const found = Array.isArray(categories)
@@ -25,7 +26,7 @@ export function buildPrompt(listing, categories) {
   const label = found && typeof found.label === 'string' && found.label !== ''
     ? found.label
     : listing.category;
-  return `best ${label} in ${listing.city}`;
+  return `best ${String(label).toLowerCase()} in ${listing.city}`;
 }
 
 /**

@@ -25,6 +25,7 @@ import fc from 'fast-check';
 import { createApp } from '../server/app.js';
 import { createRateLimiter } from '../server/lib/rate-limiter.js';
 import { createSeanceStore, runSeance } from '../server/lib/seance.js';
+import { formatRunTime } from '../server/lib/seance-html.js';
 
 const REPO_DATA = fileURLToPath(new URL('../data/', import.meta.url));
 const START = Date.UTC(2025, 0, 15, 12, 0, 0);
@@ -362,7 +363,61 @@ test('the JSON history matches the HTML history', async () => {
   assert.deepEqual([...positions].sort((x, y) => x - y), positions);
   assert.ok(!html.includes('json-other'));
   assert.equal((html.match(/class="seance-run"/g) ?? []).length, json.runs.length);
-  assert.ok(json.runs.every(r => html.includes(r.timestamp)));
+  assert.ok(json.runs.every(r => html.includes(`datetime="${r.timestamp}"`)));
+  assert.ok(json.runs.every(r => html.includes(formatRunTime(r.timestamp))));
+});
+
+test('HTML shows readable UTC times while the JSON keeps the raw ISO timestamp', async () => {
+  const env = await startEnv();
+  const id = LISTING_IDS[0];
+  const history = createSeanceStore(env.store);
+  await history.append(makeRun(id, { timestamp: '2026-11-10T05:05:00.000Z' }));
+
+  const html = await (await fetch(`${env.base}/seance/${id}`)).text();
+  assert.ok(html.includes('<time datetime="2026-11-10T05:05:00.000Z">Nov 10, 2026, 5:05 AM UTC</time>'));
+  const json = await (await fetch(`${env.base}/api/seance/${id}`)).json();
+  assert.equal(json.runs[0].timestamp, '2026-11-10T05:05:00.000Z');
+});
+
+test('a mock-provider run is labeled as a demo answer in HTML and demo:true in JSON', async () => {
+  const env = await startEnv();
+  const id = LISTING_IDS[0];
+  const history = createSeanceStore(env.store);
+  await history.append(makeRun(id, { provider: 'mock' }));
+
+  const html = await (await fetch(`${env.base}/seance/${id}`)).text();
+  assert.ok(html.includes('Demo answer (no AI connected)'));
+  const json = await (await fetch(`${env.base}/api/seance/${id}`)).json();
+  assert.equal(json.runs[0].demo, true);
+  assert.equal(json.runs[0].provider, 'mock');
+
+  const file = await readSeanceFile(env);
+  assert.ok(file.every(r => !('demo' in r)), 'demo is not stored');
+});
+
+test('a real-provider run gets no demo label and demo:false', async () => {
+  const env = await startEnv();
+  const id = LISTING_IDS[0];
+  const history = createSeanceStore(env.store);
+  await history.append(makeRun(id, { provider: 'openai' }));
+
+  const html = await (await fetch(`${env.base}/seance/${id}`)).text();
+  assert.ok(!html.includes('Demo answer (no AI connected)'));
+  const json = await (await fetch(`${env.base}/api/seance/${id}`)).json();
+  assert.equal(json.runs[0].demo, false);
+});
+
+test('formatRunTime builds a readable UTC string', () => {
+  assert.equal(formatRunTime('2026-11-10T05:05:00.000Z'), 'Nov 10, 2026, 5:05 AM UTC');
+  assert.equal(formatRunTime('2025-01-15T00:00:00.000Z'), 'Jan 15, 2025, 12:00 AM UTC');
+  assert.equal(formatRunTime('2025-01-15T12:00:00.000Z'), 'Jan 15, 2025, 12:00 PM UTC');
+  assert.equal(formatRunTime('2025-01-15T23:59:00.000Z'), 'Jan 15, 2025, 11:59 PM UTC');
+  assert.ok(!/[\u202f\u00a0]/.test(formatRunTime('2026-11-10T05:05:00.000Z')));
+});
+
+test('formatRunTime returns invalid input unchanged', () => {
+  assert.equal(formatRunTime('not a date'), 'not a date');
+  assert.equal(formatRunTime(''), '');
 });
 
 test('GET /seance/:id and /api/seance/:id return 404 for an unknown id', async () => {

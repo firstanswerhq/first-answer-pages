@@ -163,7 +163,7 @@ test('buildPrompt uses the category label from data/categories.json', () => {
   for (const c of categories) {
     assert.equal(
       buildPrompt({ category: c.slug, city: 'Nashville' }, categories),
-      `best ${c.label} in Nashville`
+      `best ${c.label.toLowerCase()} in Nashville`
     );
   }
 });
