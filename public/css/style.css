@@ -672,3 +672,27 @@ details.discard-confirm summary {
   cursor: pointer;
   font-weight: bold;
 }
+
+/* Admin review preview (third review round) */
+.admin-preview {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.25rem 0.75rem;
+  margin: 0.5rem 0;
+}
+.admin-preview dt { font-weight: bold; }
+.admin-preview dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 480px) {
+  .admin-preview { grid-template-columns: 1fr; }
+  .admin-preview dd { margin-bottom: 0.4rem; }
+}
+.admin-warning {
+  background: #fff4d6;
+  border-left: 4px solid #a65c00;
+  color: #5a3200;
+  padding: 0.5rem 0.75rem;
+  margin: 0.5rem 0;
+  font-weight: bold;
+}
+.owner-email { user-select: all; font-family: monospace; }
+.hours-none { font-style: italic; }
