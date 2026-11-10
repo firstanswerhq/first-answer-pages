@@ -12,14 +12,15 @@ import { canonicalize } from './canonical.js';
 
 /**
  * SHA-256 (lowercase hex) of canonicalize({ listing, verifiedDate }),
- * with `verifiedDate` and `verificationHash` stripped from the listing.
+ * with `verifiedDate`, `verificationHash` and the private `ownerEmail`
+ * stripped from the listing.
  * @param {object} listing
  * @param {string} verifiedDate
  * @returns {string}
  */
 export function hashListing(listing, verifiedDate) {
   // eslint-disable-next-line no-unused-vars
-  const { verifiedDate: _d, verificationHash: _h, ...rest } = listing;
+  const { verifiedDate: _d, verificationHash: _h, ownerEmail: _e, ...rest } = listing;
   const input = canonicalize({ listing: rest, verifiedDate });
   return createHash('sha256').update(input, 'utf8').digest('hex');
 }

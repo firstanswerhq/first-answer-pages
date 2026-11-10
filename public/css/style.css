@@ -396,3 +396,8 @@ h1 {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+.quote-details {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

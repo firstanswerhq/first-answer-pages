@@ -34,7 +34,7 @@ import { pruneQuotes, pruneDrafts } from './lib/retention.js';
 const COLLECTIONS = new Set(['drafts', 'quotes', 'seance', 'pending']);
 const MODEL_KEYS = [
   'name', 'category', 'phone', 'hours', 'services', 'serviceArea',
-  'description', 'city', 'state', 'address',
+  'description', 'city', 'state', 'address', 'ownerEmail',
 ];
 
 const warn = msg => process.stderr.write(`[data] ${msg}\n`);
@@ -219,6 +219,7 @@ export function createDataStore({ dataDir, fs, clock = defaultClock, validateFie
     for (const key of MODEL_KEYS) {
       if (fields[key] === undefined) continue;
       if (key === 'address' && (fields.address === '' || fields.address === null)) continue;
+      if (key === 'ownerEmail' && (typeof fields.ownerEmail !== 'string' || fields.ownerEmail === '')) continue;
       listing[key] = structuredClone(fields[key]);
     }
     return listing;

@@ -673,3 +673,19 @@ test('Property 17: search returns exactly the matching listings in store order, 
     { numRuns: 100 },
   );
 });
+
+test('request_quote success message is the new sentence with the listing phone', async () => {
+  const { json } = await callTool(main, 'request_quote', {
+    id: 'pub-01',
+    name: 'Pat Smith',
+    contact: 'pat@example.com',
+    details: 'Need a quote for a leaking pipe.',
+  });
+  assert.equal(json.error, undefined);
+  assert.notEqual(json.result.isError, true);
+  assert.equal(
+    json.result.structuredContent.message,
+    "Thanks! Your request is saved and we'll pass it to the business. If you need help sooner, call them at (615) 555-9999.",
+  );
+  assert.ok(!JSON.stringify(json).includes('will contact you'));
+});

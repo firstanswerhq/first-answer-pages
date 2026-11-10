@@ -5,6 +5,7 @@
 import express, { Router } from 'express';
 import { submitQuote } from '../lib/quotes.js';
 import { verificationFor, checkHash } from '../lib/verifier.js';
+import { publicListing } from '../lib/public-listing.js';
 
 const jsonParser = express.json({ limit: '16kb' });
 
@@ -50,7 +51,8 @@ export function createApiRouter(ctx) {
 
     // Unverified output is unchanged; confirmed listings gain two fields.
     const v = verificationFor(store, listing);
-    const payload = v ? { ...listing, verifiedDate: v.verifiedDate, verificationHash: v.hash } : listing;
+    const pub = publicListing(listing);
+    const payload = v ? { ...pub, verifiedDate: v.verifiedDate, verificationHash: v.hash } : pub;
     res.status(200).type('application/json').send(JSON.stringify(payload));
   });
 

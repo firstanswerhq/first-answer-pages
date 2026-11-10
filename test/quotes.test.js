@@ -9,6 +9,7 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
+import nodeFs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -19,6 +20,7 @@ import { createDataStore } from '../server/data.js';
 import { createMockNotifier } from '../server/lib/notifier.js';
 import { createRateLimiter } from '../server/lib/rate-limiter.js';
 import { submitQuote } from '../server/lib/quotes.js';
+import { escapeHtml } from '../server/lib/html.js';
 import { validateQuoteArgs } from '../server/lib/tool-validator.js';
 
 const REPO_DATA = fileURLToPath(new URL('../data/', import.meta.url));
@@ -403,7 +405,7 @@ test('form post stores the quote and redirects 303 to ?quote=sent', async () => 
   assert.equal(quotes[0].name, VALID.name);
 
   const page = await fetch(env.base + res.headers.get('location'));
-  assert.match(await page.text(), /Quote request sent/);
+  assert.match(await page.text(), /Thanks! Your request is saved and we&#39;ll pass it to the business\. If you need help sooner, call them at /);
 });
 
 test('form post with invalid input gets 422 and stores nothing', async () => {
@@ -530,4 +532,104 @@ test('listing page contains the quote form and the webmcp module script tag', as
   const html = await res.text();
   assert.ok(html.includes(`<form class="quote-form" method="post" action="/listings/${L0}/quote"`));
   assert.ok(html.includes('<script type="module" src="/js/webmcp.js"></script>'));
+});
+
+// ---- quote confirmation wording (task 15.5) ---------------------------------
+
+const sentenceFor = phone =>
+  `Thanks! Your request is saved and we'll pass it to the business. If you need help sooner, call them at ${phone}.`;
+
+test('?quote=sent page has the new sentence with the escaped apostrophe and the listing phone', async () => {
+  const env = await makeEnv();
+  const seed = JSON.parse(await fs.readFile(path.join(REPO_DATA, 'listings.json'), 'utf8'));
+  const phone = seed.find(l => l && l.id === L0).phone;
+  assert.ok(phone);
+
+  const res = await fetch(`${env.base}/listings/${L0}?quote=sent`);
+  assert.equal(res.status, 200);
+  const html = await res.text();
+  assert.ok(html.includes(escapeHtml(sentenceFor(phone))), 'full sentence missing');
+  assert.ok(html.includes(`we&#39;ll pass it to the business. If you need help sooner, call them at ${escapeHtml(phone)}.`));
+  assert.ok(!html.includes("we'll pass it"), 'apostrophe must be HTML-escaped in the raw page');
+
+  // Without the query flag the notice is absent.
+  const plain = await (await fetch(`${env.base}/listings/${L0}`)).text();
+  assert.ok(!plain.includes('pass it to the business'));
+});
+
+test('the old "will contact you" phrase appears nowhere under server/ or public/js', () => {
+  const OLD = 'The business will contact you';
+  const roots = [
+    fileURLToPath(new URL('../server/', import.meta.url)),
+    fileURLToPath(new URL('../public/js/', import.meta.url)),
+  ];
+  let scanned = 0;
+  for (const root of roots) {
+    for (const rel of nodeFs.readdirSync(root, { recursive: true })) {
+      const full = path.join(root, String(rel));
+      if (!nodeFs.statSync(full).isFile()) continue;
+      scanned++;
+      assert.ok(!nodeFs.readFileSync(full, 'utf8').includes(OLD), `old phrase found in ${full}`);
+    }
+  }
+  assert.ok(scanned > 0, 'no files were scanned');
+});
+
+test('Property: confirmation page and MCP message carry any trusted phone, HTML-escaped on the page', async () => {
+  // **Validates: Requirements 6.2, 6.3**
+  const phoneArb = joined([...'0123456789', ' ', '-', '(', ')', '+', '<', '>', '&', '"', "'"], 1, 14)
+    .filter(s => s === s.trim());
+  const nameProp = joined([...LETTERS, ' ', '<', '&', '"'], 1, 20).filter(s => s.trim().length > 0);
+
+  await fc.assert(
+    fc.asyncProperty(phoneArb, nameProp, async (phone, name) => {
+      const dir = await makeDataDir();
+      await fs.writeFile(path.join(dir, 'published.json'), JSON.stringify([{
+        id: 'phone-prop',
+        name,
+        category: 'plumbers',
+        phone,
+        hours: { monday: '9:00 AM - 5:00 PM' },
+        services: ['Pipe repair'],
+        serviceArea: 'Nashville',
+        description: 'We fix pipes.',
+        city: 'Nashville',
+        state: 'TN',
+      }]));
+      let n = 0;
+      const app = createApp({
+        dataDir: dir,
+        clock: makeClock(),
+        newId: () => `p-${++n}`,
+        notifier: createMockNotifier(),
+        rateLimiter: { consume: () => ({ allowed: true }), consumeAll: () => ({ allowed: true }), peek: () => ({ allowed: true }) },
+        config: { providerTimeoutMs: 1000 },
+      });
+      const server = app.listen(0, '127.0.0.1');
+      try {
+        await new Promise((resolve, reject) => {
+          server.once('listening', resolve);
+          server.once('error', reject);
+        });
+        const env = { base: `http://127.0.0.1:${server.address().port}` };
+
+        const res = await fetch(`${env.base}/listings/phone-prop?quote=sent`);
+        assert.equal(res.status, 200);
+        const html = await res.text();
+        assert.ok(html.includes(escapeHtml(sentenceFor(phone))), 'escaped sentence missing');
+        if (phone.includes('<')) assert.ok(!html.includes(phone), 'raw phone leaked into the page');
+
+        const mcp = await (await callMcp(env, {
+          id: 'phone-prop', name: 'Pat Jones', contact: 'pat@example.com', details: 'Leak under the sink.',
+        })).json();
+        assert.equal(mcp.error, undefined);
+        assert.ok(mcp.result.structuredContent.message.includes(phone));
+        assert.equal(mcp.result.structuredContent.message, sentenceFor(phone));
+      } finally {
+        server.closeAllConnections?.();
+        await new Promise(resolve => server.close(resolve));
+      }
+    }),
+    { numRuns: 30 },
+  );
 });

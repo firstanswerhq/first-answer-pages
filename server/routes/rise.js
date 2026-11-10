@@ -63,6 +63,7 @@ function fieldsFromForm(body) {
     city: str('city'),
     state: str('state'),
     address: str('address'),
+    ownerEmail: str('ownerEmail'),
     hours,
   };
 }

@@ -13,6 +13,7 @@ import {
 } from './tool-validator.js';
 import { submitQuote } from './quotes.js';
 import { verificationFor } from './verifier.js';
+import { publicListing } from './public-listing.js';
 
 export const SUPPORTED_PROTOCOL_VERSIONS = Object.freeze(['2025-06-18', '2025-03-26', '2024-11-05']);
 export const SERVER_INFO = Object.freeze({ name: 'first-answer-pages', version: '0.1.0' });
@@ -89,7 +90,8 @@ function listingUrl(ctx, id) {
   return `${base}/listings/${encodeURIComponent(id)}`;
 }
 
-function summarize(ctx, l) {
+function summarize(ctx, listing) {
+  const l = publicListing(listing);
   return {
     id: l.id,
     name: l.name,
@@ -127,7 +129,7 @@ function getListing(ctx, args) {
   const verification = v
     ? { verified: true, verifiedDate: v.verifiedDate, hash: v.hash }
     : { verified: false, verifiedDate: null, hash: null };
-  return toolSuccess({ listing, verification });
+  return toolSuccess({ listing: publicListing(listing), verification });
 }
 
 async function requestQuote(ctx, args, clientIp, id) {

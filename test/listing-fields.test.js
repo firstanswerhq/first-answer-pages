@@ -30,7 +30,7 @@ const PHONE_RE = /^\(\d{3}\) \d{3}-\d{4}$/;
 const SLUG_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const MODEL_KEYS = [
   'name', 'category', 'phone', 'hours', 'services',
-  'serviceArea', 'description', 'city', 'state', 'address',
+  'serviceArea', 'description', 'city', 'state', 'address', 'ownerEmail',
 ];
 const STRING_KEYS = MODEL_KEYS.filter((k) => k !== 'hours' && k !== 'services');
 

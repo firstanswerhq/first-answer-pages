@@ -21,6 +21,7 @@ const FIELD_LABELS = Object.freeze({
   city: 'City',
   state: 'State',
   address: 'Street address',
+  ownerEmail: 'Your email (private, we use it only to send you quote requests)',
 });
 
 export const DEMO_BANNER_TEXT = 'Demo: no photo reader is connected, so this is a sample business, not your photo.';
@@ -126,6 +127,7 @@ ${row('description', `<textarea id="f-description" name="description" rows="4" m
 ${row('city', input('city', f.city), missing)}
 ${row('state', `<input type="text" id="f-state" name="state" value="${escapeHtml(f.state ?? '')}" maxlength="2" size="3">`, missing)}
 ${row('address', input('address', f.address), missing)}
+${row('ownerEmail', `<input type="email" id="f-ownerEmail" name="ownerEmail" value="${escapeHtml(f.ownerEmail ?? '')}" maxlength="254" autocomplete="email">`, missing)}
     <fieldset class="hours-edit">
       <legend>Hours</legend>
 ${hoursRows}

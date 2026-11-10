@@ -2,6 +2,7 @@
  * admin.js — approval queue (token-protected).
  *
  *   GET  /admin/pending                    HTML list of listings awaiting review
+ *   GET  /admin/quotes                     HTML list of saved quotes, newest first
  *   POST /admin/pending/:id/approve        publish the draft          -> JSON
  *   POST /admin/pending/:id/reject         reject, publish nothing    -> JSON
  *   POST /admin/listings/:id/unpublish     take a published listing down -> JSON
@@ -46,7 +47,7 @@ export function createAdminRouter(ctx) {
         return `<li class="pending-item">
   <h2>${escapeHtml(f.name ?? '(no name)')}</h2>
   <p>${escapeHtml(f.category ?? '')} &middot; ${escapeHtml(f.city ?? '')}, ${escapeHtml(f.state ?? '')} &middot; ${escapeHtml(f.phone ?? '')}</p>
-  <p class="hint">Submitted ${escapeHtml(e.submittedAt ?? '')} &middot; Provider: ${escapeHtml(provider)}</p>
+  <p class="hint">Submitted ${escapeHtml(e.submittedAt ?? '')} &middot; Provider: ${escapeHtml(provider)}${f.ownerEmail ? ` &middot; Owner email (private): ${escapeHtml(f.ownerEmail)}` : ''}</p>
   <form method="POST" action="/admin/pending/${id}/approve"><button type="submit">Approve</button></form>
   <form method="POST" action="/admin/pending/${id}/reject"><button type="submit">Reject</button></form>
 </li>`;
@@ -58,6 +59,36 @@ export function createAdminRouter(ctx) {
   ${entries.length === 0 ? '<p>Nothing is waiting for review.</p>' : `<ul class="pending-list">\n${items}\n</ul>`}
 </section>`;
       res.type('html').send(layout({ title: 'Listings awaiting review', body }));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.get('/admin/quotes', async (req, res, next) => {
+    try {
+      const all = await ctx.store.collection('quotes').read();
+      const quotes = (Array.isArray(all) ? all : [])
+        .filter(q => q && typeof q === 'object')
+        .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
+
+      const items = quotes.map(q => {
+        const listing = ctx.store.findById(q.listingId);
+        const target = listing
+          ? `${escapeHtml(listing.name)} (${escapeHtml(q.listingId)})`
+          : escapeHtml(q.listingId ?? '');
+        return `<li class="pending-item">
+  <h2>${target}</h2>
+  <p>Quote ${escapeHtml(q.id ?? '')} &middot; ${escapeHtml(q.createdAt ?? '')} &middot; Notified: ${q.notified === true ? 'yes' : 'no'}</p>
+  <p>From: ${escapeHtml(q.name ?? '')} &middot; Contact: ${escapeHtml(q.contact ?? '')}</p>
+  <p class="quote-details">${escapeHtml(q.details ?? '')}</p>
+</li>`;
+      }).join('\n');
+
+      const body = `<section class="admin">
+  <h1>Saved quote requests</h1>
+  ${quotes.length === 0 ? '<p>No quote requests yet.</p>' : `<ul class="pending-list">\n${items}\n</ul>`}
+</section>`;
+      res.type('html').send(layout({ title: 'Saved quote requests', body }));
     } catch (err) {
       next(err);
     }

@@ -98,3 +98,45 @@ test('mountA2A throws when card, path or handler is missing', () => {
   assert.throws(() => mountA2A(spy, { ...good, handler: undefined }));
   assert.equal(calls.length, 0);
 });
+
+// ---------------------------------------------------------------------------
+// README quote limit (task 15.8)
+// ---------------------------------------------------------------------------
+
+import { readFileSync } from 'node:fs';
+import { RULES, createRateLimiter } from '../server/lib/rate-limiter.js';
+
+test('README documents the quote limit as per client per listing', () => {
+  const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
+  assert.ok(readme.includes('3 per hour per client per listing'));
+  assert.ok(!readme.includes('Quote requests for one listing | 3 per hour per listing'));
+});
+
+test('README says TRUST_PROXY accepts only a whole-number hop count', () => {
+  const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
+  assert.ok(readme.includes('hop count'));
+});
+
+test('quote-listing rule matches the README (3 per hour)', () => {
+  assert.deepEqual({ ...RULES['quote-listing'] }, { limit: 3, windowMs: 3600000 });
+});
+
+test('quote limit is per client per listing: 4th for same ip+listing is refused', () => {
+  let t = 1_000_000;
+  const limiter = createRateLimiter({ clock: { now: () => t } });
+  const ip = '203.0.113.7';
+  const quoteFor = (listing) => limiter.consumeAll([
+    { key: `quote:${ip}`, ...RULES.quote },
+    { key: `quote:${ip}:${listing}`, ...RULES['quote-listing'] },
+  ]);
+
+  assert.equal(quoteFor('listingA').allowed, true);
+  t += 1000;
+  assert.equal(quoteFor('listingA').allowed, true);
+  t += 1000;
+  assert.equal(quoteFor('listingA').allowed, true);
+  t += 1000;
+  assert.equal(quoteFor('listingA').allowed, false);
+  // Same client, different listing is still allowed.
+  assert.equal(quoteFor('listingB').allowed, true);
+});

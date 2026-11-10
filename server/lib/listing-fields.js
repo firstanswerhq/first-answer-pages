@@ -44,6 +44,23 @@ function cleanMultiline(value) {
 }
 
 /**
+ * Private, optional owner email. Returns the trimmed address when it passes a
+ * simple check (<= 254 chars, one @, a dot in the domain, no whitespace), else ''.
+ * @param {unknown} input
+ * @returns {string}
+ */
+export function normalizeEmail(input) {
+  const text = clean(input);
+  if (text === '' || text.length > 254 || /\s/.test(text)) return '';
+  const parts = text.split('@');
+  if (parts.length !== 2) return '';
+  const [local, domain] = parts;
+  if (local === '' || !domain.includes('.')) return '';
+  if (domain.startsWith('.') || domain.endsWith('.') || domain.includes('..')) return '';
+  return text;
+}
+
+/**
  * Returns "(NNN) NNN-NNNN" for 10 digits (or 11 starting with 1), else ''.
  * @param {unknown} input
  * @returns {string}
@@ -118,6 +135,7 @@ export function normalizeFields(raw, categories) {
   if (/^[a-z]{2}$/i.test(out.state)) out.state = out.state.toUpperCase();
   out.hours = normalizeHours(get('hours'));
   out.services = normalizeServices(get('services'));
+  out.ownerEmail = normalizeEmail(get('ownerEmail')); // private, optional
   return out;
 }
 

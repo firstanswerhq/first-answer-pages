@@ -275,7 +275,7 @@ test('Property 26 (quote result pages): 422 page escapes echoed argument; sent p
         const sent = await fetch(`${base}${location}`);
         assert.equal(sent.status, 200);
         const sentHtml = await sent.text();
-        assert.ok(sentHtml.includes('Quote request sent'), 'sent notice missing');
+        assert.ok(sentHtml.includes('Thanks! Your request is saved and we&#39;ll pass it to the business.'), 'sent notice missing');
         assert.ok(!sentHtml.includes('<b id="x">'), 'raw marker tag leaked into sent page');
         assert.equal(countScriptOpens(sentHtml), sentBaseline, '<script count differs from template');
       }),

@@ -4,6 +4,7 @@
 
 import { Router } from 'express';
 import { generateLlmsTxt } from '../lib/llms.js';
+import { publicListing } from '../lib/public-listing.js';
 
 /**
  * @param {{ store: object, config: { baseUrl: string } }} ctx
@@ -19,7 +20,7 @@ export function createLlmsRouter(ctx) {
       ? store.getListings().filter(l => !store.isSeed(l.id))
       : store.getListings();
     res.status(200).type('text/plain').send(
-      generateLlmsTxt(listings, config.baseUrl, store.getCategories()),
+      generateLlmsTxt(listings.map(publicListing), config.baseUrl, store.getCategories()),
     );
   });
 

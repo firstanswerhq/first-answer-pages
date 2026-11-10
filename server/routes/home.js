@@ -5,6 +5,7 @@
 import { Router } from 'express';
 import { groupListings } from '../data.js';
 import { layout, listingCard, escapeHtml } from '../lib/html.js';
+import { publicListing } from '../lib/public-listing.js';
 
 /** Reads a query param as a trimmed string, ignoring arrays/objects. */
 function param(value) {
@@ -24,7 +25,7 @@ export function createHomeRouter(ctx) {
     const city = param(req.query.city);
     const categories = store.getCategories();
 
-    const filtered = store.searchListings({ category, city });
+    const filtered = store.searchListings({ category, city }).map(publicListing);
     const grouped = groupListings(filtered, categories);
 
     const options = categories

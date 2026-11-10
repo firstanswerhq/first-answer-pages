@@ -12,6 +12,7 @@ import { RULES } from '../lib/rate-limiter.js';
 import { runSeance, createSeanceStore, SeanceError } from '../lib/seance.js';
 import { buildHistory, seanceReportPage } from '../lib/seance-html.js';
 import { messagePage } from '../lib/rise-html.js';
+import { publicListing } from '../lib/public-listing.js';
 
 /**
  * @param {object} ctx resolved dependencies from createApp
@@ -79,7 +80,7 @@ export function createSeanceRouter(ctx) {
         );
       }
       const runs = await history.list(listing.id);
-      res.type('html').send(seanceReportPage(listing, runs, ctx.store.getVerifiedDate(listing.id)));
+      res.type('html').send(seanceReportPage(publicListing(listing), runs, ctx.store.getVerifiedDate(listing.id)));
     } catch (err) {
       next(err);
     }

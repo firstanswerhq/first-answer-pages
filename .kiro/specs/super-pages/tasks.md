@@ -415,39 +415,39 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
   - [ ] 14.7 Checkpoint - Safety and honest demo mode
     - Run `node --test`; all tests for tasks 13 and 14 and all pre-existing tests must pass. Ask the user if questions arise.
 
-- [ ] 15. Launch fixes: Quotes say only what's true
-  - [-] 15.1 Correct the quote confirmation wording
+- [x] 15. Launch fixes: Quotes say only what's true
+  - [x] 15.1 Correct the quote confirmation wording
     - Replace "The business will contact you" (`server/routes/listings.js` around line 86 and `server/lib/mcp.js` around line 141) with: "Thanks! Your request is saved and we'll pass it to the business. If you need help sooner, call them at {phone}."
     - Use the listing's phone; escape it in HTML
     - Files: `server/routes/listings.js`, `server/lib/mcp.js`
     - _Requirements: docs/launch-fixes.md section 15 (wording fix)_
 
-  - [ ] 15.2 Add `ownerEmail` and `GET /admin/quotes`
+  - [x] 15.2 Add `ownerEmail` and `GET /admin/quotes`
     - Add optional `ownerEmail` to the listing fields in `server/lib/listing-fields.js` (single-line clean, simple email check, may be empty); never rendered on pages, never in JSON-LD, `/api/listings/:id`, llms.txt, sitemap, or MCP output, and not part of the public listing JSON
     - Hash rule: `ownerEmail` is stripped before hashing in `server/lib/canonical.js` / `verifier.js` so the stamp does not depend on a private field
     - Add `GET /admin/quotes` in `server/routes/admin.js` (admin token, same helper and rate limit as 13.1 and 13.3): saved quotes, newest first, escaped, `no-store`, `noindex`
     - Files: `server/lib/listing-fields.js`, `server/lib/verifier.js`, `server/lib/html.js`, `server/lib/schema.js`, `server/lib/mcp.js`, `server/routes/api.js`, `server/routes/admin.js`
     - _Requirements: docs/launch-fixes.md section 15 (ownerEmail and admin quotes)_
 
-  - [-] 15.3 Fix notifier memory and set retention
+  - [x] 15.3 Fix notifier memory and set retention
     - In `server/lib/notifier.js`, cap or drop the in-memory `sent` list outside tests so quotes are not kept forever (the mock keeps its array; real notifiers keep none)
     - Keep quotes 180 days and expire drafts after 30 days: prune on startup and on write, through the queued `updateJsonFile` path; a draft in `pending` or `published` is not expired by the 30-day rule
     - Files: `server/lib/notifier.js`, `server/lib/quotes.js`, `server/lib/drafts.js`, `server/data.js`
     - _Requirements: docs/launch-fixes.md section 15 (retention)_
 
-  - [-] 15.4 Correct the README quote limit
+  - [x] 15.4 Correct the README quote limit
     - State that the per-listing quote limit is per client per listing (3 per hour per client per listing), not per listing overall
     - Files: `README.md`
     - _Requirements: docs/launch-fixes.md section 15 (README fix)_
 
-  - [ ] 15.5 Write tests for the quote wording
+  - [x] 15.5 Write tests for the quote wording
     - Extend `test/quotes.test.js` and `test/mcp.test.js`
     - Examples: the HTML confirmation and the MCP result contain the new sentence with the listing phone; the old phrase "The business will contact you" appears nowhere under `server/`
     - **Property: The confirmation always names the listing phone and escapes it** (fast-check over generated phones and names)
     - Files: `test/quotes.test.js`, `test/mcp.test.js`
     - _Requirements: docs/launch-fixes.md section 15 (wording fix)_
 
-  - [ ] 15.6 Write tests for `ownerEmail` and `/admin/quotes`
+  - [x] 15.6 Write tests for `ownerEmail` and `/admin/quotes`
     - New file `test/admin-quotes.test.js`
     - Examples: `GET /admin/quotes` returns 401/403 without a token, saved quotes newest first with a valid token, escaped output
     - **Property: ownerEmail never appears in any public output** (fast-check over generated emails; check listing page, JSON-LD, `/api/listings/:id`, llms.txt, sitemap, MCP `get_listing`)
@@ -455,14 +455,14 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
     - Files: `test/admin-quotes.test.js`
     - _Requirements: docs/launch-fixes.md section 15 (ownerEmail and admin quotes)_
 
-  - [ ] 15.7 Write tests for retention and notifier memory
+  - [x] 15.7 Write tests for retention and notifier memory
     - New file `test/retention.test.js`; fake clock
     - **Property: Pruning keeps exactly the quotes younger than 180 days and exactly the unpublished drafts younger than 30 days** (fast-check over generated timestamps)
     - Examples: pending and published drafts survive the 30-day rule; the production notifier does not accumulate a `sent` list across many quotes
     - Files: `test/retention.test.js`
     - _Requirements: docs/launch-fixes.md section 15 (retention)_
 
-  - [ ] 15.8 Write a test for the README quote limit
+  - [x] 15.8 Write a test for the README quote limit
     - Extend `test/app.test.js`: README text says the quote limit is per client per listing
     - Files: `test/app.test.js`
     - _Requirements: docs/launch-fixes.md section 15 (README fix)_

@@ -7,6 +7,7 @@ import { buildSchema } from '../lib/schema.js';
 import { layout, listingDetail, quoteForm, escapeHtml } from '../lib/html.js';
 import { submitQuote } from '../lib/quotes.js';
 import { verificationFor } from '../lib/verifier.js';
+import { publicListing } from '../lib/public-listing.js';
 
 const formParser = express.urlencoded({ extended: false, limit: '16kb', parameterLimit: 10 });
 
@@ -70,9 +71,9 @@ export function createListingsRouter(ctx) {
   });
 
   router.get('/listings/:id', (req, res, next) => {
-    const listing = store.findById(req.params.id);
+    const stored = store.findById(req.params.id);
 
-    if (!listing) {
+    if (!stored) {
       return res.status(404).type('html').send(layout({
         title: 'Listing not found',
         body: '<section class="message"><h1>Listing not found</h1><p><a href="/">Back to the directory</a></p></section>',
@@ -80,6 +81,8 @@ export function createListingsRouter(ctx) {
     }
 
     try {
+      const listing = publicListing(stored);
+      // hashListing strips ownerEmail too, so this equals /api/verify/:id
       const verification = verificationFor(store, listing);
       const jsonLd = JSON.stringify(buildSchema(listing, verification), null, 2);
       const sentNotice = req.query.quote === 'sent'
