@@ -7,6 +7,31 @@ import { DEFAULT_SITE_NAME } from './config.js';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
+/**
+ * The days the owner actually filled in, Monday first, as [Day, text] pairs.
+ * Keys match case-insensitively ('monday' or 'Monday'). A blank, missing or
+ * whitespace-only day is left out: we never guess "Closed" for a day the owner
+ * skipped. A day the owner typed "Closed" stays "Closed".
+ * @param {object|undefined} hours
+ * @returns {[string, string][]}
+ */
+export function filledHours(hours) {
+  if (hours === null || typeof hours !== 'object') return [];
+  const byDay = new Map(Object.entries(hours).map(([key, value]) => [String(key).toLowerCase(), value]));
+  const out = [];
+  for (const day of DAYS) {
+    const value = byDay.get(day.toLowerCase());
+    if (typeof value === 'string' && value.trim() !== '') out.push([day, value.trim()]);
+  }
+  return out;
+}
+
+/** Shown when no day has hours. */
+export const NO_HOURS_TEXT = 'Call for hours';
+
+/** Marker in the footer; the app swaps it for the CONTACT_EMAIL line (or nothing). */
+export const CONTACT_MARKER = '<!--site-contact-->';
+
 /** Escapes text for safe use in HTML content and attributes. */
 export function escapeHtml(value) {
   return String(value)
@@ -79,19 +104,30 @@ export function markDemo(html) {
 /**
  * Wraps page content in the full HTML shell (head, nav, footer).
  *
- * @param {{ title: string, body: string, jsonLd?: string, scripts?: string[], demo?: boolean }} options
+ * @param {{ title: string, body: string, jsonLd?: string, scripts?: string[], demo?: boolean,
+ *   canonical?: string, description?: string }} options
  *   `jsonLd` is an optional serialized JSON-LD string placed in the head.
  *   `scripts` is an optional list of module script URLs (deferred by default).
  *   `demo` (default false) adds the noindex meta and the sample-listings footer line.
+ *   `canonical` (absolute URL) adds <link rel="canonical">; only public pages pass it.
+ *   `description` adds <meta name="description">.
  * @returns {string}
  */
-export function layout({ title, body, jsonLd, scripts, demo = false, siteName = DEFAULT_SITE_NAME }) {
-  const page = renderLayout({ title, body, jsonLd, scripts, siteName });
+export function layout({
+  title, body, jsonLd, scripts, demo = false, siteName = DEFAULT_SITE_NAME, canonical, description,
+}) {
+  const page = renderLayout({ title, body, jsonLd, scripts, siteName, canonical, description });
   return demo ? markDemo(page) : page;
 }
 
-function renderLayout({ title, body, jsonLd, scripts, siteName }) {
+function renderLayout({ title, body, jsonLd, scripts, siteName, canonical, description }) {
   const name = escapeHtml(siteName);
+  const descTag = typeof description === 'string' && description.trim() !== ''
+    ? `\n  <meta name="description" content="${escapeHtml(description.replace(/\s+/g, ' ').trim())}">`
+    : '';
+  const canonicalTag = typeof canonical === 'string' && /^https?:\/\//i.test(canonical)
+    ? `\n  <link rel="canonical" href="${escapeHtml(canonical)}">`
+    : '';
   const scriptTags = Array.isArray(scripts) && scripts.length > 0
     ? '\n' + scripts.map(src => `  <script type="module" src="${escapeHtml(src)}"></script>`).join('\n')
     : '';
@@ -106,7 +142,7 @@ function renderLayout({ title, body, jsonLd, scripts, siteName }) {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${escapeHtml(title)}</title>
+  <title>${escapeHtml(title)}</title>${descTag}${canonicalTag}
   <link rel="stylesheet" href="/css/style.css">${ldBlock}${scriptTags}
 </head>
 <body>
@@ -119,6 +155,7 @@ ${body}
   </main>
   <footer class="site-footer">
     <p>${name}. A free local business directory.</p>
+    <p><a href="/about">About</a> &middot; <a href="/privacy">Privacy</a>${CONTACT_MARKER}</p>
   </footer>
 </body>
 </html>
@@ -238,18 +275,13 @@ export function formatStampDate(verification) {
  */
 export function listingDetail(listing, jsonLd, opts = {}) {
   const categories = opts?.categories;
-  // Match hour keys case-insensitively ('monday' or 'Monday'); display capitalized names
-  const hoursByDay = new Map(
-    Object.entries(listing.hours ?? {}).map(([key, value]) => [key.toLowerCase(), value]),
-  );
-  // A day with no hours (missing, empty or whitespace) reads "Closed".
-  const hoursRows = DAYS
-    .map(day => {
-      const value = hoursByDay.get(day.toLowerCase());
-      const text = typeof value === 'string' && value.trim() !== '' ? value : 'Closed';
-      return `      <tr><th scope="row">${day}</th><td>${escapeHtml(text)}</td></tr>`;
-    })
-    .join('\n');
+  // Only the days the owner filled in; a skipped day is never shown as "Closed".
+  const days = filledHours(listing.hours);
+  const hoursBlock = days.length === 0
+    ? `    <p class="hours-none">${NO_HOURS_TEXT}</p>`
+    : `    <table class="hours">
+${days.map(([day, text]) => `      <tr><th scope="row">${day}</th><td>${escapeHtml(text)}</td></tr>`).join('\n')}
+    </table>`;
 
   const services = listing.services
     .map(s => `      <li>${escapeHtml(s)}</li>`)
@@ -292,9 +324,7 @@ ${services}
     </dd>
     <dt>Hours</dt>
     <dd>
-    <table class="hours">
-${hoursRows}
-    </table>
+${hoursBlock}
     </dd>
     </dl>
   </article>`;

@@ -91,7 +91,8 @@ export const SCHEMA_TYPES = Object.freeze({
   landscapers: 'HomeAndConstructionBusiness',
   cleaners: 'HomeAndConstructionBusiness',
   restaurants: 'Restaurant',
-  'shops-and-restaurants': 'Restaurant',
+  // One merged category covers shops too, so it stays generic (a gift shop is not a Restaurant).
+  'shops-and-restaurants': 'LocalBusiness',
   shops: 'Store',
   'hair-salons': 'HairSalon',
   'auto-repair': 'AutoRepair',

@@ -68,6 +68,7 @@ test('category -> @type table, with LocalBusiness as the fallback', () => {
     cleaners: 'HomeAndConstructionBusiness',
     restaurants: 'Restaurant',
     shops: 'Store',
+    'shops-and-restaurants': 'LocalBusiness',
   };
   for (const [slug, type] of Object.entries(table)) {
     assert.equal(schemaTypeFor(slug), type, slug);
@@ -225,7 +226,9 @@ test('GET /listings/:id for a plumber has the rich JSON-LD', async () => {
 
 test('GET /listings/:id uses the specific @type for other categories', async () => {
   const env = await startEnv();
-  const expected = { 'volt-brothers-electric': 'Electrician', 'the-griddle-house': 'Restaurant' };
+  // the-griddle-house is in the merged shops-and-restaurants category, which stays
+  // LocalBusiness so a gift shop is never typed as a Restaurant.
+  const expected = { 'volt-brothers-electric': 'Electrician', 'the-griddle-house': 'LocalBusiness' };
   for (const [id, type] of Object.entries(expected)) {
     const ld = parseJsonLd(await (await fetch(`${env.base}/listings/${id}`)).text());
     assert.equal(ld['@type'], type, id);

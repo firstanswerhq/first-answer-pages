@@ -61,11 +61,18 @@ export function createListingsRouter(ctx) {
     });
     const form = quoteForm(listing, { error, values });
     // After a failed submit the error and form come first so a phone shows them without scrolling.
+    const base = baseUrlFor(req, ctx.config);
+    const trade = store.getCategories().find(c => c.slug === listing.category)?.label ?? '';
+    const place = [listing.city, listing.state].filter(v => typeof v === 'string' && v.trim() !== '').join(', ');
+    const description = `${listing.name}${trade ? `, listed under ${trade}` : ''}${place ? ` in ${place}` : ''}. Call ${listing.phone}.`;
     return layout({
       title: `${listing.name} | First Answer Pages`,
       body: sentNotice + (error ? form + '\n' + detail : detail + '\n' + form),
       jsonLd,
       scripts: ['/js/webmcp.js'],
+      // The canonical never carries ?quote=sent or a failed form's path.
+      canonical: `${base}/listings/${encodeURIComponent(listing.id)}`,
+      description,
     });
   }
 
