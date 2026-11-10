@@ -6,6 +6,7 @@ import express, { Router } from 'express';
 import { buildSchema } from '../lib/schema.js';
 import { layout, listingDetail, quoteForm, escapeHtml } from '../lib/html.js';
 import { submitQuote } from '../lib/quotes.js';
+import { verificationFor } from '../lib/verifier.js';
 
 const formParser = express.urlencoded({ extended: false, limit: '16kb', parameterLimit: 10 });
 
@@ -79,14 +80,15 @@ export function createListingsRouter(ctx) {
     }
 
     try {
-      const jsonLd = JSON.stringify(buildSchema(listing), null, 2);
+      const verification = verificationFor(store, listing);
+      const jsonLd = JSON.stringify(buildSchema(listing, verification), null, 2);
       const sentNotice = req.query.quote === 'sent'
         ? '\n<p class="notice" role="status">Quote request sent. The business will contact you.</p>'
         : '';
       // JSON-LD goes to layout() only, so the page has exactly one ld+json block
       res.status(200).type('html').send(layout({
         title: `${listing.name} | First Answer Pages`,
-        body: listingDetail(listing, undefined, { categories: store.getCategories() }) + sentNotice + '\n' + quoteForm(listing),
+        body: listingDetail(listing, undefined, { categories: store.getCategories(), verification }) + sentNotice + '\n' + quoteForm(listing),
         jsonLd,
         scripts: ['/js/webmcp.js'],
       }));

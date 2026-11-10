@@ -407,6 +407,68 @@
         "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
         "timestamp": 1794280758870
       }
+    ],
+    "6. Checkpoint - Agent-ready": [
+      {
+        "executionId": "a1996d90-5674-4b95-8e21-03677d73e618",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794281898267
+      }
+    ],
+    "7.1 Add the stamp, JSON-LD fields, and stamp CSS": [
+      {
+        "executionId": "a1996d90-5674-4b95-8e21-03677d73e618",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794281899752
+      },
+      {
+        "executionId": "a1996d90-5674-4b95-8e21-03677d73e618",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794281943661
+      }
+    ],
+    "7.2 Add the verify endpoint and verification fields in the API and listing route": [
+      {
+        "executionId": "a1996d90-5674-4b95-8e21-03677d73e618",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794281947602
+      },
+      {
+        "executionId": "a1996d90-5674-4b95-8e21-03677d73e618",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794281989878
+      }
+    ],
+    "7. Feature 3: Owner-confirmed stamp": [
+      {
+        "executionId": "a1996d90-5674-4b95-8e21-03677d73e618",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794281990785
+      }
+    ],
+    "7.3 Write property test and examples for the verification flow": [
+      {
+        "executionId": "a1996d90-5674-4b95-8e21-03677d73e618",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794281992312
+      },
+      {
+        "executionId": "a1996d90-5674-4b95-8e21-03677d73e618",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794282102478
+      }
+    ],
+    "7.4 Extend escaping property test to the Listing_Page and quote result page": [
+      {
+        "executionId": "a1996d90-5674-4b95-8e21-03677d73e618",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794281993694
+      },
+      {
+        "executionId": "a1996d90-5674-4b95-8e21-03677d73e618",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794282104062
+      }
     ]
   }
 }

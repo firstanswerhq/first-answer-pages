@@ -285,3 +285,42 @@ h1 {
   font-weight: bold;
   padding: 0.3rem 1rem;
 }
+
+/* Owner-confirmed stamp: rubber-stamp look on the listing page */
+.stamp {
+  display: inline-block;
+  max-width: 100%;
+  margin: 1rem 0;
+  padding: 0.5rem 1rem;
+  border: 4px double #8B0000;
+  color: #8B0000;
+  transform: rotate(-2deg);
+  overflow-wrap: anywhere;
+}
+
+.stamp-title {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: bold;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.stamp-note {
+  margin: 0.25rem 0 0;
+  color: var(--color-text);
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
+.stamp-hash {
+  margin: 0.25rem 0 0;
+  color: var(--color-text);
+  font-size: 0.8rem;
+}
+
+.stamp-unconfirmed {
+  border: 3px dashed var(--color-divider);
+  color: var(--color-text);
+  transform: none;
+}

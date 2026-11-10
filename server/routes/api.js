@@ -4,6 +4,7 @@
 
 import express, { Router } from 'express';
 import { submitQuote } from '../lib/quotes.js';
+import { verificationFor, checkHash } from '../lib/verifier.js';
 
 const jsonParser = express.json({ limit: '16kb' });
 
@@ -47,7 +48,35 @@ export function createApiRouter(ctx) {
       return res.status(404).type('application/json').send(JSON.stringify({ error: 'Listing not found' }));
     }
 
-    res.status(200).type('application/json').send(JSON.stringify(listing));
+    // Unverified output is unchanged; confirmed listings gain two fields.
+    const v = verificationFor(store, listing);
+    const payload = v ? { ...listing, verifiedDate: v.verifiedDate, verificationHash: v.hash } : listing;
+    res.status(200).type('application/json').send(JSON.stringify(payload));
+  });
+
+  // Tamper check only: a matching hash means unchanged since owner confirmation.
+  router.get('/api/verify/:id', (req, res) => {
+    const listing = store.findById(req.params.id);
+    if (!listing) return sendJson(res, 404, { error: 'Listing not found' });
+
+    const v = verificationFor(store, listing);
+    const supplied = req.query.hash;
+    if (!v) {
+      return sendJson(res, 200, {
+        id: listing.id,
+        verified: false,
+        verifiedDate: null,
+        hash: null,
+        match: supplied === undefined ? null : false,
+      });
+    }
+    sendJson(res, 200, {
+      id: listing.id,
+      verified: true,
+      verifiedDate: v.verifiedDate,
+      hash: v.hash,
+      match: checkHash(v.hash, supplied),
+    });
   });
 
   return router;

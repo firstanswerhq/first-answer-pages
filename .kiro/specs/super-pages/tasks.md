@@ -223,31 +223,31 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
     - File `test/app.test.js`; `GET /.well-known/agent-card.json` returns 404; no router layer matches the card path; with an injected stub `a2a` dependency both the card and endpoint routes appear together
     - _Requirements: 8.3, 8.4, 8.5_
 
-- [ ] 6. Checkpoint - Agent-ready
+- [x] 6. Checkpoint - Agent-ready
   - Run `node --test`; existing tests and all new tests must pass. Ask the user if questions arise.
 
-- [ ] 7. Feature 3: Owner-confirmed stamp
-  - [ ] 7.1 Add the stamp, JSON-LD fields, and stamp CSS
+- [x] 7. Feature 3: Owner-confirmed stamp
+  - [x] 7.1 Add the stamp, JSON-LD fields, and stamp CSS
     - `listingDetail(listing, jsonLd, { verification })` renders an `<aside class="stamp">` with the text "Owner-confirmed <date>" (the Verified_Date) and the hash in `<code data-hash="...">`, labeled as unchanged since the owner confirmed it, with no identity or ownership claim; listings with no Verified_Date show "Not yet confirmed by the owner"
     - `buildSchema(listing, verification)` adds `identifier` (hash string) and `dateModified` (Verified_Date) only when `verification` is non-null; required-field checks unchanged
     - Add stamp styles to `public/css/style.css` in the existing hand-made style (bordered, slightly rotated rubber-stamp look in black and dark red on the paper-yellow page)
     - JSON-LD output must never contain a literal `</script`
     - _Requirements: 10.1, 10.2, 10.3, 4.12_
 
-  - [ ] 7.2 Add the verify endpoint and verification fields in the API and listing route
+  - [x] 7.2 Add the verify endpoint and verification fields in the API and listing route
     - `GET /api/verify/:id?hash=` in `routes/api.js`: 200 `{ id, verified, verifiedDate, hash, match }`; `match` is `true`, `false`, or `null` when `hash` is absent; case-insensitive after trimming; repeated `hash` parameter counts as non-match; published but unverified listing gives `verified: false`, `verifiedDate: null`, `hash: null`; unknown id gives 404 `{ error: 'Listing not found' }`
     - `GET /api/listings/:id` adds `verifiedDate` and `verificationHash` only for verified listings so unverified seed listings still deep-equal in `test/api.test.js`
     - `routes/listings.js` passes `verificationFor(store, listing)` to `listingDetail` and `buildSchema`
     - Verified_Date is set only through confirmation in `publishDraft` (UTC date from `clock`)
     - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 10.8, 10.9, 10.10, 10.12_
 
-  - [ ]* 7.3 Write property test and examples for the verification flow
+  - [x]* 7.3 Write property test and examples for the verification flow
     - File `test/verify.test.js`; publish a generated valid listing into a temp store, read the stamp hash from the rendered page, then call the verify endpoint (exact, upper-cased, whitespace-padded), edit via `store.updatePublished` and expect `match: false` with a different `hash`
     - Examples: stamp text "Owner-confirmed <date>" and JSON-LD `identifier` and `dateModified` for listings with a Verified_Date; the text "Not yet confirmed by the owner" and absence of `identifier` and `dateModified` for listings without one; the stamp markup contains no "Verified" wording; 404; `match: null`; `/api/listings/:id` additions
     - **Property 6: Stamp hash verifies until the listing changes**
     - **Validates: Requirements 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 10.8, 10.9, 10.11, 10.12**
 
-  - [ ]* 7.4 Extend escaping property test to the Listing_Page and quote result page
+  - [x]* 7.4 Extend escaping property test to the Listing_Page and quote result page
     - Add to `test/render.test.js`; include `</script>` in values to confirm JSON-LD stays safe
     - **Property 26: Rendered values are escaped** (Listing_Page, quote result page)
     - **Validates: Requirements 4.12, 6.10**

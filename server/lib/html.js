@@ -105,6 +105,29 @@ export function quoteForm(listing) {
 }
 
 /**
+ * Renders the owner-confirmed stamp, or the unconfirmed notice.
+ * The hash is a tamper check only; it makes no claim about identity or ownership.
+ *
+ * @param {{ verifiedDate: string, hash: string }|null|undefined} verification
+ * @param {string} id  listing id (for the verify link)
+ * @returns {string}
+ */
+function stamp(verification, id) {
+  if (!verification || !verification.verifiedDate || !verification.hash) {
+    return '<aside class="stamp stamp-unconfirmed"><p class="stamp-title">Not yet confirmed by the owner</p></aside>';
+  }
+  const date = escapeHtml(verification.verifiedDate);
+  const hash = escapeHtml(verification.hash);
+  const href = `/api/verify/${encodeURIComponent(id)}?hash=${encodeURIComponent(verification.hash)}`;
+  return `<aside class="stamp">
+      <p class="stamp-title">Owner-confirmed ${date}</p>
+      <p class="stamp-note">Tamper check: unchanged since the owner confirmed it. This is not proof of ownership.</p>
+      <p class="stamp-hash"><code data-hash="${hash}">${hash}</code></p>
+      <p class="stamp-note"><a href="${escapeHtml(href)}">Check this hash</a></p>
+    </aside>`;
+}
+
+/**
  * Renders the full listing detail page body.
  * The JSON-LD string is exposed on the returned value so callers can pass it
  * to layout(); it is also embedded inline in a <script type="application/ld+json">
@@ -112,8 +135,10 @@ export function quoteForm(listing) {
  *
  * @param {object} listing
  * @param {string} [jsonLd]  serialized JSON-LD string
- * @param {{ categories?: object[] }} [opts]  optional extras; categories
- *   default to the default store's categories
+ * @param {{ categories?: object[], verification?: {verifiedDate: string, hash: string}|null }} [opts]
+ *   optional extras; categories default to the default store's categories.
+ *   When the `verification` key is present, the stamp (or the unconfirmed
+ *   notice for null) is rendered; when absent, output is unchanged.
  * @returns {string}
  */
 export function listingDetail(listing, jsonLd, opts = {}) {
@@ -139,10 +164,15 @@ export function listingDetail(listing, jsonLd, opts = {}) {
     ? `  <script type="application/ld+json">\n${jsonLd.replace(/</g, '\\u003c')}\n  </script>\n`
     : '';
 
+  // Stamp only when the caller passes a `verification` key (null = unconfirmed).
+  const stampBlock = opts && typeof opts === 'object' && 'verification' in opts
+    ? '\n    ' + stamp(opts.verification, listing.id)
+    : '';
+
   return `${ld}  <article class="listing-detail">
     <p><a href="/">← Back to directory</a></p>
     <h1>${escapeHtml(listing.name)}</h1>
-    <p>${escapeHtml(listing.description)}</p>
+    <p>${escapeHtml(listing.description)}</p>${stampBlock}
     <dl>
     <dt>Category</dt>
     <dd>${escapeHtml(categoryLabel(listing.category, categories))}</dd>
