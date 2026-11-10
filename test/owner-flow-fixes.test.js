@@ -252,15 +252,16 @@ test('every hours box has the "7am-5pm, or Closed" placeholder', async () => {
 
 // ---- 5. thank-you page --------------------------------------------------------------
 
-test('the thank-you page promises an email only with resend set up and an owner email', async () => {
+test('the thank-you page says when we review and that an owner with an email will hear back', async () => {
   const review = escapeHtml("We'll review your listing, usually within one business day.");
-  const emailLine = escapeHtml("We'll email you when it's live.");
+  const hearBack = escapeHtml("If you gave us your email, we'll let you know when it's live.");
+  const oldPromise = escapeHtml("We'll email you when it's live.");
 
   const cases = [
-    { config: {}, email: 'owner@example.test', promise: false },
-    { config: {}, email: '', promise: false },
-    { config: { notifierName: 'resend' }, email: '', promise: false },
-    { config: { notifierName: 'resend' }, email: 'owner@example.test', promise: true },
+    { config: {}, email: 'owner@example.test' },
+    { config: {}, email: '' },
+    { config: { notifierName: 'resend' }, email: '' },
+    { config: { notifierName: 'resend' }, email: 'owner@example.test' },
   ];
   for (const c of cases) {
     const env = await makeEnv({ config: c.config, notifier: c.config.notifierName ? quietNotifier : undefined });
@@ -269,7 +270,8 @@ test('the thank-you page promises an email only with resend set up and an owner 
     const page = mainOf(await (await get(env, draftPath)).text());
     assert.equal(count(page, 'Thanks!'), 1);
     assert.equal(count(page, review), 1);
-    assert.equal(count(page, emailLine), c.promise ? 1 : 0, JSON.stringify(c));
+    assert.equal(count(page, hearBack), 1, JSON.stringify(c));
+    assert.equal(count(page, oldPromise), 0, JSON.stringify(c));
   }
 });
 

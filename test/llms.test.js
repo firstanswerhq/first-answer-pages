@@ -136,7 +136,7 @@ test('llms.txt line-break injection', async t => {
 // Quote instructions, owner-confirmed marks, header city (super-pages 18.3)
 // ---------------------------------------------------------------------------
 
-const HEADER_MULTI = '# Free local business directory — Local businesses';
+const HEADER_MULTI = '# A free directory of local businesses';
 const countConfirmed = text => lbLines(text).filter(line => line.startsWith('Owner-confirmed: yes')).length;
 
 const quoteSet = () => [
@@ -188,7 +188,7 @@ test('llms.txt quotes, owner-confirmed and header city', async t => {
     assert.ok(lbLines(withObj).includes('Owner-confirmed: yes (2025-12-01)'));
   });
 
-  await t.test('multi-city set says only "Local businesses" in the header', () => {
+  await t.test('multi-city set names no city in the header', () => {
     const listings = [
       lbListing({ id: 'nash-one', name: 'Nash One', city: 'Nashville' }),
       lbListing({ id: 'mem-one', name: 'Mem One', city: 'Memphis' }),
@@ -201,7 +201,7 @@ test('llms.txt quotes, owner-confirmed and header city', async t => {
 
   await t.test('one-city set names the city; case variants count as one', () => {
     const single = lbLines(generateLlmsTxt(quoteSet(), BASE_URL, LB_CATEGORIES))[1];
-    assert.equal(single, '# Free local business directory — Local businesses in Nashville');
+    assert.equal(single, '# A free directory of local businesses in Nashville');
 
     const variants = [
       lbListing({ id: 'v-one', name: 'V One', city: 'Nashville' }),
@@ -209,10 +209,10 @@ test('llms.txt quotes, owner-confirmed and header city', async t => {
       lbListing({ id: 'v-three', name: 'V Three', city: ' nashville ' }),
     ];
     const header = lbLines(generateLlmsTxt(variants, BASE_URL, LB_CATEGORIES))[1];
-    assert.match(header, /Local businesses in nashville$/i);
+    assert.match(header, /local businesses in nashville$/i);
   });
 
-  await t.test('zero listings gives the plain "Local businesses" header', () => {
+  await t.test('zero listings gives the plain header with no city', () => {
     assert.equal(lbLines(generateLlmsTxt([], BASE_URL, LB_CATEGORIES))[1], HEADER_MULTI);
   });
 
@@ -240,8 +240,8 @@ test('llms.txt quotes, owner-confirmed and header city', async t => {
       const distinct = new Set(listings.map(l => l.city.trim().toLowerCase()));
       if (distinct.size === 1) {
         const [only] = distinct;
-        assert.ok(header.startsWith('# Free local business directory — Local businesses in '));
-        const named = header.slice('# Free local business directory — Local businesses in '.length);
+        assert.ok(header.startsWith('# A free directory of local businesses in '));
+        const named = header.slice('# A free directory of local businesses in '.length);
         assert.equal(named.toLowerCase(), only);
       } else {
         assert.equal(header, HEADER_MULTI);

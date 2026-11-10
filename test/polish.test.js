@@ -262,7 +262,7 @@ test('property: a query value other than "1" shows no saved note and no discarde
 
 // ---- 3. thank-you page ------------------------------------------------------------
 
-test('thank-you page: one "Thanks!", the review sentence, and no email promise while email is not set up', async () => {
+test('thank-you page: one "Thanks!", the review sentence, and the hear-back sentence', async () => {
   const env = await makeEnv();
   const review = escapeHtml("We'll review your listing, usually within one business day.");
   const emailLine = escapeHtml("We'll email you when it's live.");
@@ -273,9 +273,10 @@ test('thank-you page: one "Thanks!", the review sentence, and no email promise w
   const page = mainOf(await (await get(env, withEmail)).text());
   assert.equal(countOf(page, 'Thanks!'), 1);
   assert.equal(countOf(page, review), 1);
-  // No email is sent without the resend notifier, so the page doesn't promise one
-  // (the resend case is covered in owner-flow-fixes.test.js).
+  // The old automatic-email promise is gone; the page says the owner will hear back
+  // (the admin gets a ready-made email link after approve or reject).
   assert.equal(countOf(page, emailLine), 0);
+  assert.equal(countOf(page, escapeHtml("If you gave us your email, we'll let you know when it's live.")), 1);
 
   const without = await newManualDraft(env);
   assert.equal((await postForm(env, `${without}/confirm`, completeForm({ ownerEmail: '' }))).status, 303);
@@ -326,15 +327,16 @@ function hoursRow(html, day) {
   return m ? m[1] : undefined;
 }
 
-// Updated by the third review round: a day the owner left blank is left out, never shown as "Closed".
-test('listingDetail shows hours for Monday and leaves out empty, blank, and missing days', () => {
+// Updated by the final read: once any day is filled every day is shown, and a day the owner
+// left blank reads "Call for hours", never "Closed".
+test('listingDetail shows Monday and "Call for hours" for empty, blank, and missing days', () => {
   const html = listingDetail({ ...HOURS_LISTING }, undefined, { categories });
   assert.equal(hoursRow(html, 'Monday'), '7:00 AM - 5:00 PM');
-  for (const day of DAY_NAMES.slice(1)) assert.equal(hoursRow(html, day), undefined, day);
+  for (const day of DAY_NAMES.slice(1)) assert.equal(hoursRow(html, day), 'Call for hours', day);
   assert.ok(!html.includes('>Closed<'));
 });
 
-test('listing page: only Monday in the table, and JSON-LD lists only Monday', async () => {
+test('listing page: every day in the table, blank ones "Call for hours", and JSON-LD lists only Monday', async () => {
   const env = await makeEnv({
     files: { 'published.json': JSON.stringify([HOURS_LISTING]) },
     config: { baseUrl: 'http://example.test' },
@@ -343,7 +345,7 @@ test('listing page: only Monday in the table, and JSON-LD lists only Monday', as
   assert.equal(res.status, 200);
   const html = await res.text();
   assert.equal(hoursRow(html, 'Monday'), '7:00 AM - 5:00 PM');
-  for (const day of DAY_NAMES.slice(1)) assert.equal(hoursRow(html, day), undefined, day);
+  for (const day of DAY_NAMES.slice(1)) assert.equal(hoursRow(html, day), 'Call for hours', day);
 
   const ld = /<script type="application\/ld\+json">\s*([\s\S]*?)\s*<\/script>/.exec(html);
   assert.ok(ld, 'JSON-LD block present');

@@ -32,6 +32,10 @@ export function createPagesRouter(ctx) {
   const contact = contactLine(config.contactEmail);
   const footerContact = contact ? ` &middot; <span class="site-contact">${contact}</span>` : '';
   const contactPara = contact ? `\n<p class="site-contact">${contact}</p>` : '';
+  // Never send people to "contact us" without an address to contact.
+  const removalPara = contact
+    ? '<p>To have a listing, quote request or email removed, contact us and we will delete it.</p>'
+    : '<p>To have a listing, quote request or email removed, reply to any email from us or ask the business that listed you.</p>';
 
   // Swap the footer marker in every HTML body (pages, 404s, errors).
   router.use((req, res, next) => {
@@ -93,7 +97,7 @@ export function createPagesRouter(ctx) {
 <h2>What we never do</h2>
 <p>We never sell your information, and we don't use it for advertising.</p>
 <h2>Removal</h2>
-<p>To have a listing, quote request or email removed, contact us and we will delete it.</p>${contactPara}
+${removalPara}${contactPara}
 </section>`;
     res.status(200).type('html').send(layout({
       title: `Privacy | ${DEFAULT_SITE_NAME}`,

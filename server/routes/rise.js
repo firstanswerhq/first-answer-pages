@@ -34,16 +34,16 @@ function runParser(parser, req, res) {
   });
 }
 
+/** Wording under the "Thanks!" heading after an owner confirms. */
+export const PENDING_MESSAGE = "We'll review your listing, usually within one business day. If you gave us your email, we'll let you know when it's live.";
+
 /**
- * Paragraph under the "Thanks!" heading. The email sentence is a promise, so it
- * appears only when email is really set up (the resend notifier) and the owner
- * gave an address.
+ * Paragraph under the "Thanks!" heading. The admin queue hands the admin the
+ * owner's email (with a ready-made message) after approve and after reject,
+ * so the owner who gave an email always hears back.
  */
-function pendingMessage(draft, config) {
-  const email = draft?.fields?.ownerEmail;
-  const hasEmail = typeof email === 'string' && email.trim() !== '';
-  const canEmail = config?.notifierName === 'resend';
-  return `We'll review your listing, usually within one business day.${hasEmail && canEmail ? " We'll email you when it's live." : ''}`;
+function pendingMessage() {
+  return PENDING_MESSAGE;
 }
 
 /** The owner's link after approval: point them at the live listing, not an edit form. */

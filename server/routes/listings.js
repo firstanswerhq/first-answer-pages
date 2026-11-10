@@ -4,7 +4,7 @@
 
 import express, { Router } from 'express';
 import { buildSchema } from '../lib/schema.js';
-import { layout, listingDetail, quoteForm, escapeHtml } from '../lib/html.js';
+import { layout, listingDetail, quoteForm, escapeHtml, telLink } from '../lib/html.js';
 import { submitQuote } from '../lib/quotes.js';
 import { verificationFor } from '../lib/verifier.js';
 import { publicListing } from '../lib/public-listing.js';
@@ -21,6 +21,9 @@ function messagePage(title, text, backHref) {
   });
 }
 
+/** Shown when the visitor typed a contact that is neither a phone number nor an email. */
+const QUOTE_CONTACT_INVALID = "That doesn't look like a phone number or email.";
+
 const QUOTE_ERRORS = {
   contact: 'Please enter a phone number or email.',
   name: 'Please enter your name.',
@@ -31,6 +34,54 @@ const QUOTE_ERRORS = {
  * @param {object} ctx
  * @returns {import('express').Router}
  */
+/** One business of each trade, for the meta description ("a plumber"). */
+const TRADE_NOUNS = Object.freeze({
+  plumbers: 'a plumber',
+  electricians: 'an electrician',
+  'auto-repair': 'an auto repair shop',
+  'hair-salons': 'a hair salon',
+  lawyers: 'a lawyer',
+  cleaners: 'a cleaning company',
+  landscapers: 'a landscaper',
+  'pressure-washing': 'a pressure washing company',
+  'pools-and-concrete': 'a pool and concrete company',
+  'shops-and-restaurants': 'a local shop or restaurant',
+});
+
+const META_MAX = 160;
+
+/** "a, b and c" */
+function joinList(items) {
+  if (items.length <= 1) return items.join('');
+  return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
+}
+
+/**
+ * Meta description for a listing page, e.g. "Acme Plumbing is a plumber in
+ * Nashville, TN offering drain cleaning, leak repair and water heaters. Call
+ * (615) 555-0100." Up to 3 services; services are dropped (then the sentence
+ * trimmed) to stay within about 160 characters. Plain text: layout() escapes it.
+ * @param {object} listing
+ * @returns {string}
+ */
+export function listingMetaDescription(listing) {
+  const name = String(listing?.name ?? '').replace(/\s+/g, ' ').trim();
+  const trade = TRADE_NOUNS[listing?.category] ?? 'a local business';
+  const place = [listing?.city, listing?.state].filter(v => typeof v === 'string' && v.trim() !== '').map(v => v.trim()).join(', ');
+  const phone = String(listing?.phone ?? '').trim();
+  const services = (Array.isArray(listing?.services) ? listing.services : [])
+    .filter(x => typeof x === 'string' && x.trim() !== '')
+    .map(x => x.replace(/\s+/g, ' ').trim())
+    .slice(0, 3);
+  const build = list => `${name} is ${trade}${place ? ` in ${place}` : ''}${list.length ? ` offering ${joinList(list)}` : ''}.${phone ? ` Call ${phone}.` : ''}`;
+  for (let n = services.length; n >= 0; n--) {
+    const text = build(services.slice(0, n));
+    if (text.length <= META_MAX) return text;
+  }
+  const text = build([]);
+  return text.length <= META_MAX ? text : `${text.slice(0, META_MAX - 1).trimEnd()}\u2026`;
+}
+
 export function createListingsRouter(ctx) {
   const router = Router();
   const { store } = ctx;
@@ -53,7 +104,7 @@ export function createListingsRouter(ctx) {
     const verification = verificationFor(store, listing);
     const jsonLd = JSON.stringify(buildSchema(listing, verification, { baseUrl: baseUrlFor(req, ctx.config) }), null, 2);
     const sentNotice = sent
-      ? `<p class="notice success-box" role="status">${escapeHtml(`Thanks! Your request is saved and we'll pass it to the business. If you need help sooner, call them at ${listing.phone}.`)}</p>\n`
+      ? `<p class="notice success-box" role="status">${escapeHtml("Thanks! Your request is saved and we'll pass it to the business. If you need help sooner, call them at ")}${telLink(listing.phone)}.</p>\n`
       : '';
     // JSON-LD goes to layout() only, so the page has exactly one ld+json block
     const detail = listingDetail(listing, undefined, {
@@ -62,9 +113,7 @@ export function createListingsRouter(ctx) {
     const form = quoteForm(listing, { error, values });
     // After a failed submit the error and form come first so a phone shows them without scrolling.
     const base = baseUrlFor(req, ctx.config);
-    const trade = store.getCategories().find(c => c.slug === listing.category)?.label ?? '';
-    const place = [listing.city, listing.state].filter(v => typeof v === 'string' && v.trim() !== '').join(', ');
-    const description = `${listing.name}${trade ? `, listed under ${trade}` : ''}${place ? ` in ${place}` : ''}. Call ${listing.phone}.`;
+    const description = listingMetaDescription(listing);
     return layout({
       title: `${listing.name} | First Answer Pages`,
       body: sentNotice + (error ? form + '\n' + detail : detail + '\n' + form),
@@ -111,7 +160,10 @@ export function createListingsRouter(ctx) {
       }
       const kept = field => (typeof body[field] === 'string' ? body[field].slice(0, 2000) : '');
       return res.status(422).type('html').send(renderListingPage(req, store.findById(id), {
-        error: QUOTE_ERRORS[result.argument] || `Please check the ${result.argument} field.`,
+        // Something typed that isn't a phone or email gets a different line than an empty box.
+        error: result.argument === 'contact' && kept('contact').trim() !== ''
+          ? QUOTE_CONTACT_INVALID
+          : QUOTE_ERRORS[result.argument] || `Please check the ${result.argument} field.`,
         values: { name: kept('name'), contact: kept('contact'), details: kept('details') },
         hasSeance: await hasSeanceRuns(id),
       }));

@@ -5,7 +5,7 @@
  */
 
 import { layout, escapeHtml } from './html.js';
-import { DAYS } from './listing-fields.js';
+import { DAYS, STATE_HINT, STATE_ERROR } from './listing-fields.js';
 
 const DAY_LABELS = Object.freeze(
   Object.fromEntries(DAYS.map(d => [d, d[0].toUpperCase() + d.slice(1)])),
@@ -29,6 +29,9 @@ export const OWNER_EMAIL_HINT = 'Optional. Never shown publicly. We use it only 
 
 /** Placeholder in every hours box. */
 export const HOURS_PLACEHOLDER = '7am-5pm, or Closed';
+
+/** Hint under the hours boxes. */
+export const HOURS_HINT = "Leave a day blank if it varies. Type Closed if you're closed.";
 
 /** True when a draft's fields hold nothing the owner has typed yet. */
 function isEmptyFields(fields) {
@@ -108,6 +111,9 @@ export function messagePage(title, message, link = { href: '/rise', text: 'Back 
   return layout({ title, body });
 }
 
+/** Field-specific wording for a flagged field (default: "Needs your input"). */
+const MISSING_NOTES = Object.freeze({ state: STATE_ERROR });
+
 function row(key, inner, missing, fresh = false) {
   // A fresh typed-in form gets neutral "Required" tags; after a save or a
   // confirm attempt, missing fields turn red with "Needs your input".
@@ -115,7 +121,7 @@ function row(key, inner, missing, fresh = false) {
   const cls = flagged && !fresh ? 'field missing' : 'field';
   const note = !flagged ? '' : fresh
     ? ' <span class="required-note">Required</span>'
-    : ' <span class="missing-note">Needs your input</span>';
+    : ` <span class="missing-note">${escapeHtml(MISSING_NOTES[key] ?? 'Needs your input')}</span>`;
   return `    <div class="${cls}">
       <label for="f-${key}">${escapeHtml(FIELD_LABELS[key])}${note}</label>
       ${inner}
@@ -163,7 +169,7 @@ export function reviewPage(draft, categories, opts = {}) {
   const heading = fresh ? 'Type in your listing' : 'Check your listing';
   const tagline = fresh
     ? 'Fill in your business details, then press Confirm. Nobody can see it until we review it.'
-    : 'This is a draft. Nobody can see it until you confirm it.';
+    : 'This is a draft. Nobody can see it until you send it for review and we approve it.';
 
   const banner = draft.provider === 'mock'
     ? `<p class="demo-banner" role="note">${escapeHtml(DEMO_BANNER_TEXT)}</p>`
@@ -185,12 +191,14 @@ ${row('services', `<textarea id="f-services" name="services" rows="5">${escapeHt
 ${row('serviceArea', input('serviceArea', f.serviceArea), missing, fresh)}
 ${row('description', `<textarea id="f-description" name="description" rows="4" maxlength="500">${escapeHtml(f.description ?? '')}</textarea>`, missing, fresh)}
 ${row('city', input('city', f.city), missing, fresh)}
-${row('state', `<input type="text" id="f-state" name="state" value="${escapeHtml(f.state ?? '')}" maxlength="2" size="3">`, missing, fresh)}
+${row('state', `<input type="text" id="f-state" name="state" value="${escapeHtml(f.state ?? '')}" maxlength="40" size="6" autocomplete="address-level1" aria-describedby="f-state-hint">
+      <span class="hint" id="f-state-hint">${escapeHtml(STATE_HINT)}</span>`, missing, fresh)}
 ${row('address', input('address', f.address), missing, fresh)}
 ${row('ownerEmail', `<input type="email" id="f-ownerEmail" name="ownerEmail" value="${escapeHtml(f.ownerEmail ?? '')}" maxlength="254" autocomplete="email" aria-describedby="f-ownerEmail-hint">
       <span class="hint" id="f-ownerEmail-hint">${escapeHtml(OWNER_EMAIL_HINT)}</span>`, missing, fresh)}
     <fieldset class="hours-edit">
       <legend>Hours</legend>
+      <p class="hint" id="hours-hint">${escapeHtml(HOURS_HINT)}</p>
 ${hoursRows}
     </fieldset>
     <div class="confirm">

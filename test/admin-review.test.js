@@ -172,12 +172,13 @@ test('a phone that matches a live listing or another pending entry is flagged', 
     ],
   });
   const html = await pendingPage(env);
-  assert.ok(html.includes(`Possible duplicate of Nashville Pipe Pros (<a href="/listings/${SEED_ID}">/listings/${SEED_ID}</a>)`));
-  assert.ok(html.includes('Possible duplicate of Zephyrine Again (<a href="#pending-d3">waiting for review below</a>)'));
-  assert.ok(html.includes('Possible duplicate of Zephyrine Plumbing 2 (<a href="#pending-d2">waiting for review below</a>)'));
+  assert.ok(html.includes(`Same phone number as Nashville Pipe Pros, already live (<a href="/listings/${SEED_ID}">view it</a>)`));
+  assert.ok(html.includes('Same phone number as Zephyrine Again, also waiting for review (<a href="#pending-d3">jump to it</a>)'));
+  assert.ok(html.includes('Same phone number as Zephyrine Plumbing 2, also waiting for review (<a href="#pending-d2">jump to it</a>)'));
+  assert.ok(!html.includes('below') && !html.includes('above'), 'no below/above wording');
   assert.ok(html.includes('id="pending-d2"'));
   const item4 = html.slice(html.indexOf('id="pending-d4"'));
-  assert.ok(!item4.slice(0, item4.indexOf('</li>')).includes('Possible duplicate'), 'a unique phone is not flagged');
+  assert.ok(!item4.slice(0, item4.indexOf('</li>')).includes('Same phone number as'), 'a unique phone is not flagged');
 });
 
 // ---- 3. are you sure ---------------------------------------------------------------------
@@ -195,7 +196,7 @@ test('a browser reject asks first; "Yes, reject" rejects; bearer clients are not
 
   const yes = await request(env, { method: 'POST', path: '/admin/pending/d1/reject', headers: browser(), body: 'confirm=yes' });
   assert.equal(yes.status, 303);
-  assert.equal(yes.headers.location, '/admin/pending?note=rejected');
+  assert.equal(yes.headers.location, '/admin/pending?note=rejected&id=d1');
   assert.equal((await readJson(env, 'pending.json'))[0].status, 'rejected');
 
   const api = await request(env, { method: 'POST', path: '/admin/pending/d2/reject', headers: bearer });

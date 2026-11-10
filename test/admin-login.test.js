@@ -395,7 +395,7 @@ test('cookie POST reject also needs a matching Referer when Origin is absent', a
     body: 'confirm=yes', // the confirm page's "Yes, reject" button
   });
   assert.equal(res.status, 303);
-  assert.equal(res.headers.location, '/admin/pending?note=rejected');
+  assert.equal(res.headers.location, '/admin/pending?note=rejected&id=d1');
   assert.equal((await readJson(env, 'pending.json'))[0].status, 'rejected');
 });
 

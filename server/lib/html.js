@@ -21,13 +21,31 @@ export function filledHours(hours) {
   const out = [];
   for (const day of DAYS) {
     const value = byDay.get(day.toLowerCase());
-    if (typeof value === 'string' && value.trim() !== '') out.push([day, value.trim()]);
+    if (typeof value === 'string' && value.trim() !== '') out.push([day, tidyHoursText(value.trim())]);
   }
   return out;
 }
 
-/** Shown when no day has hours. */
+/** A typed "closed" in any letter case reads "Closed"; other text is kept as typed. */
+function tidyHoursText(text) {
+  return /^closed\.?$/i.test(text) ? 'Closed' : text;
+}
+
+/** Shown when no day has hours, and for a skipped day when other days have hours. */
 export const NO_HOURS_TEXT = 'Call for hours';
+
+/**
+ * Hours as shown to people on the listing page. No day filled: [] (the page
+ * shows one "Call for hours"). Otherwise every day, Monday first, with a
+ * skipped day shown as "Call for hours" (never a guessed "Closed").
+ * @param {object|undefined} hours
+ * @returns {[string, string][]}
+ */
+export function displayHours(hours) {
+  const filled = new Map(filledHours(hours));
+  if (filled.size === 0) return [];
+  return DAYS.map(day => [day, filled.get(day) ?? NO_HOURS_TEXT]);
+}
 
 /** Marker in the footer; the app swaps it for the CONTACT_EMAIL line (or nothing). */
 export const CONTACT_MARKER = '<!--site-contact-->';
@@ -172,7 +190,7 @@ ${body}
  */
 export function listingCard(listing, categories) {
   return `<article class="listing-card">
-  <h3><strong>${escapeHtml(listing.name)}</strong> <span class="phone">${telLink(listing.phone)}</span></h3>
+  <h3><strong><a href="/listings/${encodeURIComponent(listing.id)}">${escapeHtml(listing.name)}</a></strong> <span class="phone">${telLink(listing.phone)}</span></h3>
   <p>${escapeHtml(listing.city)}, ${escapeHtml(listing.state)} &middot; ${escapeHtml(categoryLabel(listing.category, categories))}</p>
   <p><a href="/listings/${encodeURIComponent(listing.id)}">View details →</a></p>
 </article>`;
@@ -275,8 +293,8 @@ export function formatStampDate(verification) {
  */
 export function listingDetail(listing, jsonLd, opts = {}) {
   const categories = opts?.categories;
-  // Only the days the owner filled in; a skipped day is never shown as "Closed".
-  const days = filledHours(listing.hours);
+  // Every day once any is filled; a skipped day reads "Call for hours", never a guessed "Closed".
+  const days = displayHours(listing.hours);
   const hoursBlock = days.length === 0
     ? `    <p class="hours-none">${NO_HOURS_TEXT}</p>`
     : `    <table class="hours">

@@ -152,12 +152,12 @@ test('production: home page shows the empty state with a link to /rise', async (
   for (const name of SAMPLE_NAMES) assert.ok(!html.includes(name), `sample "${name}" leaked on /`);
 });
 
-test('production: a category page says "No plumbers listed yet. Are you one?"', async () => {
+test('production: a category page says "No plumbers listed yet. Own one?"', async () => {
   const env = await startEnv({ config: PRODUCTION });
   const res = await get(env, '/?category=plumbers');
   assert.equal(res.status, 200);
   const html = await res.text();
-  assert.ok(html.includes('No plumbers listed yet. Are you one?'));
+  assert.ok(html.includes('No plumbers listed yet. Own one?'));
   assert.ok(html.includes('href="/rise"'));
 });
 
