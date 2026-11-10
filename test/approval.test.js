@@ -489,3 +489,111 @@ test('Property: only approved listings are public (sitemap, llms.txt, MCP search
     { numRuns: 15 },
   );
 });
+
+// ---- provider record and mock-draft blocking ---------------------------------------------
+
+/**
+ * Like makeEnv, but runs the app with config.production set.
+ * @param {{ drafts?: object[], pending?: object[], production?: boolean }} [opts]
+ */
+async function makeProdEnv({ drafts = [], pending = [], production = true } = {}) {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'fap-approval-prod-'));
+  for (const name of ['listings.json', 'categories.json']) {
+    await fs.copyFile(path.join(REPO_DATA, name), path.join(dir, name));
+  }
+  await fs.writeFile(path.join(dir, 'drafts.json'), JSON.stringify(drafts));
+  await fs.writeFile(path.join(dir, 'pending.json'), JSON.stringify(pending));
+
+  const clock = { t: Date.UTC(2025, 0, 15, 12, 0, 0), now() { return this.t; } };
+  const app = createApp({
+    dataDir: dir,
+    clock,
+    rateLimiter: permissiveLimiter,
+    config: { adminToken: TOKEN, baseUrl: BASE_URL, production },
+  });
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise((resolve, reject) => {
+    server.once('listening', resolve);
+    server.once('error', reject);
+  });
+  const env = {
+    dir,
+    server,
+    base: `http://127.0.0.1:${server.address().port}`,
+    closed: false,
+    async close() {
+      if (env.closed) return;
+      env.closed = true;
+      server.closeAllConnections?.();
+      await new Promise(resolve => server.close(resolve));
+      await fs.rm(dir, { recursive: true, force: true });
+      envs.delete(env);
+    },
+  };
+  envs.add(env);
+  return env;
+}
+
+const mockDraft = (i, status) => ({ ...draftEntry(i, { status }), provider: 'mock' });
+
+test('in production a pending mock draft cannot be approved: 409 and nothing is published', async () => {
+  const env = await makeProdEnv({ drafts: [mockDraft(1, 'pending')], pending: [pendingQueueEntry(1)] });
+
+  const res = await approve(env, 1);
+  assert.equal(res.status, 409);
+  assert.match((await res.json()).error, /demo photo reader/);
+
+  assert.deepEqual(await readJson(env, 'published.json', []), []);
+  assert.deepEqual(await readJson(env, 'verified.json', {}), {});
+  assert.equal((await readJson(env, 'pending.json', []))[0].status, 'pending');
+  assert.equal((await readJson(env, 'drafts.json', []))[0].status, 'pending');
+  await assertHidden(env, 1);
+});
+
+test('in production confirming a mock draft is 409 and the draft stays a draft', async () => {
+  const env = await makeProdEnv({ drafts: [mockDraft(1, 'draft')] });
+
+  const res = await confirm(env, 1);
+  assert.equal(res.status, 409);
+
+  assert.equal((await readJson(env, 'drafts.json', []))[0].status, 'draft');
+  assert.deepEqual(await readJson(env, 'pending.json', []), []);
+  await assertHidden(env, 1);
+});
+
+test('outside production a pending mock draft can be approved', async () => {
+  const env = await makeProdEnv({
+    production: false,
+    drafts: [mockDraft(1, 'pending')],
+    pending: [pendingQueueEntry(1)],
+  });
+
+  const res = await approve(env, 1);
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), { ok: true, listingId: listingId(1) });
+  await assertVisible(env, 1);
+});
+
+test('in production a legacy draft without a provider can still be approved', async () => {
+  const legacy = draftEntry(1, { status: 'pending' });
+  assert.equal('provider' in legacy, false);
+  const env = await makeProdEnv({ drafts: [legacy], pending: [pendingQueueEntry(1)] });
+
+  const res = await approve(env, 1);
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), { ok: true, listingId: listingId(1) });
+  await assertVisible(env, 1);
+});
+
+test('GET /admin/pending shows the provider of each draft', async () => {
+  const env = await makeEnv({
+    drafts: [mockDraft(1, 'pending'), draftEntry(2, { status: 'pending' })],
+    pending: [pendingQueueEntry(1), pendingQueueEntry(2)],
+  });
+
+  const res = await get(env, '/admin/pending', bearer(TOKEN));
+  assert.equal(res.status, 200);
+  const html = await res.text();
+  assert.ok(html.includes('Provider: mock'));
+  assert.ok(html.includes('Provider: unknown'), 'legacy draft without provider reads as unknown');
+});

@@ -2,8 +2,10 @@
  * assistant.js — assistant providers for the Seance check: a deterministic
  * mock and two real adapters.
  *
- * A provider is { name, ask({ prompt, signal }) } and resolves to the
- * assistant's answer as a string. The answer is untrusted text.
+ * A provider is { name, ask({ prompt, signal, category, businessName }) } and
+ * resolves to the assistant's answer as a string. The answer is untrusted text.
+ * Only the mock reads category and businessName; real adapters send just the
+ * prompt and never the business name.
  *
  * Keys go only in a request header. Logs carry the provider name and HTTP
  * status, never keys, prompts, or response bodies.
@@ -32,31 +34,85 @@ export class AssistantError extends Error {
   }
 }
 
-// Canned answers. Fictional names plus names from the data/listings.json seed
-// so a "named" result can happen. Some answers name no fixture on purpose.
-const CANNED_ANSWERS = Object.freeze([
-  'For best plumbers in Nashville, people often mention Nashville Pipe Pros, Honky Tonk Plumbing and Cumberland Drain Co.',
-  'For electricians in Nashville, people often mention Volt Brothers Electric, Music City Wiring and Neon & Ohm Electric.',
-  'For restaurants in Nashville, people often mention The Griddle House, Biscuit & Brine and Hot Plate Nashville.',
-  'For auto repair in Nashville, people often mention Cumberland Auto Works, Five Points Auto and Pedal to the Metal Garage.',
-  'For hair salons in Nashville, people often mention Shear Nashville, The Clip Joint and Bangs & Bobs Studio.',
-  'For lawyers in Nashville, people often mention Barrett & Hollow Law, Hatch & Greer Attorneys and Stone River Legal.',
-  'For best plumbers in Nashville, people often mention Copper Kettle Plumbing, Blue Anchor Pipe Works and Delmar Drain Service.',
-  'For electricians in Nashville, people often mention Lantern Electric, Brightline Wiring and Ridgeway Electrical.',
+// Canned answers, one pool per category slug (data/categories.json). Each pool
+// names fictional or seed businesses of that trade only.
+const TRADE_ANSWERS = Object.freeze({
+  plumbers: Object.freeze([
+    'For best plumbers in Nashville, people often mention Nashville Pipe Pros, Honky Tonk Plumbing and Cumberland Drain Co.',
+    'For best plumbers in Nashville, people often mention Copper Kettle Plumbing, Blue Anchor Pipe Works and Delmar Drain Service.',
+  ]),
+  electricians: Object.freeze([
+    'For electricians in Nashville, people often mention Volt Brothers Electric, Music City Wiring and Neon & Ohm Electric.',
+    'For electricians in Nashville, people often mention Lantern Electric, Brightline Wiring and Ridgeway Electrical.',
+  ]),
+  restaurants: Object.freeze([
+    'For restaurants in Nashville, people often mention The Griddle House, Biscuit & Brine and Hot Plate Nashville.',
+    'For restaurants in Nashville, people often mention Skillet & Smoke, Fifth Street Diner and The Corner Table.',
+  ]),
+  'auto-repair': Object.freeze([
+    'For auto repair in Nashville, people often mention Cumberland Auto Works, Five Points Auto and Pedal to the Metal Garage.',
+    'For auto repair in Nashville, people often mention Lug Nut Garage, Riverside Brake & Tire and Old Hickory Auto Service.',
+  ]),
+  'hair-salons': Object.freeze([
+    'For hair salons in Nashville, people often mention Shear Nashville, The Clip Joint and Bangs & Bobs Studio.',
+    'For hair salons in Nashville, people often mention Velvet Scissors, Lucky Comb Salon and Main Street Barber & Style.',
+  ]),
+  lawyers: Object.freeze([
+    'For lawyers in Nashville, people often mention Barrett & Hollow Law, Hatch & Greer Attorneys and Stone River Legal.',
+    'For lawyers in Nashville, people often mention Marlow & Pike Law, Capitol Hill Legal and Dunmore Attorneys.',
+  ]),
+});
+
+// Trade phrase for the "names this business" answer, per category slug.
+const TRADE_PHRASES = Object.freeze({
+  plumbers: 'plumbers',
+  electricians: 'electricians',
+  restaurants: 'restaurants',
+  'auto-repair': 'auto repair',
+  'hair-salons': 'hair salons',
+  lawyers: 'lawyers',
+});
+
+// Neutral answers name no business and fit any trade.
+const NEUTRAL_ANSWERS = Object.freeze([
   'I do not have reliable information about that. Try asking a neighbor or checking a local bulletin board.',
   'There are many local businesses in that area, but I cannot name specific ones with confidence.',
 ]);
 
+function hasOwn(obj, key) {
+  return Object.prototype.hasOwnProperty.call(obj, key);
+}
+
 /**
- * Deterministic mock: SHA-256 of the prompt picks a canned answer. Pure
- * function of the prompt; never touches the network.
+ * Deterministic mock: SHA-256 of the prompt and business name picks a canned
+ * answer from the pool for the listing's category plus neutral fallbacks. An
+ * unknown or missing category uses neutral fallbacks only. About 1 in 3
+ * answers for a known category name `businessName` when one is given. Pure
+ * function of { prompt, category, businessName }; never touches the network.
  */
 export function createMockAssistantProvider() {
   return {
     name: 'mock',
-    async ask({ prompt } = {}) {
-      const digest = createHash('sha256').update(String(prompt ?? '')).digest();
-      return CANNED_ANSWERS[digest[0] % CANNED_ANSWERS.length];
+    async ask({ prompt, category, businessName } = {}) {
+      const name = typeof businessName === 'string' ? businessName.trim() : '';
+      const digest = createHash('sha256')
+        .update(`${String(prompt ?? '')}|${name}`)
+        .digest();
+      const known = typeof category === 'string' && hasOwn(TRADE_ANSWERS, category);
+      if (!known) return NEUTRAL_ANSWERS[digest[0] % NEUTRAL_ANSWERS.length];
+
+      const pool = TRADE_ANSWERS[category];
+      if (name !== '' && digest[0] % 3 === 0) {
+        const trade = TRADE_PHRASES[category];
+        // The sibling name comes from the trade pool, so it is the same trade.
+        const sibling = pool[digest[1] % pool.length]
+          .replace(/^.*mention /, '')
+          .replace(/\.$/, '')
+          .split(/, | and /)[0];
+        return `For ${trade} in Nashville, people often mention ${name}, along with ${sibling}.`;
+      }
+      const choices = [...pool, ...NEUTRAL_ANSWERS];
+      return choices[digest[1] % choices.length];
     },
   };
 }

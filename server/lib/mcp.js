@@ -138,7 +138,10 @@ async function requestQuote(ctx, args, clientIp, id) {
       result: toolFailure(`Too many quote requests. Try again in ${r.retryAfterSeconds} seconds.`),
     };
   }
-  return { result: toolSuccess({ quoteId: r.quoteId, message: 'Quote request sent.' }) };
+  const listing = ctx.store.findById(args.id);
+  const phone = listing ? listing.phone : '';
+  const message = `Thanks! Your request is saved and we'll pass it to the business. If you need help sooner, call them at ${phone}.`;
+  return { result: toolSuccess({ quoteId: r.quoteId, message }) };
 }
 
 async function callTool(ctx, id, params, clientIp) {

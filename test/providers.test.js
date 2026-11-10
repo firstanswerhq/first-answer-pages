@@ -529,3 +529,90 @@ describe('assistant adapters (stubbed fetch)', () => {
     });
   }
 });
+
+// ---------------------------------------------------------------------------
+// 3b. Trade-matched mock assistant (task 14.5)
+// ---------------------------------------------------------------------------
+
+// Independent oracle of the fixture business names, by category slug.
+const TRADE_FIXTURES = {
+  plumbers: ['Nashville Pipe Pros', 'Honky Tonk Plumbing', 'Cumberland Drain Co', 'Copper Kettle Plumbing', 'Blue Anchor Pipe Works', 'Delmar Drain Service'],
+  electricians: ['Volt Brothers Electric', 'Music City Wiring', 'Neon & Ohm Electric', 'Lantern Electric', 'Brightline Wiring', 'Ridgeway Electrical'],
+  restaurants: ['The Griddle House', 'Biscuit & Brine', 'Hot Plate Nashville', 'Skillet & Smoke', 'Fifth Street Diner', 'The Corner Table'],
+  'auto-repair': ['Cumberland Auto Works', 'Five Points Auto', 'Pedal to the Metal Garage', 'Lug Nut Garage', 'Riverside Brake & Tire', 'Old Hickory Auto Service'],
+  'hair-salons': ['Shear Nashville', 'The Clip Joint', 'Bangs & Bobs Studio', 'Velvet Scissors', 'Lucky Comb Salon', 'Main Street Barber & Style'],
+  lawyers: ['Barrett & Hollow Law', 'Hatch & Greer Attorneys', 'Stone River Legal', 'Marlow & Pike Law', 'Capitol Hill Legal', 'Dunmore Attorneys'],
+};
+const TRADE_SLUGS = Object.keys(TRADE_FIXTURES);
+const ALL_FIXTURE_NAMES = Object.values(TRADE_FIXTURES).flat();
+
+const mentioned = (answer, names) => names.filter(n => answer.includes(n));
+
+describe('trade-matched mock assistant', () => {
+  // Known slugs, unknown strings (including prototype keys), or no category.
+  const arbCategory = fc.oneof(
+    fc.constantFrom(...TRADE_SLUGS),
+    fc.string({ maxLength: 20 }).filter(s => !TRADE_SLUGS.includes(s)),
+    fc.constantFrom('constructor', '__proto__', 'toString', 'unknown-trade', ''),
+    fc.constant(undefined),
+  );
+  // The "Zqx " prefix keeps generated names out of every canned answer and fixture name.
+  const arbBusinessName = fc.oneof(
+    fc.constant(undefined),
+    fc.constant(''),
+    fc.constant('   '),
+    fc.stringMatching(/^[A-Za-z0-9 ]{0,20}$/).map(s => `Zqx ${s}`),
+  );
+
+  test('deterministic, non-empty, and never names a business from a different trade', async () => {
+    // **Validates: trade-matched mock (task 14.5)**
+    const provider = createMockAssistantProvider();
+    await fc.assert(
+      fc.asyncProperty(fc.string({ maxLength: 80 }), arbCategory, arbBusinessName, async (prompt, category, businessName) => {
+        const args = { prompt, category, businessName };
+        const a = await provider.ask(args);
+        const b = await provider.ask({ ...args });
+        assert.equal(typeof a, 'string');
+        assert.ok(a.trim().length > 0);
+        assert.equal(a, b);
+
+        const known = typeof category === 'string' && TRADE_SLUGS.includes(category);
+        const name = typeof businessName === 'string' ? businessName.trim() : '';
+        if (!known) {
+          // Unknown or missing category: neutral answer, no fixture names, no business name.
+          assert.deepEqual(mentioned(a, ALL_FIXTURE_NAMES), []);
+          if (name !== '') assert.ok(!a.includes(name));
+          return;
+        }
+        const otherTrades = ALL_FIXTURE_NAMES.filter(n => !TRADE_FIXTURES[category].includes(n));
+        assert.deepEqual(mentioned(a, otherTrades), []);
+        if (name === '' || !a.includes(name)) {
+          // Same-trade pool answer or neutral answer: every fixture name belongs to this trade.
+          for (const n of mentioned(a, ALL_FIXTURE_NAMES)) assert.ok(TRADE_FIXTURES[category].includes(n));
+        }
+      }),
+      { numRuns: 300 },
+    );
+  });
+
+  test('share of answers naming the business is between 0.2 and 0.5', async () => {
+    // The mock names the business when a hash byte % 3 === 0, so the expected share is
+    // about 1/3. Over 600 fixed pairs the standard deviation is about 0.02, so the
+    // 0.2 to 0.5 tolerance is several deviations wide. The pairs are fixed, so the
+    // result is deterministic and the test cannot flake.
+    const provider = createMockAssistantProvider();
+    const total = 600;
+    let named = 0;
+    for (let i = 0; i < total; i++) {
+      const businessName = `Zqx Business ${i} Plumbing`;
+      const answer = await provider.ask({
+        prompt: `best plumbers in City${i % 25}`,
+        category: 'plumbers',
+        businessName,
+      });
+      if (answer.includes(businessName)) named++;
+    }
+    const share = named / total;
+    assert.ok(share >= 0.2 && share <= 0.5, `share was ${share}`);
+  });
+});

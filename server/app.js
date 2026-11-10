@@ -26,7 +26,7 @@ import { createMcpRouter }      from './routes/mcp.js';
 import { createSeanceRouter }   from './routes/seance.js';
 import { createAdminRouter }   from './routes/admin.js';
 import { mountA2A }             from './routes/a2a.js';
-import { layout }               from './lib/html.js';
+import { layout, markDemo }     from './lib/html.js';
 
 /** The only place in server/ that reads the system time. */
 const systemClock = Object.freeze({ now: () => Date.now() });
@@ -54,6 +54,13 @@ export function createApp(deps = {}) {
     ? createDataStore({ dataDir: deps.dataDir ?? config.dataDir, clock })
     : getDefaultStore();
 
+  // Retention on startup: fire-and-forget, never blocks or crashes startup.
+  if (typeof store.pruneExpired === 'function') {
+    store.pruneExpired().catch(err => {
+      process.stderr.write(`[retention] startup prune failed: ${err?.name ?? 'Error'}\n`);
+    });
+  }
+
   const ctx = {
     store,
     visionProvider: deps.visionProvider ?? createVisionProvider(config),
@@ -71,6 +78,25 @@ export function createApp(deps = {}) {
   // Hop count only; never `true` (it would trust any client-supplied X-Forwarded-For).
   if (Number.isInteger(config.trustProxy) && config.trustProxy >= 0) {
     app.set('trust proxy', config.trustProxy);
+  }
+
+  // DEMO_MODE: mark every HTML page (noindex meta + footer line) and send
+  // X-Robots-Tag. Done here so no route needs to remember to pass a flag.
+  if (config.demoMode) {
+    app.use((req, res, next) => {
+      res.set('X-Robots-Tag', 'noindex');
+      const send = res.send.bind(res);
+      res.send = body => {
+        if (typeof body === 'string') {
+          const type = String(res.get('Content-Type') ?? '');
+          if (type.includes('html') || (!type && /^\s*<!doctype html/i.test(body))) {
+            body = markDemo(body);
+          }
+        }
+        return send(body);
+      };
+      next();
+    });
   }
 
   app.use(express.static(fileURLToPath(new URL('../public', import.meta.url))));

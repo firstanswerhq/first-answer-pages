@@ -34,18 +34,27 @@ Super Pages adds four features on top of the directory.
 
 ### Rise from the Grave (`/rise`)
 
-Turn a photo of a business card, sign, or flyer into a listing. Upload the image, review the draft the app extracts, fix any field, and confirm. Nothing is public until the owner confirms.
+Turn a photo of a business card, sign, or flyer into a listing. Upload the image, review the draft the app extracts, fix any field, and confirm. A confirmed listing is public after review (see "Review before anything goes live" below). Nothing is public until the owner confirms and an admin approves.
 
 - `GET /rise` upload page. It works without JavaScript: paste the image as base64 text, or use `curl`.
 - `POST /rise` accepts a raw JPEG, PNG, or WebP body (up to 5 MiB) or a form post with a base64 field (up to 8 MiB). On success it redirects to the draft review page.
 - `GET /rise/drafts/:id` edit page for one draft.
-- `POST /rise/drafts/:id` saves edits. `POST /rise/drafts/:id/confirm` publishes. `POST /rise/drafts/:id/discard` throws the draft away.
+- `POST /rise/drafts/:id` saves edits. `POST /rise/drafts/:id/confirm` sends the listing to the pending queue for review. `POST /rise/drafts/:id/discard` throws the draft away.
 
 ```
 curl --data-binary @ad.jpg -H "Content-Type: image/jpeg" -i http://localhost:3000/rise
 ```
 
 Uploaded images are never saved to disk. The image bytes live in memory for the length of the request and are dropped.
+
+### Review before anything goes live
+
+Owner confirmation sends a listing to a pending queue. It is public only after an admin approves it. All admin calls use the header `Authorization: Bearer ADMIN_TOKEN`.
+
+- `GET /admin/pending` lists listings waiting for review.
+- `POST /admin/pending/:id/approve` makes a pending listing public.
+- `POST /admin/pending/:id/reject` rejects a pending listing.
+- `POST /admin/listings/:id/unpublish` takes a public listing down.
 
 ### Agent-ready: MCP (`/mcp`)
 
@@ -103,11 +112,11 @@ Important: the stamp is a tamper check. It means the listing is unchanged since 
 
 ### The Seance (`/seance/:id`)
 
-The Seance asks an AI assistant "best <category> in <city>" for a listing and records whether the answer names the business. Runs are kept as history so you can compare answers before and after the owner confirmed the listing.
+The Seance asks an AI assistant "best <category> in <city>" for a listing and records whether the answer names the business. Runs are kept as history so you can compare answers before and after the listing went public (after owner confirmation and review).
 
 - `GET /seance/:id` HTML report for one listing. Works without JavaScript.
 - `GET /api/seance/:id` the same history as JSON.
-- `POST /seance/run` starts a new run. Send JSON `{ "id": "LISTING_ID" }` with the header `Authorization: Bearer <SEANCE_ADMIN_TOKEN>`. It returns 403 if no admin token is configured and 401 if the token is wrong.
+- `POST /seance/run` starts a new run. Send JSON `{ "id": "LISTING_ID" }` with the header `Authorization: Bearer <ADMIN_TOKEN>`. It returns 403 if no admin token is configured and 401 if the token is wrong.
 
 Without an AI key, runs use a built-in mock, and every mock answer is labeled "Demo answer (no AI connected)".
 
@@ -124,7 +133,10 @@ All are optional. With none set, the app runs on port 3000 with mock providers a
 | `PORT` | `3000` | Port to listen on. |
 | `BASE_URL` | `http://localhost:3000` | Public site address used in `/llms.txt` and `/sitemap.xml`. A trailing slash is removed. |
 | `DATA_DIR` | repo `data/` folder | Folder the app reads data from and writes its files to. |
-| `TRUST_PROXY` | unset | Passed to Express `trust proxy`: `true`, `false`, a hop count such as `1`, or a subnet list. Set this behind a reverse proxy. Without it every client shares one rate-limit bucket, because they all appear to come from the proxy address. |
+| `NODE_ENV` | unset | `production` changes defaults: trust proxy is `1`, `DEMO_MODE` is off, seed sample listings are left out of `/sitemap.xml` and `/llms.txt`, and photo listing (Rise from the Grave) returns 503 "coming soon" when no vision key is set. |
+| `DEMO_MODE` | `true` unless `NODE_ENV=production` | When on, every page has the `noindex` meta tag and a "Sample listings for demonstration" footer line. |
+| `TRUST_PROXY` | `1` when `NODE_ENV=production`, otherwise unset | Only a whole-number proxy hop count is accepted, for example `1` for Render. `true`, `false`, and subnet lists are ignored with a warning. Set this behind a reverse proxy. Without it every client shares one rate-limit bucket, because they all appear to come from the proxy address. |
+| `ADMIN_TOKEN` | unset | Bearer token for `/admin/*` and `POST /seance/run`. `SEANCE_ADMIN_TOKEN` still works as a fallback name. The admin routes return 403 when no token is set. 10 wrong attempts per hour per client are allowed. |
 | `VISION_PROVIDER` | unset | `openai` or `anthropic`. Reads text from uploaded images in Rise from the Grave. Any other value uses the mock. |
 | `VISION_API_KEY` | unset | API key for the vision provider. Without it the mock is used. |
 | `VISION_MODEL` | unset | Model name for the vision provider. Required for a real provider. If it is missing, the app logs a warning and uses the mock. |
@@ -134,7 +146,7 @@ All are optional. With none set, the app runs on port 3000 with mock providers a
 | `SEANCE_API_KEY` | unset | API key for the Seance provider. Without it the mock is used. |
 | `SEANCE_MODEL` | unset | Model name for the Seance provider. |
 | `SEANCE_BASE_URL` | `https://api.openai.com/v1` | Base URL for an OpenAI-compatible Seance API. Only used when `SEANCE_PROVIDER=openai`. |
-| `SEANCE_ADMIN_TOKEN` | unset | Bearer token required by `POST /seance/run`. When unset, that endpoint returns 403. |
+| `SEANCE_ADMIN_TOKEN` | unset | Older name for `ADMIN_TOKEN`. Used only when `ADMIN_TOKEN` is not set. |
 
 API keys and the admin token are never logged, returned, or stored in data files.
 
@@ -157,9 +169,11 @@ Limits are per client address unless noted. A refused request gets a 429 and a `
 | `POST /rise` | 10 per 10 minutes |
 | `POST /mcp` | 120 per minute |
 | Quote requests (MCP, `/api/quotes`, listing form) | 5 per hour per client |
-| Quote requests for one listing | 3 per hour per listing |
+| Quote requests for one listing | 3 per hour per client per listing |
 | `POST /seance/run` | 10 per hour per client |
 | `POST /seance/run` for one listing | 1 per 10 minutes per listing |
+
+The per-listing quote limit is counted for each client and each listing together, so one client sending 3 requests to a listing does not block other clients from quoting that listing.
 
 Counts are kept in memory and reset when the server restarts.
 

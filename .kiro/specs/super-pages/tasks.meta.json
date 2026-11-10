@@ -654,6 +654,11 @@
         "executionId": "d5950c98-889a-4362-a409-4c0f9f8adce9",
         "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
         "timestamp": 1794289220879
+      },
+      {
+        "executionId": "d5950c98-889a-4362-a409-4c0f9f8adce9",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794322912025
       }
     ],
     "13.6 Write tests for single-line fields": [
@@ -661,6 +666,11 @@
         "executionId": "d5950c98-889a-4362-a409-4c0f9f8adce9",
         "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
         "timestamp": 1794289223122
+      },
+      {
+        "executionId": "d5950c98-889a-4362-a409-4c0f9f8adce9",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794322914197
       }
     ],
     "13.7 Write tests for trust proxy and admin attempt limits": [
@@ -668,6 +678,121 @@
         "executionId": "d5950c98-889a-4362-a409-4c0f9f8adce9",
         "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
         "timestamp": 1794289224848
+      },
+      {
+        "executionId": "d5950c98-889a-4362-a409-4c0f9f8adce9",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794322916159
+      }
+    ],
+    "13. Launch fixes: Nothing goes live unreviewed": [
+      {
+        "executionId": "d5950c98-889a-4362-a409-4c0f9f8adce9",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794322917609
+      }
+    ],
+    "14.2 Make the Séance mock match the trade": [
+      {
+        "executionId": "d5950c98-889a-4362-a409-4c0f9f8adce9",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794322927230
+      },
+      {
+        "executionId": "d5950c98-889a-4362-a409-4c0f9f8adce9",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794323020773
+      }
+    ],
+    "14.3 Add the sample-data banner and DEMO_MODE": [
+      {
+        "executionId": "d5950c98-889a-4362-a409-4c0f9f8adce9",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794322929164
+      },
+      {
+        "executionId": "d5950c98-889a-4362-a409-4c0f9f8adce9",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794323021268
+      }
+    ],
+    "14.1 Record the provider and block mock drafts in production": [
+      {
+        "executionId": "d5950c98-889a-4362-a409-4c0f9f8adce9",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794323022165
+      },
+      {
+        "executionId": "d5950c98-889a-4362-a409-4c0f9f8adce9",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794323077475
+      }
+    ],
+    "14.4 Write tests for the provider record and mock-draft blocking": [
+      {
+        "executionId": "d5950c98-889a-4362-a409-4c0f9f8adce9",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794323078030
+      },
+      {
+        "executionId": "faed73b7-be28-47c5-aba5-ab9f75ed6d59",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794326964298
+      },
+      {
+        "executionId": "faed73b7-be28-47c5-aba5-ab9f75ed6d59",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794327315544
+      }
+    ],
+    "14.5 Write tests for the trade-matched Séance mock": [
+      {
+        "executionId": "d5950c98-889a-4362-a409-4c0f9f8adce9",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794323078669
+      },
+      {
+        "executionId": "faed73b7-be28-47c5-aba5-ab9f75ed6d59",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794326973184
+      },
+      {
+        "executionId": "faed73b7-be28-47c5-aba5-ab9f75ed6d59",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794327319845
+      }
+    ],
+    "14.6 Write tests for DEMO_MODE": [
+      {
+        "executionId": "d5950c98-889a-4362-a409-4c0f9f8adce9",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794323079518
+      },
+      {
+        "executionId": "faed73b7-be28-47c5-aba5-ab9f75ed6d59",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794326935249
+      }
+    ],
+    "15.1 Correct the quote confirmation wording": [
+      {
+        "executionId": "faed73b7-be28-47c5-aba5-ab9f75ed6d59",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794327336894
+      }
+    ],
+    "15.3 Fix notifier memory and set retention": [
+      {
+        "executionId": "faed73b7-be28-47c5-aba5-ab9f75ed6d59",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794327342181
+      }
+    ],
+    "15.4 Correct the README quote limit": [
+      {
+        "executionId": "faed73b7-be28-47c5-aba5-ab9f75ed6d59",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794327346947
       }
     ]
   }

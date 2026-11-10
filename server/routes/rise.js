@@ -15,7 +15,7 @@ import express, { Router } from 'express';
 import { RULES } from '../lib/rate-limiter.js';
 import { ACCEPTED_IMAGE_TYPES, MAX_IMAGE_BYTES, MAX_FORM_BYTES, detectImageType, decodeBase64Image } from '../lib/upload.js';
 import { extractDraft, ExtractionError } from '../lib/extractor.js';
-import { createDraftStore } from '../lib/drafts.js';
+import { createDraftStore, draftProvider } from '../lib/drafts.js';
 import { validateFields, DAYS } from '../lib/listing-fields.js';
 import { uploadPage, reviewPage, messagePage } from '../lib/rise-html.js';
 
@@ -88,12 +88,18 @@ export function createRiseRouter(ctx) {
     next();
   });
 
+  // In production, the mock reader must never accept owner uploads.
+  const photoListingClosed = () => ctx.config.production === true && ctx.visionProvider?.name === 'mock';
+  const comingSoon = res => sendPage(res, 503, messagePage('Photo listing is coming soon', 'Photo listing is coming soon.', HOME_LINK));
+
   router.get('/rise', (req, res) => {
+    if (photoListingClosed()) return comingSoon(res);
     sendPage(res, 200, uploadPage());
   });
 
   router.post('/rise', async (req, res, next) => {
     try {
+      if (photoListingClosed()) return comingSoon(res);
       // 1. Rate limit: every attempt counts, including rejected ones.
       const limited = ctx.rateLimiter.consume(`rise:${req.ip}`, RULES.rise);
       if (!limited.allowed) {
@@ -162,7 +168,7 @@ export function createRiseRouter(ctx) {
         throw err;
       }
 
-      const created = await drafts.create({ fields: extracted.fields, missingFields: extracted.missingFields });
+      const created = await drafts.create({ fields: extracted.fields, missingFields: extracted.missingFields, provider: ctx.visionProvider?.name });
       res.redirect(303, `/rise/drafts/${encodeURIComponent(created.draft.id)}`);
     } catch (err) {
       next(err);
@@ -214,6 +220,12 @@ export function createRiseRouter(ctx) {
   router.post('/rise/drafts/:id/confirm', async (req, res, next) => {
     try {
       // Confirm validates and queues the draft for review; it never publishes.
+      if (ctx.config.production === true) {
+        const existing = await drafts.get(req.params.id);
+        if (existing.status === 200 && draftProvider(existing.draft) === 'mock') {
+          return sendPage(res, 409, messagePage('Cannot confirm', 'This draft came from the demo photo reader and cannot be sent for review in production.', HOME_LINK));
+        }
+      }
       const result = await ctx.store.submitDraft(req.params.id);
       if (result.status === 200 && result.listing) {
         return res.redirect(303, `/listings/${encodeURIComponent(result.listing.id)}`);

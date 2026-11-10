@@ -3,6 +3,11 @@
 // The Listing model has no owner email, so the only real notifier is
 // 'console'. Email or SMS adapters would implement the same interface later.
 
+import { isTestRun } from './config.js';
+
+/** Cap on the mock notifier's `sent` list outside test runs. */
+const MOCK_MAX_SENT = 50;
+
 // Control characters and angle brackets/ampersands/quotes are neutralized so
 // notification text can never carry markup into an email or HTML relay.
 const CONTROL = /[\u0000-\u0008\u000B-\u001F\u007F-\u009F]/g;
@@ -37,7 +42,8 @@ export function formatNotice({ quote, listing }) {
  * In-memory notifier for tests. `sent` records each payload; setting
  * `failNext = true` makes the next notify() reject once.
  */
-export function createMockNotifier() {
+export function createMockNotifier({ maxSent } = {}) {
+  const cap = Number.isInteger(maxSent) && maxSent > 0 ? maxSent : Infinity;
   const notifier = {
     name: 'mock',
     sent: [],
@@ -48,6 +54,7 @@ export function createMockNotifier() {
         throw new Error('mock notifier failure');
       }
       notifier.sent.push({ quote, listing, text: formatNotice({ quote, listing }) });
+      while (notifier.sent.length > cap) notifier.sent.shift(); // drop oldest
     },
   };
   return notifier;
@@ -71,5 +78,8 @@ export function createConsoleNotifier({ write = line => process.stdout.write(lin
  * @param {{ notifierName?: string }} config
  */
 export function createNotifier(config = {}) {
-  return config.notifierName === 'console' ? createConsoleNotifier() : createMockNotifier();
+  if (config.notifierName === 'console') return createConsoleNotifier();
+  // Test runs keep every payload; otherwise cap memory.
+  const testRun = config.testRun ?? isTestRun();
+  return createMockNotifier(testRun ? {} : { maxSent: MOCK_MAX_SENT });
 }

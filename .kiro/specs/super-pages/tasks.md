@@ -317,7 +317,7 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
 - [x] 12. Final checkpoint - Full suite
   - Run `node --test`; the entire suite, including all pre-existing tests, must pass. Ask the user if questions arise.
 
-- [ ] 13. Launch fixes: Nothing goes live unreviewed
+- [x] 13. Launch fixes: Nothing goes live unreviewed
   - [x] 13.1 Build the approval queue
     - Add `pending` to the `collection(name)` allow-list in `server/data.js`; confirming a draft at `/rise` now sets the draft status to `pending` and adds `{ id, draftId, submittedAt }` to `pending`; it no longer publishes
     - Keep `store.publishDraft` as the internal publish step; extend it to accept a draft in status `pending` (still 409 for other statuses, still idempotent on `published`); approve calls it, so the `verified.json` stamp is written at approval
@@ -349,21 +349,21 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
     - Files: `test/rise.test.js`, `test/verify.test.js`, `test/render.test.js`, `test/seance-history.test.js`, `test/mcp.test.js`
     - _Requirements: docs/launch-fixes.md section 13 (13.1)_
 
-  - [-] 13.5 Write tests for the approval queue
+  - [x] 13.5 Write tests for the approval queue
     - New file `test/approval.test.js`; temp `DATA_DIR`, injected mocks, `ADMIN_TOKEN` set
     - Examples: confirm leaves the listing off `/`, `/listings/:id`, `/llms.txt`, `/sitemap.xml`, `/api/listings/:id`, JSON-LD and MCP `search_listings` / `get_listing`; `GET /admin/pending` lists it; approve publishes it everywhere and writes the Owner-confirmed stamp; reject keeps it off every surface; unpublish removes an approved listing from every surface; unpublish of a seed listing is 409; 401 with missing or wrong token, 403 with no token configured, `SEANCE_ADMIN_TOKEN` fallback works; double approve is idempotent; pending HTML escapes values
     - **Property: Only approved listings are public** (fast-check over random sequences of confirm, approve, reject, unpublish; the ids visible in the sitemap, llms.txt, and MCP search equal the set currently approved)
     - Files: `test/approval.test.js`
     - _Requirements: docs/launch-fixes.md section 13 (13.1)_
 
-  - [-] 13.6 Write tests for single-line fields
+  - [x] 13.6 Write tests for single-line fields
     - Extend `test/listing-fields.test.js` and `test/llms.test.js`
     - **Property: Single-line clean() output has no line breaks or control characters** (fast-check over arbitrary strings, including `\n`, `\r`, `\u2028`, `\u2029`, `\t`, `\0`; output of every single-line field contains no `\n`, `\r`, or control characters; `description` keeps its line breaks in storage)
     - Example: a listing name containing `\n# SYSTEM NOTE` adds no line to llms.txt (line count equals the line count with a plain name) and the text appears inline; a multi-line description prints on one llms.txt line
     - Files: `test/listing-fields.test.js`, `test/llms.test.js`
     - _Requirements: docs/launch-fixes.md section 13 (13.2)_
 
-  - [-] 13.7 Write tests for trust proxy and admin attempt limits
+  - [x] 13.7 Write tests for trust proxy and admin attempt limits
     - New file `test/trust-proxy.test.js`
     - Examples: default is `1` in production and unset otherwise; `TRUST_PROXY=true` is never applied; hop count `2` honors one more proxy; 10 wrong admin tokens in an hour from one IP, the 11th returns 429 with `Retry-After`; correct token still works for a different IP; correct token does not consume budget
     - **Property: A forged X-Forwarded-For cannot dodge the limit** (fast-check over arbitrary forged chains prepended by the client; with `trust proxy` at 1 hop the limiter key is the address the trusted proxy appended, so a client that varies the forged prefix still hits 429 after the limit)
@@ -371,41 +371,41 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
     - _Requirements: docs/launch-fixes.md section 13 (13.3)_
 
 - [ ] 14. Launch fixes: Honest demo mode (nothing fake may look real)
-  - [ ] 14.1 Record the provider and block mock drafts in production
+  - [x] 14.1 Record the provider and block mock drafts in production
     - Save `provider` on every draft (`server/lib/drafts.js`, `server/routes/rise.js`) and on every Séance run (`server/lib/seance.js`; the field already exists on runs, make sure drafts match and old records without it read as `unknown`)
     - When the vision provider is the mock, show a yellow banner on the draft page: "Demo: no photo reader is connected, so this is a sample business, not your photo." (`server/lib/rise-html.js`, style in `public/css/style.css`)
     - With `NODE_ENV=production`, block approval of mock drafts (approve returns 409 with a plain message) and return 503 from `/rise` with "Photo listing is coming soon" when no vision key is set
     - Files: `server/lib/drafts.js`, `server/lib/seance.js`, `server/lib/rise-html.js`, `server/routes/rise.js`, `server/routes/admin.js`, `server/lib/config.js`, `public/css/style.css`
     - _Requirements: docs/launch-fixes.md section 14 (14.1)_
 
-  - [ ] 14.2 Make the Séance mock match the trade
+  - [x] 14.2 Make the Séance mock match the trade
     - In `server/lib/assistant.js`, pick only from canned answers for the listing's category, plus neutral fallbacks (extend the provider input so the category reaches the mock; stay a pure function of input)
     - About 1 in 3 demo answers names the business so before-and-after can show change; keep the "Demo answer (no AI connected)" label
     - Files: `server/lib/assistant.js`, `server/lib/seance.js`
     - _Requirements: docs/launch-fixes.md section 14 (14.2)_
 
-  - [ ] 14.3 Add the sample-data banner and DEMO_MODE
+  - [x] 14.3 Add the sample-data banner and DEMO_MODE
     - Add `DEMO_MODE` to `server/lib/config.js` (default true unless `NODE_ENV=production`)
     - When on, add a site-wide footer line "Sample listings for demonstration" and `<meta name="robots" content="noindex">` in `layout()` in `server/lib/html.js`
     - In production, leave the sample (seed) listings out of the sitemap and llms.txt (`server/lib/sitemap.js`, `server/lib/llms.js`)
     - Files: `server/lib/config.js`, `server/lib/html.js`, `server/lib/sitemap.js`, `server/lib/llms.js`, `server/app.js`
     - _Requirements: docs/launch-fixes.md section 14 (14.3)_
 
-  - [ ] 14.4 Write tests for the provider record and mock-draft blocking
+  - [x] 14.4 Write tests for the provider record and mock-draft blocking
     - Extend `test/rise.test.js` and `test/approval.test.js`
     - Examples: every draft and every Séance run carries `provider`; mock draft page shows the exact yellow banner text; real-provider draft shows no banner; in production a mock draft cannot be approved (409) and nothing is published; production with no vision key gives 503 "Photo listing is coming soon" from `/rise`; outside production mock approval still works
     - **Property: Every stored draft records a known provider name** (fast-check over uploads from generated image bytes)
     - Files: `test/rise.test.js`, `test/approval.test.js`
     - _Requirements: docs/launch-fixes.md section 14 (14.1)_
 
-  - [ ] 14.5 Write tests for the trade-matched Séance mock
+  - [x] 14.5 Write tests for the trade-matched Séance mock
     - Extend `test/seance.test.js` and `test/providers.test.js`
     - **Property: Mock answers come only from the listing's category pool plus neutral fallbacks, and are deterministic** (fast-check over categories and prompts)
     - Example: across a fixed set of generated prompts, the share of answers naming the business is about one in three (within a stated tolerance); the "Demo answer (no AI connected)" label is still present
     - Files: `test/seance.test.js`, `test/providers.test.js`
     - _Requirements: docs/launch-fixes.md section 14 (14.2)_
 
-  - [ ] 14.6 Write tests for DEMO_MODE
+  - [x] 14.6 Write tests for DEMO_MODE
     - New file `test/demo-mode.test.js`
     - Examples: default true outside production and false in production; footer line "Sample listings for demonstration" and `noindex` meta present when on, absent when off; in production seed listings are absent from `/sitemap.xml` and `/llms.txt`; approved owner listings still appear in production
     - **Property: With DEMO_MODE on, every HTML page contains the footer line and the noindex meta** (fast-check over the set of public routes and listing ids)
@@ -416,7 +416,7 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
     - Run `node --test`; all tests for tasks 13 and 14 and all pre-existing tests must pass. Ask the user if questions arise.
 
 - [ ] 15. Launch fixes: Quotes say only what's true
-  - [ ] 15.1 Correct the quote confirmation wording
+  - [-] 15.1 Correct the quote confirmation wording
     - Replace "The business will contact you" (`server/routes/listings.js` around line 86 and `server/lib/mcp.js` around line 141) with: "Thanks! Your request is saved and we'll pass it to the business. If you need help sooner, call them at {phone}."
     - Use the listing's phone; escape it in HTML
     - Files: `server/routes/listings.js`, `server/lib/mcp.js`
@@ -429,13 +429,13 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
     - Files: `server/lib/listing-fields.js`, `server/lib/verifier.js`, `server/lib/html.js`, `server/lib/schema.js`, `server/lib/mcp.js`, `server/routes/api.js`, `server/routes/admin.js`
     - _Requirements: docs/launch-fixes.md section 15 (ownerEmail and admin quotes)_
 
-  - [ ] 15.3 Fix notifier memory and set retention
+  - [-] 15.3 Fix notifier memory and set retention
     - In `server/lib/notifier.js`, cap or drop the in-memory `sent` list outside tests so quotes are not kept forever (the mock keeps its array; real notifiers keep none)
     - Keep quotes 180 days and expire drafts after 30 days: prune on startup and on write, through the queued `updateJsonFile` path; a draft in `pending` or `published` is not expired by the 30-day rule
     - Files: `server/lib/notifier.js`, `server/lib/quotes.js`, `server/lib/drafts.js`, `server/data.js`
     - _Requirements: docs/launch-fixes.md section 15 (retention)_
 
-  - [ ] 15.4 Correct the README quote limit
+  - [-] 15.4 Correct the README quote limit
     - State that the per-listing quote limit is per client per listing (3 per hour per client per listing), not per listing overall
     - Files: `README.md`
     - _Requirements: docs/launch-fixes.md section 15 (README fix)_

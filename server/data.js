@@ -29,6 +29,7 @@ import nodeFs from 'node:fs';
 import path from 'node:path';
 import { readJsonFile, updateJsonFile, StoreError } from './lib/json-file.js';
 import { configFromEnv } from './lib/config.js';
+import { pruneQuotes, pruneDrafts } from './lib/retention.js';
 
 const COLLECTIONS = new Set(['drafts', 'quotes', 'seance', 'pending']);
 const MODEL_KEYS = [
@@ -158,6 +159,8 @@ export function createDataStore({ dataDir, fs, clock = defaultClock, validateFie
   const getListings = () => state.listings;
   const getCategories = () => categories;
   const findById = id => state.listings.find(l => l.id === id);
+  /** True when `id` is a sample (seed) listing from listings.json. */
+  const isSeed = id => seed.some(l => l.id === id);
   const getVerifiedDate = id => (Object.hasOwn(state.verified, id) ? state.verified[id] : undefined);
 
   function searchListings({ category, city, query, limit } = {}) {
@@ -414,14 +417,54 @@ export function createDataStore({ dataDir, fs, clock = defaultClock, validateFie
     });
   }
 
+  /**
+   * Apply retention to quotes.json and/or drafts.json under the 'publish' lock.
+   * A file is written only when something was actually removed, so a missing
+   * file is never created. Idempotent.
+   * @param {{ quotes?: boolean, drafts?: boolean }} [which]
+   * @returns {Promise<{ quotes: number, drafts: number }>} counts removed
+   */
+  function pruneExpired({ quotes = true, drafts = true } = {}) {
+    return withLock('publish', async () => {
+      const nowMs = new Date(clock.now()).getTime();
+      const removed = { quotes: 0, drafts: 0 };
+      if (quotes) {
+        const q = collection('quotes');
+        const current = await q.read();
+        if (Array.isArray(current) && pruneQuotes(current, nowMs).length < current.length) {
+          await q.update(list => {
+            const kept = pruneQuotes(list, nowMs);
+            removed.quotes = list.length - kept.length;
+            return kept;
+          });
+        }
+      }
+      if (drafts) {
+        const d = collection('drafts');
+        const current = await d.read();
+        const pending = await collection('pending').read();
+        if (Array.isArray(current) && pruneDrafts(current, nowMs, pending).length < current.length) {
+          await d.update(async list => {
+            const latest = await collection('pending').read();
+            const kept = pruneDrafts(list, nowMs, latest);
+            removed.drafts = list.length - kept.length;
+            return kept;
+          });
+        }
+      }
+      return removed;
+    });
+  }
+
   /** Re-read listings, categories, published and verified from disk. */
   function reload() {
     load();
   }
 
   return {
-    getListings, getCategories, findById, searchListings, getVerifiedDate,
+    getListings, getCategories, findById, searchListings, getVerifiedDate, isSeed,
     publishDraft, submitDraft, rejectDraft, unpublish, updatePublished, reload, withLock, collection,
+    pruneExpired,
   };
 }
 

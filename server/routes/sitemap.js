@@ -14,7 +14,11 @@ export function createSitemapRouter(ctx) {
   const { store, config } = ctx;
 
   router.get('/sitemap.xml', (req, res) => {
-    res.status(200).type('application/xml').send(generateSitemap(store.getListings(), config.baseUrl));
+    // In production the sample (seed) listings stay out of the sitemap.
+    const listings = config.production && typeof store.isSeed === 'function'
+      ? store.getListings().filter(l => !store.isSeed(l.id))
+      : store.getListings();
+    res.status(200).type('application/xml').send(generateSitemap(listings, config.baseUrl));
   });
 
   return router;

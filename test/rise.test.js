@@ -14,8 +14,11 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import fc from 'fast-check';
 
 import { createApp } from '../server/app.js';
+import { createDataStore } from '../server/data.js';
+import { runSeance } from '../server/lib/seance.js';
 import { createMockVisionProvider } from '../server/lib/vision.js';
 
 const REPO_DATA = fileURLToPath(new URL('../data/', import.meta.url));
@@ -575,4 +578,190 @@ test('no image bytes are written under the data directory', async () => {
       assert.ok(!bytes.includes(sig), `image bytes found in ${file}`);
     }
   }
+});
+
+// ---- provider record and mock-draft blocking ---------------------------------------
+
+const DEMO_BANNER = 'Demo: no photo reader is connected, so this is a sample business, not your photo.';
+
+const permissiveLimiter = {
+  consume: () => ({ allowed: true }),
+  consumeAll: () => ({ allowed: true }),
+  peek: () => ({ allowed: true }),
+};
+
+/**
+ * Like makeEnv, but with a permissive rate limiter and an explicit production flag.
+ * @param {{ production?: boolean, files?: Record<string, string>, visionProvider?: object }} [opts]
+ */
+async function makeProdEnv({ production = true, files = {}, visionProvider } = {}) {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'fap-rise-prod-'));
+  for (const name of ['listings.json', 'categories.json']) {
+    await fs.copyFile(path.join(REPO_DATA, name), path.join(dir, name));
+  }
+  for (const [name, text] of Object.entries(files)) {
+    await fs.writeFile(path.join(dir, name), text);
+  }
+  const clock = { t: Date.UTC(2025, 0, 15, 12, 0, 0), now() { return this.t; } };
+  let counter = 0;
+  const app = createApp({
+    dataDir: dir,
+    clock,
+    newId: () => `draft-${++counter}`,
+    visionProvider: visionProvider ?? createMockVisionProvider(),
+    rateLimiter: permissiveLimiter,
+    config: { adminToken: TOKEN, production },
+  });
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise((resolve, reject) => {
+    server.once('listening', resolve);
+    server.once('error', reject);
+  });
+  const env = { dir, clock, server, base: `http://127.0.0.1:${server.address().port}` };
+  envs.push(env);
+  return env;
+}
+
+/** Stub vision provider named 'openai' that returns a complete fixture object. */
+function stubOpenAiProvider() {
+  return {
+    name: 'openai',
+    async extract() {
+      return structuredClone(COMPLETE_FIELDS);
+    },
+  };
+}
+
+test('a draft from the mock provider records provider "mock"', async () => {
+  const env = await makeEnv();
+  assert.equal((await upload(env, completeJpeg)).status, 303);
+  const drafts = await readJson(env, 'drafts.json', []);
+  assert.equal(drafts.length, 1);
+  assert.equal(drafts[0].provider, 'mock');
+});
+
+test('a draft from a provider named "openai" records provider "openai"', async () => {
+  const env = await makeProdEnv({ production: false, visionProvider: stubOpenAiProvider() });
+  assert.equal((await upload(env, completeJpeg)).status, 303);
+  const drafts = await readJson(env, 'drafts.json', []);
+  assert.equal(drafts.length, 1);
+  assert.equal(drafts[0].provider, 'openai');
+});
+
+test('mock-draft review page shows the demo banner text exactly', async () => {
+  const env = await makeEnv();
+  assert.equal((await upload(env, completeJpeg)).status, 303);
+  const html = await (await get(env, '/rise/drafts/draft-1')).text();
+  assert.ok(html.includes(DEMO_BANNER));
+});
+
+test('real-provider draft review page shows no demo banner', async () => {
+  const env = await makeProdEnv({ production: false, visionProvider: stubOpenAiProvider() });
+  assert.equal((await upload(env, completeJpeg)).status, 303);
+  const res = await get(env, '/rise/drafts/draft-1');
+  assert.equal(res.status, 200);
+  const html = await res.text();
+  assert.ok(html.includes('value="Copper Kettle Plumbing"'));
+  assert.ok(!html.includes('Demo: no photo reader'));
+  assert.ok(!html.includes('demo-banner'));
+});
+
+test('in production with the mock provider, GET /rise is 503 "coming soon"', async () => {
+  const env = await makeProdEnv();
+  const res = await get(env, '/rise');
+  assert.equal(res.status, 503);
+  assert.ok((await res.text()).includes('Photo listing is coming soon'));
+});
+
+test('in production with the mock provider, POST /rise is 503 and stores no draft', async () => {
+  const env = await makeProdEnv();
+  const res = await upload(env, completeJpeg);
+  assert.equal(res.status, 503);
+  assert.ok((await res.text()).includes('Photo listing is coming soon'));
+  assert.deepEqual(await readJson(env, 'drafts.json', []), []);
+});
+
+test('in production a mock draft cannot be confirmed (409) and nothing is queued', async () => {
+  const mockDraft = { ...publishingDraft(), id: 'mock-1', status: 'draft', provider: 'mock' };
+  const env = await makeProdEnv({ files: { 'drafts.json': JSON.stringify([mockDraft]) } });
+  const res = await postForm(env, '/rise/drafts/mock-1/confirm', '');
+  assert.equal(res.status, 409);
+  assert.equal((await readJson(env, 'drafts.json', []))[0].status, 'draft');
+  assert.deepEqual(await readJson(env, 'pending.json', []), []);
+});
+
+test('outside production a mock draft can still be confirmed and approved', async () => {
+  const env = await makeProdEnv({ production: false });
+  assert.equal((await upload(env, completeJpeg)).status, 303);
+  assert.equal((await postForm(env, '/rise/drafts/draft-1/confirm', '')).status, 303);
+  assert.equal((await approve(env, 'draft-1')).status, 200);
+  assert.equal((await get(env, `/listings/${COMPLETE_ID}`)).status, 200);
+});
+
+// ---- Seance runs carry the provider -----------------------------------------------
+
+/** Builds a hand-made Seance context on a temp data dir. */
+async function makeSeanceCtx(assistantProvider) {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'fap-rise-seance-'));
+  for (const name of ['listings.json', 'categories.json']) {
+    await fs.copyFile(path.join(REPO_DATA, name), path.join(dir, name));
+  }
+  const clock = { t: Date.UTC(2025, 0, 15, 12, 0, 0), now() { return this.t; } };
+  const store = createDataStore({ dataDir: dir, clock });
+  let counter = 0;
+  const ctx = {
+    store,
+    assistantProvider,
+    config: { providerTimeoutMs: 1000 },
+    clock,
+    newId: () => `run-${++counter}`,
+  };
+  return { ctx, dir, listingId: store.getListings()[0].id };
+}
+
+test('a Seance run records the assistant provider name', async () => {
+  const { ctx, dir, listingId } = await makeSeanceCtx({ name: 'fake', async ask() { return 'Nobody in particular.'; } });
+  try {
+    const run = await runSeance(ctx, listingId);
+    assert.equal(run.provider, 'fake');
+    const stored = await ctx.store.collection('seance').read();
+    assert.equal(stored.length, 1);
+    assert.equal(stored[0].provider, 'fake');
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('a Seance run from an unnamed assistant records provider "unknown"', async () => {
+  const { ctx, dir, listingId } = await makeSeanceCtx({ async ask() { return 'Nobody in particular.'; } });
+  try {
+    const run = await runSeance(ctx, listingId);
+    assert.equal(run.provider, 'unknown');
+    const stored = await ctx.store.collection('seance').read();
+    assert.equal(stored[0].provider, 'unknown');
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---- property: uploads on a non-production app always record "mock" ----------------------
+
+test('Property: every draft stored from a mock-provider upload records provider "mock"', async () => {
+  const env = await makeProdEnv({ production: false });
+  const imageArb = fc.record({
+    kind: fc.constantFrom('jpeg', 'png', 'webp'),
+    tail: fc.uint8Array({ minLength: 0, maxLength: 16 }),
+  });
+
+  await fc.assert(
+    fc.asyncProperty(imageArb, async ({ kind, tail }) => {
+      const before = (await readJson(env, 'drafts.json', [])).length;
+      const res = await upload(env, Buffer.concat([HEADERS[kind], Buffer.from(tail)]), kind);
+      assert.equal(res.status, 303);
+      const drafts = await readJson(env, 'drafts.json', []);
+      assert.equal(drafts.length, before + 1);
+      assert.equal(drafts[drafts.length - 1].provider, 'mock');
+    }),
+    { numRuns: 10 },
+  );
 });

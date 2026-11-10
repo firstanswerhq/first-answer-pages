@@ -83,7 +83,7 @@ export function createListingsRouter(ctx) {
       const verification = verificationFor(store, listing);
       const jsonLd = JSON.stringify(buildSchema(listing, verification), null, 2);
       const sentNotice = req.query.quote === 'sent'
-        ? '\n<p class="notice" role="status">Quote request sent. The business will contact you.</p>'
+        ? `\n<p class="notice" role="status">${escapeHtml(`Thanks! Your request is saved and we'll pass it to the business. If you need help sooner, call them at ${listing.phone}.`)}</p>`
         : '';
       // JSON-LD goes to layout() only, so the page has exactly one ld+json block
       res.status(200).type('html').send(layout({

@@ -21,6 +21,11 @@ const defaultClock = { now: () => new Date() };
 
 const NOT_FOUND = Object.freeze({ status: 404, error: 'Draft not found' });
 
+/** Provider recorded on a draft; old records without one read as 'unknown'. */
+export function draftProvider(draft) {
+  return typeof draft?.provider === 'string' && draft.provider !== '' ? draft.provider : 'unknown';
+}
+
 /**
  * @param {{ store: { collection(name: string): object },
  *           clock?: { now(): Date|number }, newId?: () => string }} options
@@ -33,15 +38,24 @@ export function createDraftStore({ store, clock = defaultClock, newId = randomUU
   const copy = value => structuredClone(value);
 
   /** Create a draft with status 'draft'. */
-  async function create({ fields, missingFields } = {}) {
+  async function create({ fields, missingFields, provider } = {}) {
     const draft = {
       id: newId(),
       status: 'draft',
+      provider: typeof provider === 'string' && provider !== '' ? provider : 'unknown',
       fields: copy(fields ?? {}),
       missingFields: Array.isArray(missingFields) ? [...missingFields] : [],
       createdAt: new Date(clock.now()).toISOString(),
     };
     await drafts().append(draft);
+    // Best-effort retention; never fails the create.
+    if (typeof store.pruneExpired === 'function') {
+      try {
+        await store.pruneExpired({ quotes: false, drafts: true });
+      } catch (err) {
+        process.stderr.write(`[draft] prune failed: ${err?.name ?? 'Error'}\n`);
+      }
+    }
     return { status: 201, draft: copy(draft) };
   }
 

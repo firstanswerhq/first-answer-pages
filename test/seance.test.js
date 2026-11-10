@@ -174,3 +174,89 @@ test('buildPrompt falls back to the slug for an unknown category', () => {
     'best chimney-sweeps in Austin'
   );
 });
+
+// ---- Trade-matched mock: label and end-to-end (task 14.5) ----
+
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { runSeance, createSeanceStore } from '../server/lib/seance.js';
+import { seanceReportPage, DEMO_LABEL } from '../server/lib/seance-html.js';
+import { createMockAssistantProvider } from '../server/lib/assistant.js';
+import { createDataStore } from '../server/data.js';
+
+// Independent oracle of the fixture business names, by category slug.
+const E2E_TRADE_NAMES = {
+  plumbers: ['Nashville Pipe Pros', 'Honky Tonk Plumbing', 'Cumberland Drain Co', 'Copper Kettle Plumbing', 'Blue Anchor Pipe Works', 'Delmar Drain Service'],
+  electricians: ['Volt Brothers Electric', 'Music City Wiring', 'Neon & Ohm Electric', 'Lantern Electric', 'Brightline Wiring', 'Ridgeway Electrical'],
+  restaurants: ['The Griddle House', 'Biscuit & Brine', 'Hot Plate Nashville', 'Skillet & Smoke', 'Fifth Street Diner', 'The Corner Table'],
+  'auto-repair': ['Cumberland Auto Works', 'Five Points Auto', 'Pedal to the Metal Garage', 'Lug Nut Garage', 'Riverside Brake & Tire', 'Old Hickory Auto Service'],
+  'hair-salons': ['Shear Nashville', 'The Clip Joint', 'Bangs & Bobs Studio', 'Velvet Scissors', 'Lucky Comb Salon', 'Main Street Barber & Style'],
+  lawyers: ['Barrett & Hollow Law', 'Hatch & Greer Attorneys', 'Stone River Legal', 'Marlow & Pike Law', 'Capitol Hill Legal', 'Dunmore Attorneys'],
+};
+
+function e2eOtherTradeNames(category) {
+  return Object.entries(E2E_TRADE_NAMES)
+    .filter(([slug]) => slug !== category)
+    .flatMap(([, names]) => names);
+}
+
+test('seanceReportPage labels mock runs as a demo answer and real providers not', () => {
+  const listing = { id: 'acme-plumbing', name: 'Acme Plumbing' };
+  const makeRun = provider => ({
+    id: `run-${provider}`,
+    listingId: listing.id,
+    prompt: 'best plumbers in Nashville',
+    provider,
+    timestamp: '2026-11-10T05:05:00.000Z',
+    answer: 'Some answer.',
+    named: false,
+  });
+  const mockPage = seanceReportPage(listing, [makeRun('mock')], '2026-11-01');
+  assert.ok(mockPage.includes('Demo answer (no AI connected)'));
+  assert.equal(DEMO_LABEL, 'Demo answer (no AI connected)');
+
+  const realPage = seanceReportPage(listing, [makeRun('openai')], '2026-11-01');
+  assert.ok(!realPage.includes('Demo answer (no AI connected)'));
+});
+
+test('runSeance with the mock provider stores a trade-matched answer and matching named flag', async () => {
+  const listings = JSON.parse(readFileSync(new URL('../data/listings.json', import.meta.url), 'utf8'))
+    .filter(l => l && typeof l === 'object' && typeof l.id === 'string');
+  // One seed listing per known trade (safe access: skip trades with no seed listing).
+  const seeds = Object.keys(E2E_TRADE_NAMES)
+    .map(slug => listings.find(l => l.category === slug))
+    .filter(Boolean);
+  assert.ok(seeds.length > 0, 'expected at least one seed listing in a known trade');
+
+  const dir = mkdtempSync(join(tmpdir(), 'seance-e2e-'));
+  try {
+    writeFileSync(join(dir, 'listings.json'), readFileSync(new URL('../data/listings.json', import.meta.url)));
+    writeFileSync(join(dir, 'categories.json'), readFileSync(new URL('../data/categories.json', import.meta.url)));
+    const store = createDataStore({ dataDir: dir });
+    let counter = 0;
+    const ctx = {
+      store,
+      assistantProvider: createMockAssistantProvider(),
+      config: { providerTimeoutMs: 1000 },
+      clock: { now: () => Date.UTC(2026, 10, 10, 5, 5, 0) },
+      newId: () => `run-${++counter}`,
+    };
+
+    for (const listing of seeds) {
+      const run = await runSeance(ctx, listing.id);
+      assert.equal(run.provider, 'mock');
+      assert.equal(run.listingId, listing.id);
+      assert.equal(typeof run.answer, 'string');
+      assert.ok(run.answer.length > 0);
+      assert.equal(run.named, detectNamed(listing.name, run.answer));
+      for (const other of e2eOtherTradeNames(listing.category)) {
+        assert.ok(!run.answer.includes(other), `"${run.answer}" names ${other} from another trade`);
+      }
+      const stored = (await createSeanceStore(store).list(listing.id)).find(r => r.id === run.id);
+      assert.deepEqual(stored, run);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

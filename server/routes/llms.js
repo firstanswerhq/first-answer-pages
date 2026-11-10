@@ -14,8 +14,12 @@ export function createLlmsRouter(ctx) {
   const { store, config } = ctx;
 
   router.get('/llms.txt', (req, res) => {
+    // In production the sample (seed) listings stay out of llms.txt.
+    const listings = config.production && typeof store.isSeed === 'function'
+      ? store.getListings().filter(l => !store.isSeed(l.id))
+      : store.getListings();
     res.status(200).type('text/plain').send(
-      generateLlmsTxt(store.getListings(), config.baseUrl, store.getCategories()),
+      generateLlmsTxt(listings, config.baseUrl, store.getCategories()),
     );
   });
 

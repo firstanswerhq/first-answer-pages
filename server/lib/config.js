@@ -57,6 +57,17 @@ function parseTrustProxy(value, production, warn = console.warn) {
 }
 
 /**
+ * DEMO_MODE: 'true'/'1' => true, 'false'/'0' => false (case-insensitive).
+ * Unset or unrecognized: true, unless running in production (then false).
+ */
+export function parseDemoMode(value, production) {
+  const v = nonEmpty(value)?.toLowerCase();
+  if (v === 'true' || v === '1') return true;
+  if (v === 'false' || v === '0') return false;
+  return !production;
+}
+
+/**
  * Vision provider name: 'openai' | 'anthropic' | 'mock'.
  * Mock unless the provider is known, VISION_API_KEY is set, and this is
  * not a test run. A real provider without VISION_MODEL warns and falls
@@ -111,6 +122,7 @@ export function configFromEnv(env = process.env, opts = {}) {
 
   return {
     production,
+    demoMode: parseDemoMode(env.DEMO_MODE, production),
     dataDir: nonEmpty(env.DATA_DIR) ? path.resolve(env.DATA_DIR.trim()) : REPO_DATA_DIR,
     // ADMIN_TOKEN guards /admin/* and /seance/run; SEANCE_ADMIN_TOKEN is the older fallback name.
     adminToken: nonEmpty(env.ADMIN_TOKEN) || nonEmpty(env.SEANCE_ADMIN_TOKEN),

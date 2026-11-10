@@ -22,15 +22,45 @@ function categoryLabel(slug, categories) {
   return list.find(c => c.slug === slug)?.label ?? slug;
 }
 
+export const DEMO_FOOTER_TEXT = 'Sample listings for demonstration';
+const DEMO_META = '<meta name="robots" content="noindex">';
+const DEMO_FOOTER_LINE = `<p class="demo-note">${DEMO_FOOTER_TEXT}</p>`;
+
+/**
+ * Adds the noindex meta and the sample-listings footer line to a finished
+ * HTML page. Idempotent: a page that already has them is returned unchanged.
+ * Used by the app for every HTML response when DEMO_MODE is on.
+ * @param {string} html
+ * @returns {string}
+ */
+export function markDemo(html) {
+  let out = html;
+  if (!out.includes(DEMO_META)) {
+    out = out.replace('</head>', `  ${DEMO_META}\n</head>`);
+  }
+  if (!out.includes(DEMO_FOOTER_TEXT)) {
+    out = out.includes('\n  </footer>')
+      ? out.replace('\n  </footer>', `\n    ${DEMO_FOOTER_LINE}\n  </footer>`)
+      : out.replace('</footer>', `${DEMO_FOOTER_LINE}</footer>`);
+  }
+  return out;
+}
+
 /**
  * Wraps page content in the full HTML shell (head, nav, footer).
  *
- * @param {{ title: string, body: string, jsonLd?: string, scripts?: string[] }} options
+ * @param {{ title: string, body: string, jsonLd?: string, scripts?: string[], demo?: boolean }} options
  *   `jsonLd` is an optional serialized JSON-LD string placed in the head.
  *   `scripts` is an optional list of module script URLs (deferred by default).
+ *   `demo` (default false) adds the noindex meta and the sample-listings footer line.
  * @returns {string}
  */
-export function layout({ title, body, jsonLd, scripts }) {
+export function layout({ title, body, jsonLd, scripts, demo = false }) {
+  const page = renderLayout({ title, body, jsonLd, scripts });
+  return demo ? markDemo(page) : page;
+}
+
+function renderLayout({ title, body, jsonLd, scripts }) {
   const scriptTags = Array.isArray(scripts) && scripts.length > 0
     ? '\n' + scripts.map(src => `  <script type="module" src="${escapeHtml(src)}"></script>`).join('\n')
     : '';

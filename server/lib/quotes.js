@@ -53,6 +53,15 @@ export async function submitQuote(ctx, args, clientIp) {
   const quotes = ctx.store.collection('quotes');
   await quotes.append(quote);
 
+  // Best-effort retention; never blocks or fails the submission.
+  if (typeof ctx.store.pruneExpired === 'function') {
+    try {
+      await ctx.store.pruneExpired({ quotes: true, drafts: false });
+    } catch (err) {
+      process.stderr.write(`[quote] prune failed: ${err?.name ?? 'Error'}\n`);
+    }
+  }
+
   const listing = ctx.store.findById(listingId);
   try {
     await notifyWithTimeout(ctx.notifier, { quote, listing }, ctx.config.providerTimeoutMs);

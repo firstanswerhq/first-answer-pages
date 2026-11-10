@@ -16,6 +16,7 @@
 import { Router } from 'express';
 import { requireAdmin } from '../lib/admin-auth.js';
 import { layout, escapeHtml } from '../lib/html.js';
+import { draftProvider } from '../lib/drafts.js';
 
 /** @param {object} ctx resolved dependencies from createApp */
 export function createAdminRouter(ctx) {
@@ -40,11 +41,12 @@ export function createAdminRouter(ctx) {
 
       const items = entries.map(e => {
         const f = byId.get(e.draftId)?.fields ?? {};
+        const provider = draftProvider(byId.get(e.draftId));
         const id = encodeURIComponent(e.id);
         return `<li class="pending-item">
   <h2>${escapeHtml(f.name ?? '(no name)')}</h2>
   <p>${escapeHtml(f.category ?? '')} &middot; ${escapeHtml(f.city ?? '')}, ${escapeHtml(f.state ?? '')} &middot; ${escapeHtml(f.phone ?? '')}</p>
-  <p class="hint">Submitted ${escapeHtml(e.submittedAt ?? '')}</p>
+  <p class="hint">Submitted ${escapeHtml(e.submittedAt ?? '')} &middot; Provider: ${escapeHtml(provider)}</p>
   <form method="POST" action="/admin/pending/${id}/approve"><button type="submit">Approve</button></form>
   <form method="POST" action="/admin/pending/${id}/reject"><button type="submit">Reject</button></form>
 </li>`;
@@ -66,6 +68,14 @@ export function createAdminRouter(ctx) {
       const entry = (await pendingEntries()).find(e => e && e.id === req.params.id);
       if (!entry) return res.status(404).json({ error: 'Pending entry not found' });
       if (entry.status !== 'pending') return res.status(409).json({ error: 'Entry is not pending' });
+
+      if (ctx.config.production === true) {
+        const drafts = await ctx.store.collection('drafts').read();
+        const draft = (Array.isArray(drafts) ? drafts : []).find(d => d && d.id === entry.draftId);
+        if (draftProvider(draft) === 'mock') {
+          return res.status(409).json({ error: 'This draft came from the demo photo reader and cannot be approved in production.' });
+        }
+      }
 
       const result = await ctx.store.publishDraft(entry.draftId);
       if (result.status === 422) return res.status(422).json({ error: 'Invalid listing', missingFields: result.missingFields ?? [] });

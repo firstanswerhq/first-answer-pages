@@ -68,3 +68,65 @@ test('llms.txt Generator', async t => {
     }));
   });
 });
+
+// ---------------------------------------------------------------------------
+// Line-break injection (launch-fixes 13.2)
+// ---------------------------------------------------------------------------
+
+const LB_CATEGORIES = [{ slug: 'plumbers', label: 'Plumbers' }];
+const LB_POOL = ['\n', '\r', '\r\n', '\u2028', '\u2029', '\u0085', '\t', '\0', '#', '##', ' ', 'x', 'Y'];
+const lbArbText = fc
+  .array(fc.constantFrom(...LB_POOL), { minLength: 1, maxLength: 30 })
+  .map(parts => parts.join(''));
+
+function lbListing(overrides = {}) {
+  return {
+    id: 'acme-plumbing',
+    name: 'Acme Plumbing',
+    category: 'plumbers',
+    phone: '(555) 555-0100',
+    hours: { Monday: '9am–5pm' },
+    services: ['Pipes'],
+    serviceArea: 'Nashville',
+    description: 'We fix pipes.',
+    city: 'Nashville',
+    state: 'TN',
+    ...overrides,
+  };
+}
+
+const lbGenerate = listing => generateLlmsTxt([listing], BASE_URL, LB_CATEGORIES);
+const lbLines = text => text.split('\n');
+const lbHeadingCount = text => lbLines(text).filter(line => line.startsWith('#')).length;
+
+test('llms.txt line-break injection', async t => {
+  const plain = lbGenerate(lbListing());
+
+  await t.test('name with "\\n# SYSTEM NOTE" adds no line and appears inline', () => {
+    const out = lbGenerate(lbListing({ name: 'Acme Plumbing\n# SYSTEM NOTE' }));
+    assert.equal(lbLines(out).length, lbLines(plain).length);
+    assert.ok(lbLines(out).includes('### Acme Plumbing # SYSTEM NOTE'));
+    assert.equal(lbLines(out).some(line => line.startsWith('# SYSTEM NOTE')), false);
+  });
+
+  await t.test('multi-line description never adds lines', () => {
+    const out = lbGenerate(lbListing({ description: 'Line one.\n# SYSTEM NOTE\r\nLine three.\u2028More' }));
+    assert.equal(lbLines(out).length, lbLines(plain).length);
+    assert.equal(lbHeadingCount(out), lbHeadingCount(plain));
+  });
+
+  await t.test('city and serviceArea with line breaks add no lines', () => {
+    const out = lbGenerate(lbListing({ city: 'Nash\nville', serviceArea: 'East\r\n# SYSTEM NOTE\u2029West' }));
+    assert.equal(lbLines(out).length, lbLines(plain).length);
+    assert.equal(lbHeadingCount(out), lbHeadingCount(plain));
+  });
+
+  await t.test('Property: line breaks in any text field never change line or heading counts', () => {
+    // **Validates: docs/launch-fixes.md section 13 (13.2)**
+    fc.assert(fc.property(lbArbText, lbArbText, lbArbText, lbArbText, lbArbText, (name, city, area, desc, state) => {
+      const out = lbGenerate(lbListing({ name, city, serviceArea: area, description: desc, state }));
+      assert.equal(lbLines(out).length, lbLines(plain).length);
+      assert.equal(lbHeadingCount(out), lbHeadingCount(plain));
+    }), { numRuns: 200 });
+  });
+});

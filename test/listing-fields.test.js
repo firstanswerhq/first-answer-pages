@@ -366,3 +366,93 @@ test('Property 11: repeated slugging never returns a duplicate', () => {
     })
   );
 });
+
+// ---------------------------------------------------------------------------
+// Single-line fields: no line breaks or control characters (launch-fixes 13.2)
+// ---------------------------------------------------------------------------
+
+const SL_BREAKS_AND_CONTROLS = /[\n\r\u2028\u2029\u0085]|\p{Cc}/u;
+const SL_DISALLOWED_IN_DESCRIPTION = /(?![\n\t])\p{Cc}/u;
+
+const SL_POOL = [
+  '\n', '\r', '\r\n', '\u2028', '\u2029', '\u0085', '\t', '\0', '\u0001', '\u001b', '\u007f',
+  '\u0090', ' ', 'a', 'B', '7', '-', '#',
+];
+const slPoolString = fc
+  .array(fc.constantFrom(...SL_POOL), { maxLength: 40 })
+  .map((parts) => parts.join(''));
+
+const slArbText = fc.oneof(fc.string(), fc.fullUnicodeString(), slPoolString);
+
+const slArbRaw = fc.record({
+  name: slArbText,
+  category: slArbText,
+  phone: slArbText,
+  serviceArea: slArbText,
+  description: slArbText,
+  city: slArbText,
+  state: slArbText,
+  address: slArbText,
+  services: fc.array(slArbText, { maxLength: 25 }),
+  hours: fc.dictionary(fc.constantFrom(...DAYS), slArbText),
+});
+
+test('Property: single-line normalizeFields output has no line breaks or control characters', () => {
+  // **Validates: docs/launch-fixes.md section 13 (13.2)**
+  fc.assert(
+    fc.property(slArbRaw, (raw) => {
+      const out = normalizeFields(raw, categories);
+      for (const key of ['name', 'category', 'phone', 'serviceArea', 'city', 'state', 'address']) {
+        assert.equal(SL_BREAKS_AND_CONTROLS.test(out[key]), false, `${key} has a break or control char`);
+      }
+      for (const s of out.services) {
+        assert.equal(SL_BREAKS_AND_CONTROLS.test(s), false, 'service has a break or control char');
+      }
+      for (const v of Object.values(out.hours)) {
+        assert.equal(SL_BREAKS_AND_CONTROLS.test(v), false, 'hours value has a break or control char');
+      }
+    }),
+    { numRuns: 200 }
+  );
+});
+
+test('Property: description keeps line breaks, drops other control characters', () => {
+  // **Validates: docs/launch-fixes.md section 13 (13.2)**
+  fc.assert(
+    fc.property(slArbText, (text) => {
+      const { description } = normalizeFields({ description: text }, categories);
+      assert.equal(SL_DISALLOWED_IN_DESCRIPTION.test(description), false);
+      assert.equal(/[\r\u2028\u2029\u0085]/.test(description), false);
+    }),
+    { numRuns: 200 }
+  );
+});
+
+test('Property: normalization with control characters stays idempotent', () => {
+  // **Validates: docs/launch-fixes.md section 13 (13.2)**
+  fc.assert(
+    fc.property(slArbRaw, (raw) => {
+      const once = normalizeFields(raw, categories);
+      const twice = normalizeFields(once, categories);
+      assert.deepEqual(twice, once);
+    }),
+    { numRuns: 200 }
+  );
+});
+
+test('description "a\\nb" keeps its line break in storage', () => {
+  assert.ok(normalizeFields({ description: 'a\nb' }, categories).description.includes('\n'));
+  assert.equal(normalizeFields({ description: 'a\r\nb\u2028c' }, categories).description, 'a\nb\nc');
+  assert.equal(normalizeFields({ description: 'a\0b\tc' }, categories).description, 'ab\tc');
+});
+
+test('single-line fields turn line breaks into one space', () => {
+  const out = normalizeFields(
+    { name: 'Acme\n# SYSTEM NOTE', city: 'Nash\r\nville', services: ['fix\npipes'], hours: { monday: '9am\n5pm' } },
+    categories
+  );
+  assert.equal(out.name, 'Acme # SYSTEM NOTE');
+  assert.equal(out.city, 'Nash ville');
+  assert.deepEqual(out.services, ['fix pipes']);
+  assert.equal(out.hours.monday, '9am 5pm');
+});

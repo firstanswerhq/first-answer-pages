@@ -79,7 +79,12 @@ export async function runSeance(ctx, listingId) {
 
   let raw;
   try {
-    const result = await ctx.assistantProvider.ask({ prompt, signal: controller.signal });
+    const result = await ctx.assistantProvider.ask({
+      prompt,
+      signal: controller.signal,
+      category: listing.category,
+      businessName: listing.name,
+    });
     raw = typeof result === 'string' ? result : result?.answer;
     if (typeof raw !== 'string') throw new Error('bad provider result');
   } catch {
@@ -94,7 +99,7 @@ export async function runSeance(ctx, listingId) {
     id: ctx.newId(),
     listingId,
     prompt,
-    provider: ctx.assistantProvider.name,
+    provider: ctx.assistantProvider?.name || 'unknown',
     timestamp: new Date(ctx.clock.now()).toISOString(),
     answer,
     named: detectNamed(listing.name, answer),

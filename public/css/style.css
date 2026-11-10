@@ -44,6 +44,10 @@ main {
   padding: 1rem 1.5rem 2rem;
 }
 
+.site-footer .demo-note {
+  font-weight: bold;
+}
+
 .site-footer {
   padding: 0.75rem 1.5rem;
   border-top: 4px double var(--color-divider);
@@ -246,6 +250,15 @@ h1 {
 .pending-item form {
   display: inline-block;
   margin-right: 0.5rem;
+}
+
+.demo-banner {
+  margin: 0.75rem 0;
+  padding: 0.5rem 0.75rem;
+  background: #FFE600;
+  color: #000;
+  border: 2px solid #000;
+  font-weight: bold;
 }
 
 .notice {

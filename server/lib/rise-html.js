@@ -23,6 +23,8 @@ const FIELD_LABELS = Object.freeze({
   address: 'Street address',
 });
 
+export const DEMO_BANNER_TEXT = 'Demo: no photo reader is connected, so this is a sample business, not your photo.';
+
 /** Page for the upload form: GET /rise. */
 export function uploadPage() {
   const body = `<section class="rise">
@@ -103,8 +105,13 @@ export function reviewPage(draft, categories, opts = {}) {
     ? `<p class="notice" role="alert">These fields need your input: ${[...missing].map(k => escapeHtml(FIELD_LABELS[k] ?? k)).join(', ')}.</p>`
     : '';
 
+  const banner = draft.provider === 'mock'
+    ? `<p class="demo-banner" role="note">${escapeHtml(DEMO_BANNER_TEXT)}</p>`
+    : '';
+
   const body = `<section class="rise">
   <h1>Check your listing</h1>
+  ${banner}
   <p class="tagline">This is a draft. Nobody can see it until you confirm it.</p>
   ${notice}
   ${summary}
