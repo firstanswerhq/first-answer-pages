@@ -818,6 +818,12 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
   - [x] 21.7 Checkpoint - Second review round
     - Run `node --test`; everything must be green, including all pre-existing tests and the tests for tasks 13 to 21. Ask the user if questions arise.
 
+- [x] 22. Tell Bing about new listings (IndexNow)
+  - Built in the cloud from `docs/launch-fixes.md` section 21 (Colby approved Nov 10, 2026).
+  - Files: `server/lib/indexnow.js` (key in `DATA_DIR/indexnow-key.txt`, `submit`, last-20 log), `server/app.js` (`/{key}.txt` route, `ctx.indexNow`), `server/routes/admin.js` (ping on approve and unpublish, note on `/admin/pending`, `GET /admin/indexnow`), `server/lib/config.js` (`INDEXNOW`), README section "Tell Bing about new listings".
+  - Tests: `test/indexnow.test.js` (stubbed fetch only).
+  - _Requirements: docs/launch-fixes.md section 21_
+
 ## Notes
 
 - Tasks marked with `*` are optional test sub-tasks and can be skipped for a faster MVP; each property test runs at least 100 iterations (200 for Properties 1 to 4 and 9) and carries the comment `// Feature: super-pages, Property N: <title>`.

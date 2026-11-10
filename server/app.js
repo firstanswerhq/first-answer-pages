@@ -18,6 +18,7 @@ import { createVisionProvider } from './lib/vision.js';
 import { createAiBudget } from './lib/ai-budget.js';
 import { createNotifier } from './lib/notifier.js';
 import { createAssistantProvider } from './lib/assistant.js';
+import { createIndexNow, indexNowOffReason } from './lib/indexnow.js';
 import { createHomeRouter }     from './routes/home.js';
 import { createListingsRouter } from './routes/listings.js';
 import { createApiRouter }      from './routes/api.js';
@@ -94,6 +95,21 @@ export function createApp(deps = {}) {
     a2a: deps.a2a,
   };
 
+  // IndexNow (Bing ping): real sites only; tests send only with their own fetch.
+  if (deps.indexNow) {
+    ctx.indexNow = deps.indexNow;
+  } else {
+    const reason = indexNowOffReason(config, { hasStubFetch: typeof deps.indexNowFetch === 'function' });
+    ctx.indexNow = createIndexNow({
+      baseUrl: config.baseUrl,
+      dataDir: deps.dataDir ?? config.dataDir,
+      enabled: reason === '',
+      reason,
+      fetch: deps.indexNowFetch ?? globalThis.fetch,
+      clock,
+    });
+  }
+
   const app = express();
 
   // Don't advertise the framework; set baseline security headers on every
@@ -158,6 +174,14 @@ export function createApp(deps = {}) {
     res.set('Cache-Control', 'no-store');
     res.status(200).json({ ok: true });
   });
+
+  // IndexNow key file at the site root, so engines can check the key is ours.
+  if (ctx.indexNow?.enabled && ctx.indexNow.key) {
+    const key = ctx.indexNow.key;
+    app.get(`/${key}.txt`, (req, res) => {
+      res.type('text/plain; charset=utf-8').send(key);
+    });
+  }
 
   app.use(express.static(fileURLToPath(new URL('../public', import.meta.url))));
 

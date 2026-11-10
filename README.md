@@ -56,6 +56,7 @@ Owner confirmation sends a listing to a pending queue. It is public only after a
 - `POST /admin/pending/:id/approve` makes a pending listing public.
 - `POST /admin/pending/:id/reject` rejects a pending listing.
 - `POST /admin/listings/:id/unpublish` takes a public listing down.
+- `GET /admin/indexnow` shows the last 20 Bing pings (see "Tell Bing about new listings" below).
 - `GET /admin/whoami` shows the client address the server sees (`req.ip`, `req.ips`) and the current `TRUST_PROXY` setting. See "Check TRUST_PROXY" below.
 
 ### Agent-ready: MCP (`/mcp`) and WebMCP
@@ -154,6 +155,7 @@ All are optional except in production, where `DATA_DIR` and `BASE_URL` are requi
 | `SEANCE_BASE_URL` | `https://api.openai.com/v1` | Base URL for an OpenAI-compatible Séance API. Only used when `SEANCE_PROVIDER=openai`. |
 | `SEANCE_TIMEOUT_MS` | `120000` | How long one Séance question may take, in milliseconds. One deadline covers the first call and any resend. The photo reader keeps 30 seconds. Must be a positive whole number; anything else logs a warning and uses 120000. |
 | `MAX_AI_CALLS_PER_DAY` | `200` | Daily cap on paid AI provider calls, shared by photo listing and the Séance. Every paid call counts, including the second call when a Séance answer needs a continuation. Photo uploads may use at most 150 of the total (or the whole cap if it is lower), so uploads never block Séance runs. The day runs midnight to midnight Central time (America/Chicago). The count is saved in `DATA_DIR/ai-budget.json`, so a restart does not reset it. Over the cap, people see "Try again tomorrow". Must be a positive whole number; anything else logs a warning and uses 200. |
+| `INDEXNOW` | `on` | Set to `off` to stop telling Bing about new and removed listings (see "Tell Bing about new listings" below). It only ever runs on the live site: `NODE_ENV=production`, `DEMO_MODE` off, and an `https` `BASE_URL` that is not a local address. |
 | `SEANCE_ADMIN_TOKEN` | unset | Older name for `ADMIN_TOKEN`. Used only when `ADMIN_TOKEN` is not set. |
 | `NODE_TEST_CONTEXT` | unset | Set by Node's test runner, not by you. When present, all providers use the mock. Do not set it in production. |
 
@@ -213,6 +215,7 @@ The owner tools are the one place the web layer writes files. It writes only the
 - `quotes.json` quote requests
 - `seance.json` Séance run history
 - `ai-budget.json` the day's count of paid AI calls (written only when a real provider call is counted)
+- `indexnow-key.txt` the site's IndexNow key (written once, on the live site only)
 
 `listings.json` and `categories.json` are never written by the app. Published listings from `published.json` appear alongside the seed listings. The `data/` folder is never served over HTTP, so a request such as `/data/listings.json` returns 404. Uploaded images are never written anywhere.
 
@@ -254,6 +257,12 @@ Open `/admin/login`, paste the `ADMIN_TOKEN`, and press Log in. The login cookie
 `TRUST_PROXY` is the number of proxies in front of the app (`1` on Render). If it is wrong, every visitor looks like the same address and shares one rate limit, or a visitor can fake an address. At startup in production the server logs one line, `trust proxy = N`.
 
 To check it, open `/admin/whoami` from your phone while logged in as admin (it is also linked in the admin menu as "My IP"). It shows `req.ip`, `req.ips`, and the current setting. Set `TRUST_PROXY` to the smallest number that shows your real IP address. Send `Accept: application/json` to get the same answer as JSON.
+
+### Tell Bing about new listings
+
+When you approve a listing, the site tells Bing about it right away using IndexNow, a free, open standard. It sends the listing page, its category page, `/llms.txt` and `/sitemap.xml`, so Bing reads them in days instead of weeks. Bing shares these pings with the other IndexNow search engines. Unpublishing a listing sends its address too, so the removed page drops out sooner. Google doesn't take part in IndexNow, so add the site to Google Search Console once by hand.
+
+It needs no account. On first start the site makes a key, saves it in `DATA_DIR/indexnow-key.txt`, and serves it at `/<key>.txt` so Bing can check the pings are really from this site. The ping never slows down or blocks an approval. The admin queue shows "Bing notified" (or why not) after each approval, and `/admin/indexnow` lists the last 20 pings. Set `INDEXNOW=off` to turn it off.
 
 ## License
 

@@ -239,6 +239,8 @@ export function configFromEnv(env = process.env, opts = {}) {
     seanceTimeoutMs: parseSeanceTimeout(env.SEANCE_TIMEOUT_MS, opts.warn ?? console.warn),
     trustProxy: parseTrustProxy(env.TRUST_PROXY, production, opts.warn ?? console.warn),
     maxAiCallsPerDay: parseMaxAiCalls(env.MAX_AI_CALLS_PER_DAY, opts.warn ?? console.warn),
+    // INDEXNOW=off stops the Bing ping on approve/unpublish (it only runs on the live site anyway).
+    indexNow: nonEmpty(env.INDEXNOW)?.toLowerCase() === 'off' ? 'off' : 'on',
     testRun: isTestRun(env),
 
     visionProviderName: vision,

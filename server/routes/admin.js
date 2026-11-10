@@ -26,6 +26,7 @@ import {
 import { layout, escapeHtml } from '../lib/html.js';
 import { draftProvider } from '../lib/drafts.js';
 import { formatRunTime } from '../lib/seance-html.js';
+import { indexNowNote } from '../lib/indexnow.js';
 
 /** Fixed notes for /admin/pending?note=...; never echo the query value. */
 const NOTES = Object.freeze({
@@ -53,7 +54,7 @@ const wantsHtml = req =>
   typeof req.headers.authorization !== 'string' && String(req.headers.accept ?? '').includes('text/html');
 
 const adminNav = () => `<nav class="admin-nav">
-  <a href="/admin/pending">Pending</a> &middot; <a href="/admin/quotes">Quotes</a> &middot; <a href="/admin/whoami">My IP</a>
+  <a href="/admin/pending">Pending</a> &middot; <a href="/admin/quotes">Quotes</a> &middot; <a href="/admin/indexnow">Bing pings</a> &middot; <a href="/admin/whoami">My IP</a>
   <form method="POST" action="/admin/logout" class="admin-logout"><button type="submit" class="admin-button">Log out</button></form>
 </nav>`;
 
@@ -127,6 +128,17 @@ export function createAdminRouter(ctx) {
     return res.redirect(303, `/admin/pending?${q}`);
   };
 
+  /** Fire-and-forget Bing ping (IndexNow); never delays or breaks the admin action. */
+  const ping = (paths, tag) => {
+    const base = String(ctx.config.baseUrl ?? '').replace(/\/+$/, '');
+    const urls = paths.map(p => `${base}${p}`);
+    try {
+      ctx.indexNow?.submit(urls, tag)?.catch?.(() => {});
+    } catch {
+      // never let the ping break the action
+    }
+  };
+
   router.get('/admin/pending', async (req, res, next) => {
     try {
       const entries = (await pendingEntries()).filter(e => e && e.status === 'pending');
@@ -159,7 +171,14 @@ export function createAdminRouter(ctx) {
       const link = noteKey === 'approved' && noteId
         ? ` <a href="/listings/${encodeURIComponent(noteId)}">View listing &rarr;</a>`
         : '';
-      const note = noteKey ? `<p class="admin-note" role="status">${escapeHtml(NOTES[noteKey])}${link}</p>` : '';
+      // One line on whether Bing was told (IndexNow), for approve and unpublish.
+      const pingEntry = (noteKey === 'approved' || noteKey === 'unpublished') && noteId
+        ? ctx.indexNow?.latestFor?.(noteId)
+        : undefined;
+      const pingLine = (noteKey === 'approved' || noteKey === 'unpublished') && noteId
+        ? `<p class="hint">${escapeHtml(pingEntry ? indexNowNote(pingEntry) : `Bing not notified (${ctx.indexNow?.reason || 'off'}).`)}</p>`
+        : '';
+      const note = noteKey ? `<p class="admin-note" role="status">${escapeHtml(NOTES[noteKey])}${link}</p>${pingLine}` : '';
 
       const body = `<section class="admin">
   ${adminNav()}
@@ -235,6 +254,25 @@ export function createAdminRouter(ctx) {
     res.type('html').send(layout({ title: 'Your IP address', body }));
   });
 
+  // The last 20 IndexNow submissions (Bing pings), newest first.
+  router.get('/admin/indexnow', (req, res) => {
+    const entries = typeof ctx.indexNow?.recent === 'function' ? ctx.indexNow.recent() : [];
+    const status = ctx.indexNow?.enabled
+      ? '<p>Bing pings are on. Approving or unpublishing a listing tells Bing right away.</p>'
+      : `<p>Bing pings are off (${escapeHtml(ctx.indexNow?.reason || 'off')}).</p>`;
+    const items = entries.map(e => `<li class="pending-item">
+  <p><strong>${escapeHtml(adminTime(e.at))}</strong> &middot; ${escapeHtml(indexNowNote(e) || e.reason || '')}${e.status ? ` (status ${escapeHtml(String(e.status))})` : ''}</p>
+  <ul>${e.urls.map(u => `<li>${escapeHtml(u)}</li>`).join('')}</ul>
+</li>`).join('\n');
+    const body = `<section class="admin">
+  ${adminNav()}
+  <h1>Bing pings (IndexNow)</h1>
+  ${status}
+  ${entries.length === 0 ? '<p>No pings sent since the last restart.</p>' : `<ul class="pending-list">\n${items}\n</ul>`}
+</section>`;
+    res.type('html').send(layout({ title: 'Bing pings', body }));
+  });
+
   router.post('/admin/pending/:id/approve', async (req, res, next) => {
     try {
       const entry = (await pendingEntries()).find(e => e && e.id === req.params.id);
@@ -266,7 +304,15 @@ export function createAdminRouter(ctx) {
         const e = list.find(x => x && x.id === entry.id);
         if (e) e.status = 'approved';
       });
-      reply(req, res, { json: { ok: true, listingId: result.listing.id }, note: 'approved', id: result.listing.id });
+      const listingId = result.listing.id;
+      const category = typeof result.listing.category === 'string' ? result.listing.category : '';
+      ping([
+        `/listings/${encodeURIComponent(listingId)}`,
+        ...(category ? [`/?category=${encodeURIComponent(category)}`] : []),
+        '/llms.txt',
+        '/sitemap.xml',
+      ], listingId);
+      reply(req, res, { json: { ok: true, listingId }, note: 'approved', id: listingId });
     } catch (err) {
       next(err);
     }
@@ -292,7 +338,9 @@ export function createAdminRouter(ctx) {
       const result = await ctx.store.unpublish(req.params.id);
       if (result.status === 404) return reply(req, res, { status: 404, json: { error: 'Listing not found' }, note: 'notfound' });
       if (result.status !== 200) return reply(req, res, { status: 409, json: { error: result.error ?? 'Cannot unpublish' }, note: 'failed' });
-      reply(req, res, { json: { ok: true }, note: 'unpublished' });
+      // The removed page now 404s; telling Bing lets it drop the page sooner.
+      ping([`/listings/${encodeURIComponent(req.params.id)}`, '/llms.txt', '/sitemap.xml'], req.params.id);
+      reply(req, res, { json: { ok: true }, note: 'unpublished', id: req.params.id });
     } catch (err) {
       next(err);
     }
