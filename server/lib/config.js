@@ -136,6 +136,7 @@ export function configFromEnv(env = process.env, opts = {}) {
             provider: assistant,
             apiKey: nonEmpty(env.SEANCE_API_KEY),
             model: nonEmpty(env.SEANCE_MODEL),
+            baseUrl: nonEmpty(env.SEANCE_BASE_URL),
           },
   };
 }

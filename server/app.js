@@ -15,6 +15,7 @@ import { configFromEnv } from './lib/config.js';
 import { createRateLimiter } from './lib/rate-limiter.js';
 import { createVisionProvider } from './lib/vision.js';
 import { createNotifier } from './lib/notifier.js';
+import { createAssistantProvider } from './lib/assistant.js';
 import { createHomeRouter }     from './routes/home.js';
 import { createListingsRouter } from './routes/listings.js';
 import { createApiRouter }      from './routes/api.js';
@@ -22,6 +23,7 @@ import { createLlmsRouter }     from './routes/llms.js';
 import { createSitemapRouter }  from './routes/sitemap.js';
 import { createRiseRouter }     from './routes/rise.js';
 import { createMcpRouter }      from './routes/mcp.js';
+import { createSeanceRouter }   from './routes/seance.js';
 import { mountA2A }             from './routes/a2a.js';
 import { layout }               from './lib/html.js';
 
@@ -55,7 +57,7 @@ export function createApp(deps = {}) {
     store,
     visionProvider: deps.visionProvider ?? createVisionProvider(config),
     notifier: deps.notifier ?? createNotifier(config),
-    assistantProvider: deps.assistantProvider,
+    assistantProvider: deps.assistantProvider ?? createAssistantProvider(config),
     clock,
     rateLimiter: deps.rateLimiter ?? createRateLimiter({ clock }),
     config,
@@ -76,6 +78,7 @@ export function createApp(deps = {}) {
   app.use(createSitemapRouter(ctx));
   app.use(createRiseRouter(ctx));
   app.use(createMcpRouter(ctx));
+  app.use(createSeanceRouter(ctx));
 
   if (ctx.a2a) mountA2A(app, ctx.a2a); // registers BOTH the card route and ctx.a2a.path together
 

@@ -20,6 +20,7 @@ import { buildSchema } from '../server/lib/schema.js';
 import { createApp } from '../server/app.js';
 import { createMockNotifier } from '../server/lib/notifier.js';
 import { reviewPage, messagePage } from '../server/lib/rise-html.js';
+import { seanceReportPage } from '../server/lib/seance-html.js';
 
 // ---------------------------------------------------------------------------
 // 1. Shared helpers and generators
@@ -288,5 +289,56 @@ test('Property 26 (quote result pages): 422 page escapes echoed argument; sent p
 });
 
 // ---------------------------------------------------------------------------
-// 4. Seance report (task 9.7 extends here)
+// 4. Seance report (task 9.7)
 // ---------------------------------------------------------------------------
+
+const SEANCE_TIMESTAMPS = [
+  '2025-01-05T10:00:00.000Z',
+  '2025-02-10T12:30:00.000Z',
+  '2025-03-15T08:15:00.000Z',
+  '2025-04-20T17:45:00.000Z',
+];
+
+/** Builds a fixed-shape run set: a two-run group (before/after) plus a single-run group. */
+function buildSeanceRuns(v) {
+  return [
+    { id: 'r1', timestamp: SEANCE_TIMESTAMPS[0], provider: v.provider, prompt: v.prompt, answer: v.answer1, named: false },
+    { id: 'r2', timestamp: SEANCE_TIMESTAMPS[2], provider: v.provider, prompt: v.prompt, answer: v.answer2, named: true },
+    { id: 'r3', timestamp: SEANCE_TIMESTAMPS[1], provider: v.provider2, prompt: v.prompt2, answer: v.answer3, named: false },
+  ];
+}
+
+test('Property 26 (Seance report): name, provider, prompt, and answer text are escaped', () => {
+  // Validates: Requirements 13.8
+  const benign = {
+    provider: 'prov', prompt: 'prompt', provider2: 'prov2', prompt2: 'prompt2',
+    answer1: 'a1', answer2: 'a2', answer3: 'a3',
+  };
+  const benignListing = { id: 'l-1', name: 'Ben' };
+  const baselineWith = countScriptOpens(
+    seanceReportPage(benignListing, buildSeanceRuns(benign), '2025-02-01'),
+  );
+  const baselineWithout = countScriptOpens(
+    seanceReportPage(benignListing, buildSeanceRuns(benign), null),
+  );
+
+  fc.assert(
+    fc.property(
+      fc.record({
+        name: arbDangerous,
+        provider: arbDangerous, prompt: arbDangerous,
+        provider2: arbDangerous, prompt2: arbDangerous,
+        answer1: arbDangerous, answer2: arbDangerous, answer3: arbDangerous,
+      }),
+      fc.constantFrom('2025-02-01', '2025-03-15', null),
+      (v, confirmedDate) => {
+        const html = seanceReportPage({ id: 'l-1', name: v.name }, buildSeanceRuns(v), confirmedDate);
+        const values = [
+          v.name, v.provider, v.prompt, v.provider2, v.prompt2, v.answer1, v.answer2, v.answer3,
+        ];
+        assertEscaped(html, values, confirmedDate ? baselineWith : baselineWithout);
+      },
+    ),
+    { numRuns: 100 },
+  );
+});

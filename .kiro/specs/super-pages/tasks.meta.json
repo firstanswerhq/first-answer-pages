@@ -469,6 +469,104 @@
         "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
         "timestamp": 1794282104062
       }
+    ],
+    "8. Checkpoint - Owner-confirmed stamp": [
+      {
+        "executionId": "a27faea3-d1d3-407c-87ab-a254a8889b0b",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794282553592
+      }
+    ],
+    "9.1 Create `server/lib/assistant.js`": [
+      {
+        "executionId": "a27faea3-d1d3-407c-87ab-a254a8889b0b",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794282556087
+      },
+      {
+        "executionId": "a27faea3-d1d3-407c-87ab-a254a8889b0b",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794284228535
+      }
+    ],
+    "9.2 Create `server/lib/seance.js`": [
+      {
+        "executionId": "a27faea3-d1d3-407c-87ab-a254a8889b0b",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794282558047
+      },
+      {
+        "executionId": "a27faea3-d1d3-407c-87ab-a254a8889b0b",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794284231686
+      }
+    ],
+    "9.3 Create `server/lib/seance-html.js` and `server/routes/seance.js`, and wire into `createApp`": [
+      {
+        "executionId": "a27faea3-d1d3-407c-87ab-a254a8889b0b",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794284236969
+      },
+      {
+        "executionId": "a27faea3-d1d3-407c-87ab-a254a8889b0b",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794284324216
+      }
+    ],
+    "9. Feature 4: The Seance": [
+      {
+        "executionId": "a27faea3-d1d3-407c-87ab-a254a8889b0b",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794284325450
+      }
+    ],
+    "9.4 Write property tests for name detection": [
+      {
+        "executionId": "a27faea3-d1d3-407c-87ab-a254a8889b0b",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794284326504
+      },
+      {
+        "executionId": "a27faea3-d1d3-407c-87ab-a254a8889b0b",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794284734633
+      }
+    ],
+    "9.5 Write property tests and report tests for the Seance history": [
+      {
+        "executionId": "a27faea3-d1d3-407c-87ab-a254a8889b0b",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794284327743
+      },
+      {
+        "executionId": "a27faea3-d1d3-407c-87ab-a254a8889b0b",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794284736649
+      }
+    ],
+    "9.6 Extend provider tests for the assistant provider": [
+      {
+        "executionId": "a27faea3-d1d3-407c-87ab-a254a8889b0b",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794284329113
+      },
+      {
+        "executionId": "a27faea3-d1d3-407c-87ab-a254a8889b0b",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794284738069
+      }
+    ],
+    "9.7 Extend escaping property test to the Seance report": [
+      {
+        "executionId": "a27faea3-d1d3-407c-87ab-a254a8889b0b",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794284331120
+      },
+      {
+        "executionId": "a27faea3-d1d3-407c-87ab-a254a8889b0b",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794284739412
+      }
     ]
   }
 }

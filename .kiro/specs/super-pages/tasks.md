@@ -252,16 +252,16 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
     - **Property 26: Rendered values are escaped** (Listing_Page, quote result page)
     - **Validates: Requirements 4.12, 6.10**
 
-- [ ] 8. Checkpoint - Owner-confirmed stamp
+- [x] 8. Checkpoint - Owner-confirmed stamp
   - Run `node --test`; existing tests and all new tests must pass. Ask the user if questions arise.
 
-- [ ] 9. Feature 4: The Seance
-  - [ ] 9.1 Create `server/lib/assistant.js`
+- [x] 9. Feature 4: The Seance
+  - [x] 9.1 Create `server/lib/assistant.js`
     - `createMockAssistantProvider()`: SHA-256 of the prompt selects a canned answer that names a fixture business or not; pure function of input
     - Real adapters `openai` and `anthropic` with built-in `fetch`, `AbortSignal.timeout(30000)`, key only in a header, model from `SEANCE_MODEL`; `createAssistantProvider(env)` follows config rules (mock without `SEANCE_API_KEY` or in test runs, no network call)
     - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5, 12.6_
 
-  - [ ] 9.2 Create `server/lib/seance.js`
+  - [x] 9.2 Create `server/lib/seance.js`
     - `buildPrompt(listing, categories)` returns `best <category label> in <city>` with the label as stored
     - `normalizeForMatch(s)`: per-code-point lowercase, each `\p{P}` code point becomes a space, whitespace runs collapse to one space, trim; no Unicode normalization form
     - `detectNamed(name, answer)`: substring test on normalized forms; empty normalized name never matches
@@ -270,18 +270,18 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
     - Reflect the design's weakened 11.8 property: `named` can only change across an affix boundary for overlapping text; implementation must not try to prevent boundary matches
     - _Requirements: 11.1, 11.2, 11.3, 11.4, 11.5, 11.6, 13.1_
 
-  - [ ] 9.3 Create `server/lib/seance-html.js` and `server/routes/seance.js`, and wire into `createApp`
+  - [x] 9.3 Create `server/lib/seance-html.js` and `server/routes/seance.js`, and wire into `createApp`
     - `POST /seance/run` (JSON `{ id }`): 403 when no `SEANCE_ADMIN_TOKEN` configured; 401 for missing or wrong bearer token (SHA-256 both values then `crypto.timingSafeEqual`); 404 unknown listing; rate limits `seance:<ip>` (10 per hour) and `seance-listing:<id>` (1 per 10 minutes) consumed before the provider call, 429 with `Retry-After`; 502 `{ error: 'run failed' }` on provider failure
     - `GET /seance/:id` HTML report and `GET /api/seance/:id` JSON, both 404 for unknown listings; runs oldest to newest; group by `(provider, prompt)` with first labeled "before", last "after", and whether `named` changed; tag each run "before owner confirmation" or "after owner confirmation" by UTC date against the Verified_Date (same date counts as after); empty state says no runs recorded; works without JavaScript; escape answers with `escapeHtml`
     - _Requirements: 11.2, 11.6, 12.7, 12.8, 12.9, 13.1, 13.2, 13.3, 13.4, 13.5, 13.6, 13.7, 13.8_
 
-  - [ ]* 9.4 Write property tests for name detection
+  - [x]* 9.4 Write property tests for name detection
     - File `test/seance.test.js`; positive case uses letters and spaces with re-casing, punctuation changes, and longer whitespace; disjoint case uses a name alphabet `a-f` and affixes and answers from digits
     - **Property 21: A name contained in the answer is detected**
     - **Property 22: Name detection is stable under added context** (uses the weakened form from the design: `named: true` stays true after any prefix and suffix; unchanged when affixes use a disjoint alphabet)
     - **Validates: Requirements 11.3, 11.4, 11.7, 11.8**
 
-  - [ ]* 9.5 Write property tests and report tests for the Seance history
+  - [x]* 9.5 Write property tests and report tests for the Seance history
     - File `test/seance-history.test.js`
     - Property tests include concurrent appends and a 4,000-character truncation round trip
     - Examples: report ordering, before and after labels, before and after owner confirmation tags, empty state, 401, 403, 429 with `Retry-After`, 502 stores nothing, JSON matches HTML history, answer escaped
@@ -289,12 +289,12 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
     - **Property 24: Seance round trip**
     - **Validates: Requirements 11.5, 12.7, 12.8, 12.9, 13.1, 13.2, 13.3, 13.4, 13.5, 13.6, 13.7, 13.9, 13.10**
 
-  - [ ]* 9.6 Extend provider tests for the assistant provider
+  - [x]* 9.6 Extend provider tests for the assistant provider
     - Add to `test/providers.test.js`; stubbed `globalThis.fetch`; zero calls without a key; key never in logs, responses, or stored files
     - **Property 14: Mock providers are deterministic** (assistant half)
     - **Validates: Requirements 12.1, 12.2, 12.3, 12.4, 12.5, 12.6**
 
-  - [ ]* 9.7 Extend escaping property test to the Seance report
+  - [x]* 9.7 Extend escaping property test to the Seance report
     - Add to `test/render.test.js`
     - **Property 26: Rendered values are escaped** (Seance report)
     - **Validates: Requirements 13.8**

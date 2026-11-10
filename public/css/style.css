@@ -324,3 +324,45 @@ h1 {
   color: var(--color-text);
   transform: none;
 }
+
+/* Seance report: plain phone-book entries on paper yellow */
+.seance h2 {
+  margin: 1.5rem 0 0.5rem;
+  border-bottom: 2px solid var(--color-divider);
+}
+
+.seance-group,
+.seance-run {
+  margin: 0 0 1rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-divider);
+}
+
+.seance-group h3,
+.seance-run h3 {
+  margin: 0 0 0.25rem;
+  font-size: 1.05rem;
+}
+
+.seance-tag {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0 0.4rem;
+  border: 1px solid var(--color-divider);
+  font-size: 0.85rem;
+  font-weight: normal;
+  text-transform: uppercase;
+}
+
+.seance-meta {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+}
+
+.seance-answer {
+  margin: 0;
+  padding-left: 0.75rem;
+  border-left: 4px solid var(--color-divider);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
