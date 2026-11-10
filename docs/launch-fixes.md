@@ -95,3 +95,17 @@ Two more independent reviews (one of the code, one walking the site as a visitor
 - The specs: change the titles inside `.kiro/specs/super-pages/*.md` from "Super Pages" to "Owner tools" (don't rename the folder). Change "honours" to "honors" in server/app.js.
 - README, a "Deploy on Render" section: the Starter plan and the 1 GB disk are paid monthly (link to Render's pricing page instead of quoting a price), New → Blueprint → pick the repo, which env vars to type in (`BASE_URL`, `SITE_NAME`, the two Anthropic keys, optional `RESEND_API_KEY`/`NOTIFY_FROM`/`ADMIN_EMAIL`), where to find the generated `ADMIN_TOKEN` (the service's Environment tab), that `autoDeploy: false` means you press "Manual Deploy" after each change, how to log in at `/admin/login`, and the TRUST_PROXY check below.
 - TRUST_PROXY check (README and a log line): at startup in production log `trust proxy = N`. Add `GET /admin/whoami` (admin only) that shows `req.ip` and `req.ips`, so after the first deploy Colby can open it from his phone and we set TRUST_PROXY to the smallest number that shows his real IP.
+
+## 21 (task 22 in tasks.md). Tell Bing about new listings (IndexNow)
+
+Colby approved this on Nov 10, 2026. IndexNow is a free, open protocol: the site tells participating search engines (Bing and others, which share submissions) "this page is new or changed", so they read it in days instead of weeks. Google doesn't take part; Colby adds the site to Google Search Console by hand.
+
+- New module `server/lib/indexnow.js`: `createIndexNow({ baseUrl, dataDir, enabled, fetch, clock })` with `submit(urls)`.
+- **Key:** on first use, make a random 32-character key from `[a-z0-9]` (crypto) and save it to `DATA_DIR/indexnow-key.txt`; reuse it after that. (Rules: 8 to 128 characters, letters, digits and dashes only.)
+- **Key file:** serve `GET /{key}.txt` at the site root, `text/plain; charset=utf-8`, body exactly the key. Any other `/*.txt` still 404s (except `/llms.txt`).
+- **Submit:** `POST https://api.indexnow.org/indexnow` with header `Content-Type: application/json; charset=utf-8` and body `{ "host": <BASE_URL hostname>, "key": <key>, "keyLocation": <BASE_URL>/<key>.txt, "urlList": [...] }`. 200 and 202 are success; 400/403/422/429 are logged as `[indexnow] status=<code>` only (never the key). 10-second timeout. Fire and forget: the admin's approve/unpublish never waits for it and never fails because of it.
+- **When:** after an admin approves a listing (the listing URL, its category page, `/llms.txt` and `/sitemap.xml`), and after unpublish (the removed listing URL, so engines see the 404). Batch in one request.
+- **Only for real sites:** enabled when `NODE_ENV=production`, `DEMO_MODE` is off, and `BASE_URL` is https and not localhost/127.0.0.1/*.test. `INDEXNOW=off` turns it off. Never runs in tests unless a test passes a stub fetch.
+- **Admin:** `/admin/pending` shows one line under each approval note: "Bing notified" or "Bing not notified (reason)". `GET /admin/indexnow` (admin only) shows the last 20 submissions: time (America/Chicago), URLs, status.
+- Tests with a stubbed fetch: the request body and headers are exactly as above, the key file route returns the key, the key is stable across restarts (same DATA_DIR), nothing is sent in demo mode or for a localhost BASE_URL, a failing or hanging endpoint doesn't slow or break approve, and the key never appears in logs.
+- README: one short paragraph explaining what IndexNow does and how to turn it off.
