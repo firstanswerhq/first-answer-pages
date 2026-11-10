@@ -5,15 +5,23 @@ First Answer Pages is a free local business directory with a classic phone-book 
 
 ## Go live on Render, step by step
 
-The site runs on Render from the `render.yaml` Blueprint in this repository. Render deploys the `main` branch, so make sure the latest work is merged into `main` first.
+The site runs on Render from the `render.yaml` Blueprint in this repository. Render deploys the `main` branch of the GitHub repository, which always holds the finished, reviewed version.
 
 The Starter plan and the 1 GB disk are both paid monthly. See [Render's pricing page](https://render.com/pricing) for the current prices.
+
+### 0. Accounts you need
+
+- **GitHub**: the account that owns this repository.
+- **Render**: sign up at render.com with **Sign up with GitHub**, so Render can see the repository.
+- **Anthropic** (step 1) for the photo reader and the Séance.
 
 ### 1. Get an Anthropic API key
 
 1. Go to the Claude Console (console.anthropic.com) and sign in.
-2. Open API keys and create a key. Copy it somewhere safe; it is shown once.
-3. The same key goes in two places below (`VISION_API_KEY` for reading photos and `SEANCE_API_KEY` for the Séance). Both are required: the Blueprint turns on the Anthropic provider for both, and the server will not start without the keys.
+2. Under **Billing**, add a payment method and buy some credits. The key does not work until the account has credits.
+3. Under **Limits**, set a monthly spend limit you are comfortable with. The site also stops itself after 200 AI calls a day (`MAX_AI_CALLS_PER_DAY`), and each Séance web search costs $10 per 1,000 searches plus normal usage.
+4. Open **API keys** and create a key. Copy it somewhere safe; it is shown once.
+5. The same key goes in two places below (`VISION_API_KEY` for reading photos and `SEANCE_API_KEY` for the Séance). Both are required: the Blueprint turns on the Anthropic provider for both, and the server will not start without the keys.
 
 ### 2. Create the service
 
@@ -22,6 +30,8 @@ The Starter plan and the 1 GB disk are both paid monthly. See [Render's pricing 
    - `BASE_URL`: the site's public address with no trailing slash. Use the Render address for now, for example `https://first-answer-pages.onrender.com`. If Render gives the service a different address, fix this value in step 3.
    - `SITE_NAME`: the name shown on every page.
    - `VISION_API_KEY` and `SEANCE_API_KEY`: your Anthropic key from step 1 (the same key in both).
+   - `CONTACT_EMAIL`: the email address people can write to. It appears on the About and Privacy pages and in the footer.
+   - Leave `RESEND_API_KEY`, `NOTIFY_FROM` and `ADMIN_EMAIL` blank for now. They are for quote emails (step 6).
 3. Press **Apply**. Render builds and starts the service. It is ready when `https://<your address>/healthz` shows `{"ok":true}`.
 
 ### 3. Check the address
@@ -36,18 +46,22 @@ Render generates `ADMIN_TOKEN` for you. To read it, open the service, then **Env
 
 ### 5. Check TRUST_PROXY
 
-`TRUST_PROXY` is the number of proxies in front of the app (`1` on Render). If it is wrong, every visitor looks like the same address and shares one rate limit. At startup in production the server logs one line, `trust proxy = N`.
+Render already sets `TRUST_PROXY` to `1`, which should be right. To check it:
 
-To check it, open `/admin/whoami` from your phone while logged in (it is also in the admin menu as "My IP"). It shows `req.ip`, `req.ips`, and the current setting. Set `TRUST_PROXY` to the smallest number that shows your real IP address, then Manual Deploy. Send `Accept: application/json` to get the same answer as JSON.
+1. On your phone, turn off Wi-Fi, log in as admin, and open `/admin/whoami` (it is also in the admin menu as "My IP").
+2. In another tab, open whatismyipaddress.com.
+3. If the address on `/admin/whoami` matches, you're done.
+
+If it doesn't match, ask for help before changing it. (For developers: the page shows `req.ip` and `req.ips`. Set `TRUST_PROXY` to the smallest hop count that shows the real client IP, then Manual Deploy. At startup in production the server logs `trust proxy = N`, and `Accept: application/json` returns the same answer as JSON.)
 
 ### 6. Turn on quote emails (recommended before you promote the site)
 
-Until this is on, quote requests are saved but nobody is emailed. Check `/admin/quotes` yourself.
+Until this is on, quote requests are saved but nobody is emailed. Open `/admin/quotes` every day and use **Forward to the business** to send each new quote on yourself.
 
-1. Create a free Resend account (resend.com) with the project's email address.
-2. In Resend, add and verify your domain (Resend shows the DNS records to add at your domain registrar). Emails can only be sent from a verified domain.
+1. Create a free Resend account (resend.com). Use the email address you use for this business.
+2. In Resend, add and verify your own domain (step 7). Resend shows the DNS records to add at your domain registrar. Emails can only be sent from a verified domain.
 3. Create a Resend API key.
-4. In Render, open **Environment** and add: `NOTIFIER` = `resend`, `RESEND_API_KEY` = the key, `NOTIFY_FROM` = for example `Quotes <quotes@your-domain.example>`, `ADMIN_EMAIL` = where you want a copy of every quote, and optionally `CONTACT_EMAIL` (shown on the About and Privacy pages). Save and press **Manual Deploy**.
+4. In Render, open **Environment** and change `NOTIFIER` from `none` to `resend`. Fill in `RESEND_API_KEY` (the key), `NOTIFY_FROM` (for example `Quotes <quotes@your-domain.example>`) and `ADMIN_EMAIL` (where you want a copy of every quote). Save and press **Manual Deploy**.
 
 ### 7. Use your own domain
 
@@ -57,8 +71,10 @@ Until this is on, quote requests are saved but nobody is emailed. Check `/admin/
 
 ### 8. Tell the search engines
 
-1. Add the site to Google Search Console and submit `https://your-domain/sitemap.xml`.
-2. Add it to Bing Webmaster Tools and submit the same sitemap. After that, every listing you approve is sent to Bing automatically (see "Tell Bing about new listings").
+Do this after step 7, once your own domain works.
+
+1. In Google Search Console, add a **Domain** property for your domain. Google asks you to prove you own it by adding a TXT record at your registrar, and shows the exact record to copy. Then open **Sitemaps** and submit `https://your-domain/sitemap.xml`.
+2. In Bing Webmaster Tools, choose **Import from Google Search Console**, so you don't have to verify again. After that, every listing you approve is sent to Bing automatically (see "Tell Bing about new listings").
 
 ### Backups
 
@@ -221,7 +237,7 @@ All are optional except in production, where `DATA_DIR` and `BASE_URL` are requi
 | `SEANCE_MODEL` | unset | Model name for the Séance provider. |
 | `SEANCE_BASE_URL` | `https://api.openai.com/v1` | Base URL for an OpenAI-compatible Séance API. Only used when `SEANCE_PROVIDER=openai`. |
 | `SEANCE_TIMEOUT_MS` | `120000` | How long one Séance question may take, in milliseconds. One deadline covers the first call and any resend. The photo reader keeps 30 seconds. Must be a positive whole number; anything else logs a warning and uses 120000. |
-| `MAX_AI_CALLS_PER_DAY` | `200` | Daily cap on paid AI provider calls, shared by photo listing and the Séance. Every paid call counts, including the second call when a Séance answer needs a continuation. Photo uploads may use at most 150 of the total (or the whole cap if it is lower), so uploads never block Séance runs. The day runs midnight to midnight Central time (America/Chicago). The count is saved in `DATA_DIR/ai-budget.json`, so a restart does not reset it. Over the cap, people see "Try again tomorrow". Must be a positive whole number; anything else logs a warning and uses 200. |
+| `MAX_AI_CALLS_PER_DAY` | `200` | Daily cap on paid AI provider calls, shared by photo listing and the Séance. Every paid call counts, including the second call when a Séance answer needs a continuation. Photo uploads may use at most 150 of the total, and never more than three quarters of it, so uploads never block Séance runs. The day runs midnight to midnight Central time (America/Chicago). The count is saved in `DATA_DIR/ai-budget.json`, so a restart does not reset it. Over the cap, people see "Try again tomorrow". Must be a positive whole number; anything else logs a warning and uses 200. |
 | `INDEXNOW` | `on` | Set to `off` to stop telling Bing about new and removed listings (see "Tell Bing about new listings" above). It only ever runs on the live site: `NODE_ENV=production`, `DEMO_MODE` off, and an `https` `BASE_URL` that is not a local address. |
 | `CONTACT_EMAIL` | (none) | An email address shown as plain text on `/about`, `/privacy` and in every page footer, so people can ask questions or ask for removal. Leave it unset to show no contact line. |
 | `SEANCE_ADMIN_TOKEN` | unset | Older name for `ADMIN_TOKEN`. Used only when `ADMIN_TOKEN` is not set. |
