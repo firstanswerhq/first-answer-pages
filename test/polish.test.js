@@ -526,7 +526,7 @@ test('llms.txt and sitemap.xml use an explicit BASE_URL', async () => {
 
 test('README documents the Render deploy and has no "Super Pages"', async () => {
   const readme = await fs.readFile(path.join(REPO_ROOT, 'README.md'), 'utf8');
-  assert.match(readme, /^#{1,6} Deploy on Render\s*$/m);
+  assert.match(readme, /^#{1,6} Go live on Render/m);
   for (const part of [
     'https://render.com/pricing', 'Blueprint', 'Manual Deploy', '/admin/login', '/admin/whoami',
     'TRUST_PROXY', 'ADMIN_TOKEN', 'Environment',
