@@ -261,6 +261,152 @@
         "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
         "timestamp": 1794279343859
       }
+    ],
+    "4. Checkpoint - Rise from the Grave": [
+      {
+        "executionId": "5cf0a1d3-fa0b-4245-9dde-ec962eaba223",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794280291874
+      }
+    ],
+    "5.1 Create `server/lib/tool-validator.js`": [
+      {
+        "executionId": "5cf0a1d3-fa0b-4245-9dde-ec962eaba223",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794280303822
+      },
+      {
+        "executionId": "5cf0a1d3-fa0b-4245-9dde-ec962eaba223",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794280365726
+      }
+    ],
+    "5.5 Create `public/js/webmcp.js`": [
+      {
+        "executionId": "5cf0a1d3-fa0b-4245-9dde-ec962eaba223",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794280305361
+      },
+      {
+        "executionId": "5cf0a1d3-fa0b-4245-9dde-ec962eaba223",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794280367175
+      }
+    ],
+    "5.6 Create the A2A seam `server/routes/a2a.js` and wire it into `createApp`": [
+      {
+        "executionId": "5cf0a1d3-fa0b-4245-9dde-ec962eaba223",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794280306753
+      },
+      {
+        "executionId": "5cf0a1d3-fa0b-4245-9dde-ec962eaba223",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794280368885
+      }
+    ],
+    "5.2 Create `server/lib/notifier.js` and `server/lib/quotes.js`": [
+      {
+        "executionId": "5cf0a1d3-fa0b-4245-9dde-ec962eaba223",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794280372270
+      },
+      {
+        "executionId": "5cf0a1d3-fa0b-4245-9dde-ec962eaba223",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794280422789
+      }
+    ],
+    "5.3 Create `server/lib/mcp.js` and `server/routes/mcp.js`, and wire into `createApp`": [
+      {
+        "executionId": "5cf0a1d3-fa0b-4245-9dde-ec962eaba223",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794280429093
+      },
+      {
+        "executionId": "5cf0a1d3-fa0b-4245-9dde-ec962eaba223",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794280515983
+      }
+    ],
+    "5.4 Add quote surfaces and listing-page integration": [
+      {
+        "executionId": "5cf0a1d3-fa0b-4245-9dde-ec962eaba223",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794280430327
+      },
+      {
+        "executionId": "5cf0a1d3-fa0b-4245-9dde-ec962eaba223",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794280518441
+      }
+    ],
+    "5. Feature 2: Agent-ready": [
+      {
+        "executionId": "5cf0a1d3-fa0b-4245-9dde-ec962eaba223",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794280520288
+      }
+    ],
+    "5.7 Write property tests for the tool validator": [
+      {
+        "executionId": "5cf0a1d3-fa0b-4245-9dde-ec962eaba223",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794280521527
+      },
+      {
+        "executionId": "5cf0a1d3-fa0b-4245-9dde-ec962eaba223",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794280752501
+      }
+    ],
+    "5.8 Write property tests and flow tests for the MCP endpoint": [
+      {
+        "executionId": "5cf0a1d3-fa0b-4245-9dde-ec962eaba223",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794280523627
+      },
+      {
+        "executionId": "5cf0a1d3-fa0b-4245-9dde-ec962eaba223",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794280754007
+      }
+    ],
+    "5.9 Write property tests for quotes": [
+      {
+        "executionId": "5cf0a1d3-fa0b-4245-9dde-ec962eaba223",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794280524837
+      },
+      {
+        "executionId": "5cf0a1d3-fa0b-4245-9dde-ec962eaba223",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794280755825
+      }
+    ],
+    "5.10 Write tests for the WebMCP script with stubbed globals": [
+      {
+        "executionId": "5cf0a1d3-fa0b-4245-9dde-ec962eaba223",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794280525908
+      },
+      {
+        "executionId": "5cf0a1d3-fa0b-4245-9dde-ec962eaba223",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794280757169
+      }
+    ],
+    "5.11 Write tests for the A2A seam": [
+      {
+        "executionId": "5cf0a1d3-fa0b-4245-9dde-ec962eaba223",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794280527326
+      },
+      {
+        "executionId": "5cf0a1d3-fa0b-4245-9dde-ec962eaba223",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794280758870
+      }
     ]
   }
 }

@@ -242,3 +242,46 @@ h1 {
   padding: 0.5rem;
   border: 1px solid var(--color-divider);
 }
+
+/* Quote request form on listing pages */
+.quote-request {
+  margin-top: 2rem;
+  padding-top: 0.5rem;
+  border-top: 4px double var(--color-divider);
+}
+
+.quote-request h2 {
+  margin: 0.5rem 0;
+  font-size: 1.4rem;
+  text-transform: uppercase;
+}
+
+.quote-request .hint {
+  font-size: 0.9rem;
+  font-style: italic;
+}
+
+.quote-form {
+  padding: 0.75rem;
+  border: 2px solid var(--color-divider);
+}
+
+.quote-form label {
+  display: block;
+  margin-top: 0.5rem;
+  font-weight: bold;
+}
+
+.quote-form input[type="text"],
+.quote-form textarea {
+  width: 100%;
+  font: inherit;
+  padding: 0.25rem 0.5rem;
+}
+
+.quote-form button {
+  margin-top: 0.75rem;
+  font: inherit;
+  font-weight: bold;
+  padding: 0.3rem 1rem;
+}

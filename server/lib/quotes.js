@@ -1,0 +1,69 @@
+// Quote store and submission. One function serves MCP, the JSON API, and the
+// no-JS HTML form so validation, storage, and rate limits are identical.
+
+import { validateQuoteArgs } from './tool-validator.js';
+import { RULES } from './rate-limiter.js';
+
+/** Run notify() with a timeout; rejects on timeout. */
+function notifyWithTimeout(notifier, payload, timeoutMs) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      const err = new Error('notifier timed out');
+      err.name = 'TimeoutError';
+      reject(err);
+    }, timeoutMs);
+  });
+  return Promise.race([Promise.resolve().then(() => notifier.notify(payload)), timeout])
+    .finally(() => clearTimeout(timer));
+}
+
+/**
+ * @param {object} ctx resolved app context
+ * @param {unknown} args raw quote arguments
+ * @param {string} clientIp
+ * @returns {Promise<{status:'ok', quoteId:string}
+ *   | {status:'invalid', argument:string, message:string}
+ *   | {status:'rate_limited', retryAfterSeconds:number}>}
+ */
+export async function submitQuote(ctx, args, clientIp) {
+  const checked = validateQuoteArgs(args, ctx.store);
+  if (!checked.ok) {
+    return { status: 'invalid', argument: checked.argument, message: checked.message };
+  }
+  const { id: listingId, name, contact, details } = checked.value;
+
+  const limit = ctx.rateLimiter.consumeAll([
+    { key: `quote:${clientIp}`, ...RULES.quote },
+    { key: `quote:${clientIp}:${listingId}`, ...RULES['quote-listing'] },
+  ]);
+  if (!limit.allowed) {
+    return { status: 'rate_limited', retryAfterSeconds: limit.retryAfterSeconds };
+  }
+
+  const quote = {
+    id: ctx.newId(),
+    listingId,
+    name,
+    contact,
+    details,
+    createdAt: new Date(ctx.clock.now()).toISOString(),
+    notified: false,
+  };
+  const quotes = ctx.store.collection('quotes');
+  await quotes.append(quote);
+
+  const listing = ctx.store.findById(listingId);
+  try {
+    await notifyWithTimeout(ctx.notifier, { quote, listing }, ctx.config.providerTimeoutMs);
+    await quotes.update(list => {
+      const stored = list.find(q => q.id === quote.id);
+      if (stored) stored.notified = true;
+    });
+  } catch (err) {
+    // Name only: messages could echo user text.
+    process.stderr.write(`[quote] notify failed: ${err?.name ?? 'Error'}\n`);
+  }
+
+  return { status: 'ok', quoteId: quote.id };
+}

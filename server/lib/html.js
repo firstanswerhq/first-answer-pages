@@ -80,6 +80,31 @@ export function listingCard(listing, categories) {
 }
 
 /**
+ * Renders the plain HTML quote request form for a listing. Works without
+ * JavaScript; webmcp.js reads the data attributes.
+ *
+ * @param {{ id: string, name: string }} listing
+ * @returns {string}
+ */
+export function quoteForm(listing) {
+  const id = escapeHtml(listing.id);
+  const name = escapeHtml(listing.name);
+  return `<section class="quote-request">
+  <h2>Ask for a quote</h2>
+  <p class="hint">Tell ${name} what you need. Leave a phone number or email so they can reach you.</p>
+  <form class="quote-form" method="post" action="/listings/${encodeURIComponent(listing.id)}/quote" data-listing-id="${id}" data-listing-name="${name}">
+    <label for="quote-name">Your name</label>
+    <input id="quote-name" name="name" type="text" required maxlength="100" autocomplete="name">
+    <label for="quote-contact">Phone or email</label>
+    <input id="quote-contact" name="contact" type="text" required maxlength="254" autocomplete="off">
+    <label for="quote-details">What do you need done?</label>
+    <textarea id="quote-details" name="details" rows="5" required maxlength="2000"></textarea>
+    <button type="submit">Send request</button>
+  </form>
+</section>`;
+}
+
+/**
  * Renders the full listing detail page body.
  * The JSON-LD string is exposed on the returned value so callers can pass it
  * to layout(); it is also embedded inline in a <script type="application/ld+json">

@@ -14,12 +14,15 @@ import { createDataStore, getDefaultStore } from './data.js';
 import { configFromEnv } from './lib/config.js';
 import { createRateLimiter } from './lib/rate-limiter.js';
 import { createVisionProvider } from './lib/vision.js';
+import { createNotifier } from './lib/notifier.js';
 import { createHomeRouter }     from './routes/home.js';
 import { createListingsRouter } from './routes/listings.js';
 import { createApiRouter }      from './routes/api.js';
 import { createLlmsRouter }     from './routes/llms.js';
 import { createSitemapRouter }  from './routes/sitemap.js';
 import { createRiseRouter }     from './routes/rise.js';
+import { createMcpRouter }      from './routes/mcp.js';
+import { mountA2A }             from './routes/a2a.js';
 import { layout }               from './lib/html.js';
 
 /** The only place in server/ that reads the system time. */
@@ -51,7 +54,7 @@ export function createApp(deps = {}) {
   const ctx = {
     store,
     visionProvider: deps.visionProvider ?? createVisionProvider(config),
-    notifier: deps.notifier,
+    notifier: deps.notifier ?? createNotifier(config),
     assistantProvider: deps.assistantProvider,
     clock,
     rateLimiter: deps.rateLimiter ?? createRateLimiter({ clock }),
@@ -72,6 +75,9 @@ export function createApp(deps = {}) {
   app.use(createLlmsRouter(ctx));
   app.use(createSitemapRouter(ctx));
   app.use(createRiseRouter(ctx));
+  app.use(createMcpRouter(ctx));
+
+  if (ctx.a2a) mountA2A(app, ctx.a2a); // registers BOTH the card route and ctx.a2a.path together
 
   // Catch-all 404
   app.use((req, res) => {

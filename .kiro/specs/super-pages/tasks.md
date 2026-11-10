@@ -149,22 +149,22 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
     - **Property 26: Rendered values are escaped** (Rise pages)
     - **Validates: Requirements 4.12**
 
-- [ ] 4. Checkpoint - Rise from the Grave
+- [x] 4. Checkpoint - Rise from the Grave
   - Run `node --test`; existing tests and all new tests must pass. Ask the user if questions arise.
 
-- [ ] 5. Feature 2: Agent-ready
-  - [ ] 5.1 Create `server/lib/tool-validator.js`
+- [x] 5. Feature 2: Agent-ready
+  - [x] 5.1 Create `server/lib/tool-validator.js`
     - `validateAgainstSchema(schema, value)` for the subset `type` (`object`, `string`), `properties`, `required`, `additionalProperties: false`, `minLength`, `maxLength`; total function that never throws; reads keys with `Object.hasOwn`; returns `{ ok, value }` or `{ ok: false, argument, message }`
     - `validateQuoteArgs(args, store)`: structural check, sanitize (strip control characters; `details` keeps `\n` and `\t`, normalizes `\r\n`; trim), then `id` must match a published listing, `name` 1 to 100, `contact` email (at most 254 characters) or phone with 10 digits or 11 starting with 1, `details` 1 to 2000
     - _Requirements: 5.8, 5.9, 5.16, 6.2, 6.3, 6.10_
 
-  - [ ] 5.2 Create `server/lib/notifier.js` and `server/lib/quotes.js`
+  - [x] 5.2 Create `server/lib/notifier.js` and `server/lib/quotes.js`
     - `createMockNotifier()` with in-memory `sent` array and `failNext` flag; `console` notifier writes one JSON line with quote id and listing id only; `createNotifier(env)` per config rules (mock when `NOTIFIER` unset or in test runs)
     - `submitQuote(ctx, args, clientIp)`: validate (invalid consumes no rate budget), atomic two-key rate check, append `{ id, listingId, name, contact, details, createdAt, notified: false }` through the queue, call `notifier.notify` in try/catch with the provider timeout, set `notified: true` by queued update on success, keep `false` on failure and still return `{ status: 'ok', quoteId }`
     - Logs print error names only
     - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9, 6.10_
 
-  - [ ] 5.5 Create `public/js/webmcp.js`
+  - [x] 5.5 Create `public/js/webmcp.js`
     - ES module exporting `registerWebMcp({ navigator, document, window, fetch, console })`; auto-start guarded by `typeof document !== 'undefined' && typeof window !== 'undefined'` (Node 22 defines `navigator`)
     - Context from `navigator?.modelContext ?? document?.modelContext`; absent means return silently with no console output
     - Register `get_listing` (`readOnlyHint: true`, fetches `/api/listings/<id>`) and `request_quote` (`readOnlyHint: false`, `requiresConfirmation: true`, input schema matching the MCP tool) in separate try/catch blocks
@@ -172,12 +172,12 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
     - Reads `data-listing-id` and `data-listing-name` from the quote form
     - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8_
 
-  - [ ] 5.6 Create the A2A seam `server/routes/a2a.js` and wire it into `createApp`
+  - [x] 5.6 Create the A2A seam `server/routes/a2a.js` and wire it into `createApp`
     - `mountA2A(app, a2a)` registers the card route and `a2a.path` together; `createApp` calls it only when `ctx.a2a` is supplied; this spec supplies none, so `GET /.well-known/agent-card.json` returns 404
     - No A2A endpoint is built in this spec (design decision)
     - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5_
 
-  - [ ] 5.3 Create `server/lib/mcp.js` and `server/routes/mcp.js`, and wire into `createApp`
+  - [x] 5.3 Create `server/lib/mcp.js` and `server/routes/mcp.js`, and wire into `createApp`
     - `POST /mcp` chain: rate limit `mcp:<ip>`, `express.raw({ type: () => true, limit: 65536 })`, handler; 413 over 64 KiB; `GET` and `DELETE` return 405 with `Allow: POST`
     - Bad JSON gives HTTP 400 with `-32700`; non-object, missing `jsonrpc: "2.0"`, missing method, or batch gives HTTP 400 with `-32600`; message without `id` is a notification and gets 202 empty
     - `initialize` (protocol version, `capabilities.tools`, `serverInfo.name` `first-answer-pages`), `ping`, `tools/list` (exactly `search_listings`, `get_listing`, `request_quote`, each with name, description, `inputSchema`), `tools/call`; unknown method `-32601`; unknown tool or invalid args `-32602` naming the tool or argument before any tool logic; thrown exceptions give `-32603` with HTTP 200, never 500
@@ -187,26 +187,26 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
     - Success shape `{ content: [{ type: 'text', text }], structuredContent }`
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8, 5.9, 5.10, 5.11, 5.12, 5.13, 5.14, 5.15, 5.18, 5.19, 6.1, 6.3, 10.12_
 
-  - [ ] 5.4 Add quote surfaces and listing-page integration
+  - [x] 5.4 Add quote surfaces and listing-page integration
     - `POST /api/quotes` in `routes/api.js` (JSON, 16 KiB limit): 201 `{ quoteId }`, 422 `{ error, argument }`, 429 with `Retry-After`; same validation, storage, notification, and limits as MCP
     - `POST /listings/:id/quote` in `routes/listings.js` (urlencoded): path `id` overrides body `id`; `303` to `/listings/:id?quote=sent`, or an HTML error page with 422 or 429; unknown listing 404
     - `quoteForm(listing)` in `html.js` renders a plain HTML form (works without JavaScript) carrying `data-listing-id` and `data-listing-name`; listing page passes `scripts: ['/js/webmcp.js']` to `layout()` which renders `<script type="module" src="/js/webmcp.js">`
     - Escape `name` and `details` wherever shown; add quote form CSS in the existing hand-made style
     - _Requirements: 6.9, 6.10, 7.1, 7.8, 7.9_
 
-  - [ ]* 5.7 Write property tests for the tool validator
+  - [x]* 5.7 Write property tests for the tool validator
     - File `test/tool-validator.test.js`; independent oracle for the schema subset
     - **Property 15: Tool validator accepts exactly what the schema allows**
     - **Validates: Requirements 5.8, 5.9, 5.16**
 
-  - [ ]* 5.8 Write property tests and flow tests for the MCP endpoint
+  - [x]* 5.8 Write property tests and flow tests for the MCP endpoint
     - File `test/mcp.test.js`; start the server once per file; body generators mix random bytes, random JSON, and JSON-RPC envelopes with weighted method names
     - Example flow: `initialize`, `tools/list`, `tools/call`; 405 with `Allow`; 413; 429 with `Retry-After`; unknown tool and method; unpublished drafts excluded
     - **Property 16: The MCP endpoint never answers 500**
     - **Property 17: Search returns exactly the matching listings, capped at 25**
     - **Validates: Requirements 5.1, 5.2, 5.3, 5.4, 5.5, 5.8, 5.9, 5.10, 5.11, 5.12, 5.13, 5.14, 5.15, 5.16, 5.17, 5.18, 5.19**
 
-  - [ ]* 5.9 Write property tests for quotes
+  - [x]* 5.9 Write property tests for quotes
     - File `test/quotes.test.js`; mock notifier, fake clock, large-limit rate limiter except where limits are under test
     - Examples: notifier success sets `notified: true`; notifier failure keeps the quote with `notified: false` and still returns success; 5 per hour and 3 per listing per hour limits; no-JS form post; `POST /api/quotes` parity with MCP
     - **Property 18: A quote is stored if and only if validation accepts**
@@ -214,12 +214,12 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
     - **Property 20: Quote round trip**
     - **Validates: Requirements 6.2, 6.3, 6.4, 6.5, 6.7, 6.8, 6.9, 6.10, 6.11, 6.12, 7.8**
 
-  - [ ]* 5.10 Write tests for the WebMCP script with stubbed globals
+  - [x]* 5.10 Write tests for the WebMCP script with stubbed globals
     - File `test/webmcp.test.js`; cases: `modelContext` absent (no throw, no `console.error` or `console.warn`, no `fetch`), `document.modelContext` fallback, present (both tools with annotations and confirmation marker), first registration throws (second still attempted), user declines (zero `fetch` calls), user confirms (one `POST` to `/api/quotes` with page listing id), server rejects with 422, import in Node has no side effects
     - Also assert the listing page HTML contains the module script tag and the plain quote form
     - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8, 7.9, 15.9_
 
-  - [ ]* 5.11 Write tests for the A2A seam
+  - [x]* 5.11 Write tests for the A2A seam
     - File `test/app.test.js`; `GET /.well-known/agent-card.json` returns 404; no router layer matches the card path; with an injected stub `a2a` dependency both the card and endpoint routes appear together
     - _Requirements: 8.3, 8.4, 8.5_
 
