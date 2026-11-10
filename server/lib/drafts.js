@@ -8,9 +8,11 @@
  *   { status: 409, error }              draft is not in status 'draft'
  * Storage failures (StoreError) still propagate to the caller.
  *
- * Draft shape: { id, status: 'draft'|'publishing'|'published', fields,
- *   missingFields, createdAt, reservedId?, listingId? }
- * Status transitions to 'publishing'/'published' are made by store.publishDraft.
+ * Draft shape: { id, status: 'draft'|'pending'|'rejected'|'publishing'|'published',
+ *   fields, missingFields, createdAt, reservedId?, listingId? }
+ * Only 'draft' drafts can be edited or discarded. Transitions to 'pending' and
+ * 'rejected' are made by store.submitDraft / rejectDraft; 'publishing' and
+ * 'published' by store.publishDraft.
  */
 
 import { randomUUID } from 'node:crypto';

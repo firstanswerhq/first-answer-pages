@@ -42,17 +42,18 @@ function providerName(value) {
 }
 
 /**
- * Parse TRUST_PROXY for Express: "true"/"false", a hop count, or a
- * subnet/list string. Returns undefined when unset.
+ * Resolve Express `trust proxy` as a non-negative integer hop count only.
+ * `true`, `false`, subnets, negatives, floats and other strings are ignored
+ * with a warning (the raw value is never echoed). When TRUST_PROXY is unset
+ * (or invalid) the default is 1 in production and undefined otherwise.
  */
-function parseTrustProxy(value) {
+function parseTrustProxy(value, production, warn = console.warn) {
   const v = nonEmpty(value);
-  if (v === undefined) return undefined;
-  const lower = v.toLowerCase();
-  if (lower === 'true') return true;
-  if (lower === 'false') return false;
-  if (/^\d+$/.test(v)) return Number(v);
-  return v;
+  if (v !== undefined) {
+    if (/^\d+$/.test(v) && Number.isSafeInteger(Number(v))) return Number(v);
+    warn('TRUST_PROXY must be a non-negative whole number (proxy hop count); ignoring it.');
+  }
+  return production ? 1 : undefined;
 }
 
 /**
@@ -106,13 +107,16 @@ export function configFromEnv(env = process.env, opts = {}) {
   const vision = visionProviderName(env, opts);
   const assistant = assistantProviderName(env);
   const notifier = notifierName(env);
+  const production = nonEmpty(env.NODE_ENV) === 'production';
 
   return {
+    production,
     dataDir: nonEmpty(env.DATA_DIR) ? path.resolve(env.DATA_DIR.trim()) : REPO_DATA_DIR,
-    adminToken: nonEmpty(env.SEANCE_ADMIN_TOKEN),
+    // ADMIN_TOKEN guards /admin/* and /seance/run; SEANCE_ADMIN_TOKEN is the older fallback name.
+    adminToken: nonEmpty(env.ADMIN_TOKEN) || nonEmpty(env.SEANCE_ADMIN_TOKEN),
     baseUrl: (nonEmpty(env.BASE_URL) || DEFAULT_BASE_URL).replace(/\/+$/, ''),
     providerTimeoutMs: DEFAULT_PROVIDER_TIMEOUT_MS,
-    trustProxy: parseTrustProxy(env.TRUST_PROXY),
+    trustProxy: parseTrustProxy(env.TRUST_PROXY, production, opts.warn ?? console.warn),
     testRun: isTestRun(env),
 
     visionProviderName: vision,

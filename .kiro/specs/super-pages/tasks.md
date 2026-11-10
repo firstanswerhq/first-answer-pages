@@ -314,8 +314,378 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
     - Extend `test/app.test.js`: `GET /data/listings.json` returns 404; README mentions every env var; only allow-listed files (`drafts.json`, `published.json`, `verified.json`, `quotes.json`, `seance.json`) appear in a temp `DATA_DIR` after exercising all features; no forbidden trademark terms or walking-fingers logo references in new files under `server/`, `public/`, `test/`, `README.md`, and `.kiro/specs/super-pages/`
     - _Requirements: 14.1, 14.2, 14.5, 14.7, 15.1, 15.6, 15.7_
 
-- [ ] 12. Final checkpoint - Full suite
+- [x] 12. Final checkpoint - Full suite
   - Run `node --test`; the entire suite, including all pre-existing tests, must pass. Ask the user if questions arise.
+
+- [ ] 13. Launch fixes: Nothing goes live unreviewed
+  - [x] 13.1 Build the approval queue
+    - Add `pending` to the `collection(name)` allow-list in `server/data.js`; confirming a draft at `/rise` now sets the draft status to `pending` and adds `{ id, draftId, submittedAt }` to `pending`; it no longer publishes
+    - Keep `store.publishDraft` as the internal publish step; extend it to accept a draft in status `pending` (still 409 for other statuses, still idempotent on `published`); approve calls it, so the `verified.json` stamp is written at approval
+    - Add `store.unpublish(id)`: removes a published (not seed) listing from `published.json` and the in-memory snapshot, marks its pending entry `unpublished`; seed listings from `listings.json` return 409
+    - Create `server/lib/admin-auth.js`: `ADMIN_TOKEN` bearer check (SHA-256 both values, then `crypto.timingSafeEqual`), `SEANCE_ADMIN_TOKEN` accepted as a fallback name; 403 when neither is configured, 401 for a missing or wrong token; add `adminToken` handling to `server/lib/config.js`
+    - Create `server/routes/admin.js` (wired in `server/app.js`): `GET /admin/pending` (HTML list, escaped values, `Cache-Control: no-store`, `X-Robots-Tag: noindex`), `POST /admin/pending/:id/approve`, `POST /admin/pending/:id/reject` (draft status `rejected`, nothing published), `POST /admin/listings/:id/unpublish`; unknown id 404
+    - Switch `server/routes/seance.js` to the shared admin-auth helper
+    - Update `server/routes/rise.js` confirm to redirect to the draft page with a pending message instead of `/listings/:id`
+    - Only approved listings may appear on pages, in the sitemap, in llms.txt, in JSON-LD and in MCP; pending, rejected, and unpublished entries are excluded by construction
+    - Files: `server/data.js`, `server/lib/admin-auth.js`, `server/lib/config.js`, `server/lib/drafts.js`, `server/routes/admin.js`, `server/routes/rise.js`, `server/routes/seance.js`, `server/app.js`
+    - _Requirements: docs/launch-fixes.md section 13 (13.1)_
+
+  - [x] 13.2 Collapse control characters in single-line fields
+    - In `server/lib/listing-fields.js` `clean()`, turn every newline and control character into one space for single-line fields (name, phone, address, city, state, category, website, hours); only `description` may keep line breaks
+    - `server/lib/llms.js` must print `description` on a single line (collapse its line breaks when writing llms.txt)
+    - Files: `server/lib/listing-fields.js`, `server/lib/llms.js`
+    - _Requirements: docs/launch-fixes.md section 13 (13.2)_
+
+  - [x] 13.3 Rate limits behind Render
+    - Set Express `trust proxy` in `server/app.js` from `TRUST_PROXY` as a hop count (integer); default `1` when `NODE_ENV=production`; never `true` (reject or ignore `true` and non-integer values)
+    - Add an `admin-auth` rule to `RULES` in `server/lib/rate-limiter.js`: 10 wrong-token attempts per hour per IP, checked in `server/lib/admin-auth.js`, 429 with `Retry-After`; a correct token does not consume budget
+    - Files: `server/app.js`, `server/lib/config.js`, `server/lib/rate-limiter.js`, `server/lib/admin-auth.js`
+    - _Requirements: docs/launch-fixes.md section 13 (13.3)_
+
+  - [x] 13.4 Update existing tests for the pending flow
+    - `test/rise.test.js`, `test/verify.test.js`, `test/render.test.js`, `test/seance-history.test.js`, and `test/mcp.test.js` rely on direct publish through `store.publishDraft` or `/rise` confirm; change them so confirm lands in `pending`, then an admin approve (with `ADMIN_TOKEN` set in the test app) publishes
+    - Where a test calls `store.publishDraft` directly as a fixture shortcut, keep it (it is still the internal publish step); where it goes through the confirm route, add the approve call before asserting on `/listings/:id`, `/`, `/llms.txt`, `/sitemap.xml`, JSON-LD, or MCP
+    - All pre-existing tests stay green
+    - Files: `test/rise.test.js`, `test/verify.test.js`, `test/render.test.js`, `test/seance-history.test.js`, `test/mcp.test.js`
+    - _Requirements: docs/launch-fixes.md section 13 (13.1)_
+
+  - [-] 13.5 Write tests for the approval queue
+    - New file `test/approval.test.js`; temp `DATA_DIR`, injected mocks, `ADMIN_TOKEN` set
+    - Examples: confirm leaves the listing off `/`, `/listings/:id`, `/llms.txt`, `/sitemap.xml`, `/api/listings/:id`, JSON-LD and MCP `search_listings` / `get_listing`; `GET /admin/pending` lists it; approve publishes it everywhere and writes the Owner-confirmed stamp; reject keeps it off every surface; unpublish removes an approved listing from every surface; unpublish of a seed listing is 409; 401 with missing or wrong token, 403 with no token configured, `SEANCE_ADMIN_TOKEN` fallback works; double approve is idempotent; pending HTML escapes values
+    - **Property: Only approved listings are public** (fast-check over random sequences of confirm, approve, reject, unpublish; the ids visible in the sitemap, llms.txt, and MCP search equal the set currently approved)
+    - Files: `test/approval.test.js`
+    - _Requirements: docs/launch-fixes.md section 13 (13.1)_
+
+  - [-] 13.6 Write tests for single-line fields
+    - Extend `test/listing-fields.test.js` and `test/llms.test.js`
+    - **Property: Single-line clean() output has no line breaks or control characters** (fast-check over arbitrary strings, including `\n`, `\r`, `\u2028`, `\u2029`, `\t`, `\0`; output of every single-line field contains no `\n`, `\r`, or control characters; `description` keeps its line breaks in storage)
+    - Example: a listing name containing `\n# SYSTEM NOTE` adds no line to llms.txt (line count equals the line count with a plain name) and the text appears inline; a multi-line description prints on one llms.txt line
+    - Files: `test/listing-fields.test.js`, `test/llms.test.js`
+    - _Requirements: docs/launch-fixes.md section 13 (13.2)_
+
+  - [-] 13.7 Write tests for trust proxy and admin attempt limits
+    - New file `test/trust-proxy.test.js`
+    - Examples: default is `1` in production and unset otherwise; `TRUST_PROXY=true` is never applied; hop count `2` honors one more proxy; 10 wrong admin tokens in an hour from one IP, the 11th returns 429 with `Retry-After`; correct token still works for a different IP; correct token does not consume budget
+    - **Property: A forged X-Forwarded-For cannot dodge the limit** (fast-check over arbitrary forged chains prepended by the client; with `trust proxy` at 1 hop the limiter key is the address the trusted proxy appended, so a client that varies the forged prefix still hits 429 after the limit)
+    - Files: `test/trust-proxy.test.js`
+    - _Requirements: docs/launch-fixes.md section 13 (13.3)_
+
+- [ ] 14. Launch fixes: Honest demo mode (nothing fake may look real)
+  - [ ] 14.1 Record the provider and block mock drafts in production
+    - Save `provider` on every draft (`server/lib/drafts.js`, `server/routes/rise.js`) and on every Séance run (`server/lib/seance.js`; the field already exists on runs, make sure drafts match and old records without it read as `unknown`)
+    - When the vision provider is the mock, show a yellow banner on the draft page: "Demo: no photo reader is connected, so this is a sample business, not your photo." (`server/lib/rise-html.js`, style in `public/css/style.css`)
+    - With `NODE_ENV=production`, block approval of mock drafts (approve returns 409 with a plain message) and return 503 from `/rise` with "Photo listing is coming soon" when no vision key is set
+    - Files: `server/lib/drafts.js`, `server/lib/seance.js`, `server/lib/rise-html.js`, `server/routes/rise.js`, `server/routes/admin.js`, `server/lib/config.js`, `public/css/style.css`
+    - _Requirements: docs/launch-fixes.md section 14 (14.1)_
+
+  - [ ] 14.2 Make the Séance mock match the trade
+    - In `server/lib/assistant.js`, pick only from canned answers for the listing's category, plus neutral fallbacks (extend the provider input so the category reaches the mock; stay a pure function of input)
+    - About 1 in 3 demo answers names the business so before-and-after can show change; keep the "Demo answer (no AI connected)" label
+    - Files: `server/lib/assistant.js`, `server/lib/seance.js`
+    - _Requirements: docs/launch-fixes.md section 14 (14.2)_
+
+  - [ ] 14.3 Add the sample-data banner and DEMO_MODE
+    - Add `DEMO_MODE` to `server/lib/config.js` (default true unless `NODE_ENV=production`)
+    - When on, add a site-wide footer line "Sample listings for demonstration" and `<meta name="robots" content="noindex">` in `layout()` in `server/lib/html.js`
+    - In production, leave the sample (seed) listings out of the sitemap and llms.txt (`server/lib/sitemap.js`, `server/lib/llms.js`)
+    - Files: `server/lib/config.js`, `server/lib/html.js`, `server/lib/sitemap.js`, `server/lib/llms.js`, `server/app.js`
+    - _Requirements: docs/launch-fixes.md section 14 (14.3)_
+
+  - [ ] 14.4 Write tests for the provider record and mock-draft blocking
+    - Extend `test/rise.test.js` and `test/approval.test.js`
+    - Examples: every draft and every Séance run carries `provider`; mock draft page shows the exact yellow banner text; real-provider draft shows no banner; in production a mock draft cannot be approved (409) and nothing is published; production with no vision key gives 503 "Photo listing is coming soon" from `/rise`; outside production mock approval still works
+    - **Property: Every stored draft records a known provider name** (fast-check over uploads from generated image bytes)
+    - Files: `test/rise.test.js`, `test/approval.test.js`
+    - _Requirements: docs/launch-fixes.md section 14 (14.1)_
+
+  - [ ] 14.5 Write tests for the trade-matched Séance mock
+    - Extend `test/seance.test.js` and `test/providers.test.js`
+    - **Property: Mock answers come only from the listing's category pool plus neutral fallbacks, and are deterministic** (fast-check over categories and prompts)
+    - Example: across a fixed set of generated prompts, the share of answers naming the business is about one in three (within a stated tolerance); the "Demo answer (no AI connected)" label is still present
+    - Files: `test/seance.test.js`, `test/providers.test.js`
+    - _Requirements: docs/launch-fixes.md section 14 (14.2)_
+
+  - [ ] 14.6 Write tests for DEMO_MODE
+    - New file `test/demo-mode.test.js`
+    - Examples: default true outside production and false in production; footer line "Sample listings for demonstration" and `noindex` meta present when on, absent when off; in production seed listings are absent from `/sitemap.xml` and `/llms.txt`; approved owner listings still appear in production
+    - **Property: With DEMO_MODE on, every HTML page contains the footer line and the noindex meta** (fast-check over the set of public routes and listing ids)
+    - Files: `test/demo-mode.test.js`
+    - _Requirements: docs/launch-fixes.md section 14 (14.3)_
+
+  - [ ] 14.7 Checkpoint - Safety and honest demo mode
+    - Run `node --test`; all tests for tasks 13 and 14 and all pre-existing tests must pass. Ask the user if questions arise.
+
+- [ ] 15. Launch fixes: Quotes say only what's true
+  - [ ] 15.1 Correct the quote confirmation wording
+    - Replace "The business will contact you" (`server/routes/listings.js` around line 86 and `server/lib/mcp.js` around line 141) with: "Thanks! Your request is saved and we'll pass it to the business. If you need help sooner, call them at {phone}."
+    - Use the listing's phone; escape it in HTML
+    - Files: `server/routes/listings.js`, `server/lib/mcp.js`
+    - _Requirements: docs/launch-fixes.md section 15 (wording fix)_
+
+  - [ ] 15.2 Add `ownerEmail` and `GET /admin/quotes`
+    - Add optional `ownerEmail` to the listing fields in `server/lib/listing-fields.js` (single-line clean, simple email check, may be empty); never rendered on pages, never in JSON-LD, `/api/listings/:id`, llms.txt, sitemap, or MCP output, and not part of the public listing JSON
+    - Hash rule: `ownerEmail` is stripped before hashing in `server/lib/canonical.js` / `verifier.js` so the stamp does not depend on a private field
+    - Add `GET /admin/quotes` in `server/routes/admin.js` (admin token, same helper and rate limit as 13.1 and 13.3): saved quotes, newest first, escaped, `no-store`, `noindex`
+    - Files: `server/lib/listing-fields.js`, `server/lib/verifier.js`, `server/lib/html.js`, `server/lib/schema.js`, `server/lib/mcp.js`, `server/routes/api.js`, `server/routes/admin.js`
+    - _Requirements: docs/launch-fixes.md section 15 (ownerEmail and admin quotes)_
+
+  - [ ] 15.3 Fix notifier memory and set retention
+    - In `server/lib/notifier.js`, cap or drop the in-memory `sent` list outside tests so quotes are not kept forever (the mock keeps its array; real notifiers keep none)
+    - Keep quotes 180 days and expire drafts after 30 days: prune on startup and on write, through the queued `updateJsonFile` path; a draft in `pending` or `published` is not expired by the 30-day rule
+    - Files: `server/lib/notifier.js`, `server/lib/quotes.js`, `server/lib/drafts.js`, `server/data.js`
+    - _Requirements: docs/launch-fixes.md section 15 (retention)_
+
+  - [ ] 15.4 Correct the README quote limit
+    - State that the per-listing quote limit is per client per listing (3 per hour per client per listing), not per listing overall
+    - Files: `README.md`
+    - _Requirements: docs/launch-fixes.md section 15 (README fix)_
+
+  - [ ] 15.5 Write tests for the quote wording
+    - Extend `test/quotes.test.js` and `test/mcp.test.js`
+    - Examples: the HTML confirmation and the MCP result contain the new sentence with the listing phone; the old phrase "The business will contact you" appears nowhere under `server/`
+    - **Property: The confirmation always names the listing phone and escapes it** (fast-check over generated phones and names)
+    - Files: `test/quotes.test.js`, `test/mcp.test.js`
+    - _Requirements: docs/launch-fixes.md section 15 (wording fix)_
+
+  - [ ] 15.6 Write tests for `ownerEmail` and `/admin/quotes`
+    - New file `test/admin-quotes.test.js`
+    - Examples: `GET /admin/quotes` returns 401/403 without a token, saved quotes newest first with a valid token, escaped output
+    - **Property: ownerEmail never appears in any public output** (fast-check over generated emails; check listing page, JSON-LD, `/api/listings/:id`, llms.txt, sitemap, MCP `get_listing`)
+    - Example: changing `ownerEmail` does not change the stamp hash
+    - Files: `test/admin-quotes.test.js`
+    - _Requirements: docs/launch-fixes.md section 15 (ownerEmail and admin quotes)_
+
+  - [ ] 15.7 Write tests for retention and notifier memory
+    - New file `test/retention.test.js`; fake clock
+    - **Property: Pruning keeps exactly the quotes younger than 180 days and exactly the unpublished drafts younger than 30 days** (fast-check over generated timestamps)
+    - Examples: pending and published drafts survive the 30-day rule; the production notifier does not accumulate a `sent` list across many quotes
+    - Files: `test/retention.test.js`
+    - _Requirements: docs/launch-fixes.md section 15 (retention)_
+
+  - [ ] 15.8 Write a test for the README quote limit
+    - Extend `test/app.test.js`: README text says the quote limit is per client per listing
+    - Files: `test/app.test.js`
+    - _Requirements: docs/launch-fixes.md section 15 (README fix)_
+
+- [ ] 16. Launch fixes: Deploy-ready on Render
+  - [ ] 16.1 Split read-only seed data from writable data
+    - Read `listings.json` and `categories.json` from the repo `data/` folder; write only `drafts`, `pending`, `published`, `quotes`, `seance`, and `verified` files to `DATA_DIR` (update `createDataStore` and `configFromEnv`)
+    - Refuse to start when there are 0 categories; in production, refuse to start when `DATA_DIR` or `BASE_URL` is missing (clear one-line error, exit code 1 from `server/index.js`)
+    - Files: `server/data.js`, `server/lib/config.js`, `server/index.js`, `render.yaml`
+    - _Requirements: docs/launch-fixes.md section 16 (data folders and startup checks)_
+
+  - [ ] 16.2 Add `GET /healthz`
+    - Return `{ ok: true }` with 200, no data access, no rate limit
+    - Files: `server/app.js`
+    - _Requirements: docs/launch-fixes.md section 16 (healthz)_
+
+  - [ ] 16.3 Set engines and start script
+    - Add `"engines": { "node": "22.x" }` to `package.json`; make sure `npm start` runs `node server/index.js`
+    - Files: `package.json`
+    - _Requirements: docs/launch-fixes.md section 16 (engines and start)_
+
+  - [ ] 16.4 Fix the error handler
+    - Respect `err.status` (for example 400 for a malformed URL id from `decodeURIComponent` failures); unknown errors give 500 with a plain message; never send a stack trace and never include `err.message` for 5xx
+    - Files: `server/app.js`
+    - _Requirements: docs/launch-fixes.md section 16 (error handler)_
+
+  - [ ] 16.5 Turn off `x-powered-by` and add security headers
+    - `app.disable('x-powered-by')`; middleware sets `X-Content-Type-Options: nosniff`, `Referrer-Policy` (for example `strict-origin-when-cross-origin`), and `Content-Security-Policy: frame-ancestors 'none'`; keep the stricter `no-referrer` on draft pages
+    - Files: `server/app.js`
+    - _Requirements: docs/launch-fixes.md section 16 (headers)_
+
+  - [ ] 16.6 Answer `OPTIONS /mcp`
+    - Return 204 with `Access-Control-Allow-Origin: *` and `Access-Control-Allow-Headers` allowing `content-type`, `accept`, and `mcp-session-id`; also allow `POST, OPTIONS`; add `Access-Control-Allow-Origin: *` to POST /mcp replies
+    - Files: `server/routes/mcp.js`
+    - _Requirements: docs/launch-fixes.md section 16 (CORS preflight)_
+
+  - [ ] 16.7 Remove hard-coded `localhost` from the Rise curl example
+    - In `server/lib/rise-html.js`, build the curl example from `BASE_URL` (passed through `ctx.config`), escaped
+    - Files: `server/lib/rise-html.js`, `server/routes/rise.js`
+    - _Requirements: docs/launch-fixes.md section 16 (curl example)_
+
+  - [ ] 16.8 Add `SITE_NAME`
+    - Add `siteName` to `server/lib/config.js` (default "First Answer Pages") and use it everywhere the site name shows: `layout()` header and title, footer, llms.txt header, sitemap-adjacent text, Rise and Séance pages, JSON-LD publisher fields if any, MCP `serverInfo` title (keep `serverInfo.name` `first-answer-pages`)
+    - Files: `server/lib/config.js`, `server/lib/html.js`, `server/lib/llms.js`, `server/lib/rise-html.js`, `server/lib/seance-html.js`, `server/lib/mcp.js`, `server/lib/schema.js`, `server/app.js`
+    - _Requirements: docs/launch-fixes.md section 16 (SITE_NAME)_
+
+  - [ ] 16.9 Write tests for data folders and startup checks
+    - New file `test/data-dir.test.js`
+    - Examples: seed files are read from repo `data/` even when `DATA_DIR` points elsewhere; writable files appear only in `DATA_DIR`; `listings.json` and `categories.json` are never written; 0 categories refuses to start; production without `DATA_DIR` or without `BASE_URL` refuses to start; non-production starts without them
+    - **Property: After any sequence of app actions, the only files in DATA_DIR are the allow-listed writable files** (fast-check over action sequences)
+    - Files: `test/data-dir.test.js`
+    - _Requirements: docs/launch-fixes.md section 16 (data folders and startup checks)_
+
+  - [ ] 16.10 Write tests for healthz, engines, and start script
+    - New file `test/healthz.test.js`
+    - Examples: `GET /healthz` returns 200 `{ ok: true }`; `package.json` has `engines.node` `22.x` and `scripts.start` `node server/index.js`
+    - Files: `test/healthz.test.js`
+    - _Requirements: docs/launch-fixes.md section 16 (healthz, engines and start)_
+
+  - [ ] 16.11 Write tests for errors and headers
+    - New file `test/errors-headers.test.js`
+    - **Property: Malformed ids never produce a 500 or a stack trace** (fast-check over arbitrary strings, including invalid percent-encoding such as `%E0%A4%A`; status is below 500 or a plain 500 body with no `at ` stack lines)
+    - Examples: malformed id returns 400; thrown errors with `err.status` keep it; 5xx bodies contain no stack or file paths; no `X-Powered-By`; `nosniff`, referrer policy, and `frame-ancestors 'none'` present on HTML, JSON, and error responses
+    - Files: `test/errors-headers.test.js`
+    - _Requirements: docs/launch-fixes.md section 16 (error handler, headers)_
+
+  - [ ] 16.12 Write tests for the MCP preflight and curl example
+    - Extend `test/mcp.test.js` and `test/rise.test.js`
+    - Examples: `OPTIONS /mcp` returns 204 with `Access-Control-Allow-Origin: *` and allowed headers containing `content-type`, `accept`, `mcp-session-id`; `/rise` HTML shows `BASE_URL` in the curl example and the string `localhost` appears nowhere in `server/lib/rise-html.js`
+    - Files: `test/mcp.test.js`, `test/rise.test.js`
+    - _Requirements: docs/launch-fixes.md section 16 (CORS preflight, curl example)_
+
+  - [ ] 16.13 Write tests for `SITE_NAME`
+    - New file `test/site-name.test.js`
+    - **Property: A custom SITE_NAME appears in the header, title, and llms.txt and the default name appears nowhere** (fast-check over safe generated names, escaped in HTML)
+    - Example: default is "First Answer Pages"
+    - Files: `test/site-name.test.js`
+    - _Requirements: docs/launch-fixes.md section 16 (SITE_NAME)_
+
+  - [ ] 16.14 Checkpoint - Deploy-ready
+    - Run `node --test`; all tests for tasks 13 to 16 and all pre-existing tests must pass. Ask the user if questions arise.
+
+- [ ] 17. Launch fixes: Owner-friendly wording and flow
+  - [ ] 17.1 Header link, unconfirmed note, and Séance link
+    - Add a header link "List your business free" pointing to `/rise` in `layout()`
+    - On every unconfirmed listing, replace the large "NOT YET CONFIRMED BY THE OWNER" box with a smaller note plus a button "Is this your business? Confirm it free →" linking to `/rise`
+    - Add a link "See what AI says about this business" to the listing's Séance report (`/seance/:id`)
+    - Files: `server/lib/html.js`, `public/css/style.css`
+    - _Requirements: docs/launch-fixes.md section 17 (header, unconfirmed note, Séance link)_
+
+  - [ ] 17.2 Simplify the `/rise` page
+    - One big "Take or choose a photo" button; hide the base64 text box under an "Advanced" disclosure (`<details>`); say "5 MB", not "5 MiB"; say "a business card, flyer, sign or storefront"
+    - Page still works without JavaScript
+    - Files: `server/lib/rise-html.js`, `public/js/rise.js`, `public/css/style.css`
+    - _Requirements: docs/launch-fixes.md section 17 (/rise page)_
+
+  - [ ] 17.3 Draft page confirm flow and categories
+    - Confirm saves the edited fields first, then sends the draft for approval, so edits cannot be lost
+    - Add categories for cleaners, landscapers, pressure washing, pools and concrete, shops and restaurants, plus "Other" to `data/categories.json` (JSON only, unique slugs, existing slugs untouched)
+    - After confirming, show: "Thanks! We'll review your listing and it will be live soon."
+    - Files: `server/routes/rise.js`, `server/lib/rise-html.js`, `data/categories.json`
+    - _Requirements: docs/launch-fixes.md section 17 (draft page)_
+
+  - [ ] 17.4 Owner-confirmed stamp date and details toggle
+    - Keep the visible wording "Owner-confirmed <date>"; show the date as "Nov 9, 2026" in America/Chicago time (store the confirmation timestamp, for example `verifiedAt`, in `verified.json` alongside the existing UTC `verifiedDate`; the hash input is unchanged)
+    - Move the hash and the verify link under a small "Details for AI tools" toggle (`<details>`)
+    - Update stamp assertions in `test/verify.test.js` and `test/render.test.js` to the new date format
+    - Files: `server/lib/html.js`, `server/data.js`, `server/lib/verifier.js`, `test/verify.test.js`, `test/render.test.js`
+    - _Requirements: docs/launch-fixes.md section 17 (Owner-confirmed stamp)_
+
+  - [ ] 17.5 Séance report wording
+    - Make the result the headline: "AI named this business" in green, or "AI didn't name this business yet" in amber
+    - Hide the word "mock" (the "Demo answer (no AI connected)" label stays)
+    - Use the name Séance with its accent in headings; show times in local time (America/Chicago)
+    - Files: `server/lib/seance-html.js`, `public/css/style.css`
+    - _Requirements: docs/launch-fixes.md section 17 (Séance report)_
+
+  - [ ] 17.6 Quote form errors and success box
+    - On error, re-render the form with the visitor's entries kept (escaped) and the message "Please enter a phone number or email."
+    - Show the success message at the top of the page in a neutral or green box
+    - Files: `server/routes/listings.js`, `server/lib/html.js`, `public/css/style.css`
+    - _Requirements: docs/launch-fixes.md section 17 (quote form)_
+
+  - [ ] 17.7 Tappable phone numbers
+    - Render phone numbers as `tel:` links (digits only in the `href`) on listing pages, home, and category pages
+    - Files: `server/lib/html.js`
+    - _Requirements: docs/launch-fixes.md section 17 (tel links)_
+
+  - [ ] 17.8 Category page heading
+    - Heading like "Plumbers in Nashville" with the listing grid under one heading
+    - Files: `server/routes/home.js`, `server/lib/html.js`, `public/css/style.css`
+    - _Requirements: docs/launch-fixes.md section 17 (category page)_
+
+  - [ ] 17.9 Write tests for the header link, unconfirmed note, and Séance link
+    - New file `test/nav-and-notes.test.js`
+    - Examples: "List your business free" links to `/rise` on every page; unconfirmed listing shows the small note and the "Is this your business? Confirm it free →" button and not the old large box text; confirmed listing shows neither; "See what AI says about this business" links to `/seance/:id`
+    - **Property: Every public listing page has the Séance link for its own id** (fast-check over listing ids)
+    - Files: `test/nav-and-notes.test.js`
+    - _Requirements: docs/launch-fixes.md section 17 (header, unconfirmed note, Séance link)_
+
+  - [ ] 17.10 Write tests for the `/rise` page
+    - Extend `test/rise.test.js`
+    - Examples: "Take or choose a photo" present; base64 textarea sits inside a `<details>` titled "Advanced"; "5 MB" present and "5 MiB" absent; "a business card, flyer, sign or storefront" present
+    - Files: `test/rise.test.js`
+    - _Requirements: docs/launch-fixes.md section 17 (/rise page)_
+
+  - [ ] 17.11 Write tests for the draft page flow and categories
+    - Extend `test/rise.test.js` and `test/listing-fields.test.js`
+    - Examples: confirm with edited fields saves the edits and the pending entry carries them; the thank-you text is shown; the new categories (cleaners, landscapers, pressure washing, pools and concrete, shops and restaurants, other) exist with unique slugs and `mapCategory` resolves them
+    - **Property: Confirm never loses edits** (fast-check over edited field values; the draft fields after confirm equal the submitted normalized fields)
+    - Files: `test/rise.test.js`, `test/listing-fields.test.js`
+    - _Requirements: docs/launch-fixes.md section 17 (draft page)_
+
+  - [ ] 17.12 Write tests for the stamp date and details toggle
+    - New file `test/stamp-display.test.js`
+    - **Property: The stamp date is formatted in America/Chicago and matches an independent oracle** (fast-check over timestamps, including daylight saving boundaries and 00:00 to 06:00 UTC where the Chicago date is the day before)
+    - Examples: wording "Owner-confirmed Nov 9, 2026"; hash and verify link are inside `<details>` "Details for AI tools"; hash value unchanged by the display change
+    - Files: `test/stamp-display.test.js`
+    - _Requirements: docs/launch-fixes.md section 17 (Owner-confirmed stamp)_
+
+  - [ ] 17.13 Write tests for the Séance report wording
+    - Extend `test/seance-history.test.js`
+    - Examples: named result shows "AI named this business" with the green class; not named shows "AI didn't name this business yet" with the amber class; the word "mock" is absent from the HTML; times shown in America/Chicago; "Séance" with the accent in headings
+    - **Property: The headline matches the latest run's `named` value** (fast-check over run histories)
+    - Files: `test/seance-history.test.js`
+    - _Requirements: docs/launch-fixes.md section 17 (Séance report)_
+
+  - [ ] 17.14 Write tests for quote form errors and success box
+    - Extend `test/quotes.test.js`
+    - Examples: invalid contact re-renders the form with name and details kept and "Please enter a phone number or email."; success message appears at the top in a neutral or green box
+    - **Property: Re-shown entries are escaped and equal the submitted values** (fast-check over arbitrary strings including `<script>` and quotes)
+    - Files: `test/quotes.test.js`
+    - _Requirements: docs/launch-fixes.md section 17 (quote form)_
+
+  - [ ] 17.15 Write tests for tappable phone numbers
+    - New file `test/tel-links.test.js`
+    - **Property: Every rendered phone is a tel: link whose href holds only digits and an optional leading plus** (fast-check over valid phones; link text is the display form)
+    - Examples: link present on listing, home, and category pages
+    - Files: `test/tel-links.test.js`
+    - _Requirements: docs/launch-fixes.md section 17 (tel links)_
+
+  - [ ] 17.16 Write tests for the category page heading
+    - New file `test/category-page.test.js`
+    - Examples: heading "Plumbers in Nashville" for the matching category and city; one heading above the grid; escaped output
+    - **Property: The category heading names the category label and the city, escaped** (fast-check over categories and cities)
+    - Files: `test/category-page.test.js`
+    - _Requirements: docs/launch-fixes.md section 17 (category page)_
+
+- [ ] 18. Launch fixes: AI basics in llms.txt and the README
+  - [ ] 18.1 Improve llms.txt
+    - Say how to request a quote: the MCP tool `request_quote` at `/mcp`, and `POST /api/quotes`
+    - Mark owner-confirmed listings
+    - Do not claim one city in the header when listings span several (list cities, or say "local businesses" when more than one)
+    - Keep single-line rules from task 13.2 and the demo exclusions from task 14.3
+    - Files: `server/lib/llms.js`, `server/routes/llms.js`
+    - _Requirements: docs/launch-fixes.md section 18 (llms.txt)_
+
+  - [ ] 18.2 Rewrite the README
+    - Do not use "Super Pages" in README or any user-facing text (Thryv owns the SUPERPAGES trademark); the spec folder name `super-pages` stays as an internal id only
+    - Call the features "Owner tools" or name each one (Rise from the Grave, Agent-ready, Owner-confirmed stamp, Séance, with the accent in prose)
+    - List every env var: `PORT`, `BASE_URL`, `DATA_DIR`, `ADMIN_TOKEN`, `TRUST_PROXY`, `DEMO_MODE`, `SITE_NAME`, `NODE_ENV`, and the provider keys (`VISION_PROVIDER`, `VISION_API_KEY`, `VISION_MODEL`, `VISION_BASE_URL`, `NOTIFIER`, `SEANCE_PROVIDER`, `SEANCE_API_KEY`, `SEANCE_MODEL`, `SEANCE_ADMIN_TOKEN` as a fallback name)
+    - Files: `README.md`
+    - _Requirements: docs/launch-fixes.md section 18 (README)_
+
+  - [ ] 18.3 Write tests for llms.txt
+    - Extend `test/llms.test.js`
+    - Examples: output mentions `request_quote`, `/mcp`, and `POST /api/quotes`; owner-confirmed listings are marked and unconfirmed are not; a multi-city data set does not claim one city in the header; a one-city set may name it
+    - **Property: The header never names a single city unless every listing is in that city** (fast-check over generated listing sets)
+    - Files: `test/llms.test.js`
+    - _Requirements: docs/launch-fixes.md section 18 (llms.txt)_
+
+  - [ ] 18.4 Write tests for the README
+    - Extend `test/app.test.js`
+    - Examples: README contains every env var listed in 18.2; README does not contain "Super Pages" or "SUPERPAGES" (case-insensitive); no "Yellow Pages", "YP", or walking-fingers references; user-facing strings under `server/` and `public/` do not contain "Super Pages"
+    - **Property: Every env var read by server/lib/config.js appears in the README** (scan `process.env` / `env.NAME` names in `server/` and check each is documented)
+    - Files: `test/app.test.js`
+    - _Requirements: docs/launch-fixes.md section 18 (README)_
+
+  - [ ] 18.5 Checkpoint - AI basics and README
+    - Run `node --test`; all tests for tasks 13 to 18 and all pre-existing tests must pass. Ask the user if questions arise.
+
+- [ ] 19. Final checkpoint - Full suite
+  - Run `node --test`; the entire suite, including all pre-existing tests and the tests for tasks 13 to 18, must be green. Ask the user if questions arise.
 
 ## Notes
 
@@ -331,6 +701,9 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
 - Trademark rule applies to all code, docs, comments, and tests: never use the words "Yellow Pages" or "YP", or any walking-fingers logo. Use "old printed phone book" or "classic phone-book look".
 - Tests never call the network and never touch the repo `data/` directory; they use mocks and a temporary `DATA_DIR`.
 - No terminal-only or deployment tasks are included; checkpoints run the automated suite only.
+- Tasks 13 to 18 come from `docs/launch-fixes.md` (sections 13 to 18) and are built in order; every sub-task has required (not optional) tests. Task 19 is the final checkpoint and is not a section of that file. Launch-fix tasks cite "docs/launch-fixes.md section N" instead of requirement numbers.
+- The approval queue (13.1) changes Rise confirm: confirm goes to `pending`, then admin approve publishes. `store.publishDraft` stays as the internal publish step that approve calls. The visible wording "Owner-confirmed" stays.
+- Trademark: never use "Super Pages" in the README or any user-facing text. The spec folder name `super-pages` is an internal id and stays.
 - After completing this plan, begin executing tasks by opening this file and clicking "Start task" next to a task item.
 
 ## Task Dependency Graph
@@ -355,7 +728,29 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
     { "id": 14, "tasks": ["9.3", "9.4", "9.6"] },
     { "id": 15, "tasks": ["9.5", "9.7"] },
     { "id": 16, "tasks": ["11.1"] },
-    { "id": 17, "tasks": ["11.2"] }
+    { "id": 17, "tasks": ["11.2"] },
+    { "id": 18, "tasks": ["13.1", "13.2"] },
+    { "id": 19, "tasks": ["13.3", "13.4"] },
+    { "id": 20, "tasks": ["13.5", "13.6", "13.7"] },
+    { "id": 21, "tasks": ["14.1", "14.2", "14.3"] },
+    { "id": 22, "tasks": ["14.4", "14.5", "14.6"] },
+    { "id": 23, "tasks": ["15.1", "15.2"] },
+    { "id": 24, "tasks": ["15.3", "15.4"] },
+    { "id": 25, "tasks": ["15.5", "15.6", "15.7", "15.8"] },
+    { "id": 26, "tasks": ["16.1", "16.3"] },
+    { "id": 27, "tasks": ["16.2", "16.6", "16.7"] },
+    { "id": 28, "tasks": ["16.4"] },
+    { "id": 29, "tasks": ["16.5"] },
+    { "id": 30, "tasks": ["16.8"] },
+    { "id": 31, "tasks": ["16.9", "16.10", "16.11", "16.12", "16.13"] },
+    { "id": 32, "tasks": ["17.1", "17.2", "17.5"] },
+    { "id": 33, "tasks": ["17.3", "17.4"] },
+    { "id": 34, "tasks": ["17.6"] },
+    { "id": 35, "tasks": ["17.7"] },
+    { "id": 36, "tasks": ["17.8"] },
+    { "id": 37, "tasks": ["17.9", "17.10", "17.11", "17.12", "17.13", "17.14", "17.15", "17.16"] },
+    { "id": 38, "tasks": ["18.1", "18.2"] },
+    { "id": 39, "tasks": ["18.3", "18.4"] }
   ]
 }
 ```

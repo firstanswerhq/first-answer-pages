@@ -14,10 +14,33 @@ const MAX_SERVICES = 20;
 const MAX_SLUG = 60;
 const STRING_KEYS = ['name', 'category', 'phone', 'serviceArea', 'description', 'city', 'state', 'address'];
 
-/** Trim, cap at 500 characters, trim again (so the result is stable). */
+/**
+ * Single-line text: every newline / control character becomes a space, runs of
+ * whitespace collapse to one space, trim, cap at 500, trim again (idempotent).
+ */
 function clean(value) {
   if (typeof value !== 'string') return '';
-  return value.trim().slice(0, MAX_STRING).trim();
+  return value
+    .replace(/[\n\r\u2028\u2029\u0085]|\p{Cc}/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, MAX_STRING)
+    .trim();
+}
+
+/**
+ * Multi-line text (description only): line breaks are kept as \n, other
+ * control characters except tab are removed, then trim, cap at 500, trim.
+ */
+function cleanMultiline(value) {
+  if (typeof value !== 'string') return '';
+  return value
+    .replace(/\r\n/g, '\n')
+    .replace(/[\r\u2028\u2029]/g, '\n')
+    .replace(/(?![\n\t])\p{Cc}/gu, '')
+    .trim()
+    .slice(0, MAX_STRING)
+    .trim();
 }
 
 /**
@@ -89,6 +112,7 @@ export function normalizeFields(raw, categories) {
   const get = key => (Object.hasOwn(src, key) ? src[key] : undefined);
   const out = {};
   for (const key of STRING_KEYS) out[key] = clean(get(key));
+  out.description = cleanMultiline(get('description'));
   out.phone = normalizePhone(get('phone'));
   out.category = mapCategory(get('category'), categories);
   if (/^[a-z]{2}$/i.test(out.state)) out.state = out.state.toUpperCase();

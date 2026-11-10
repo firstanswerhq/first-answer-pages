@@ -18,6 +18,7 @@ export const RULES = Object.freeze({
   'quote-listing': Object.freeze({ limit: 3, windowMs: 60 * 60 * 1000 }),
   seance: Object.freeze({ limit: 10, windowMs: 60 * 60 * 1000 }),
   'seance-listing': Object.freeze({ limit: 1, windowMs: 10 * 60 * 1000 }),
+  'admin-auth': Object.freeze({ limit: 10, windowMs: 60 * 60 * 1000 }),
 });
 
 const systemClock = { now: () => Date.now() };
@@ -112,9 +113,29 @@ export function createRateLimiter({ clock = systemClock, maxKeys = MAX_KEYS } = 
     return consumeAll([{ key, limit, windowMs }]);
   }
 
+  /**
+   * Check a key without recording a call.
+   * @param {string} key
+   * @param {{ limit: number, windowMs: number }} rule
+   * @returns {{ allowed: boolean, retryAfterSeconds?: number }}
+   */
+  function peek(key, { limit, windowMs }) {
+    const now = clock.now();
+    const log = prune(key, windowMs, now);
+    const count = log ? log.length : 0;
+    if (count < limit) return { allowed: true };
+    const maxSeconds = Math.ceil(windowMs / 1000);
+    let seconds = maxSeconds;
+    if (log && limit > 0) {
+      seconds = Math.ceil((log[log.length - limit] + windowMs - now) / 1000);
+    }
+    return { allowed: false, retryAfterSeconds: Math.min(Math.max(seconds, 1), maxSeconds) };
+  }
+
   return {
     consume,
     consumeAll,
+    peek,
     /** Number of keys currently tracked (for tests). */
     size: () => logs.size,
   };

@@ -6,6 +6,14 @@
 
 import { getCategories } from '../data.js';
 
+/** Forces a value onto one line: line breaks and control characters become one space. */
+function oneLine(value) {
+  return String(value ?? '')
+    .replace(/[\n\r\u2028\u2029\u0085]|\p{Cc}/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 /**
  * Generates the full /llms.txt content.
  *
@@ -36,7 +44,7 @@ export function generateLlmsTxt(listings, baseUrl, categories) {
 
   for (const [slug, group] of groups) {
     if (group.length === 0) continue;
-    const label = labels.get(slug) ?? slug;
+    const label = oneLine(labels.get(slug) ?? slug);
     const sorted = [...group].sort((a, b) => {
       const an = a.name.toLowerCase();
       const bn = b.name.toLowerCase();
@@ -46,12 +54,12 @@ export function generateLlmsTxt(listings, baseUrl, categories) {
     lines.push(`## ${label}`, '');
     for (const l of sorted) {
       lines.push(
-        `### ${l.name}`,
-        `Phone: ${l.phone}`,
+        `### ${oneLine(l.name)}`,
+        `Phone: ${oneLine(l.phone)}`,
         `Category: ${label}`,
-        `City: ${l.city}, ${l.state}`,
-        `Service Area: ${l.serviceArea}`,
-        `Page: ${baseUrl}/listings/${l.id}`,
+        `City: ${oneLine(l.city)}, ${oneLine(l.state)}`,
+        `Service Area: ${oneLine(l.serviceArea)}`,
+        `Page: ${oneLine(baseUrl)}/listings/${oneLine(l.id)}`,
         '',
       );
     }

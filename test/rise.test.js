@@ -79,6 +79,17 @@ function reviewForm(fields) {
 // ---- environment helpers ----------------------------------------------------
 
 const envs = [];
+const TOKEN = 'rise-test-admin-token';
+const PENDING_MESSAGE = /We(?:'|&#39;)ll review your listing and it will be live soon\./;
+
+/** POST /admin/pending/:id/approve with the admin bearer token. */
+function approve(env, id, token = TOKEN) {
+  return fetch(`${env.base}/admin/pending/${encodeURIComponent(id)}/approve`, {
+    method: 'POST',
+    redirect: 'manual',
+    headers: { authorization: `Bearer ${token}` },
+  });
+}
 
 /**
  * @param {{ files?: Record<string, string>, visionProvider?: object }} [opts]
@@ -98,6 +109,7 @@ async function makeEnv({ files = {}, visionProvider } = {}) {
     clock,
     newId: () => `draft-${++counter}`,
     visionProvider: visionProvider ?? createMockVisionProvider(),
+    config: { adminToken: TOKEN },
   });
   const server = app.listen(0, '127.0.0.1');
   await new Promise((resolve, reject) => {
@@ -172,7 +184,7 @@ async function assertNotPublic(env, id, name) {
 
 // ---- full flow ----------------------------------------------------------------
 
-test('upload, review, edit, confirm: listing appears on every public route', async () => {
+test('upload, review, edit, confirm, approve: listing appears on every public route only after approval', async () => {
   const env = await makeEnv();
   const realBefore = await fs.readFile(path.join(REPO_DATA, 'listings.json'));
   const tempBefore = await fs.readFile(path.join(env.dir, 'listings.json'));
@@ -208,10 +220,30 @@ test('upload, review, edit, confirm: listing appears on every public route', asy
   assert.ok((await (await get(env, '/rise/drafts/draft-1')).text()).includes(newDescription));
   await assertNotPublic(env, COMPLETE_ID, 'Copper Kettle');
 
-  // Confirm.
+  // Confirm: goes to pending, not public.
   const confirm = await postForm(env, '/rise/drafts/draft-1/confirm', '');
   assert.equal(confirm.status, 303);
-  assert.equal(confirm.headers.get('location'), `/listings/${COMPLETE_ID}`);
+  assert.equal(confirm.headers.get('location'), '/rise/drafts/draft-1');
+  const pendingPage = await get(env, '/rise/drafts/draft-1');
+  assert.equal(pendingPage.status, 200);
+  assert.match(await pendingPage.text(), PENDING_MESSAGE);
+  await assertNotPublic(env, COMPLETE_ID, 'Copper Kettle');
+  assert.deepEqual(await readJson(env, 'published.json', []), []);
+  assert.equal((await readJson(env, 'drafts.json', []))[0].status, 'pending');
+
+  // Confirming a pending draft again is idempotent: one pending entry.
+  const reconfirm = await postForm(env, '/rise/drafts/draft-1/confirm', '');
+  assert.equal(reconfirm.status, 303);
+  assert.equal(reconfirm.headers.get('location'), '/rise/drafts/draft-1');
+  const queue = await readJson(env, 'pending.json', []);
+  assert.equal(queue.length, 1);
+  assert.equal(queue[0].status, 'pending');
+  await assertNotPublic(env, COMPLETE_ID, 'Copper Kettle');
+
+  // Admin approval publishes.
+  const approved = await approve(env, 'draft-1');
+  assert.equal(approved.status, 200);
+  assert.deepEqual(await approved.json(), { ok: true, listingId: COMPLETE_ID });
 
   const home = await (await get(env, '/')).text();
   assert.ok(home.includes('Copper Kettle Plumbing'));
@@ -243,10 +275,15 @@ test('upload, review, edit, confirm: listing appears on every public route', asy
   assert.deepEqual(await fs.readFile(path.join(env.dir, 'listings.json')), tempBefore);
   assert.deepEqual(await fs.readFile(path.join(REPO_DATA, 'listings.json')), realBefore);
 
-  // Confirm again is idempotent: still exactly one listing.
+  assert.equal((await readJson(env, 'pending.json', []))[0].status, 'approved');
+
+  // Confirm again after approval is idempotent: still exactly one listing.
   const again = await postForm(env, '/rise/drafts/draft-1/confirm', '');
   assert.equal(again.status, 303);
   assert.equal((await readJson(env, 'published.json', [])).filter(l => l.id === COMPLETE_ID).length, 1);
+
+  // Approving twice is refused (entry no longer pending).
+  assert.equal((await approve(env, 'draft-1')).status, 409);
 });
 
 test('PNG and WebP uploads are accepted', async () => {
@@ -309,17 +346,20 @@ test('confirm with missing fields returns 422, publishes nothing, then succeeds 
   await assertNotPublic(env, id, 'Four Corners');
   assert.deepEqual(await readJson(env, 'published.json', []), []);
   assert.equal((await readJson(env, 'drafts.json', []))[0].status, 'draft');
+  assert.deepEqual(await readJson(env, 'pending.json', []), []);
 
   const edit = await postForm(env, '/rise/drafts/draft-1',
     reviewForm({ ...fixture, description: 'Brakes, oil, and engine checks.' }));
   assert.equal(edit.status, 303);
   const ok = await postForm(env, '/rise/drafts/draft-1/confirm', '');
   assert.equal(ok.status, 303);
-  assert.equal(ok.headers.get('location'), `/listings/${id}`);
+  assert.equal(ok.headers.get('location'), '/rise/drafts/draft-1');
+  await assertNotPublic(env, id, 'Four Corners');
+  assert.equal((await approve(env, 'draft-1')).status, 200);
   assert.equal((await get(env, `/listings/${id}`)).status, 200);
 });
 
-test('discarding an unpublished draft removes it; discarding after publish returns 409', async () => {
+test('discarding an unpublished draft removes it; discarding or editing after confirm or publish returns 409', async () => {
   const env = await makeEnv();
   await upload(env, completeJpeg);
   const discard = await postForm(env, '/rise/drafts/draft-1/discard', '');
@@ -329,13 +369,43 @@ test('discarding an unpublished draft removes it; discarding after publish retur
   await upload(env, completeJpeg); // draft-2
   const confirm = await postForm(env, '/rise/drafts/draft-2/confirm', '');
   assert.equal(confirm.status, 303);
+
+  // Pending: discard and edit are refused, listing is not public.
+  assert.equal((await postForm(env, '/rise/drafts/draft-2/discard', '')).status, 409);
+  assert.equal((await postForm(env, '/rise/drafts/draft-2', reviewForm(COMPLETE_FIELDS))).status, 409);
+  assert.equal((await get(env, `/listings/${COMPLETE_ID}`)).status, 404);
+
+  // Published: still refused.
+  assert.equal((await approve(env, 'draft-2')).status, 200);
   const late = await postForm(env, '/rise/drafts/draft-2/discard', '');
   assert.equal(late.status, 409);
   assert.equal((await get(env, `/listings/${COMPLETE_ID}`)).status, 200);
-
-  // Editing a published draft is refused too.
   const edit = await postForm(env, '/rise/drafts/draft-2', reviewForm(COMPLETE_FIELDS));
   assert.equal(edit.status, 409);
+});
+
+test('admin approve: wrong token is 401, unknown entry is 404, invalid draft is 422', async () => {
+  const env = await makeEnv();
+  await upload(env, completeJpeg);
+  await postForm(env, '/rise/drafts/draft-1/confirm', '');
+
+  assert.equal((await approve(env, 'draft-1', 'wrong')).status, 401);
+  assert.equal((await get(env, `/listings/${COMPLETE_ID}`)).status, 404);
+  assert.equal((await approve(env, 'no-such-entry')).status, 404);
+
+  // A pending entry whose draft fields are invalid cannot be approved.
+  const drafts = await readJson(env, 'drafts.json', []);
+  drafts.push({
+    id: 'bad-1', status: 'pending', fields: { name: 'No Details Co' }, missingFields: [],
+    createdAt: '2025-01-14T00:00:00.000Z',
+  });
+  await fs.writeFile(path.join(env.dir, 'drafts.json'), JSON.stringify(drafts));
+  const queue = await readJson(env, 'pending.json', []);
+  queue.push({ id: 'bad-1', draftId: 'bad-1', submittedAt: '2025-01-14T00:00:00.000Z', status: 'pending' });
+  await fs.writeFile(path.join(env.dir, 'pending.json'), JSON.stringify(queue));
+  const bad = await approve(env, 'bad-1');
+  assert.equal(bad.status, 422);
+  assert.ok(Array.isArray((await bad.json()).missingFields));
 });
 
 test('unknown draft ids return 404 on every draft route', async () => {
@@ -443,15 +513,30 @@ async function assertSingleListing(env) {
   assert.equal(verified[COMPLETE_ID], '2025-01-15');
 }
 
-test('crash resume: a publishing draft with a reserved id publishes exactly once', async () => {
-  const env = await makeEnv({ files: { 'drafts.json': JSON.stringify([publishingDraft()]) } });
+/** pending.json entry left behind by a crash during approval. */
+function crashPending() {
+  return { id: 'crash-1', draftId: 'crash-1', submittedAt: '2025-01-14T00:00:00.000Z', status: 'pending' };
+}
 
-  const first = await postForm(env, '/rise/drafts/crash-1/confirm', '');
-  assert.equal(first.status, 303);
-  assert.equal(first.headers.get('location'), `/listings/${COMPLETE_ID}`);
-  const second = await postForm(env, '/rise/drafts/crash-1/confirm', '');
-  assert.equal(second.status, 303);
-  assert.equal(second.headers.get('location'), `/listings/${COMPLETE_ID}`);
+test('crash resume: a publishing draft with a reserved id publishes exactly once', async () => {
+  const env = await makeEnv({
+    files: {
+      'drafts.json': JSON.stringify([publishingDraft()]),
+      'pending.json': JSON.stringify([crashPending()]),
+    },
+  });
+
+  // The owner confirm route does not touch a draft that is already publishing.
+  const confirm = await postForm(env, '/rise/drafts/crash-1/confirm', '');
+  assert.equal(confirm.status, 409);
+  assert.equal((await get(env, `/listings/${COMPLETE_ID}`)).status, 404);
+
+  // Re-running the admin approval completes the publish exactly once.
+  const first = await approve(env, 'crash-1');
+  assert.equal(first.status, 200);
+  assert.deepEqual(await first.json(), { ok: true, listingId: COMPLETE_ID });
+  const second = await approve(env, 'crash-1');
+  assert.equal(second.status, 409);
 
   await assertSingleListing(env);
   assert.equal((await get(env, `/listings/${COMPLETE_ID}`)).status, 200);
@@ -463,12 +548,13 @@ test('crash resume: listing already in published.json is not duplicated', async 
     files: {
       'drafts.json': JSON.stringify([publishingDraft()]),
       'published.json': JSON.stringify([already]),
+      'pending.json': JSON.stringify([crashPending()]),
     },
   });
 
-  const res = await postForm(env, '/rise/drafts/crash-1/confirm', '');
-  assert.equal(res.status, 303);
-  assert.equal(res.headers.get('location'), `/listings/${COMPLETE_ID}`);
+  const res = await approve(env, 'crash-1');
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), { ok: true, listingId: COMPLETE_ID });
 
   await assertSingleListing(env);
 });
@@ -481,6 +567,7 @@ test('no image bytes are written under the data directory', async () => {
   assert.equal((await upload(env, makeImage('png', COMPLETE_FIXTURE), 'png')).status, 303);
   assert.equal((await upload(env, makeImage('webp', COMPLETE_FIXTURE), 'webp')).status, 303);
   assert.equal((await postForm(env, '/rise/drafts/draft-1/confirm', '')).status, 303);
+  assert.equal((await approve(env, 'draft-1')).status, 200);
 
   const signatures = [HEADERS.jpeg.subarray(0, 3), HEADERS.png.subarray(0, 4), MARKER];
   for (const { file, bytes } of await allFiles(env.dir)) {

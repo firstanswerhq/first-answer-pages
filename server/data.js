@@ -11,8 +11,10 @@
  * DATA_DIR or the repo data/ directory.
  *
  * Draft shape this module relies on (drafts.json entries):
- *   { id, status: 'draft'|'publishing'|'published', fields: {...listing fields},
- *     reservedId?, listingId? }
+ *   { id, status: 'draft'|'pending'|'rejected'|'publishing'|'published',
+ *     fields: {...listing fields}, reservedId?, listingId? }
+ * pending.json entries: { id (= draft id), draftId, submittedAt,
+ *   status: 'pending'|'approved'|'rejected'|'unpublished' }
  *
  * Field validation and slug creation live in ./lib/listing-fields.js (task 3.1).
  * Until that file exists, publishDraft cannot validate: it rejects with a
@@ -28,7 +30,7 @@ import path from 'node:path';
 import { readJsonFile, updateJsonFile, StoreError } from './lib/json-file.js';
 import { configFromEnv } from './lib/config.js';
 
-const COLLECTIONS = new Set(['drafts', 'quotes', 'seance']);
+const COLLECTIONS = new Set(['drafts', 'quotes', 'seance', 'pending']);
 const MODEL_KEYS = [
   'name', 'category', 'phone', 'hours', 'services', 'serviceArea',
   'description', 'city', 'state', 'address',
@@ -240,7 +242,8 @@ export function createDataStore({ dataDir, fs, clock = defaultClock, validateFie
         const existing = findById(draft.listingId);
         return existing ? { status: 200, listing: existing } : { status: 409, error: 'Published listing missing' };
       }
-      if (draft.status !== 'draft' && draft.status !== 'publishing') {
+      // 'draft' is kept for fixtures; 'pending' is the normal approval path.
+      if (draft.status !== 'draft' && draft.status !== 'pending' && draft.status !== 'publishing') {
         return { status: 409, error: 'Draft cannot be published' };
       }
 
@@ -301,6 +304,101 @@ export function createDataStore({ dataDir, fs, clock = defaultClock, validateFie
   }
 
   /**
+   * Owner confirmation: validate the draft, set it to 'pending' and queue it
+   * for review. Nothing is published. Pending entry id = draft id.
+   * @returns {Promise<{ status: number, draft?: object, listing?: object,
+   *   missingFields?: string[], error?: string }>}
+   *   200 queued (or already pending), or published listing; 404; 409; 422.
+   */
+  function submitDraft(draftId) {
+    return withLock('publish', async () => {
+      const drafts = collection('drafts');
+      const pending = collection('pending');
+      const api = await getFieldsApi();
+
+      const all = await drafts.read();
+      const draft = Array.isArray(all) ? all.find(d => d && d.id === draftId) : undefined;
+      if (!draft) return { status: 404, error: 'Draft not found' };
+      if (draft.status === 'published') {
+        const existing = findById(draft.listingId);
+        return existing ? { status: 200, listing: existing } : { status: 409, error: 'Published listing missing' };
+      }
+      if (draft.status === 'pending') {
+        return { status: 200, draft: structuredClone(draft) }; // idempotent
+      }
+      if (draft.status !== 'draft') return { status: 409, error: 'Draft cannot be submitted' };
+
+      const rawFields = draft.fields && typeof draft.fields === 'object' ? draft.fields : {};
+      const checked = api.validateFields(rawFields, categories);
+      const fields = checked && !Array.isArray(checked) && checked.fields ? checked.fields : rawFields;
+      const failing = failingFields(checked, fields);
+      if (failing.length > 0) return { status: 422, missingFields: failing };
+
+      const submittedAt = new Date(clock.now()).toISOString();
+      await pending.update(list => {
+        if (!list.some(e => e && e.draftId === draftId)) {
+          list.push({ id: draftId, draftId, submittedAt, status: 'pending' });
+        }
+      });
+      await drafts.update(list => {
+        const d = list.find(x => x && x.id === draftId);
+        if (d) d.status = 'pending';
+      });
+      return { status: 200, draft: { ...structuredClone(draft), status: 'pending' } };
+    });
+  }
+
+  /**
+   * Reject a pending draft: draft and pending entry become 'rejected'.
+   * Nothing is published. 404 unknown, 409 when not pending.
+   */
+  function rejectDraft(draftId) {
+    return withLock('publish', async () => {
+      const drafts = collection('drafts');
+      const all = await drafts.read();
+      const draft = Array.isArray(all) ? all.find(d => d && d.id === draftId) : undefined;
+      if (!draft) return { status: 404, error: 'Draft not found' };
+      if (draft.status !== 'pending') return { status: 409, error: 'Draft is not pending' };
+      await drafts.update(list => {
+        const d = list.find(x => x && x.id === draftId);
+        if (d) d.status = 'rejected';
+      });
+      await collection('pending').update(list => {
+        const e = list.find(x => x && x.draftId === draftId);
+        if (e) e.status = 'rejected';
+      });
+      return { status: 200 };
+    });
+  }
+
+  /**
+   * Remove a published (non-seed) listing from published.json and the snapshot;
+   * its pending entry becomes 'unpublished'. 404 unknown, 409 seed listing.
+   */
+  function unpublish(id) {
+    return withLock('publish', async () => {
+      if (seed.some(l => l.id === id)) return { status: 409, error: 'Seed listings cannot be unpublished' };
+      if (!state.published.some(l => l && l.id === id)) return { status: 404, error: 'Listing not found' };
+
+      const next = await updateJsonFile(file('published.json'), list => {
+        const i = list.findIndex(l => l && l.id === id);
+        if (i !== -1) list.splice(i, 1);
+      }, { ...io, fallback: [] });
+
+      const all = await collection('drafts').read();
+      const draft = Array.isArray(all) ? all.find(d => d && d.listingId === id) : undefined;
+      if (draft) {
+        await collection('pending').update(list => {
+          const e = list.find(x => x && x.draftId === draft.id);
+          if (e) e.status = 'unpublished';
+        });
+      }
+      swap({ published: withoutComments(next) });
+      return { status: 200 };
+    });
+  }
+
+  /**
    * Internal: patch a published (non-seed) listing. `id` cannot change.
    * Returns the updated listing, or undefined for an unknown/seed id.
    */
@@ -323,7 +421,7 @@ export function createDataStore({ dataDir, fs, clock = defaultClock, validateFie
 
   return {
     getListings, getCategories, findById, searchListings, getVerifiedDate,
-    publishDraft, updatePublished, reload, withLock, collection,
+    publishDraft, submitDraft, rejectDraft, unpublish, updatePublished, reload, withLock, collection,
   };
 }
 

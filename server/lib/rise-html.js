@@ -128,9 +128,9 @@ ${hoursRows}
 
   <form class="rise-form confirm" method="POST" action="${base}/confirm">
     <h2>Publish</h2>
-    <p>Confirming publishes this listing and marks it Owner-confirmed. This is not an ownership check. We do not verify who you are or that the business is yours.</p>
-    <p>Save your changes first. Confirm publishes the saved draft.</p>
-    <button type="submit">Confirm and publish</button>
+    <p>Confirming sends this listing to us for review. Once we approve it, it goes live and is marked Owner-confirmed. This is not an ownership check. We do not verify who you are or that the business is yours.</p>
+    <p>Save your changes first. Confirm sends the saved draft.</p>
+    <button type="submit">Confirm and send for review</button>
   </form>
 
   <form class="rise-form discard" method="POST" action="${base}/discard">

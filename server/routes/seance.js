@@ -7,20 +7,11 @@
  */
 
 import express, { Router } from 'express';
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { requireAdmin } from '../lib/admin-auth.js';
 import { RULES } from '../lib/rate-limiter.js';
 import { runSeance, createSeanceStore, SeanceError } from '../lib/seance.js';
 import { buildHistory, seanceReportPage } from '../lib/seance-html.js';
 import { messagePage } from '../lib/rise-html.js';
-
-const sha256 = s => createHash('sha256').update(String(s)).digest();
-
-/** True when the Authorization header carries the configured bearer token. */
-function tokenMatches(header, expected) {
-  const match = typeof header === 'string' ? /^Bearer (.+)$/i.exec(header.trim()) : null;
-  if (!match) return false;
-  return timingSafeEqual(sha256(match[1]), sha256(expected));
-}
 
 /**
  * @param {object} ctx resolved dependencies from createApp
@@ -31,17 +22,8 @@ export function createSeanceRouter(ctx) {
   const history = createSeanceStore(ctx.store);
   const jsonParser = express.json({ limit: '4kb' });
 
-  router.post('/seance/run', (req, res, next) => {
-    // 1. Disabled entirely without a configured token (before reading the body).
-    if (!ctx.config.adminToken) {
-      return res.status(403).json({ error: 'Seance runs are disabled' });
-    }
-    // 2. Auth.
-    if (!tokenMatches(req.headers.authorization, ctx.config.adminToken)) {
-      res.set('WWW-Authenticate', 'Bearer');
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-    // 3. Body.
+  // Admin auth (403 when no token configured, 401 otherwise) runs before the body is read.
+  router.post('/seance/run', requireAdmin(ctx), (req, res, next) => {
     jsonParser(req, res, async err => {
       try {
         if (err) return res.status(err.type === 'entity.too.large' ? 413 : 400).json({ error: 'Bad request' });

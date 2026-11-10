@@ -72,6 +72,12 @@ async function makeEnv({ rateLimiter = permissiveLimiter, clock } = {}) {
       reservedId: 'ghost-draft-plumbing',
       fields: { name: 'Ghost Draft Plumbing', category: 'plumbers', city: 'Ghostville', state: 'TN' },
     },
+    {
+      id: 'draft-awaiting',
+      status: 'pending',
+      reservedId: 'awaiting-review-plumbing',
+      fields: { name: 'Awaiting Review Plumbing', category: 'plumbers', city: 'Ghostville', state: 'TN' },
+    },
   ]));
 
   const theClock = clock ?? { t: Date.UTC(2025, 0, 15, 12, 0, 0), now() { return this.t; } };
@@ -315,14 +321,16 @@ test('get_listing without id is -32602 naming id', async () => {
 
 test('unpublished drafts are not returned by search or get_listing', async () => {
   const drafts = JSON.parse(await fs.readFile(path.join(main.dir, 'drafts.json'), 'utf8'));
-  assert.equal(drafts.length, 1); // the draft really is on disk
+  assert.equal(drafts.length, 2); // a draft and a pending draft really are on disk
 
   const search = searchResult((await callTool(main, 'search_listings', { query: 'ghost' })).json);
   assert.equal(search.count, 0);
+  const awaiting = searchResult((await callTool(main, 'search_listings', { query: 'awaiting review' })).json);
+  assert.equal(awaiting.count, 0);
   const byCity = searchResult((await callTool(main, 'search_listings', { city: 'Ghostville' })).json);
   assert.equal(byCity.count, 0);
 
-  for (const id of ['draft-ghost', 'ghost-draft-plumbing']) {
+  for (const id of ['draft-ghost', 'ghost-draft-plumbing', 'draft-awaiting', 'awaiting-review-plumbing']) {
     const { json } = await callTool(main, 'get_listing', { id });
     assert.equal(json.result.isError, true);
   }

@@ -24,6 +24,7 @@ import { createSitemapRouter }  from './routes/sitemap.js';
 import { createRiseRouter }     from './routes/rise.js';
 import { createMcpRouter }      from './routes/mcp.js';
 import { createSeanceRouter }   from './routes/seance.js';
+import { createAdminRouter }   from './routes/admin.js';
 import { mountA2A }             from './routes/a2a.js';
 import { layout }               from './lib/html.js';
 
@@ -67,7 +68,10 @@ export function createApp(deps = {}) {
 
   const app = express();
 
-  if (config.trustProxy !== undefined) app.set('trust proxy', config.trustProxy);
+  // Hop count only; never `true` (it would trust any client-supplied X-Forwarded-For).
+  if (Number.isInteger(config.trustProxy) && config.trustProxy >= 0) {
+    app.set('trust proxy', config.trustProxy);
+  }
 
   app.use(express.static(fileURLToPath(new URL('../public', import.meta.url))));
 
@@ -79,6 +83,7 @@ export function createApp(deps = {}) {
   app.use(createRiseRouter(ctx));
   app.use(createMcpRouter(ctx));
   app.use(createSeanceRouter(ctx));
+  app.use(createAdminRouter(ctx));
 
   if (ctx.a2a) mountA2A(app, ctx.a2a); // registers BOTH the card route and ctx.a2a.path together
 

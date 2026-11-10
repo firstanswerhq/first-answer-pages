@@ -593,6 +593,82 @@
         "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
         "timestamp": 1794287370278
       }
+    ],
+    "12. Final checkpoint - Full suite": [
+      {
+        "executionId": "d5950c98-889a-4362-a409-4c0f9f8adce9",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794288719072
+      }
+    ],
+    "13.1 Build the approval queue": [
+      {
+        "executionId": "d5950c98-889a-4362-a409-4c0f9f8adce9",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794288918810
+      },
+      {
+        "executionId": "d5950c98-889a-4362-a409-4c0f9f8adce9",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794289077927
+      }
+    ],
+    "13.2 Collapse control characters in single-line fields": [
+      {
+        "executionId": "d5950c98-889a-4362-a409-4c0f9f8adce9",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794288920484
+      },
+      {
+        "executionId": "d5950c98-889a-4362-a409-4c0f9f8adce9",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794289079397
+      }
+    ],
+    "13.3 Rate limits behind Render": [
+      {
+        "executionId": "d5950c98-889a-4362-a409-4c0f9f8adce9",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794289087392
+      },
+      {
+        "executionId": "d5950c98-889a-4362-a409-4c0f9f8adce9",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794289214427
+      }
+    ],
+    "13.4 Update existing tests for the pending flow": [
+      {
+        "executionId": "d5950c98-889a-4362-a409-4c0f9f8adce9",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794289089143
+      },
+      {
+        "executionId": "d5950c98-889a-4362-a409-4c0f9f8adce9",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794289216095
+      }
+    ],
+    "13.5 Write tests for the approval queue": [
+      {
+        "executionId": "d5950c98-889a-4362-a409-4c0f9f8adce9",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794289220879
+      }
+    ],
+    "13.6 Write tests for single-line fields": [
+      {
+        "executionId": "d5950c98-889a-4362-a409-4c0f9f8adce9",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794289223122
+      }
+    ],
+    "13.7 Write tests for trust proxy and admin attempt limits": [
+      {
+        "executionId": "d5950c98-889a-4362-a409-4c0f9f8adce9",
+        "chatSessionId": "sess_87f80ade-d2a1-4398-8beb-6efe2bd81da3",
+        "timestamp": 1794289224848
+      }
     ]
   }
 }

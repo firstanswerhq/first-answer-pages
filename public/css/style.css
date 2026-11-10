@@ -231,6 +231,23 @@ h1 {
   border: 1px solid var(--color-divider);
 }
 
+/* Admin approval queue */
+.pending-list {
+  list-style: none;
+  padding: 0;
+}
+
+.pending-item {
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  border: 2px solid #000;
+}
+
+.pending-item form {
+  display: inline-block;
+  margin-right: 0.5rem;
+}
+
 .notice {
   padding: 0.5rem 0.75rem;
   border: 2px solid #8B0000;

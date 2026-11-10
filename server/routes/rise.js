@@ -5,7 +5,7 @@
  *   POST /rise                       raw image, or urlencoded base64 field
  *   GET  /rise/drafts/:id            editable review form
  *   POST /rise/drafts/:id            save edits
- *   POST /rise/drafts/:id/confirm    publish
+ *   POST /rise/drafts/:id/confirm    validate and send for review (admin approval publishes)
  *   POST /rise/drafts/:id/discard    delete an unpublished draft
  *
  * Image bytes live only in the request scope: nothing is written to disk.
@@ -33,6 +33,9 @@ function runParser(parser, req, res) {
     parser(req, res, err => (err ? reject(err) : resolve()));
   });
 }
+
+const PENDING_MESSAGE = "Thanks! We'll review your listing and it will be live soon.";
+const HOME_LINK = { href: '/', text: 'Back to the directory' };
 
 function sendPage(res, status, html) {
   res.status(status).type('html').send(html);
@@ -172,6 +175,12 @@ export function createRiseRouter(ctx) {
       if (found.status !== 200) {
         return sendPage(res, 404, messagePage('Draft not found', 'That draft does not exist or was discarded.'));
       }
+      if (found.draft.status === 'pending') {
+        return sendPage(res, 200, messagePage('Thanks!', PENDING_MESSAGE, HOME_LINK));
+      }
+      if (found.draft.status === 'rejected') {
+        return sendPage(res, 200, messagePage('Not approved', 'This listing was not approved.', HOME_LINK));
+      }
       sendPage(res, 200, reviewPage(found.draft, ctx.store.getCategories()));
     } catch (err) {
       next(err);
@@ -194,7 +203,7 @@ export function createRiseRouter(ctx) {
         return sendPage(res, 404, messagePage('Draft not found', 'That draft does not exist or was discarded.'));
       }
       if (result.status === 409) {
-        return sendPage(res, 409, messagePage('Draft locked', 'This draft was already published and can no longer be edited.', { href: '/', text: 'Back to the directory' }));
+        return sendPage(res, 409, messagePage('Draft locked', 'This draft was already sent for review or published and can no longer be edited.', HOME_LINK));
       }
       res.redirect(303, `/rise/drafts/${encodeURIComponent(req.params.id)}`);
     } catch (err) {
@@ -204,9 +213,13 @@ export function createRiseRouter(ctx) {
 
   router.post('/rise/drafts/:id/confirm', async (req, res, next) => {
     try {
-      const result = await ctx.store.publishDraft(req.params.id);
+      // Confirm validates and queues the draft for review; it never publishes.
+      const result = await ctx.store.submitDraft(req.params.id);
       if (result.status === 200 && result.listing) {
         return res.redirect(303, `/listings/${encodeURIComponent(result.listing.id)}`);
+      }
+      if (result.status === 200) {
+        return res.redirect(303, `/rise/drafts/${encodeURIComponent(req.params.id)}`);
       }
       if (result.status === 422) {
         const found = await drafts.get(req.params.id);
@@ -215,13 +228,13 @@ export function createRiseRouter(ctx) {
         }
         return sendPage(res, 422, reviewPage(found.draft, ctx.store.getCategories(), {
           missingFields: result.missingFields ?? [],
-          notice: 'The listing cannot be published yet. Fix the highlighted fields and save, then confirm again.',
+          notice: 'The listing cannot be sent for review yet. Fix the highlighted fields and save, then confirm again.',
         }));
       }
       if (result.status === 404) {
         return sendPage(res, 404, messagePage('Draft not found', 'That draft does not exist or was discarded.'));
       }
-      sendPage(res, 409, messagePage('Cannot publish', result.error ?? 'This draft cannot be published.', { href: '/', text: 'Back to the directory' }));
+      sendPage(res, 409, messagePage('Cannot confirm', result.error ?? 'This draft cannot be confirmed.', HOME_LINK));
     } catch (err) {
       next(err);
     }
