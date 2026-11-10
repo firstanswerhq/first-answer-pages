@@ -1,6 +1,6 @@
 # Launch fixes (from two independent reviews, Nov 10, 2026)
 
-Add these to `.kiro/specs/super-pages/tasks.md` as tasks 13 to 18, with tests for each, then build them in order. Keep every existing test passing.
+Add these to `.kiro/specs/super-pages/tasks.md` as tasks 13 to 18, with tests for each, then build them in order. Keep every existing test passing. Section 19 below goes in as task 20 (after the task 19 checkpoint).
 
 ## 13. Safety: nothing goes live unreviewed
 
@@ -48,11 +48,11 @@ Add these to `.kiro/specs/super-pages/tasks.md` as tasks 13 to 18, with tests fo
 - llms.txt: say how to request a quote (the MCP tool `request_quote` at /mcp, and `POST /api/quotes`). Mark owner-confirmed listings. Don't claim one city in the header when listings span several.
 - README: don't use "Super Pages" (Thryv owns the SUPERPAGES trademark). Call the features "Owner tools" or name each one. Use "Séance" with the accent in prose. List every env var: `PORT`, `BASE_URL`, `DATA_DIR`, `ADMIN_TOKEN`, `TRUST_PROXY`, `DEMO_MODE`, `SITE_NAME`, `NODE_ENV` and the provider keys.
 
-## 19. Connect a real AI (Claude, through the Anthropic API)
+## 19 (task 20 in tasks.md). Connect a real AI (Claude, through the Anthropic API)
 
 Colby is connecting Claude as the real provider for both features. He pastes the key into Render himself; it never goes in the repo or in chat.
 
 - Env for production: `VISION_PROVIDER=anthropic`, `VISION_MODEL=claude-haiku-5-5`, `VISION_API_KEY=<key>`, `SEANCE_PROVIDER=anthropic`, `SEANCE_MODEL=claude-sonnet-5-5`, `SEANCE_API_KEY=<same key>`. Check that config.js reads a `SEANCE_MODEL` (add it if missing) and that both model names can be changed by env alone.
-- **Séance must search the web**, the way consumer assistants do, so the answer reflects what AI finds today and not just old training data. In `server/lib/assistant.js` for the anthropic provider, add Anthropic's server-side web search tool to the Messages request (check the current tool type name in Anthropic's docs; cap it at `max_uses: 3`). Use the model's final text as the answer. Keep the named-or-not check. Save which provider and model answered on each run, and show it on the report as "Asked Claude (with web search) on Nov 10, 2026."
+- **Séance must search the web**, the way consumer assistants do, so the answer reflects what AI finds today and not just old training data. In `server/lib/assistant.js` for the anthropic provider, add Anthropic's server-side web search tool to the Messages request: `tools: [{ "type": "web_search_20250305", "name": "web_search", "max_uses": 3 }]` (checked in Anthropic's docs on Nov 10, 2026; no beta header needed). Raise `max_tokens` to at least 1024. The reply's `content` mixes `text`, `server_tool_use` and `web_search_tool_result` blocks: the answer is all `text` blocks joined in order. If `stop_reason` is `pause_turn`, send the request again once with the assistant content appended as the last message, then use what comes back. Use the model's final text as the answer. Keep the named-or-not check. Save which provider and model answered on each run, and show it on the report as "Asked Claude (with web search) on Nov 10, 2026."
 - Cost guard: a daily cap on real provider calls (`MAX_AI_CALLS_PER_DAY`, default 200 across /rise and Séance). Over the cap, return a friendly "Try again tomorrow" message. Never fall back to the mock silently in production.
 - Tests: use stubbed fetch only (no real network in tests). Check the web search tool is in the request body, the key never shows up in logs or errors, and the cap works.
