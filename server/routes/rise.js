@@ -1,5 +1,5 @@
 /**
- * rise.js — Rise from the Grave: upload an image, review the draft, confirm.
+ * rise.js — owner listing flow: upload an image, review the draft, confirm.
  *
  *   GET  /rise                       upload form (works without JavaScript)
  *   POST /rise                       raw image, or urlencoded base64 field
@@ -34,7 +34,12 @@ function runParser(parser, req, res) {
   });
 }
 
-const PENDING_MESSAGE = "Thanks! We'll review your listing and it will be live soon.";
+/** Paragraph under the "Thanks!" heading; the email sentence only when an owner email was given. */
+function pendingMessage(draft) {
+  const email = draft?.fields?.ownerEmail;
+  const hasEmail = typeof email === 'string' && email.trim() !== '';
+  return `We'll review your listing, usually within one business day.${hasEmail ? " We'll email you when it's live." : ''}`;
+}
 const HOME_LINK = { href: '/', text: 'Back to the directory' };
 
 function sendPage(res, status, html) {
@@ -94,7 +99,7 @@ export function createRiseRouter(ctx) {
   const comingSoon = res => sendPage(res, 503, messagePage('Photo listing is coming soon', 'Photo listing is coming soon.', HOME_LINK));
 
   router.get('/rise', (req, res) => {
-    sendPage(res, 200, uploadPage({ baseUrl: ctx.config.baseUrl, photoEnabled: !photoListingClosed() }));
+    sendPage(res, 200, uploadPage({ photoEnabled: !photoListingClosed(), discarded: req.query.discarded === '1' }));
   });
 
   // Type it in: an empty draft with the same edit page. Never uses the AI budget.
@@ -214,12 +219,12 @@ export function createRiseRouter(ctx) {
         return sendPage(res, 404, messagePage('Draft not found', 'That draft does not exist or was discarded.'));
       }
       if (found.draft.status === 'pending') {
-        return sendPage(res, 200, messagePage('Thanks!', PENDING_MESSAGE, HOME_LINK));
+        return sendPage(res, 200, messagePage('Thanks!', pendingMessage(found.draft), HOME_LINK));
       }
       if (found.draft.status === 'rejected') {
         return sendPage(res, 200, messagePage('Not approved', 'This listing was not approved.', HOME_LINK));
       }
-      sendPage(res, 200, reviewPage(found.draft, ctx.store.getCategories()));
+      sendPage(res, 200, reviewPage(found.draft, ctx.store.getCategories(), { saved: req.query.saved === '1' }));
     } catch (err) {
       next(err);
     }
@@ -243,7 +248,7 @@ export function createRiseRouter(ctx) {
       if (result.status === 409) {
         return sendPage(res, 409, messagePage('Draft locked', 'This draft was already sent for review or published and can no longer be edited.', HOME_LINK));
       }
-      res.redirect(303, `/rise/drafts/${encodeURIComponent(req.params.id)}`);
+      res.redirect(303, `/rise/drafts/${encodeURIComponent(req.params.id)}?saved=1`);
     } catch (err) {
       next(err);
     }
@@ -291,7 +296,7 @@ export function createRiseRouter(ctx) {
         }
         return sendPage(res, 422, reviewPage(found.draft, ctx.store.getCategories(), {
           missingFields: result.missingFields ?? [],
-          notice: 'The listing cannot be sent for review yet. Fix the highlighted fields and save, then confirm again.',
+          notice: 'Please fix the highlighted fields, then press Confirm again.',
         }));
       }
       if (result.status === 404) {
@@ -306,7 +311,7 @@ export function createRiseRouter(ctx) {
   router.post('/rise/drafts/:id/discard', async (req, res, next) => {
     try {
       const result = await drafts.discard(req.params.id);
-      if (result.status === 200) return res.redirect(303, '/rise');
+      if (result.status === 200) return res.redirect(303, '/rise?discarded=1');
       if (result.status === 409) {
         return sendPage(res, 409, messagePage('Cannot discard', 'This draft is published or being published, so it cannot be discarded.', { href: '/', text: 'Back to the directory' }));
       }

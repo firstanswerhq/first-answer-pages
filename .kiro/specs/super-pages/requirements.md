@@ -2,7 +2,7 @@
 
 ## Introduction
 
-Super Pages extends First Answer Pages, the finished spec `listings-and-ai-readable-pages`, into the first local directory built for AI agents. Old businesses rise from the grave into the AI age. Four features ship in this build order:
+Owner tools extends First Answer Pages, the finished spec `listings-and-ai-readable-pages`, into the first local directory built for AI agents. Old businesses rise from the grave into the AI age. Four features ship in this build order:
 
 1. **Rise from the Grave**: an owner uploads a photo of an old phone-book ad, business card, or truck door. A vision model extracts the business details into a DRAFT listing. The owner reviews and confirms the draft before it is published.
 2. **Agent-ready**: an MCP server at `/mcp` (Streamable HTTP) exposes `search_listings`, `get_listing`, and `request_quote`. Listing pages register matching WebMCP tools in the browser. An A2A agent card is published only when a real agent endpoint backs it.

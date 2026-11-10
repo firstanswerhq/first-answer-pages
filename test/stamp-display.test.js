@@ -145,8 +145,8 @@ const detailsBlock = /<details class="stamp-details">([\s\S]*?)<\/details>/.exec
 const titleP = /<p class="stamp-title">([\s\S]*?)<\/p>/.exec(html)?.[1];
 
 test('stamp title shows the Chicago date and sits outside the details block', () => {
-  assert.ok(html.includes('Owner-confirmed Nov 9, 2026'));
-  assert.equal(titleP, 'Owner-confirmed Nov 9, 2026');
+  assert.ok(html.includes('Owner-confirmed <span class="stamp-date">Nov 9, 2026</span>'));
+  assert.equal(titleP, 'Owner-confirmed <span class="stamp-date">Nov 9, 2026</span>');
   assert.ok(detailsBlock, 'details block present');
   assert.ok(!detailsBlock.includes('stamp-title'));
   assert.ok(!detailsBlock.includes('Owner-confirmed'));
@@ -205,7 +205,7 @@ test('HTTP: page shows the Chicago date while the API and JSON-LD keep verifiedD
   const page = await fetch(`${base}/listings/${listing.id}`);
   assert.equal(page.status, 200);
   const body = await page.text();
-  assert.ok(body.includes('Owner-confirmed Nov 9, 2026'));
+  assert.ok(body.includes('Owner-confirmed <span class="stamp-date">Nov 9, 2026</span>'));
   assert.equal(/<code data-hash="([0-9a-f]{64})"/.exec(body)?.[1], hashListing(listing, verifiedDate));
 
   const ld = [];

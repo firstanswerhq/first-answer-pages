@@ -54,6 +54,10 @@ const TRADE_ANSWERS = Object.freeze({
     'For restaurants in Nashville, people often mention The Griddle House, Biscuit & Brine and Hot Plate Nashville.',
     'For restaurants in Nashville, people often mention Skillet & Smoke, Fifth Street Diner and The Corner Table.',
   ]),
+  'shops-and-restaurants': Object.freeze([
+    'For restaurants in Nashville, people often mention The Griddle House, Biscuit & Brine and Hot Plate Nashville.',
+    'For restaurants in Nashville, people often mention Skillet & Smoke, Fifth Street Diner and The Corner Table.',
+  ]),
   'auto-repair': Object.freeze([
     'For auto repair in Nashville, people often mention Cumberland Auto Works, Five Points Auto and Pedal to the Metal Garage.',
     'For auto repair in Nashville, people often mention Lug Nut Garage, Riverside Brake & Tire and Old Hickory Auto Service.',
@@ -73,6 +77,7 @@ const TRADE_PHRASES = Object.freeze({
   plumbers: 'plumbers',
   electricians: 'electricians',
   restaurants: 'restaurants',
+  'shops-and-restaurants': 'shops and restaurants',
   'auto-repair': 'auto repair',
   'hair-salons': 'hair salons',
   lawyers: 'lawyers',

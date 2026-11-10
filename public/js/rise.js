@@ -1,12 +1,11 @@
-// Optional file-picker enhancement for /rise. The Advanced text form works without it.
+// Optional file-picker enhancement for /rise. The type-it-in button works without it.
 const MAX_BYTES = 5242880;
 const TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 const form = document.getElementById('rise-form');
-const area = document.getElementById('imageBase64');
 const status = document.getElementById('rise-status');
 
-if (form && area) {
+if (form) {
   let picker = document.getElementById('imageFile');
   if (!picker) {
     picker = document.createElement('input');

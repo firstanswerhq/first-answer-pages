@@ -204,10 +204,11 @@ test('a correct token never consumes budget and works from a different address a
   const blocked = await hit(env, { auth: WRONG, xff: `9.9.9.0, ${real}` });
   assert.equal(blocked.status, 429);
   await blocked.arrayBuffer();
-  // Throttle is checked before the token, so the blocked address stays blocked.
-  const stillBlocked = await hit(env, { auth: GOOD, xff: `9.9.9.0, ${real}` });
-  assert.equal(stillBlocked.status, 429);
-  await stillBlocked.arrayBuffer();
+  // The correct token is checked first, so the admin is never locked out,
+  // even from the throttled address (task 21.1).
+  const stillWorks = await hit(env, { auth: GOOD, xff: `9.9.9.0, ${real}` });
+  assert.equal(stillWorks.status, 200);
+  await stillWorks.arrayBuffer();
   // A different address with the right token works.
   const other = await hit(env, { auth: GOOD, xff: `9.9.9.0, 203.0.113.21` });
   assert.equal(other.status, 200);

@@ -231,13 +231,14 @@ test('production: seed listings are left out of sitemap and llms.txt; owner list
   assert.ok(sitemap.includes(`${BASE_URL}/listings/${OWNER_ID}<`), 'sitemap has owner listing');
   assert.ok(llms.includes(`/listings/${OWNER_ID}`), 'llms.txt has owner listing');
 
+  // Task 21.1: with demo mode off the sample listings are not loaded at all.
   const page = await get(env, `/listings/${SEED_ID}`);
-  assert.equal(page.status, 200);
+  assert.equal(page.status, 404);
 });
 
-test('outside production: seed listings appear in sitemap and llms.txt', async () => {
+test('demo mode outside production: seed listings appear in sitemap and llms.txt', async () => {
   const env = await makeEnv({
-    config: { production: false, demoMode: false },
+    config: { production: false, demoMode: true },
     withOwner: true,
   });
   const sitemap = await (await get(env, '/sitemap.xml')).text();

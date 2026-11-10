@@ -1,8 +1,8 @@
-# Design Document: Super Pages
+# Design Document: Owner tools
 
 ## Overview
 
-Super Pages extends the finished `listings-and-ai-readable-pages` build with four features, built in this order: Rise from the Grave (photo to draft listing), Agent-ready (MCP server, quote requests, WebMCP), the Owner-confirmed stamp (SHA-256 of a canonical listing), and the Seance (does an AI assistant name this business, with history).
+Owner tools extends the finished `listings-and-ai-readable-pages` build with four features, built in this order: Rise from the Grave (photo to draft listing), Agent-ready (MCP server, quote requests, WebMCP), the Owner-confirmed stamp (SHA-256 of a canonical listing), and the Seance (does an AI assistant name this business, with history).
 
 **The stamp does not prove ownership.** Nothing in this design checks that the person who confirms a draft owns the business, so the stamp never claims identity verification. The hash is a tamper check: it shows the listing is unchanged since the owner confirmed it. Real ownership checks, such as a phone or email code sent to the listed number, are future work. Code identifiers (`verifiedDate`, `Verified_Date`, `Verification_Hash`, `Verifier`, `verified.json`, `/api/verify/:id`, the JSON `verified` boolean) keep their names; only visible wording and prose use "Owner-confirmed".
 

@@ -6,6 +6,7 @@
  *   POST /admin/logout                     clears the cookie, 303 /admin/login
  *   GET  /admin/pending                    HTML list of listings awaiting review
  *   GET  /admin/quotes                     HTML list of saved quotes, newest first
+ *   GET  /admin/whoami                     req.ip, req.ips and the trust proxy setting
  *   POST /admin/pending/:id/approve        publish the draft
  *   POST /admin/pending/:id/reject         reject, publish nothing
  *   POST /admin/listings/:id/unpublish     take a published listing down
@@ -52,7 +53,7 @@ const wantsHtml = req =>
   typeof req.headers.authorization !== 'string' && String(req.headers.accept ?? '').includes('text/html');
 
 const adminNav = () => `<nav class="admin-nav">
-  <a href="/admin/pending">Pending</a> &middot; <a href="/admin/quotes">Quotes</a>
+  <a href="/admin/pending">Pending</a> &middot; <a href="/admin/quotes">Quotes</a> &middot; <a href="/admin/whoami">My IP</a>
   <form method="POST" action="/admin/logout" class="admin-logout"><button type="submit" class="admin-button">Log out</button></form>
 </nav>`;
 
@@ -131,8 +132,8 @@ export function createAdminRouter(ctx) {
       const entries = (await pendingEntries()).filter(e => e && e.status === 'pending');
       const drafts = await ctx.store.collection('drafts').read();
       const byId = new Map((Array.isArray(drafts) ? drafts : []).map(d => [d.id, d]));
-      const publishedAll = await ctx.store.collection('published').read();
-      const published = (Array.isArray(publishedAll) ? publishedAll : []).filter(l => l && typeof l.id === 'string');
+      // Owner listings that are live now (the store's snapshot; sample listings are never unpublishable).
+      const published = ctx.store.getListings().filter(l => l && typeof l.id === 'string' && !ctx.store.isSeed(l.id));
 
       const items = entries.map(e => {
         const f = byId.get(e.draftId)?.fields ?? {};
@@ -209,6 +210,29 @@ export function createAdminRouter(ctx) {
     } catch (err) {
       next(err);
     }
+  });
+
+  // Shows the address the server sees, to pick the right TRUST_PROXY hop count.
+  router.get('/admin/whoami', (req, res) => {
+    const trust = req.app.get('trust proxy');
+    const trustText = trust === undefined || trust === false ? 'not set' : String(trust);
+    const ips = Array.isArray(req.ips) ? req.ips : [];
+    if (String(req.headers.accept ?? '').includes('application/json')) {
+      return res.json({ ip: req.ip ?? '', ips, trustProxy: trustText });
+    }
+    const list = ips.length === 0
+      ? '<p>None (no forwarded addresses are being trusted).</p>'
+      : `<ul>${ips.map(ip => `<li>${escapeHtml(ip)}</li>`).join('')}</ul>`;
+    const body = `<section class="admin">
+  ${adminNav()}
+  <h1>Your IP address</h1>
+  <p>Open this page from your phone. Set TRUST_PROXY to the smallest number that shows your real IP address.</p>
+  <p>req.ip: <strong>${escapeHtml(req.ip ?? '')}</strong></p>
+  <p>req.ips:</p>
+  ${list}
+  <p>Current TRUST_PROXY (trust proxy): <strong>${escapeHtml(trustText)}</strong></p>
+</section>`;
+    res.type('html').send(layout({ title: 'Your IP address', body }));
   });
 
   router.post('/admin/pending/:id/approve', async (req, res, next) => {

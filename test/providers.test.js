@@ -480,7 +480,8 @@ describe('assistant adapters (stubbed fetch)', () => {
             init.signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
           });
         await withFetch(hang, async () => {
-          const config = { ...realAssistantConfig(provider), providerTimeoutMs: 25 };
+          // Séance has its own deadline (seanceTimeoutMs, task 21.2), so shorten both.
+          const config = { ...realAssistantConfig(provider), providerTimeoutMs: 25, seanceTimeoutMs: 25 };
           await assert.rejects(ask(config), (err) => {
             assert.ok(err instanceof AssistantError);
             assert.equal(err.code, 'timeout');

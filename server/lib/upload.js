@@ -1,4 +1,4 @@
-// Upload helpers for Rise from the Grave: image signature detection and
+// Upload helpers for the /rise owner listing page: image signature detection and
 // strict base64 decoding. Pure functions over Buffers; nothing touches disk.
 
 export const MAX_IMAGE_BYTES = 5242880; // 5 MiB decoded image

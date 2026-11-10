@@ -199,7 +199,7 @@ function sourcesLine(run) {
 }
 
 function runSection(run) {
-  const model = typeof run.model === 'string' && run.model !== ''
+  const model = run.provider !== 'mock' && typeof run.model === 'string' && run.model !== ''
     ? ` &middot; ${escapeHtml(run.model)}`
     : '';
   const tag = run.ownerConfirmation

@@ -469,7 +469,7 @@ const NEW_CATEGORIES = [
   { slug: 'shops-and-restaurants', label: 'Shops and Restaurants' },
   { slug: 'other', label: 'Other' },
 ];
-const ORIGINAL_SLUGS = ['plumbers', 'electricians', 'restaurants', 'auto-repair', 'hair-salons', 'lawyers'];
+const ORIGINAL_SLUGS = ['plumbers', 'electricians', 'auto-repair', 'hair-salons', 'lawyers'];
 
 test('categories.json has the six new categories with the expected labels', () => {
   const onDisk = JSON.parse(
@@ -482,7 +482,7 @@ test('categories.json has the six new categories with the expected labels', () =
   }
 });
 
-test('categories.json slugs are unique and URL-safe, and the original six remain', () => {
+test('categories.json slugs are unique and URL-safe, and the original categories remain (restaurants merged into shops-and-restaurants)', () => {
   const onDisk = JSON.parse(
     readFileSync(new URL('../data/categories.json', import.meta.url), 'utf8')
   );
@@ -502,4 +502,13 @@ test('mapCategory resolves each new slug and label in any letter case', () => {
   }
   assert.equal(mapCategory('pressure washing', categories), 'pressure-washing');
   assert.equal(mapCategory('Pools and Concrete', categories), 'pools-and-concrete');
+});
+
+test('makeSlug appends the city only when the name does not already contain it', () => {
+  assert.equal(makeSlug('Bellevue Plumbing Co', 'Bellevue'), 'bellevue-plumbing-co');
+  assert.equal(makeSlug('Joe\'s Plumbing', 'Nashville'), 'joe-s-plumbing-nashville');
+  assert.equal(makeSlug('Nashville Pipe Pros', 'Nashville'), 'nashville-pipe-pros');
+  assert.equal(makeSlug('Bellevue Plumbing Co', 'Bellevue', new Set(['bellevue-plumbing-co'])), 'bellevue-plumbing-co-2');
+  // Whole words only: "Nash" is not in "Nashville Pipe Pros".
+  assert.equal(makeSlug('Nashville Pipe Pros', 'Nash'), 'nashville-pipe-pros-nash');
 });

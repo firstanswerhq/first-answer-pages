@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import fc from 'fast-check';
-import { buildPrompt, detectNamed, normalizeForMatch } from '../server/lib/seance.js';
+import { buildPrompt, CATEGORY_PHRASES, detectNamed, normalizeForMatch } from '../server/lib/seance.js';
 
 const categories = JSON.parse(
   readFileSync(new URL('../data/categories.json', import.meta.url), 'utf8')
@@ -158,20 +158,26 @@ test('detectNamed examples', () => {
   assert.equal(detectNamed('Neon & Ohm Electric', 'Try Neon and Ohm Electric'), false);
 });
 
-test('buildPrompt uses the category label from data/categories.json', () => {
+test('buildPrompt uses a natural phrase for every category in data/categories.json', () => {
   assert.ok(categories.length > 0);
   for (const c of categories) {
     assert.equal(
       buildPrompt({ category: c.slug, city: 'Nashville' }, categories),
-      `best ${c.label.toLowerCase()} in Nashville`
+      `best ${CATEGORY_PHRASES[c.slug]} in Nashville`
     );
   }
+  assert.equal(buildPrompt({ category: 'auto-repair', city: 'Nashville' }, categories), 'best auto repair shops in Nashville');
+  assert.equal(buildPrompt({ category: 'other', city: 'Nashville' }, categories), 'best businesses in Nashville');
 });
 
-test('buildPrompt falls back to the slug for an unknown category', () => {
+test('buildPrompt falls back to the lowercased label, then to "businesses"', () => {
+  assert.equal(
+    buildPrompt({ category: 'chimney-sweeps', city: 'Austin' }, [{ slug: 'chimney-sweeps', label: 'Chimney Sweeps' }]),
+    'best chimney sweeps in Austin'
+  );
   assert.equal(
     buildPrompt({ category: 'chimney-sweeps', city: 'Austin' }, categories),
-    'best chimney-sweeps in Austin'
+    'best businesses in Austin'
   );
 });
 

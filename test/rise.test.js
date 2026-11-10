@@ -83,7 +83,7 @@ function reviewForm(fields) {
 
 const envs = [];
 const TOKEN = 'rise-test-admin-token';
-const PENDING_MESSAGE = /We(?:'|&#39;)ll review your listing and it will be live soon\./;
+const PENDING_MESSAGE = /We(?:'|&#39;)ll review your listing, usually within one business day\./;
 
 /** POST /admin/pending/:id/approve with the admin bearer token. */
 function approve(env, id, token = TOKEN) {
@@ -194,7 +194,7 @@ test('upload, review, edit, confirm, approve: listing appears on every public ro
 
   const form = await get(env, '/rise');
   assert.equal(form.status, 200);
-  assert.match(await form.text(), /imageBase64/);
+  assert.match(await form.text(), /id="rise-form"/);
 
   await assertNotPublic(env, COMPLETE_ID, 'Copper Kettle');
 
@@ -219,7 +219,7 @@ test('upload, review, edit, confirm, approve: listing appears on every public ro
   const edit = await postForm(env, '/rise/drafts/draft-1',
     reviewForm({ ...COMPLETE_FIELDS, description: newDescription }));
   assert.equal(edit.status, 303);
-  assert.equal(edit.headers.get('location'), '/rise/drafts/draft-1');
+  assert.equal(edit.headers.get('location'), '/rise/drafts/draft-1?saved=1');
   assert.ok((await (await get(env, '/rise/drafts/draft-1')).text()).includes(newDescription));
   await assertNotPublic(env, COMPLETE_ID, 'Copper Kettle');
 
@@ -799,13 +799,12 @@ async function makeEnvWithBaseUrl(baseUrl) {
   return env;
 }
 
-test('GET /rise curl example uses the configured baseUrl without a double slash', async () => {
+test('GET /rise with a configured baseUrl shows no curl example and no localhost', async () => {
   const env = await makeEnvWithBaseUrl('https://pages.example.test/');
   const res = await get(env, '/rise');
   assert.equal(res.status, 200);
   const html = await res.text();
-  assert.ok(html.includes('https://pages.example.test/rise'));
-  assert.ok(!html.includes('pages.example.test//rise'));
+  assert.ok(!html.includes('curl'));
   assert.ok(!html.includes('localhost'));
 });
 
@@ -814,35 +813,27 @@ test('rise-html.js source never hardcodes localhost', () => {
   assert.ok(!src.includes('localhost'));
 });
 
-test('GET /rise escapes HTML characters in baseUrl', async () => {
+test('GET /rise never echoes an unsafe baseUrl', async () => {
   const env = await makeEnvWithBaseUrl('https://x.test/<b>');
   const html = await (await get(env, '/rise')).text();
   assert.ok(!html.includes('<b>'));
-  assert.ok(html.includes('https://x.test/&lt;b&gt;/rise'));
 });
 
 // ---- /rise page: photo-first upload form -----------------------------------------
 
-test('GET /rise leads with the photo picker and tucks base64 under a closed Advanced section', async () => {
+test('GET /rise leads with the photo picker and has no Advanced or base64 box', async () => {
   const env = await makeEnv();
   const res = await get(env, '/rise');
   assert.equal(res.status, 200);
   const html = await res.text();
 
+  assert.ok(html.includes('<h1>List your business free</h1>'));
+  assert.ok(!html.includes('Rise from the Grave'));
   assert.ok(html.includes('Take or choose a photo'));
-
-  const detailsAt = html.indexOf('<details class="advanced">');
-  const summaryAt = html.indexOf('<summary>Advanced</summary>');
-  const fieldAt = html.indexOf('name="imageBase64"');
-  const closeAt = html.indexOf('</details>');
-  assert.ok(detailsAt >= 0, 'details element present');
-  assert.ok(detailsAt < summaryAt, 'summary follows details');
-  assert.ok(summaryAt < fieldAt, 'textarea follows summary');
-  assert.ok(fieldAt < closeAt, 'textarea sits inside details');
-  assert.ok(html.includes('id="imageBase64"'));
-
-  // The details element is collapsed by default.
-  assert.ok(!/<details[^>]*\sopen[\s>=]/.test(html));
+  assert.ok(!html.includes('Advanced'));
+  assert.ok(!html.includes('imageBase64'));
+  assert.ok(!html.includes('curl'));
+  assert.ok(html.includes('Photo upload needs JavaScript. You can still type your listing in below.'));
 
   assert.ok(html.includes('5 MB'));
   assert.ok(!html.includes('5 MiB'));

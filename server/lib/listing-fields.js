@@ -172,13 +172,18 @@ export function validateFields(fields, categories) {
  * @returns {string}
  */
 export function makeSlug(name, city, takenIds) {
-  const text = [name, city]
-    .map(v => (typeof v === 'string' ? v : ''))
-    .join(' ')
+  const slugify = v => (typeof v === 'string' ? v : '')
     .normalize('NFKD')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
+  const nameSlug = slugify(name);
+  const citySlug = slugify(city);
+  // Skip the city when the name already contains it as whole words ("Bellevue Plumbing Co").
+  const cityInName = citySlug !== '' && `-${nameSlug}-`.includes(`-${citySlug}-`);
+  const text = cityInName || citySlug === ''
+    ? nameSlug
+    : [nameSlug, citySlug].filter(Boolean).join('-');
   const base = text.slice(0, MAX_SLUG).replace(/-+$/g, '') || 'listing';
   const taken = takenIds && typeof takenIds.has === 'function' ? takenIds : new Set();
   if (!taken.has(base)) return base;

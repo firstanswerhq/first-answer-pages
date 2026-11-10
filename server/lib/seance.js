@@ -14,20 +14,37 @@ export class SeanceError extends Error {
   }
 }
 
+/** A natural plural phrase for each category slug, used in the Séance question. */
+export const CATEGORY_PHRASES = Object.freeze({
+  plumbers: 'plumbers',
+  electricians: 'electricians',
+  restaurants: 'restaurants',
+  'auto-repair': 'auto repair shops',
+  'hair-salons': 'hair salons',
+  lawyers: 'lawyers',
+  cleaners: 'cleaners',
+  landscapers: 'landscapers',
+  'pressure-washing': 'pressure washing companies',
+  'pools-and-concrete': 'pool and concrete companies',
+  'shops-and-restaurants': 'shops and restaurants',
+  other: 'businesses',
+});
+
 /**
  * @param {{ category?: string, city?: string }} listing
  * @param {{ slug: string, label: string }[]} categories
- * @returns {string} `best <category label, lowercased> in <city>`; the city keeps
- *   its stored casing, and an unknown category falls back to the lowercased slug
+ * @returns {string} `best <phrase> in <city>`; the phrase comes from
+ *   CATEGORY_PHRASES, else the lowercased category label, else "businesses".
+ *   The city keeps its stored casing.
  */
 export function buildPrompt(listing, categories) {
   const found = Array.isArray(categories)
     ? categories.find(c => c && c.slug === listing.category)
     : undefined;
-  const label = found && typeof found.label === 'string' && found.label !== ''
-    ? found.label
-    : listing.category;
-  return `best ${String(label).toLowerCase()} in ${listing.city}`;
+  const mapped = Object.hasOwn(CATEGORY_PHRASES, listing.category) ? CATEGORY_PHRASES[listing.category] : '';
+  const label = found && typeof found.label === 'string' ? found.label.trim() : '';
+  const phrase = mapped || label.toLowerCase() || 'businesses';
+  return `best ${phrase} in ${listing.city}`;
 }
 
 /**

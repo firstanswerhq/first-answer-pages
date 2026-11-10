@@ -53,7 +53,7 @@ const FIXTURES = Object.freeze([
   {
     name: 'Maple Street Diner',
     phone: '(217) 555-0123',
-    category: 'restaurants',
+    category: 'shops-and-restaurants',
     services: ['Breakfast', 'Lunch', 'Takeout'],
     hours: { monday: '6:00 AM - 2:00 PM', saturday: '7:00 AM - 1:00 PM' },
     serviceArea: 'Fairview',

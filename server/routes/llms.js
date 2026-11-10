@@ -5,6 +5,7 @@
 import { Router } from 'express';
 import { generateLlmsTxt } from '../lib/llms.js';
 import { publicListing } from '../lib/public-listing.js';
+import { baseUrlFor } from '../lib/base-url.js';
 
 /**
  * @param {{ store: object, config: { baseUrl: string, siteName?: string } }} ctx
@@ -25,7 +26,7 @@ export function createLlmsRouter(ctx) {
       if (date) confirmedDates.set(l.id, date);
     }
     res.status(200).type('text/plain').send(
-      generateLlmsTxt(listings.map(publicListing), config.baseUrl, store.getCategories(), {
+      generateLlmsTxt(listings.map(publicListing), baseUrlFor(req, config), store.getCategories(), {
         siteName: config.siteName,
         confirmed: new Set(confirmedDates.keys()),
         confirmedDates,

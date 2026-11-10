@@ -111,6 +111,8 @@ export function createApp(deps = {}) {
   // Hop count only; never `true` (it would trust any client-supplied X-Forwarded-For).
   if (Number.isInteger(config.trustProxy) && config.trustProxy >= 0) {
     app.set('trust proxy', config.trustProxy);
+    // One line at startup in production so the hop count can be checked in the logs.
+    if (config.production) process.stdout.write(`trust proxy = ${config.trustProxy}\n`);
   }
 
   // SITE_NAME: swap the default site name in every HTML page. Installed
@@ -179,7 +181,7 @@ export function createApp(deps = {}) {
     }));
   });
 
-  // Generic error handler — honours 4xx/5xx err.status, never leaks message or stack
+  // Generic error handler — honors 4xx/5xx err.status, never leaks message or stack
   app.use((err, req, res, next) => {
     if (res.headersSent) return next(err);
 

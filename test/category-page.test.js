@@ -188,7 +188,8 @@ test('Property: arbitrary city strings are escaped and the heading (when shown) 
         const found = titles(html);
         assert.ok(found.length <= 1);
         for (const t of found) assert.equal(t, expected);
-        if (found.length === 0) assert.ok(html.includes('No results found'));
+        // Task 21.1: an empty trade with no city filter invites owners instead.
+        if (found.length === 0) assert.ok(html.includes('No results found') || html.includes('listed yet. Are you one?'));
       },
     ),
     { numRuns: 25 },

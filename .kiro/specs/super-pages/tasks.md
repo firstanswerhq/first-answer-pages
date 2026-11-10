@@ -1,4 +1,4 @@
-# Implementation Plan: Super Pages
+# Implementation Plan: Owner tools
 
 ## Overview
 
@@ -751,7 +751,7 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
   - [ ] 20.9 Checkpoint - Real AI connected
     - Run `node --test`; everything must be green, including all pre-existing tests and the tests for tasks 13 to 20. Ask the user if questions arise.
 
-- [ ] 21. Second review round: launch blockers
+- [x] 21. Second review round: launch blockers
   - [x] 21.1 Blockers
     - No sample businesses in production: in `createDataStore` (`server/data.js`) load the sample listings from `data/listings.json` only when `includeSamples` is true, passed from config (`DEMO_MODE`); with `NODE_ENV=production` and `DEMO_MODE=false` every page, the sitemap, llms.txt, MCP `search_listings` and `get_listing`, and `POST /api/quotes` / `request_quote` see only approved owner listings, and a sample id returns 404
     - Empty states: the home page and every category page with no listings say "No {trade} listed yet. Are you one? List your business free →" with the link going to `/rise`; llms.txt with 0 listings still reads cleanly
@@ -779,7 +779,7 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
     - Files: `server/lib/config.js`, `server/lib/assistant.js`, `server/lib/seance.js`, `server/lib/seance-html.js`, `server/lib/ai-budget.js`, `server/lib/schema.js`, `server/lib/listing-fields.js`, `server/lib/mcp.js`, `server/app.js`, `server/routes/`, `public/js/rise.js`, `test/data-dir.test.js`
     - _Requirements: docs/launch-fixes.md section 20 (21.2 Should-fix)_
 
-  - [ ] 21.3 Owner wording and polish
+  - [x] 21.3 Owner wording and polish
     - `/rise` heading reads "List your business free" (no "Rise from the Grave" anywhere an owner sees it); remove the "Advanced / Image as text (base64)" box from the page (the API keeps accepting it)
     - Draft page: phone input `type="tel"` and email input `type="email"`, styled like the other fields and full width; "Save changes" shows "Saved." next to the button; the confirm error says "Please fix the highlighted fields, then press Confirm again."; replace "This is not an ownership check…" with "We review every listing before it goes live."; Discard asks "Discard this draft?" on the page itself (no browser dialog) and then shows "Draft discarded."
     - Thank-you page: one "Thanks!" only, then "We'll review your listing, usually within one business day. We'll email you when it's live." (the email sentence only when an owner email was given)
@@ -801,7 +801,7 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
     - Files: `test/production-samples.test.js`, `test/admin-auth.test.js`, `test/admin-login.test.js`, `test/quotes.test.js`
     - _Requirements: docs/launch-fixes.md section 20 (21.1 Blockers)_
 
-  - [-] 21.5 Write tests for the should-fix items
+  - [x] 21.5 Write tests for the should-fix items
     - Stubbed `fetch` only; extend existing test files where they fit
     - Examples: `SEANCE_TIMEOUT_MS` default 120000 and override, photo reader keeps 30 seconds; sources are saved on the run and shown as escaped links; non-http(s) URLs are dropped; the `pause_turn` resend consumes a second unit and falls back to the first reply when none is left; photo uploads stop at 150 and never block Séance; the day resets at Chicago midnight; `ai-budget.json` survives a restart; `test/data-dir.test.js` allow list includes `ai-budget.json`; mock Séance in production returns 503 "Séance is not connected"; `public/js/rise.js` shows the server's message and the "Reading your photo…" text; the type-it-in button opens an empty draft; production with no vision key shows only type-it-in; MCP `search_listings` schema has the category enum; "Nashville, TN" matches Nashville; the Séance link shows only with runs; the demo headline is gray and never says "mock"; JSON-LD has `url`, +1 `telephone`, `areaServed`, `openingHoursSpecification`, a clean `streetAddress`, and the right `@type` per category with `LocalBusiness` as fallback
     - **Property: For any citation list, sources are deduped by URL, at most 8, and http(s) only** (fast-check)
@@ -809,13 +809,13 @@ Each feature carries its own fast-check property tests as optional sub-tasks. Te
     - Files: `test/seance-sources.test.js`, `test/ai-budget.test.js`, `test/data-dir.test.js`, `test/providers.test.js`, `test/search.test.js`, `test/mcp.test.js`, `test/schema.test.js`, `test/seance-history.test.js`
     - _Requirements: docs/launch-fixes.md section 20 (21.2 Should-fix)_
 
-  - [ ] 21.6 Write tests for owner wording and polish
+  - [x] 21.6 Write tests for owner wording and polish
     - Examples: `/rise` heading and no "Rise from the Grave" or base64 box; phone `type="tel"` and email `type="email"`; "Saved.", the confirm error text, "We review every listing before it goes live.", inline discard confirmation and "Draft discarded."; one "Thanks!" and the email sentence only with an owner email; one merged restaurants category; category page `<title>`; natural Séance phrase per category; stamp date `nowrap`; "Closed" for a day with no hours; listing id rule (no `bellevue-plumbing-co-bellevue`); llms.txt and sitemap use `BASE_URL` and fall back to the request host and port; spec titles say "Owner tools"; "honors" in `server/app.js`; `GET /admin/whoami` is admin only and shows `req.ip` and `req.ips`; production startup logs `trust proxy = N`
     - **Property: For any business name and city, the generated listing id contains the city once at most and is a valid slug** (fast-check)
     - Files: `test/rise-wording.test.js`, `test/listing-ids.test.js`, `test/llms.test.js`, `test/sitemap.test.js`, `test/admin-login.test.js`
     - _Requirements: docs/launch-fixes.md section 20 (21.3 Owner wording and polish)_
 
-  - [ ] 21.7 Checkpoint - Second review round
+  - [x] 21.7 Checkpoint - Second review round
     - Run `node --test`; everything must be green, including all pre-existing tests and the tests for tasks 13 to 21. Ask the user if questions arise.
 
 ## Notes

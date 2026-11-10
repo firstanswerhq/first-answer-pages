@@ -180,7 +180,7 @@ h1 {
   }
 }
 
-/* Rise from the Grave: upload and review forms */
+/* owner listing (/rise): upload and review forms */
 .rise-form {
   margin: 1rem 0;
   padding: 0.75rem;
@@ -194,6 +194,10 @@ h1 {
 }
 
 .rise-form input[type="text"],
+.rise-form input[type="tel"],
+.rise-form input[type="email"],
+.field input[type="tel"],
+.field input[type="email"],
 .rise-form select,
 .rise-form textarea {
   width: 100%;
@@ -624,3 +628,23 @@ details.advanced summary {
 /* Quote form error and success box (task 17.6) */
 .form-error { color: #7a1f0f; border-left: 4px solid #7a1f0f; padding: 0.4rem 0.75rem; margin: 0.75rem 0; font-weight: bold; }
 .success-box { background: #e8f5e9; border: 2px solid #2e7d32; padding: 0.75rem 1rem; margin: 0 0 1rem; }
+
+/* Launch fixes 21.3: owner wording and polish */
+.stamp-date,
+.stamp-title {
+  white-space: nowrap;
+}
+
+.saved-note {
+  margin-left: 0.5rem;
+  font-weight: bold;
+}
+
+details.discard-confirm {
+  margin: 1rem 0;
+}
+
+details.discard-confirm summary {
+  cursor: pointer;
+  font-weight: bold;
+}

@@ -56,6 +56,7 @@ Owner confirmation sends a listing to a pending queue. It is public only after a
 - `POST /admin/pending/:id/approve` makes a pending listing public.
 - `POST /admin/pending/:id/reject` rejects a pending listing.
 - `POST /admin/listings/:id/unpublish` takes a public listing down.
+- `GET /admin/whoami` shows the client address the server sees (`req.ip`, `req.ips`) and the current `TRUST_PROXY` setting. See "Check TRUST_PROXY" below.
 
 ### Agent-ready: MCP (`/mcp`) and WebMCP
 
@@ -132,7 +133,7 @@ All are optional except in production, where `DATA_DIR` and `BASE_URL` are requi
 | Variable | Default | What it does |
 | --- | --- | --- |
 | `PORT` | `3000` | Port to listen on. |
-| `BASE_URL` | `http://localhost:3000` | Public site address used in `/llms.txt` and `/sitemap.xml`. A trailing slash is removed. |
+| `BASE_URL` | `http://localhost:3000` | Public site address used in `/llms.txt`, `/sitemap.xml` and listing page links. A trailing slash is removed. When it is not set (local use only), those use the host and port of the request instead. In production the set value is always used. |
 | `DATA_DIR` | repo `data/` folder | Folder the app writes its files to (drafts, pending, published, verified, quotes, Séance history). Required when `NODE_ENV=production`. The seed files `listings.json` and `categories.json` are always read from the repo `data/` folder when `DATA_DIR` is set. |
 | `NODE_ENV` | unset | `production` changes defaults: trust proxy is `1`, `DEMO_MODE` is off, seed sample listings are left out of `/sitemap.xml` and `/llms.txt`, and photo listing (Rise from the Grave) returns 503 "coming soon" when no vision key is set. |
 | `SITE_NAME` | `First Answer Pages` | The name shown in page headers, page titles, the footer, `/llms.txt`, and the MCP server title. One line, up to 80 characters. |
@@ -219,12 +220,40 @@ The owner tools are the one place the web layer writes files. It writes only the
 
 `render.yaml` is a Render Blueprint for one web service.
 
+The Starter plan and the 1 GB disk are both paid monthly. See [Render's pricing page](https://render.com/pricing) for the current prices.
+
+What the Blueprint sets up:
+
 - Node.js 22 is required (`engines` in `package.json` is `22.x`).
 - Build: `npm ci --omit=dev`. Start: `npm start`.
 - Health check: `GET /healthz`.
 - A 1 GB disk is mounted at `/var/data` and `DATA_DIR` points to it, so drafts, pending listings, and quotes survive restarts and deploys.
 - Production settings: `NODE_ENV=production`, `TRUST_PROXY=1`, `DEMO_MODE=false`.
-- Type `BASE_URL`, `SITE_NAME`, `VISION_API_KEY`, and `SEANCE_API_KEY` into Render. They are not committed. Render generates `ADMIN_TOKEN` for you.
+- The provider and model settings for the photo reader and the Séance (`VISION_PROVIDER`, `VISION_MODEL`, `SEANCE_PROVIDER`, `SEANCE_MODEL`) are already filled in.
+
+### Steps
+
+1. In the Render dashboard choose New, then Blueprint, and pick this repository.
+2. Type in the values Render asks for. None of them are committed:
+   - `BASE_URL`: the public address, for example `https://your-domain.example` (no trailing slash).
+   - `SITE_NAME`: the name shown on every page.
+   - `VISION_API_KEY` and `SEANCE_API_KEY`: your two Anthropic API keys.
+   - Optional, for quote emails: `RESEND_API_KEY`, `NOTIFY_FROM`, and `ADMIN_EMAIL`. Also set `NOTIFIER` to `resend`.
+3. Apply the Blueprint. Render builds and starts the service.
+
+Render generates `ADMIN_TOKEN` for you. To read it, open the service in the Render dashboard and go to its Environment tab.
+
+`autoDeploy` is `false`, so pushing to the repository does not deploy. After each change, open the service and press "Manual Deploy".
+
+### Log in as admin
+
+Open `/admin/login`, paste the `ADMIN_TOKEN`, and press Log in. The login cookie lasts 12 hours. Press the Log out button on any admin page to end it sooner.
+
+### Check TRUST_PROXY
+
+`TRUST_PROXY` is the number of proxies in front of the app (`1` on Render). If it is wrong, every visitor looks like the same address and shares one rate limit, or a visitor can fake an address. At startup in production the server logs one line, `trust proxy = N`.
+
+To check it, open `/admin/whoami` from your phone while logged in as admin (it is also linked in the admin menu as "My IP"). It shows `req.ip`, `req.ips`, and the current setting. Set `TRUST_PROXY` to the smallest number that shows your real IP address. Send `Accept: application/json` to get the same answer as JSON.
 
 ## License
 

@@ -189,7 +189,7 @@ function stamp(verification, id) {
   const hash = escapeHtml(verification.hash);
   const href = `/api/verify/${encodeURIComponent(id)}?hash=${encodeURIComponent(verification.hash)}`;
   return `<aside class="stamp">
-      <p class="stamp-title">Owner-confirmed ${date}</p>
+      <p class="stamp-title">Owner-confirmed <span class="stamp-date">${date}</span></p>
       <details class="stamp-details"><summary>Details for AI tools</summary>
       <p class="stamp-note">Tamper check: unchanged since the owner confirmed it. This is not proof of ownership.</p>
       <p class="stamp-hash"><code data-hash="${hash}">${hash}</code></p>
@@ -242,9 +242,13 @@ export function listingDetail(listing, jsonLd, opts = {}) {
   const hoursByDay = new Map(
     Object.entries(listing.hours ?? {}).map(([key, value]) => [key.toLowerCase(), value]),
   );
+  // A day with no hours (missing, empty or whitespace) reads "Closed".
   const hoursRows = DAYS
-    .filter(day => hoursByDay.has(day.toLowerCase()))
-    .map(day => `      <tr><th scope="row">${day}</th><td>${escapeHtml(hoursByDay.get(day.toLowerCase()))}</td></tr>`)
+    .map(day => {
+      const value = hoursByDay.get(day.toLowerCase());
+      const text = typeof value === 'string' && value.trim() !== '' ? value : 'Closed';
+      return `      <tr><th scope="row">${day}</th><td>${escapeHtml(text)}</td></tr>`;
+    })
     .join('\n');
 
   const services = listing.services

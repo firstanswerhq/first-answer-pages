@@ -129,7 +129,7 @@
   {
     "id": "the-griddle-house",
     "name": "The Griddle House",
-    "category": "restaurants",
+    "category": "shops-and-restaurants",
     "phone": "(555) 555-0107",
     "address": "134 Division St, Nashville, TN 37203",
     "hours": {
@@ -150,7 +150,7 @@
   {
     "id": "biscuit-and-brine",
     "name": "Biscuit & Brine",
-    "category": "restaurants",
+    "category": "shops-and-restaurants",
     "phone": "(555) 555-0108",
     "address": "709 Woodland St, Nashville, TN 37206",
     "hours": {
@@ -171,7 +171,7 @@
   {
     "id": "hot-plate-nashville",
     "name": "Hot Plate Nashville",
-    "category": "restaurants",
+    "category": "shops-and-restaurants",
     "phone": "(555) 555-0109",
     "address": "1822 Charlotte Ave, Nashville, TN 37203",
     "hours": {

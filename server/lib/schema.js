@@ -91,6 +91,7 @@ export const SCHEMA_TYPES = Object.freeze({
   landscapers: 'HomeAndConstructionBusiness',
   cleaners: 'HomeAndConstructionBusiness',
   restaurants: 'Restaurant',
+  'shops-and-restaurants': 'Restaurant',
   shops: 'Store',
   'hair-salons': 'HairSalon',
   'auto-repair': 'AutoRepair',

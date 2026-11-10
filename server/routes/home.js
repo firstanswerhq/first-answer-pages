@@ -6,6 +6,7 @@ import { Router } from 'express';
 import { groupListings } from '../data.js';
 import { layout, listingCard, escapeHtml } from '../lib/html.js';
 import { publicListing } from '../lib/public-listing.js';
+import { DEFAULT_SITE_NAME } from '../lib/config.js';
 import { normalizeCategory, normalizeCity } from '../lib/search-match.js';
 
 /** Reads a query param as a trimmed string, ignoring arrays/objects. */
@@ -90,7 +91,19 @@ ${group.map(l => listingCard(l, categories)).join('\n')}
 ${filterForm}
 ${results}`;
 
-    res.status(200).type('html').send(layout({ title: 'First Answer Pages: Local Business Directory', body }));
+    // Category pages: "Plumbers in Nashville | First Answer Pages". The default site
+    // name is swapped for SITE_NAME by the app-level HTML wrapper.
+    let title = `${DEFAULT_SITE_NAME}: Local Business Directory`;
+    if (categoryLabel) {
+      let titleCity = city;
+      if (!titleCity) {
+        const cities = new Set(filtered.map(l => (typeof l.city === 'string' ? l.city.trim() : '')).filter(Boolean));
+        if (cities.size === 1) [titleCity] = cities;
+      }
+      title = `${titleCity ? `${categoryLabel} in ${titleCity}` : categoryLabel} | ${DEFAULT_SITE_NAME}`;
+    }
+
+    res.status(200).type('html').send(layout({ title, body }));
   });
 
   return router;

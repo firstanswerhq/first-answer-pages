@@ -8,6 +8,7 @@ import { layout, listingDetail, quoteForm, escapeHtml } from '../lib/html.js';
 import { submitQuote } from '../lib/quotes.js';
 import { verificationFor } from '../lib/verifier.js';
 import { publicListing } from '../lib/public-listing.js';
+import { baseUrlFor } from '../lib/base-url.js';
 import { createSeanceStore } from '../lib/seance.js';
 
 const formParser = express.urlencoded({ extended: false, limit: '16kb', parameterLimit: 10 });
@@ -46,11 +47,11 @@ export function createListingsRouter(ctx) {
   }
 
   /** Full listing page; shared by GET and the 422 quote re-render. */
-  function renderListingPage(stored, { sent = false, error, values, hasSeance = false } = {}) {
+  function renderListingPage(req, stored, { sent = false, error, values, hasSeance = false } = {}) {
     const listing = publicListing(stored);
     // hashListing strips ownerEmail too, so this equals /api/verify/:id
     const verification = verificationFor(store, listing);
-    const jsonLd = JSON.stringify(buildSchema(listing, verification, { baseUrl: ctx.config?.baseUrl }), null, 2);
+    const jsonLd = JSON.stringify(buildSchema(listing, verification, { baseUrl: baseUrlFor(req, ctx.config) }), null, 2);
     const sentNotice = sent
       ? `<p class="notice success-box" role="status">${escapeHtml(`Thanks! Your request is saved and we'll pass it to the business. If you need help sooner, call them at ${listing.phone}.`)}</p>\n`
       : '';
@@ -102,7 +103,7 @@ export function createListingsRouter(ctx) {
         ));
       }
       const kept = field => (typeof body[field] === 'string' ? body[field].slice(0, 2000) : '');
-      return res.status(422).type('html').send(renderListingPage(store.findById(id), {
+      return res.status(422).type('html').send(renderListingPage(req, store.findById(id), {
         error: QUOTE_ERRORS[result.argument] || `Please check the ${result.argument} field.`,
         values: { name: kept('name'), contact: kept('contact'), details: kept('details') },
         hasSeance: await hasSeanceRuns(id),
@@ -121,17 +122,18 @@ export function createListingsRouter(ctx) {
   });
 
   router.get('/listings/:id', async (req, res, next) => {
-    const stored = store.findById(req.params.id);
-
-    if (!stored) {
-      return res.status(404).type('html').send(layout({
-        title: 'Listing not found',
-        body: '<section class="message"><h1>Listing not found</h1><p><a href="/">Back to the directory</a></p></section>',
-      }));
-    }
-
     try {
-      res.status(200).type('html').send(renderListingPage(stored, {
+      // Inside the try: an async handler's throw would otherwise be an unhandled rejection.
+      const stored = store.findById(req.params.id);
+
+      if (!stored) {
+        return res.status(404).type('html').send(layout({
+          title: 'Listing not found',
+          body: '<section class="message"><h1>Listing not found</h1><p><a href="/">Back to the directory</a></p></section>',
+        }));
+      }
+
+      res.status(200).type('html').send(renderListingPage(req, stored, {
         sent: req.query.quote === 'sent',
         hasSeance: await hasSeanceRuns(stored.id),
       }));
