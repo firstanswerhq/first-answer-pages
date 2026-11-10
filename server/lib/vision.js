@@ -138,26 +138,28 @@ async function callProvider(name, url, headers, body, timeoutMs, outerSignal) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   const signal = outerSignal ? AbortSignal.any([ctrl.signal, outerSignal]) : ctrl.signal;
-  let res;
   try {
-    res = await fetch(url, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', ...headers },
-      body: JSON.stringify(body),
-      signal,
-    });
-  } catch {
-    logStatus(name, signal.aborted ? 'timeout' : 'network-error');
-    throw new ExtractionError(signal.aborted ? 'timeout' : 'provider_failed');
+    let res;
+    try {
+      res = await fetch(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...headers },
+        body: JSON.stringify(body),
+        signal,
+      });
+    } catch {
+      logStatus(name, signal.aborted ? 'timeout' : 'network-error');
+      throw new ExtractionError(signal.aborted ? 'timeout' : 'provider_failed');
+    }
+    logStatus(name, res.status);
+    if (!res.ok) throw new ExtractionError('provider_failed');
+    try {
+      return await res.json();
+    } catch {
+      throw new ExtractionError('unparseable');
+    }
   } finally {
     clearTimeout(timer);
-  }
-  logStatus(name, res.status);
-  if (!res.ok) throw new ExtractionError('provider_failed');
-  try {
-    return await res.json();
-  } catch {
-    throw new ExtractionError('unparseable');
   }
 }
 
