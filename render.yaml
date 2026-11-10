@@ -1,0 +1,44 @@
+# Render Blueprint for the directory. Colby clicks deploy; secrets are typed into Render, never committed.
+services:
+  - type: web
+    name: first-answer-pages
+    runtime: node
+    plan: starter
+    region: ohio
+    buildCommand: npm ci --omit=dev
+    startCommand: npm start
+    healthCheckPath: /healthz
+    autoDeploy: false
+    disk:
+      name: directory-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATA_DIR
+        value: /var/data
+      - key: TRUST_PROXY
+        value: "1"
+      - key: DEMO_MODE
+        value: "false"
+      - key: MAX_AI_CALLS_PER_DAY
+        value: "200"
+      - key: SITE_NAME
+        sync: false
+      - key: BASE_URL
+        sync: false
+      - key: ADMIN_TOKEN
+        generateValue: true
+      - key: VISION_PROVIDER
+        value: anthropic
+      - key: VISION_MODEL
+        value: claude-haiku-5-5
+      - key: VISION_API_KEY
+        sync: false
+      - key: SEANCE_PROVIDER
+        value: anthropic
+      - key: SEANCE_MODEL
+        value: claude-sonnet-5-5
+      - key: SEANCE_API_KEY
+        sync: false
