@@ -19,6 +19,12 @@ export const RULES = Object.freeze({
   seance: Object.freeze({ limit: 10, windowMs: 60 * 60 * 1000 }),
   'seance-listing': Object.freeze({ limit: 1, windowMs: 10 * 60 * 1000 }),
   'admin-auth': Object.freeze({ limit: 10, windowMs: 60 * 60 * 1000 }),
+  // AI Visibility Grader
+  grade: Object.freeze({ limit: 5, windowMs: 60 * 60 * 1000 }),
+  'grade-day': Object.freeze({ limit: 20, windowMs: 24 * 60 * 60 * 1000 }),
+  'grade-unlock': Object.freeze({ limit: 5, windowMs: 60 * 60 * 1000 }),
+  'grade-recheck': Object.freeze({ limit: 10, windowMs: 60 * 60 * 1000 }),
+  'grade-recheck-grade': Object.freeze({ limit: 1, windowMs: 2 * 60 * 1000 }),
 });
 
 const systemClock = { now: () => Date.now() };

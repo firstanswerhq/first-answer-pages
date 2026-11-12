@@ -24,6 +24,14 @@ services:
         value: "false"
       - key: MAX_AI_CALLS_PER_DAY
         value: "200"
+      # AI Visibility Grader (/grade). GRADER_SECRET signs the form timer and the
+      # unlock cookie. Set GRADER_LEAD_GATE to off to show full reports to everyone.
+      - key: GRADER_SECRET
+        generateValue: true
+      - key: GRADER_LEAD_GATE
+        value: "on"
+      - key: GRADE_AI_CALLS_PER_DAY
+        value: "60"
       - key: SITE_NAME
         sync: false
       # Shown on the About and Privacy pages and in the footer.

@@ -23,8 +23,9 @@ import { createMockVisionProvider } from '../server/lib/vision.js';
 const REPO_DATA = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'data');
 const SEED_FILES = ['listings.json', 'categories.json'];
 const WRITABLE_FILES = ['drafts.json', 'pending.json', 'published.json', 'quotes.json', 'seance.json', 'verified.json'];
-// Files the app may create. ai-budget.json is written only when a real provider call is counted.
-const ALLOWED_FILES = [...WRITABLE_FILES, 'ai-budget.json'];
+// Files the app may create. ai-budget.json is written only when a real provider call is counted;
+// grades.json and leads.json only when the Grader is used.
+const ALLOWED_FILES = [...WRITABLE_FILES, 'ai-budget.json', 'grades.json', 'leads.json'];
 
 // ---- helpers ------------------------------------------------------------------
 

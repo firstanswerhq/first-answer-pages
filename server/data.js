@@ -31,9 +31,9 @@ import nodeFs from 'node:fs';
 import path from 'node:path';
 import { readJsonFile, updateJsonFile, StoreError } from './lib/json-file.js';
 import { configFromEnv } from './lib/config.js';
-import { pruneQuotes, pruneDrafts } from './lib/retention.js';
+import { pruneQuotes, pruneDrafts, pruneGrades, pruneLeads } from './lib/retention.js';
 
-const COLLECTIONS = new Set(['drafts', 'quotes', 'seance', 'pending']);
+const COLLECTIONS = new Set(['drafts', 'quotes', 'seance', 'pending', 'grades', 'leads']);
 const MODEL_KEYS = [
   'name', 'category', 'phone', 'hours', 'services', 'serviceArea',
   'description', 'city', 'state', 'address', 'ownerEmail',
@@ -445,10 +445,14 @@ export function createDataStore({
    * Apply retention to quotes.json and/or drafts.json under the 'publish' lock.
    * A file is written only when something was actually removed, so a missing
    * file is never created. Idempotent.
-   * @param {{ quotes?: boolean, drafts?: boolean }} [which]
-   * @returns {Promise<{ quotes: number, drafts: number }>} counts removed
+   * `grades` and `leads` (90 days) default to false and are counted in the
+   * result only when asked for.
+   * @param {{ quotes?: boolean, drafts?: boolean, grades?: boolean, leads?: boolean }} [which]
+   * @returns {Promise<{ quotes: number, drafts: number, grades?: number, leads?: number }>} counts removed
    */
-  function pruneExpired({ quotes = true, drafts = true } = {}) {
+  function pruneExpired({
+    quotes = true, drafts = true, grades = false, leads = false,
+  } = {}) {
     return withLock('publish', async () => {
       const nowMs = new Date(clock.now()).getTime();
       const removed = { quotes: 0, drafts: 0 };
@@ -472,6 +476,19 @@ export function createDataStore({
             const latest = await collection('pending').read();
             const kept = pruneDrafts(list, nowMs, latest);
             removed.drafts = list.length - kept.length;
+            return kept;
+          });
+        }
+      }
+      for (const [flag, name, prune] of [[grades, 'grades', pruneGrades], [leads, 'leads', pruneLeads]]) {
+        if (!flag) continue;
+        removed[name] = 0;
+        const c = collection(name);
+        const current = await c.read();
+        if (Array.isArray(current) && prune(current, nowMs).length < current.length) {
+          await c.update(list => {
+            const kept = prune(list, nowMs);
+            removed[name] = list.length - kept.length;
             return kept;
           });
         }

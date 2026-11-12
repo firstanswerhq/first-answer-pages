@@ -9,5 +9,7 @@
   { "slug": "pressure-washing", "label": "Pressure Washing" },
   { "slug": "pools-and-concrete", "label": "Pools and Concrete" },
   { "slug": "shops-and-restaurants", "label": "Shops and Restaurants" },
+  { "slug": "roofers",      "label": "Roofers" },
+  { "slug": "hvac",         "label": "Heating and Air" },
   { "slug": "other",        "label": "Other" }
 ]

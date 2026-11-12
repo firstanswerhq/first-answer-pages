@@ -46,6 +46,8 @@ const TRADE_NOUNS = Object.freeze({
   'pressure-washing': 'a pressure washing company',
   'pools-and-concrete': 'a pool and concrete company',
   'shops-and-restaurants': 'a local business',
+  roofers: 'a roofer',
+  hvac: 'a heating and air company',
 });
 
 const META_MAX = 160;

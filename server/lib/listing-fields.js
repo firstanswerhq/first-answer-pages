@@ -90,8 +90,20 @@ export function mapCategory(input, categories) {
     const label = typeof c.label === 'string' ? c.label.trim().toLowerCase() : '';
     if (wanted === slug || dashed === slug || (label !== '' && wanted === label)) return c.slug;
   }
+  // Common service words, matched exactly, and only when the category exists.
+  const alias = SERVICE_ALIASES.get(wanted.replace(/\s+/g, ' '));
+  if (alias && categories.some(c => c && c.slug === alias)) return alias;
   return '';
 }
+
+/** Service words people type that belong to a category (see mapCategory). */
+const SERVICE_ALIASES = new Map([
+  ...['roof', 'roofs', 'roofing', 'roofer', 'roofers', 'roofing contractor', 'roofing contractors',
+    'roofing company', 'roofing companies'].map(w => [w, 'roofers']),
+  ...['hvac', 'heating', 'cooling', 'heating and cooling', 'heating & cooling', 'heating and air',
+    'heating & air', 'air conditioning', 'air conditioning and heating', 'heating and air conditioning',
+    'heating, ventilation and air conditioning', 'ac repair'].map(w => [w, 'hvac']),
+]);
 
 /** Two-letter codes for the 50 states and DC, keyed by full name (lowercase). */
 const STATE_NAMES = Object.freeze({

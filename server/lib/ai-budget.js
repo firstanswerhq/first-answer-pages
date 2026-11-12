@@ -15,6 +15,7 @@ import { updateJsonFile } from './json-file.js';
 
 export const DEFAULT_AI_LIMIT = 200;
 export const PHOTO_LIMIT_DEFAULT = 150;
+export const GRADE_LIMIT_DEFAULT = 60;
 
 const TIME_ZONE = 'America/Chicago';
 const HOUR_MS = 60 * 60 * 1000;
@@ -57,7 +58,8 @@ function loadCounts(file) {
   try {
     const data = JSON.parse(text);
     if (typeof data?.day === 'string' && isCount(data.total) && isCount(data.photo)) {
-      return { day: data.day, total: data.total, photo: data.photo };
+      // `grade` is written only when above 0, so older files load it as 0.
+      return { day: data.day, total: data.total, photo: data.photo, grade: isCount(data.grade) ? data.grade : 0 };
     }
   } catch {
     // fall through to removal
@@ -86,12 +88,17 @@ export function photoShare(cap, photoLimit) {
 /**
  * @param {{ clock: { now(): number }, limit?: number, photoLimit?: number, file?: string }} opts
  */
-export function createAiBudget({ clock, limit, photoLimit, file } = {}) {
+export function createAiBudget({ clock, limit, photoLimit, gradeLimit, file } = {}) {
   const cap = Number.isInteger(limit) && limit > 0 ? limit : DEFAULT_AI_LIMIT;
   const photoCap = photoShare(cap, photoLimit);
+  // The Grader's own daily share (GRADE_AI_CALLS_PER_DAY); 0 turns Grader AI calls off.
+  const gradeCap = Number.isInteger(gradeLimit) && gradeLimit >= 0 ? gradeLimit : GRADE_LIMIT_DEFAULT;
+  // Photo and Grader calls together stay out of the quarter held back for Séance runs.
+  const sharedCap = cap - Math.ceil(cap / 4);
   let dayKey = '';
   let total = 0;
   let photo = 0;
+  let grade = 0;
   let pending = Promise.resolve();
 
   if (typeof file === 'string' && file !== '') {
@@ -100,6 +107,7 @@ export function createAiBudget({ clock, limit, photoLimit, file } = {}) {
       dayKey = saved.day;
       total = saved.total;
       photo = saved.photo;
+      grade = saved.grade;
     }
   }
 
@@ -110,6 +118,7 @@ export function createAiBudget({ clock, limit, photoLimit, file } = {}) {
       dayKey = key;
       total = 0;
       photo = 0;
+      grade = 0;
     }
     const nextMidnight = nextChicagoMidnight(now);
     return {
@@ -118,10 +127,11 @@ export function createAiBudget({ clock, limit, photoLimit, file } = {}) {
     };
   }
 
-  const remainingFor = kind => Math.max(
-    0,
-    kind === 'photo' ? Math.min(cap - total, photoCap - photo) : cap - total,
-  );
+  const remainingFor = kind => {
+    if (kind === 'photo') return Math.max(0, Math.min(cap - total, photoCap - photo, sharedCap - photo - grade));
+    if (kind === 'grade') return Math.max(0, Math.min(cap - total, gradeCap - grade, sharedCap - photo - grade));
+    return Math.max(0, cap - total);
+  };
 
   function result(allowed, kind) {
     const s = state();
@@ -131,7 +141,8 @@ export function createAiBudget({ clock, limit, photoLimit, file } = {}) {
   /** Writes the current counts. Writes are queued; a failure logs the error name only. */
   function persist() {
     if (typeof file !== 'string' || file === '') return;
-    const snapshot = { day: dayKey, total, photo };
+    // `grade` is written only when above 0, so existing files stay byte-identical.
+    const snapshot = grade > 0 ? { day: dayKey, total, photo, grade } : { day: dayKey, total, photo };
     pending = pending
       .then(() => updateJsonFile(file, () => snapshot, { fallback: {} }))
       .then(() => undefined, err => {
@@ -142,17 +153,24 @@ export function createAiBudget({ clock, limit, photoLimit, file } = {}) {
   return {
     limit: cap,
     photoLimit: photoCap,
+    gradeLimit: gradeCap,
     /**
      * Counts one call if the cap allows it. Denied calls are not counted.
-     * kind 'photo' is also held to the photo share; the default 'seance' only to the total.
-     * @param {{ kind?: 'photo' | 'seance' }} [opts]
+     * kind 'photo' is also held to the photo share; kind 'grade' to its own
+     * share; both together stay below the quarter kept for Séance runs. The
+     * default 'seance' is held only to the total.
+     * @param {{ kind?: 'photo' | 'seance' | 'grade' }} [opts]
      */
     consume({ kind = 'seance' } = {}) {
       state();
-      const blocked = total >= cap || (kind === 'photo' && photo >= photoCap);
+      const blocked = total >= cap
+        || (kind === 'photo' && photo >= photoCap)
+        || (kind === 'grade' && grade >= gradeCap)
+        || ((kind === 'photo' || kind === 'grade') && photo + grade >= sharedCap);
       if (blocked) return result(false, kind);
       total += 1;
       if (kind === 'photo') photo += 1;
+      if (kind === 'grade') grade += 1;
       persist();
       return result(true, kind);
     },

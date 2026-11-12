@@ -73,7 +73,7 @@ export function createApp(deps = {}) {
 
   // Retention on startup: fire-and-forget, never blocks or crashes startup.
   if (typeof store.pruneExpired === 'function') {
-    store.pruneExpired().catch(err => {
+    store.pruneExpired({ grades: true, leads: true }).catch(err => {
       process.stderr.write(`[retention] startup prune failed: ${err?.name ?? 'Error'}\n`);
     });
   }
@@ -90,6 +90,7 @@ export function createApp(deps = {}) {
     aiBudget: deps.aiBudget ?? createAiBudget({
       clock,
       limit: config.maxAiCallsPerDay ?? 200,
+      gradeLimit: config.gradeAiCallsPerDay,
       file: path.join(deps.dataDir ?? config.dataDir, 'ai-budget.json'),
     }),
     newId: deps.newId ?? (() => randomUUID()),

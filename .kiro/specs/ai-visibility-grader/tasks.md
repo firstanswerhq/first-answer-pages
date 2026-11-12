@@ -10,24 +10,24 @@ Contest cut, in build order: (A) tasks 0 to 8 plus 9.2 and 10.1 give the full de
 
 ## Tasks
 
-- [ ] 0. Before starting
-  - [ ] 0.1 Confirm every task in `.kiro/specs/super-pages/tasks.md` is done or deliberately skipped, and `node --test` passes
-  - [ ] 0.2 Update steering: bring `structure.md` and `tech.md` in line with the code as built (the `server/lib` folder, MCP built, web writes allowed for the listed collections); add `steering/wording.md` (always on: American spelling, plain words, no "Yellow Pages" or "YP", no dollar figures, never promise AI will name a business, say "days to weeks") and `steering/grader-safety.md` (for the fetch and grader files: never loosen the address guard, never log typed input, AI answers or lead details, always escape AI text)
-  - [ ] 0.3 Add two hooks in `.kiro/hooks/`: on save of a grade file, run `node --test test/grade-*.test.js`; on save of `grade-html.js` or `fix-kit.js`, check for British spellings, "YP" as a word, a dollar sign followed by digits, and the word "guarantee"
+- [x] 0. Before starting
+  - [x] 0.1 Confirm every task in `.kiro/specs/super-pages/tasks.md` is done or deliberately skipped, and `node --test` passes
+  - [x] 0.2 Update steering: bring `structure.md` and `tech.md` in line with the code as built (the `server/lib` folder, MCP built, web writes allowed for the listed collections); add `steering/wording.md` (always on: American spelling, plain words, no "Yellow Pages" or "YP", no dollar figures, never promise AI will name a business, say "days to weeks") and `steering/grader-safety.md` (for the fetch and grader files: never loosen the address guard, never log typed input, AI answers or lead details, always escape AI text)
+  - [x] 0.3 Add two hooks in `.kiro/hooks/`: on save of a grade file, run `node --test test/grade-*.test.js`; on save of `grade-html.js` or `fix-kit.js`, check for British spellings, "YP" as a word, a dollar sign followed by digits, and the word "guarantee"
 
 Every task also follows the design's "Implementation notes from the code review" section.
 
-- [ ] 1. Safe fetching
-  - [ ] 1.1 Create `server/lib/ip-guard.js`
+- [x] 1. Safe fetching
+  - [x] 1.1 Create `server/lib/ip-guard.js`
     - Export `isPublicAddress(ip)` using `net.isIP`, a 32-bit IPv4 parser and an eight-group IPv6 expander that handles `::` and a dotted IPv4 tail
     - Follow the design's IPv6 rule (public only inside `2000::/3` minus the listed blocks) and refuse every IPv4 range listed in the design, judging IPv4-mapped, IPv4-compatible and NAT64 IPv6 forms by their embedded IPv4
     - Return false for anything `net.isIP` rejects
     - _Requirements: 3.2_
-  - [ ] 1.2 Write property tests for the address guard
+  - [x] 1.2 Write property tests for the address guard
     - **Property 1: Public-address test matches the range table**
     - Build an independent bit-mask oracle in the test from the same range table
     - **Validates: Requirements 3.2, 3.10**
-  - [ ] 1.3 Create `server/lib/safe-fetch.js`
+  - [x] 1.3 Create `server/lib/safe-fetch.js`
     - Export `createSafeFetcher({ request, lookup, timeoutMs, maxBytes, maxRedirects, userAgent })` and `SafeFetchError` with codes `bad_url`, `blocked_address`, `timeout`, `too_large`, `too_many_redirects`, `connect_failed`
     - URL checks: `http`/`https` only, ports 80 and 443 only, no user name or password; IP literal hosts must pass `isPublicAddress`
     - Strip brackets from `url.hostname` before the IP check; resolve and check in `fetchText`, then call `node:http`/`node:https` `request()` with `agent: false` and a `pinnedLookup` that answers with the checked list when `opts.all` is set and a single address otherwise
@@ -36,14 +36,14 @@ Every task also follows the design's "Implementation notes from the code review"
     - Follow up to 5 redirects by hand, checking each target from the top
     - Decompress gzip, deflate and br with `node:zlib`; stop past 2 MiB decompressed; one 10-second timer per fetch
     - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8_
-  - [ ]* 1.4 Write property and example tests for the safe fetcher
+  - [x]* 1.4 Write property and example tests for the safe fetcher
     - **Property 2: Redirects never reach a refused address**
     - **Property 3: Size limit holds after decompression**
     - Examples: refused ports, credentials in URL, DNS answer mixing public and private addresses, timeout, a guard that fails the test if the real `http.request` is called
     - **Validates: Requirements 3.1, 3.3, 3.4, 3.5, 3.6, 3.8**
 
-- [ ] 2. Reading pages and robots.txt
-  - [ ] 2.1 Create `server/lib/page-facts.js`
+- [x] 2. Reading pages and robots.txt
+  - [x] 2.1 Create `server/lib/page-facts.js`
     - Export `readPageFacts(html)` following the design's ten steps: comments out, JSON-LD collected first, script/style/noscript/template/svg removed, title, meta tags, h1s, images and alt counts, tel links, call-to-action labels, visible text with entities decoded
     - Parse each JSON-LD block in a try; collect `@type` from the top, arrays and `@graph`; read name, telephone, address, hours and url from the first business-typed node (type list in the design); mark failed blocks `unreadable`
     - Set `scriptBuilt` when visible text is under 200 characters and the page has a script tag
@@ -53,7 +53,7 @@ Every task also follows the design's "Implementation notes from the code review"
   - [ ]* 2.2 Write property tests for page reading
     - **Property 4: Page reading never throws and stays fast** (random inputs up to 64 KiB, plus fixed 2 MiB worst cases: unclosed `<script`, `<!--` and `<a`)
     - **Validates: Requirements 4.1, 4.6**
-  - [ ] 2.3 Create `server/lib/robots.js`
+  - [x] 2.3 Create `server/lib/robots.js`
     - Export `parseRobots(text)` and `mayFetchRoot(groups, agent)` as designed: grouped user agents, comments and unknown fields ignored, specific group before `*`, longest rule wins, `Allow` wins a tie, empty `Disallow` allows
     - Export `AI_AGENTS` with the eight crawler names from the glossary
     - _Requirements: 5.1, 5.2_
@@ -61,35 +61,35 @@ Every task also follows the design's "Implementation notes from the code review"
     - **Property 5: Robots answers are stable under formatting**
     - **Validates: Requirements 5.1, 5.2, 5.5**
 
-- [ ] 3. Checks, score, names and fix kit
-  - [ ] 3.1 Create `server/lib/grade-checks.js`
+- [x] 3. Checks, score, names and fix kit
+  - [x] 3.1 Create `server/lib/grade-checks.js`
     - Export `CHECKS` (ids, groups, points, label, pass and fail details, fix sentences of at most 160 characters) exactly as the design's table
     - Export `runWebsiteChecks({ facts, robots, llms, input })` returning one Check_Result per website Check; `not_checked` with a plain reason when the site was unreachable, refused, too large or script-built (title check excepted for script-built), and "No website given" when there is no website
     - robots.txt: 404 or 410 means all allowed; other failures mean `not_checked`; llms.txt present only for status 200, non-HTML, at least 20 characters
     - Always add `google-profile` as `not_checked` with "Google check coming soon"
     - _Requirements: 5.3, 5.4, 6.1, 6.2, 6.3, 6.4_
-  - [ ] 3.2 Create `server/lib/grade-score.js`
+  - [x] 3.2 Create `server/lib/grade-score.js`
     - Export `scoreGrade(results)` returning `{ score, earned, available, failed, counted, byGroup }`; `ai-named` uses its `earned` value; `score` is null under 40 available points
     - _Requirements: 6.5, 8.1, 8.2_
-  - [ ] 3.3 Write property tests for the score
+  - [x] 3.3 Write property tests for the score
     - **Property 6: Score bounds and invariance**
     - **Validates: Requirements 6.5, 6.6, 8.2**
-  - [ ] 3.4 Create `server/lib/name-match.js`
+  - [x] 3.4 Create `server/lib/name-match.js`
     - Export `shortName`, `registeredDomain`, `isNamed(answer, { name, website })` and `extractCompetitors(answer, business)` as designed, reusing `normalizeForMatch` from `seance.js`
     - _Requirements: 7.3, 7.4_
-  - [ ] 3.5 Write property tests for name matching and competitor extraction
+  - [x] 3.5 Write property tests for name matching and competitor extraction
     - **Property 7: Name matching ignores case, punctuation and spacing**
     - **Property 8: Competitors exclude the business and repeat no one**
     - Examples: "Acme Roofing Company" matches an answer saying "Acme Roofing"; a numbered list of five roofers yields five names
     - **Validates: Requirements 7.3, 7.4, 7.10**
-  - [ ] 3.6 Create `server/lib/fix-kit.js`
+  - [x] 3.6 Create `server/lib/fix-kit.js`
     - Export `suggestedTitle`, `suggestedSummary`, `jsonLdBlock`, `llmsDraft` and `robotsLines` as designed
     - _Requirements: 11.1, 11.2, 11.3, 11.4, 11.5_
-  - [ ] 3.7 Write property tests for the fix kit
+  - [x] 3.7 Write property tests for the fix kit
     - **Property 9: Fix kit stays within its limits**
     - **Validates: Requirements 11.1, 11.2, 11.3, 11.8**
 
-- [ ] 4. Checkpoint: pure pieces
+- [x] 4. Checkpoint: pure pieces
   - Run `node --test`; every earlier test and every new test passes. Ask the user if questions arise.
 
 - [ ] 5. Storage, budget and configuration

@@ -27,6 +27,8 @@ export const CATEGORY_PHRASES = Object.freeze({
   'pressure-washing': 'pressure washing companies',
   'pools-and-concrete': 'pool and concrete companies',
   'shops-and-restaurants': 'shops and restaurants',
+  roofers: 'roofers',
+  hvac: 'heating and air companies',
   other: 'businesses',
 });
 

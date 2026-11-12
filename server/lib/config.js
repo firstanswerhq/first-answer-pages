@@ -7,6 +7,7 @@
 // could be logged or returned.
 
 import { fileURLToPath } from 'node:url';
+import { randomBytes } from 'node:crypto';
 import path from 'node:path';
 
 const REPO_DATA_DIR = path.resolve(
@@ -94,6 +95,32 @@ export function parseMaxAiCalls(value, warn = console.warn) {
   );
   return DEFAULT_MAX_AI_CALLS_PER_DAY;
 }
+
+export const DEFAULT_GRADE_AI_CALLS_PER_DAY = 60;
+
+/**
+ * GRADE_AI_CALLS_PER_DAY: a whole number, 0 or more (0 turns the Grader's AI
+ * question off). Unset gives 60; anything else warns (without echoing the
+ * value) and gives 60.
+ * @param {string | undefined} value
+ * @param {(msg: string) => void} [warn]
+ * @returns {number}
+ */
+export function parseGradeAiCalls(value, warn = console.warn) {
+  const v = nonEmpty(value);
+  if (v === undefined) return DEFAULT_GRADE_AI_CALLS_PER_DAY;
+  if (/^(0|[1-9][0-9]*)$/.test(v) && Number.isSafeInteger(Number(v))) return Number(v);
+  warn(`GRADE_AI_CALLS_PER_DAY must be a whole number, 0 or more; using ${DEFAULT_GRADE_AI_CALLS_PER_DAY}.`);
+  return DEFAULT_GRADE_AI_CALLS_PER_DAY;
+}
+
+/** GRADER_ENABLED / GRADER_LEAD_GATE: 'off' (any case) is false; anything else is true. */
+export function parseOnOff(value) {
+  return nonEmpty(value)?.toLowerCase() !== 'off';
+}
+
+// One random key per process, used when GRADER_SECRET is not set.
+let processGraderSecret;
 
 export const DEFAULT_SEANCE_TIMEOUT_MS = 120000;
 
@@ -245,6 +272,15 @@ export function configFromEnv(env = process.env, opts = {}) {
     indexNow: nonEmpty(env.INDEXNOW)?.toLowerCase() === 'off' ? 'off' : 'on',
     testRun: isTestRun(env),
 
+    // AI Visibility Grader (/grade).
+    graderEnabled: parseOnOff(env.GRADER_ENABLED),
+    graderLeadGate: parseOnOff(env.GRADER_LEAD_GATE),
+    gradeAiCallsPerDay: parseGradeAiCalls(env.GRADE_AI_CALLS_PER_DAY, opts.warn ?? console.warn),
+    // Signs form stamps and unlock cookies. Without GRADER_SECRET a random per-process key is
+    // used (unlocks then reset on restart); graderSecretGenerated lets createApp warn once.
+    graderSecret: nonEmpty(env.GRADER_SECRET) ?? (processGraderSecret ??= randomBytes(32).toString('hex')),
+    graderSecretGenerated: !nonEmpty(env.GRADER_SECRET),
+
     visionProviderName: vision,
     assistantProviderName: assistant,
     notifierName: notifier,
@@ -290,6 +326,7 @@ export function redactConfig(config) {
   return {
     ...config,
     adminToken: mark(config.adminToken),
+    ...(config.graderSecret !== undefined && { graderSecret: mark(config.graderSecret) }),
     ...(config.resend && { resend: { ...config.resend, apiKey: mark(config.resend.apiKey) } }),
     vision: { ...config.vision, ...(config.vision.apiKey !== undefined && { apiKey: mark(config.vision.apiKey) }) },
     assistant: {

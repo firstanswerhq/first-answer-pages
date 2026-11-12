@@ -52,3 +52,22 @@ export function pruneDrafts(list, nowMs, pending = []) {
     return age === undefined || age < DRAFT_EXPIRY_DAYS * DAY_MS;
   });
 }
+
+export const GRADE_RETENTION_DAYS = 90;
+
+/**
+ * Keep grades (and leads) younger than 90 days. A missing or invalid
+ * createdAt is kept, the same rule as quotes.
+ * @param {object[]} list
+ * @param {number} nowMs
+ * @returns {object[]}
+ */
+export function pruneGrades(list, nowMs) {
+  if (!Array.isArray(list)) return list;
+  return list.filter(g => {
+    const age = ageMs(g?.createdAt, nowMs);
+    return age === undefined || age < GRADE_RETENTION_DAYS * DAY_MS;
+  });
+}
+
+export const pruneLeads = pruneGrades;
