@@ -346,7 +346,7 @@ function fixKit(grade) {
   </section>`;
 }
 
-function fullReport(grade, contact) {
+function fullReport(grade, contact, rechecking = false) {
   const groups = SHOWN_GROUPS.map(g => {
     const checks = CHECKS.filter(c => c.group === g);
     const extra = g === 'ai_answers' ? allAnswers(grade) : '';
@@ -368,9 +368,11 @@ function fullReport(grade, contact) {
   ${fixKit(grade)}
   <section class="grade-recheck">
     <h2>Made some changes?</h2>
-    <form method="POST" action="/grade/${e(grade.id)}/recheck">
+    ${rechecking
+    ? '<p class="notice" role="status" data-grade-rechecking>Reading your website again. This page updates by itself.</p>'
+    : `<form method="POST" action="/grade/${e(grade.id)}/recheck">
       <button type="submit" class="button">Check again</button>
-    </form>
+    </form>`}
     <p class="hint">This reads your website again. It does not ask AI again.</p>
   </section>
   <section class="grade-offer">
@@ -384,7 +386,7 @@ function fullReport(grade, contact) {
  *   leadValues?: object, leadErrors?: object }} [opts]
  */
 export function reportPage(grade, {
-  unlocked = false, leadGate = true, contactEmail, now = NaN, leadValues, leadErrors,
+  unlocked = false, leadGate = true, contactEmail, now = NaN, leadValues, leadErrors, rechecking = false,
 } = {}) {
   const contact = contactEmail
     ? { href: `mailto:${contactEmail}`, text: contactEmail }
@@ -400,10 +402,14 @@ export function reportPage(grade, {
   ${googleSection(grade)}
   ${groupLines(grade)}
   <p class="grade-meta">Automated check, ${e(when)}. AI assistants pick up changes over days to weeks.</p>
-  ${showFull ? fullReport(grade, contact) : leadForm(grade, { values: leadValues, errors: leadErrors })}
+  ${showFull ? fullReport(grade, contact, rechecking) : leadForm(grade, { values: leadValues, errors: leadErrors })}
   <p class="hint">Ask us to remove this report: <a href="${e(contact.href)}">${e(contact.text)}</a></p>
 </article>`;
-  return page(`${grade.input.name}: AI visibility check`, body);
+  return page(
+    `${grade.input.name}: AI visibility check`,
+    body,
+    rechecking && showFull ? '<noscript><meta http-equiv="refresh" content="3"></noscript>' : '',
+  );
 }
 
 // ---- Failed, about --------------------------------------------------------------

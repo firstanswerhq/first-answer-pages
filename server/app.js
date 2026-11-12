@@ -21,6 +21,7 @@ import { createAssistantProvider } from './lib/assistant.js';
 import { createIndexNow, indexNowOffReason } from './lib/indexnow.js';
 import { createSafeFetcher } from './lib/safe-fetch.js';
 import { createGrader } from './lib/grader.js';
+import { createDraftStore } from './lib/drafts.js';
 import { createHomeRouter }     from './routes/home.js';
 import { createListingsRouter } from './routes/listings.js';
 import { createApiRouter }      from './routes/api.js';
@@ -119,6 +120,7 @@ export function createApp(deps = {}) {
     assistantProvider: ctx.assistantProvider,
     aiBudget: ctx.aiBudget,
     safeFetcher: ctx.safeFetcher,
+    draftStore: createDraftStore({ store, clock, newId: ctx.newId }),
     notifier: ctx.notifier,
     clock,
     newId: ctx.newGradeId,

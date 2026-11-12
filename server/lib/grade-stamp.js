@@ -36,8 +36,8 @@ export function checkStamp(secret, value, nowMs) {
 /** Cookie value that unlocks the Full_Report of one Grade. */
 export const unlockToken = (secret, gradeId) => sign(secret, `unlock:${gradeId}`);
 
-/** Cookie value that shows one browser claimed the Grade's Draft. */
-export const claimToken = (secret, gradeId) => sign(secret, `claim:${gradeId}`);
+/** Cookie value that shows this browser claimed one Draft of the Grade: "<draftId>.<hmac>". */
+export const claimCookieValue = (secret, gradeId, draftId) => `${draftId}.${sign(secret, `claim:${gradeId}:${draftId}`)}`;
 
 /** Value of one cookie from a request, or ''. */
 export function readCookie(req, name) {
@@ -49,6 +49,15 @@ export function readCookie(req, name) {
     if (part.slice(0, i).trim() === name) return part.slice(i + 1).trim();
   }
   return '';
+}
+
+/** The Draft id this browser claimed for the Grade (from its signed cookie), or ''. */
+export function readClaim(req, secret, gradeId) {
+  const value = readCookie(req, `gc_${gradeId}`);
+  const dot = value.lastIndexOf('.');
+  if (dot < 1) return '';
+  const draftId = value.slice(0, dot);
+  return same(value.slice(dot + 1), sign(secret, `claim:${gradeId}:${draftId}`)) ? draftId : '';
 }
 
 /** True when the request carries a valid cookie of the given kind for this Grade. */

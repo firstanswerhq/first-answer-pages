@@ -117,7 +117,8 @@ async function startEnv({ assistantProvider, config = {}, aiBudget, safeFetcher 
     server.closeAllConnections?.();
     await new Promise(resolve => server.close(resolve));
     await app.locals.ctx.aiBudget?.flush?.();
-    await fs.rm(dir, { recursive: true, force: true });
+    // A report view can leave a background AI question still saving; retry instead of failing the cleanup.
+    await fs.rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 }).catch(() => {});
   });
   return { dir, clock, ctx: app.locals.ctx, base: `http://127.0.0.1:${server.address().port}` };
 }
@@ -238,9 +239,10 @@ test('a stub AI that names the business gives full AI points and a place in the 
   assert.equal(grade.score.score, 100);
   assert.equal(grade.ai[0].position, 1);
   assert.deepEqual(grade.ai[0].competitors, ['Other Co']);
+  // Before the report is viewed: with the gate off, a view starts the extra questions in the background.
+  assert.equal(assistant.calls, 1);
   const html = await (await get(env, `/grade/${id}`)).text();
   assert.ok(html.includes('We asked Claude once just now. It named your business 1st of 2.'));
-  assert.equal(assistant.calls, 1);
 });
 
 test('AI answer text is escaped on the page', async () => {

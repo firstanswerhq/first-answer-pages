@@ -99,7 +99,8 @@ export function llmsDraft(found) {
   const st = stateCode(found.state);
   const place = city && st ? `${city}, ${st}` : city;
   const lines = [`# ${name}`, ''];
-  if (service && place) lines.push(`> ${name} offers ${service.toLowerCase()} in ${place}.`, '');
+  // "Acme Roofing: roofers in Nashville, TN." reads right for any service word, plural or not.
+  if (service && place) lines.push(`> ${name}: ${service.toLowerCase()} in ${place}.`, '');
   if (service) lines.push(`- Service: ${service}`);
   if (place) lines.push(`- Area: ${place}`);
   if (clean(found.phone)) lines.push(`- Phone: ${clean(found.phone)}`);

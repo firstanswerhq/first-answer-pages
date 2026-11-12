@@ -12,13 +12,14 @@
  * .catch that logs the Grade_Id only.
  */
 
+import { randomUUID } from 'node:crypto';
 import { SafeFetchError } from './safe-fetch.js';
 import { readPageFacts, STREET_PATTERN } from './page-facts.js';
 import { runWebsiteChecks, CHECKS } from './grade-checks.js';
 import { scoreGrade } from './grade-score.js';
 import { analyzeAnswer, registeredDomain } from './name-match.js';
 import { normalizeForMatch } from './seance.js';
-import { mapCategory, normalizePhone } from './listing-fields.js';
+import { mapCategory, normalizePhone, validateFields } from './listing-fields.js';
 
 export const WEBSITE_BUDGET_MS = 30000;
 export const AI_TIMEOUT_MS = 120000;
@@ -169,11 +170,12 @@ const withTimeout = (promise, ms, message) => new Promise((resolve, reject) => {
 /**
  * @param {{
  *   store: object, assistantProvider: object, aiBudget: object, safeFetcher: object,
+ *   draftStore: { create: Function, get: Function },
  *   notifier?: object, clock: { now(): number }, newId: () => string, config: object,
  * }} deps
  */
 export function createGrader({
-  store, assistantProvider, aiBudget, safeFetcher, notifier, clock, newId, config,
+  store, assistantProvider, aiBudget, safeFetcher, draftStore, notifier, clock, newId, config,
 }) {
   const grades = () => store.collection('grades');
   const nowIso = () => new Date(clock.now()).toISOString();
@@ -198,7 +200,7 @@ export function createGrader({
   }
 
   /** Run one step; always records it, never throws. */
-  async function timed(id, name, fn) {
+  async function timed(id, name, fn, track = true) {
     const t0 = nowMs();
     let state = 'done';
     let finding = '';
@@ -213,22 +215,27 @@ export function createGrader({
       finding = 'This step did not finish.';
     }
     const step = { name, state, ms: nowMs() - t0, finding };
-    try {
-      await addStep(id, step);
-    } catch {
-      logId(id, `step=${name} not saved`);
+    if (track) {
+      try {
+        await addStep(id, step);
+      } catch {
+        logId(id, `step=${name} not saved`);
+      }
     }
     return { value, state };
   }
 
   // ---- website part --------------------------------------------------------
 
-  async function websitePart(id, input) {
+  /** The website steps. With track=false (a recheck) no Scan_Step is recorded. */
+  async function websitePart(id, input, track = true) {
     const names = stepNames(input);
     const out = { facts: null, robots: null, llms: null, failure: undefined };
     if (!input.website) {
-      for (const name of names.slice(0, 3)) {
-        await addStep(id, { name, state: 'skipped', ms: 0, finding: 'No website given.' });
+      if (track) {
+        for (const name of names.slice(0, 3)) {
+          await addStep(id, { name, state: 'skipped', ms: 0, finding: 'No website given.' });
+        }
       }
       return out;
     }
@@ -251,7 +258,7 @@ export function createGrader({
         out.failure = failureText(err);
         return { finding: out.failure, state: 'failed' };
       }
-    });
+    }, track);
     void fetchStep;
 
     await timed(id, names[1], async () => {
@@ -259,7 +266,7 @@ export function createGrader({
       out.facts = readPageFacts(home.text);
       const n = out.facts.h1s.length;
       return { finding: `Found ${n} main ${n === 1 ? 'headline' : 'headlines'}.` };
-    });
+    }, track);
 
     await timed(id, names[2], async () => {
       const base = home?.finalUrl ?? input.website;
@@ -279,7 +286,7 @@ export function createGrader({
       parts.push(out.robots ? 'Read your robots.txt.' : "Couldn't read your robots.txt.");
       parts.push(out.llms ? 'Checked for llms.txt.' : "Couldn't check for llms.txt.");
       return { finding: parts.join(' ') };
-    });
+    }, track);
     return out;
   }
 
@@ -489,7 +496,199 @@ export function createGrader({
     return { status: grade.status, steps: grade.steps, done: grade.status !== 'running' };
   }
 
+  // ---- extra AI questions, unlock, claim, recheck --------------------------------
+
+  /** Replace the ai-named result from the stored AI answers and recompute the Score. */
+  function applyAiResults(g) {
+    const i = g.results.findIndex(r => r.id === 'ai-named');
+    const prev = i >= 0 ? g.results[i] : undefined;
+    const next = aiNamedResult(g.ai, prev?.result === 'not_checked' ? prev.detail : undefined);
+    if (i >= 0) g.results[i] = next;
+    else g.results.push(next);
+    g.score = scoreGrade(g.results);
+  }
+
+  const extraPrompts = input => [
+    `I need ${input.service} in ${input.city}, ${input.state}. Which companies would you recommend?`,
+    `Which ${input.service} in ${input.city}, ${input.state} do people say is the most reliable?`,
+  ];
+
+  async function runExtraQuestions(id) {
+    // Mark first, so repeated views can never start the questions twice.
+    let claimed = false;
+    await updateGrade(id, g => {
+      if (g.status === 'done' && !g.extraAiStartedAt) {
+        g.extraAiStartedAt = nowIso();
+        claimed = true;
+      }
+    });
+    if (!claimed) return;
+    const grade = await get(id);
+    const have = new Set((grade.ai ?? []).map(a => a.prompt));
+    for (const prompt of extraPrompts(grade.input)) {
+      if (have.has(prompt)) continue;
+      const res = await askAi(grade.input, prompt);
+      if (!res.entry) break; // budget used up or the provider failed: keep what we have
+      await updateGrade(id, g => {
+        g.ai.push(res.entry);
+        applyAiResults(g);
+      });
+    }
+  }
+
+  /** Start the two extra AI questions in the background (once per Grade). */
+  function startExtraQuestions(id) {
+    runExtraQuestions(id).catch(() => logId(id, 'extra questions failed'));
+  }
+
+  /**
+   * Store a Lead, start the extra questions and tell the site owner.
+   * @param {{ name: string, email: string, phone: string, okToContact: boolean }} lead
+   */
+  async function unlock(id, lead) {
+    const grade = await get(id);
+    if (!grade || grade.status !== 'done') return { status: 409 };
+    await store.collection('leads').append({
+      id: randomUUID(),
+      gradeId: id,
+      business: grade.input.name,
+      name: lead.name,
+      email: lead.email,
+      phone: lead.phone,
+      okToContact: lead.okToContact === true,
+      score: grade.score?.score ?? null,
+      createdAt: nowIso(),
+    });
+    startExtraQuestions(id);
+    if (typeof notifier?.notifyLead === 'function') {
+      try {
+        withTimeout(Promise.resolve(notifier.notifyLead({
+          business: grade.input.name,
+          score: grade.score?.score ?? null,
+          reportUrl: `${config.baseUrl ?? ''}/grade/${id}`,
+          lead: { name: lead.name, email: lead.email, phone: lead.phone, okToContact: lead.okToContact === true },
+        })), 10000, 'notice timeout').catch(() => logId(id, 'lead notice failed'));
+      } catch {
+        logId(id, 'lead notice failed');
+      }
+    }
+    return { status: 200 };
+  }
+
+  /** Create a Draft from what the scan found. It is not published: the owner and an admin still review it. */
+  async function claim(id) {
+    const grade = await get(id);
+    if (!grade || grade.status !== 'done') return { status: 404 };
+    const found = foundFromGrade(grade);
+    const categories = store.getCategories();
+    const checked = validateFields({
+      name: found.name,
+      category: mapCategory(found.service, categories) || 'other',
+      phone: found.phone,
+      services: [found.service],
+      serviceArea: found.city,
+      city: found.city,
+      state: found.state,
+      address: found.address,
+      hours: hoursToObject(found.hours),
+    }, categories);
+    const created = await draftStore.create({
+      fields: checked.fields, missingFields: checked.missingFields, provider: 'grader',
+    });
+    await updateGrade(id, g => { if (!g.draftId) g.draftId = created.draft.id; });
+    return { status: 201, draft: created.draft };
+  }
+
+  /** True when a Draft still exists (so a returning browser can be sent back to it). */
+  async function draftExists(draftId) {
+    const found = await draftStore.get(draftId);
+    return found.status === 200;
+  }
+
+  const isRechecking = g => g?.recheckRunning === true
+    && nowMs() - Date.parse(g.recheckStartedAt) <= STALE_AFTER_MS;
+
+  async function runRecheck(id) {
+    try {
+      const grade = await get(id);
+      const site = await withTimeout(websitePart(id, grade.input, false), WEBSITE_BUDGET_MS, 'website budget')
+        .catch(() => ({ facts: null, robots: null, llms: null, failure: FETCH_FAILURES.timeout }));
+      const websiteResults = runWebsiteChecks({
+        facts: site.facts, robots: site.robots, llms: site.llms, input: grade.input, failure: site.failure,
+      });
+      const facts = summarizeFacts(site.facts, grade.input);
+      await updateGrade(id, g => {
+        const ai = g.results.find(r => r.id === 'ai-named');
+        g.previousScore = g.score?.score ?? null;
+        g.results = [...websiteResults, ...(ai ? [ai] : [])];
+        g.facts = facts ?? g.facts;
+        g.score = scoreGrade(g.results);
+        g.recheckedAt = nowIso();
+        g.recheckRunning = false;
+      });
+    } catch {
+      await updateGrade(id, g => { g.recheckRunning = false; }).catch(() => {});
+      throw new Error('recheck failed');
+    }
+  }
+
+  /**
+   * Run the website checks again (no AI question). It never sets the Grade back to
+   * `running`; it uses its own recheckRunning flag. Returns false when one is already running.
+   */
+  async function recheck(id) {
+    let started = false;
+    await updateGrade(id, g => {
+      if (g.status === 'done' && !isRechecking(g)) {
+        g.recheckRunning = true;
+        g.recheckStartedAt = nowIso();
+        started = true;
+      }
+    });
+    if (!started) return false;
+    runRecheck(id).catch(() => logId(id, 'recheck failed'));
+    return true;
+  }
+
   return {
     start, run, get, statusOf, isStale, findReusableAi, askAi, updateGrade, grades, notifier,
+    startExtraQuestions, unlock, claim, draftExists, recheck, isRechecking,
   };
+}
+
+const DAY_NAMES = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+
+/** "mo" / "mon" / "monday" to "monday"; anything else to undefined. */
+function dayName(word) {
+  const w = word.trim().toLowerCase();
+  if (w.length < 2) return undefined;
+  return DAY_NAMES.find(n => n.startsWith(w));
+}
+
+/**
+ * Found hours strings ("Mo-Fr 08:00-17:00", "Monday, Tuesday 07:00-18:00") to
+ * { monday: '08:00-17:00', ... }. Strings it cannot read are left out.
+ * @param {string[]} hours
+ * @returns {Record<string, string>}
+ */
+export function hoursToObject(hours) {
+  const out = {};
+  for (const raw of Array.isArray(hours) ? hours : []) {
+    const text = String(raw).slice(0, 200);
+    const m = /^\s*([A-Za-z][A-Za-z ,-]*?)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?\s*-\s*\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\s*$/i.exec(text);
+    if (!m) continue;
+    const days = [];
+    for (const token of m[1].split(',')) {
+      const [a, b] = token.split('-').map(dayName);
+      if (a && b) {
+        const from = DAY_NAMES.indexOf(a);
+        const to = DAY_NAMES.indexOf(b);
+        for (let i = from; i <= to; i += 1) days.push(DAY_NAMES[i]);
+      } else if (a && token.split('-').length === 1) {
+        days.push(a);
+      }
+    }
+    for (const day of days) if (!Object.hasOwn(out, day)) out[day] = m[2].trim();
+  }
+  return out;
 }

@@ -56,6 +56,12 @@ export function createMockNotifier({ maxSent } = {}) {
       notifier.sent.push({ quote, listing, text: formatNotice({ quote, listing }) });
       while (notifier.sent.length > cap) notifier.sent.shift(); // drop oldest
     },
+    /** Grader leads: recorded in memory only (never printed). */
+    leads: [],
+    async notifyLead({ business, score, reportUrl, lead }) {
+      notifier.leads.push({ business, score, reportUrl, lead });
+      while (notifier.leads.length > cap) notifier.leads.shift();
+    },
   };
   return notifier;
 }
@@ -70,6 +76,10 @@ export function createConsoleNotifier({ write = line => process.stdout.write(lin
     async notify({ quote, listing }) {
       write(JSON.stringify({ event: 'quote', quoteId: quote.id, listingId: listing?.id ?? quote.listingId }) + '\n');
     },
+    /** One line: business name, score and report link. Never the visitor's name, email or phone. */
+    async notifyLead({ business, score, reportUrl }) {
+      write(JSON.stringify({ event: 'grader-lead', business, score, reportUrl }) + '\n');
+    },
   };
 }
 
@@ -80,6 +90,9 @@ export function createNoneNotifier() {
   return {
     name: 'none',
     async notify() {
+      return { notifier: 'none', sent: false };
+    },
+    async notifyLead() {
       return { notifier: 'none', sent: false };
     },
   };
@@ -132,6 +145,45 @@ export function createResendNotifier({ apiKey, from, adminEmail, fetch: fetchImp
         return { notifier: 'resend', sent: true };
       } catch (err) {
         // Name only: messages could echo request details.
+        return fail(err?.name === 'AbortError' ? 'TimeoutError' : (err?.name ?? 'Error'));
+      } finally {
+        clearTimeout(timer);
+      }
+    },
+    /**
+     * New Grader lead: emailed to the admin only (never to a business owner), so the
+     * admin can follow up. Never throws and never puts the key in its result.
+     */
+    async notifyLead({ business, score, reportUrl, lead }) {
+      const fail = error => ({ notifier: 'resend', sent: false, error });
+      const name = plainText(business);
+      const text = [
+        `New grader lead: ${name}`,
+        `Score: ${Number.isInteger(score) ? score : 'not scored yet'}`,
+        `Report: ${plainText(reportUrl)}`,
+        '',
+        `Name: ${plainText(lead?.name)}`,
+        `Phone: ${plainText(lead?.phone)}`,
+        `Email: ${plainText(lead?.email)}`,
+        `OK to contact: ${lead?.okToContact ? 'yes' : 'no'}`,
+      ].join('\n');
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const res = await fetchImpl(RESEND_URL, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            from,
+            to: [adminEmail],
+            subject: `New grader lead: ${name}`.replace(/\s+/g, ' ').slice(0, 200),
+            text,
+          }),
+          signal: controller.signal,
+        });
+        if (!res.ok) return fail(`http_${res.status}`);
+        return { notifier: 'resend', sent: true };
+      } catch (err) {
         return fail(err?.name === 'AbortError' ? 'TimeoutError' : (err?.name ?? 'Error'));
       } finally {
         clearTimeout(timer);

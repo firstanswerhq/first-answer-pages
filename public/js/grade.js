@@ -64,6 +64,22 @@ function watchScan(scan) {
   setTimeout(poll, 1000);
 }
 
+// After "Check again": reload the report every few seconds until the notice is gone.
+function watchRecheck() {
+  let tries = 0;
+  const tick = async () => {
+    tries += 1;
+    try {
+      await swapInPage();
+    } catch {
+      // Try again on the next tick.
+    }
+    if (document.querySelector('[data-grade-rechecking]') && tries < 60) setTimeout(tick, 3000);
+  };
+  setTimeout(tick, 3000);
+}
+
 setupCopyButtons(document);
 const scan = document.querySelector('[data-grade-scan]');
 if (scan) watchScan(scan);
+if (document.querySelector('[data-grade-rechecking]')) watchRecheck();

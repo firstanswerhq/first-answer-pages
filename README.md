@@ -206,6 +206,28 @@ The Séance asks an AI assistant "best <category> in <city>" for a listing and r
 
 Without an AI key, runs use a built-in mock, and every mock answer is labeled "Demo answer (no AI connected)".
 
+### The AI Visibility Grader (`/grade`)
+
+A free check for one local business. The owner types the business name, city, state, what they do, and a website if they have one. In about two minutes the Grader shows:
+
+- whether an AI assistant names the business when asked for the best business like it in that city, and who it names instead;
+- whether the business's website lets AI assistants in (`robots.txt`), labels its name and phone in a way AI can read, and has an `llms.txt` info sheet;
+- whether the home page has the search and customer basics (city and service in the title, a tap-to-call phone number, hours, address, a call or book button).
+
+Every number on the report is something the Grader measured. It shows no dollar figures. The report ends with the fix: a free listing already filled in from what the scan found, with one button to claim it. The claim uses the same draft review as `/rise`, so nothing goes live until the owner confirms it and an admin approves it. The report never promises that AI will name the business. It says AI assistants pick up changes over days to weeks.
+
+**How a website is read.** The server fetches the home page, `/robots.txt` and `/llms.txt` through a safe fetcher. It visits only public websites on ports 80 and 443, checks every address (including each redirect) before connecting, connects only to the address it checked, stops after 10 seconds or 2 MiB, and sends no cookies. It never runs the page's scripts. `/grade/about` tells website owners what is read and why.
+
+**The AI check.** The Grader uses the same assistant provider as the Séance (`SEANCE_PROVIDER`). With the mock provider, every answer is labeled "Demo answer (no AI connected)". In production the mock never answers: the AI part says it isn't connected.
+
+**Lead gate.** With `GRADER_LEAD_GATE=on` (the default) the free part of a report is open to anyone with the link. The full report (every check, the fix for each, and the copy-and-paste fix kit) opens after the visitor sends their name, email and phone. Opening it also runs two more AI questions, so the AI part of the score uses three answers. Set `GRADER_LEAD_GATE=off` to show the full report to everyone, for demos and contest judges. The cookie that opens a report is signed with `GRADER_SECRET`.
+
+**Where leads appear.** Log in as admin, then open `/admin/leads` for the newest 100 leads and `/admin/grades` for the newest 100 grades (with a Delete button for removal requests). With `NOTIFIER=resend`, each new lead is also emailed to `ADMIN_EMAIL` only, never to a business owner.
+
+**How the AI cap is shared.** Grader AI calls count against `MAX_AI_CALLS_PER_DAY`. They have their own daily share, `GRADE_AI_CALLS_PER_DAY` (default 60). Grader and photo calls together never use the quarter of the day kept for Séance runs. If the Grader's share is used up, the report says the AI check can be run again later. A second grade with the same details within 7 days reuses the earlier AI answer.
+
+**Privacy.** Every `/grade` page is not listed in search engines (`X-Robots-Tag: noindex, nofollow`) and is left out of `sitemap.xml`, `llms.txt` and the MCP tools. Grades and leads are deleted after 90 days. To remove a report sooner, use the Delete button at `/admin/grades`. Set `GRADER_ENABLED=off` to turn the Grader off (every `/grade` address returns 404).
+
 ### A2A decision
 
 No A2A (agent-to-agent) endpoint is built. The app has a small seam where one could be mounted later, but nothing is mounted now, so `GET /.well-known/agent-card.json` returns 404 on purpose.
@@ -273,6 +295,10 @@ Limits are per client address unless noted. A refused request gets a 429 and a `
 | Quote requests for one listing | 3 per hour per client per listing |
 | `POST /seance/run` | 10 per hour per client |
 | `POST /seance/run` for one listing | 1 per 10 minutes per listing |
+| `POST /grade` (new grades) | 5 per hour and 20 per day per client |
+| `POST /grade/:id/unlock` | 5 per hour per client |
+| `POST /grade/:id/recheck` | 10 per hour per client, and 1 per 2 minutes per grade |
+| `POST /grade/:id/claim` | the same limit as `POST /rise` (10 per 10 minutes) |
 
 The per-listing quote limit is counted for each client and each listing together, so one client sending 3 requests to a listing does not block other clients from quoting that listing.
 
@@ -302,6 +328,8 @@ The owner tools are the one place the web layer writes files. It writes only the
 - `verified.json` the Owner-confirmed date for each confirmed listing
 - `quotes.json` quote requests
 - `seance.json` Séance run history
+- `grades.json` Grader reports (deleted after 90 days)
+- `leads.json` contact details people gave to open a full Grader report (deleted after 90 days)
 - `ai-budget.json` the day's count of paid AI calls (written only when a real provider call is counted)
 - `indexnow-key.txt` the site's IndexNow key (written once, on the live site only)
 

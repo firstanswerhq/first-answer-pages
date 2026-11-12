@@ -26,6 +26,7 @@ import {
   requireAdmin, plainTokenMatches, setAdminCookie, clearAdminCookie, throttled, sameOrigin, cookieMatches,
 } from '../lib/admin-auth.js';
 import { layout, escapeHtml } from '../lib/html.js';
+import { mountGradeAdmin } from './grade-admin.js';
 import { draftProvider } from '../lib/drafts.js';
 import { formatRunTime } from '../lib/seance-html.js';
 import { indexNowNote } from '../lib/indexnow.js';
@@ -152,7 +153,7 @@ const wantsHtml = req =>
   typeof req.headers.authorization !== 'string' && String(req.headers.accept ?? '').includes('text/html');
 
 const adminNav = () => `<nav class="admin-nav">
-  <a href="/admin/pending">Pending</a> &middot; <a href="/admin/quotes">Quotes</a> &middot; <a href="/admin/indexnow">Bing pings</a> &middot; <a href="/admin/whoami">My IP</a>
+  <a href="/admin/pending">Pending</a> &middot; <a href="/admin/quotes">Quotes</a> &middot; <a href="/admin/grades">Grades</a> &middot; <a href="/admin/leads">Leads</a> &middot; <a href="/admin/indexnow">Bing pings</a> &middot; <a href="/admin/whoami">My IP</a>
   <form method="POST" action="/admin/logout" class="admin-logout"><button type="submit" class="admin-button">Log out</button></form>
 </nav>`;
 
@@ -214,6 +215,9 @@ export function createAdminRouter(ctx) {
   });
 
   router.use('/admin', requireAdmin(ctx, { cookie: true }));
+
+  // Grader pages (grades, leads, delete) sit behind the same gate.
+  mountGradeAdmin(router, ctx, { adminNav, wantsHtml, form });
 
   const pendingEntries = async () => {
     const list = await ctx.store.collection('pending').read();

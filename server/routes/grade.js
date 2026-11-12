@@ -6,6 +6,9 @@
  *   GET  /grade/about            what the Grader reads and why
  *   GET  /grade/:id              scan screen, report, or "did not finish" page
  *   GET  /grade/:id/status.json  { status, steps, done } for the optional script
+ *   POST /grade/:id/unlock       the Lead_Form: opens the full report for this browser
+ *   POST /grade/:id/claim        make a Draft from what the scan found
+ *   POST /grade/:id/recheck      read the website again (no AI question)
  *
  * Every /grade response is not indexed and sends no referrer. With
  * GRADER_ENABLED=off every /grade path is a 404. Grade_Ids are 22-character
@@ -14,8 +17,12 @@
 
 import express, { Router } from 'express';
 import { RULES } from '../lib/rate-limiter.js';
-import { normalizeState, STATE_ERROR, US_STATE_CODES } from '../lib/listing-fields.js';
-import { makeStamp, checkStamp, unlockToken, hasToken } from '../lib/grade-stamp.js';
+import {
+  normalizeState, normalizeEmail, normalizePhone, STATE_ERROR, US_STATE_CODES,
+} from '../lib/listing-fields.js';
+import {
+  makeStamp, checkStamp, unlockToken, hasToken, claimCookieValue, readClaim,
+} from '../lib/grade-stamp.js';
 import {
   gradeFormPage, scanPage, reportPage, failedPage, aboutPage, gradeMessagePage,
 } from '../lib/grade-html.js';
@@ -81,6 +88,24 @@ export function createGradeRouter(ctx) {
   const send = (res, status, html) => res.status(status).type('html').send(html);
   const notFound = res => send(res, 404, gradeMessagePage('Page not found', "We can't find that report.", { href: '/grade', text: 'Grade a business' }));
   const newStamp = () => makeStamp(secret, ctx.clock.now());
+  const isUnlocked = (req, id) => hasToken(req, `g_${id}`, unlockToken(secret, id));
+  const tooMany = (res, seconds) => {
+    res.set('Retry-After', String(seconds));
+    return send(res, 429, gradeMessagePage('Please wait', `Please try again in ${seconds} seconds.`));
+  };
+  /** A cookie only this browser sends back, and only for this Grade's pages. */
+  const setCookie = (res, name, value, id) => {
+    const secure = config.production === true || res.req.secure === true ? '; Secure' : '';
+    res.append('Set-Cookie', `${name}=${value}; HttpOnly${secure}; SameSite=Lax; Path=/grade/${id}; Max-Age=${90 * 24 * 60 * 60}`);
+  };
+  const renderReport = (grade, unlocked, extra = {}) => reportPage(grade, {
+    unlocked,
+    leadGate: config.graderLeadGate !== false,
+    contactEmail: config.contactEmail,
+    now: Number(ctx.clock.now()),
+    rechecking: grader.isRechecking(grade),
+    ...extra,
+  });
 
   // Every /grade response: not indexed, no referrer, never cached.
   router.use('/grade', (req, res, next) => {
@@ -156,13 +181,100 @@ export function createGradeRouter(ctx) {
       if (!grade) return notFound(res);
       if (grade.status === 'running') return send(res, 200, scanPage(grade));
       if (grade.status === 'failed') return send(res, 200, failedPage(grade, { stamp: newStamp() }));
-      const unlocked = hasToken(req, `g_${grade.id}`, unlockToken(secret, grade.id));
-      return send(res, 200, reportPage(grade, {
-        unlocked,
-        leadGate: config.graderLeadGate !== false,
-        contactEmail: config.contactEmail,
-        now: Number(ctx.clock.now()),
-      }));
+      const unlocked = isUnlocked(req, grade.id);
+      // With the gate off (or once unlocked) the extra AI questions start on the first view.
+      if (unlocked || config.graderLeadGate === false) grader.startExtraQuestions(grade.id);
+      return send(res, 200, renderReport(grade, unlocked));
+    } catch (err) {
+      return next(err);
+    }
+  });
+
+  // ---- lead form and unlock ------------------------------------------------------------
+
+  router.post('/grade/:id/unlock', formParser, async (req, res, next) => {
+    try {
+      const id = req.params.id;
+      if (!ID_PATTERN.test(id)) return notFound(res);
+      const grade = await grader.get(id);
+      if (!grade) return notFound(res);
+      if (grade.status !== 'done' || isUnlocked(req, id)) return res.redirect(303, `/grade/${id}`);
+
+      const body = req.body ?? {};
+      const values = { name: tidy(body.name), email: tidy(body.email), phone: tidy(body.phone) };
+      const lead = {
+        name: values.name,
+        email: normalizeEmail(values.email),
+        phone: normalizePhone(values.phone),
+        okToContact: body.okToContact === '1',
+      };
+      const errors = {};
+      if (lead.name === '' || len(lead.name) > 120) errors.name = 'Type your name.';
+      if (lead.email === '') errors.email = 'Type a real email address, like you@example.com.';
+      if (lead.phone === '') errors.phone = 'Type a 10-digit phone number, like (615) 555-0100.';
+      if (Object.keys(errors).length > 0) {
+        return send(res, 422, renderReport(grade, false, { leadValues: values, leadErrors: errors }));
+      }
+
+      const limited = ctx.rateLimiter.consume(`grade-unlock:${req.ip}`, RULES['grade-unlock']);
+      if (!limited.allowed) return tooMany(res, limited.retryAfterSeconds);
+
+      const result = await grader.unlock(id, lead);
+      if (result.status !== 200) return res.redirect(303, `/grade/${id}`);
+      setCookie(res, `g_${id}`, unlockToken(secret, id), id);
+      return res.redirect(303, `/grade/${id}`);
+    } catch (err) {
+      return next(err);
+    }
+  });
+
+  // ---- claim the free page ----------------------------------------------------------------
+
+  router.post('/grade/:id/claim', async (req, res, next) => {
+    try {
+      const id = req.params.id;
+      if (!ID_PATTERN.test(id)) return notFound(res);
+      const grade = await grader.get(id);
+      if (!grade) return notFound(res);
+      if (grade.status !== 'done') return res.redirect(303, `/grade/${id}`);
+
+      // The same browser goes back to its own Draft; nobody is ever sent to another visitor's Draft.
+      const mine = readClaim(req, secret, id);
+      if (mine && await grader.draftExists(mine)) {
+        return res.redirect(303, `/rise/drafts/${encodeURIComponent(mine)}`);
+      }
+
+      const limited = ctx.rateLimiter.consume(`rise:${req.ip}`, RULES.rise);
+      if (!limited.allowed) return tooMany(res, limited.retryAfterSeconds);
+
+      const created = await grader.claim(id);
+      if (created.status !== 201) return notFound(res);
+      setCookie(res, `gc_${id}`, claimCookieValue(secret, id, created.draft.id), id);
+      return res.redirect(303, `/rise/drafts/${encodeURIComponent(created.draft.id)}`);
+    } catch (err) {
+      return next(err);
+    }
+  });
+
+  // ---- check again ----------------------------------------------------------------------
+
+  router.post('/grade/:id/recheck', async (req, res, next) => {
+    try {
+      const id = req.params.id;
+      if (!ID_PATTERN.test(id)) return notFound(res);
+      const grade = await grader.get(id);
+      if (!grade) return notFound(res);
+      const allowed = config.graderLeadGate === false || isUnlocked(req, id);
+      if (grade.status !== 'done' || !allowed) return res.redirect(303, `/grade/${id}`);
+
+      const limited = ctx.rateLimiter.consumeAll([
+        { key: `grade-recheck:${req.ip}`, ...RULES['grade-recheck'] },
+        { key: `grade-recheck-grade:${id}`, ...RULES['grade-recheck-grade'] },
+      ]);
+      if (!limited.allowed) return tooMany(res, limited.retryAfterSeconds);
+
+      await grader.recheck(id);
+      return res.redirect(303, `/grade/${id}`);
     } catch (err) {
       return next(err);
     }

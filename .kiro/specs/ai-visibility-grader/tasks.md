@@ -151,25 +151,25 @@ Every task also follows the design's "Implementation notes from the code review"
     - Form 422s for each bad field, honeypot and too-fast stamp; 303 and Grade stored; refresh tag while running; report sections; noindex headers; 404 for unknown and malformed ids; sitemap and llms.txt free of `/grade`; no "Yellow Pages" or "YP" in any Grader page
     - **Validates: Requirements 1.1 to 1.7, 2.3, 9.1 to 9.8, 16.2**
 
-- [ ] 8. Checkpoint: grade a fixture end to end
+- [x] 8. Checkpoint: grade a fixture end to end
   - Run `node --test`, including flow tests that grade each fixture end to end through `createApp` with a fake transport serving the fixture pages and the mock AI provider. The safe fetcher's address rules are never loosened for tests or local runs. Ask the user if questions arise.
 
-- [ ] 9. Lead gate, claim, recheck and admin
-  - [ ] 9.1 Lead form and unlock
+- [x] 9. Lead gate, claim, recheck and admin
+  - [x] 9.1 Lead form and unlock
     - `POST /grade/:id/unlock`: validate name, email and phone (existing normalizers); store the Lead; set the signed `g_<id>` cookie; run the two extra AI_Questions in the background and recompute the Score; notify the site owner with business name, score and report link only; 303 to the report
     - `GRADER_LEAD_GATE=off`: show the Full_Report to all and run the extra questions on the first view, subject to the budget
     - Add `notifyLead({ business, score, reportUrl })` to the mock, console, none and Resend notifiers as designed (Resend sends to `ADMIN_EMAIL` only; never throws)
     - _Requirements: 7.2, 7.6, 8.3, 12.1, 12.2, 12.3, 12.4, 12.5, 12.6_
-  - [ ] 9.2 Claim the free page
+  - [x] 9.2 Claim the free page
     - `POST /grade/:id/claim`: reuse an existing Draft when `draftId` points to one; else build fields (JSON-LD first, then tel links and text; phone through `normalizePhone`; category through `mapCategory` with `other` as fallback; service as the first service; city and state from the input) and call `draftStore.create` with `missingFields`; store `draftId`; 303 to `/rise/drafts/:draftId`
     - _Requirements: 10.2, 10.3, 10.4, 10.5_
-  - [ ] 9.3 Check again
+  - [x] 9.3 Check again
     - `POST /grade/:id/recheck`: website steps only, AI results kept, `previousScore` stored, one per Grade every 2 minutes and 10 per client per hour
     - _Requirements: 13.1, 13.2, 13.3_
-  - [ ] 9.4 Admin pages
+  - [x] 9.4 Admin pages
     - `GET /admin/grades`, `GET /admin/leads` (newest 100), `POST /admin/grades/:id/delete` (Grade and its Leads), all behind `requireAdmin`
     - _Requirements: 15.1, 15.2, 15.3, 15.4_
-  - [ ]* 9.5 Write example tests for unlock, claim, recheck and admin
+  - [x]* 9.5 Write example tests for unlock, claim, recheck and admin
     - Gate on: Lead_Form shown, unlock stores one Lead, sets the cookie, shows the Full_Report only to that visitor; gate off: Full_Report for all
     - Claim twice creates one Draft and redirects to it; the Draft is not published
     - Recheck inside 2 minutes answers 429; recheck keeps AI results
@@ -179,6 +179,6 @@ Every task also follows the design's "Implementation notes from the code review"
 - [ ] 10. Fixtures, README and final checkpoint
   - [x] 10.1 Add `test/fixtures/grade/` with three saved home pages (restaurant with slider headlines, roofer with JSON-LD that fails to parse, large company with several JSON-LD blocks), personal details replaced, plus expected Page_Facts and Check_Results; add example tests that read each fixture
     - _Requirements: 17.3_
-  - [ ] 10.2 Update the README: what the Grader does, the four settings, how the AI cap is shared, how to turn the lead gate off for judges, and where leads appear
+  - [x] 10.2 Update the README: what the Grader does, the four settings, how the AI cap is shared, how to turn the lead gate off for judges, and where leads appear
   - [ ] 10.3 Final checkpoint: run `node --test`; every test passes, including every test from earlier specs. Ask the user if questions arise.
     - _Requirements: 17.1, 17.2, 17.4_
