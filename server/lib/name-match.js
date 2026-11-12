@@ -68,10 +68,18 @@ export function registeredDomain(website) {
  * @param {{ name: string, website?: string|null, service?: string, city?: string, state?: string }} business
  * @returns {boolean}
  */
-export function isNamed(answer, business) {
+export function isNamed(answer, business, { allowGeneric = false } = {}) {
   const haystack = ` ${normalizeForMatch(answer)} `;
+  // A name made only of trade words ("Best Roofers") also turns up in the AI's own
+  // sentences, so in running text it does not count. In a list line it does.
+  const full = normalizeForMatch(business?.name);
+  const context = new Set(
+    [business?.service, business?.city, business?.state].flatMap(v => normalizeForMatch(v ?? '').split(' ')).filter(Boolean),
+  );
+  const fullWords = full.split(' ').filter(Boolean);
+  const fullIsGeneric = fullWords.length > 0 && fullWords.every(w => GENERIC_WORDS.has(w) || context.has(w));
   const candidates = [
-    normalizeForMatch(business?.name),
+    fullIsGeneric && !allowGeneric ? '' : full,
     shortName(business?.name, business ?? {}) ?? '',
     normalizeForMatch(registeredDomain(business?.website)),
   ];
@@ -141,7 +149,7 @@ function listedNames(answer) {
  * @returns {string[]}
  */
 export function extractCompetitors(answer, business) {
-  return listedNames(answer).filter(n => !isNamed(n, business)).slice(0, 5);
+  return listedNames(answer).filter(n => !isNamed(n, business, { allowGeneric: true })).slice(0, 5);
 }
 
 /**
@@ -150,11 +158,12 @@ export function extractCompetitors(answer, business) {
  */
 export function analyzeAnswer(answer, business) {
   const listed = listedNames(answer);
-  const index = listed.findIndex(n => isNamed(n, business));
+  const inList = n => isNamed(n, business, { allowGeneric: true });
+  const index = listed.findIndex(inList);
   return {
-    named: isNamed(answer, business),
+    named: index !== -1 || isNamed(answer, business),
     position: index === -1 ? null : index + 1,
     total: listed.length,
-    competitors: listed.filter(n => !isNamed(n, business)).slice(0, 5),
+    competitors: listed.filter(n => !inList(n)).slice(0, 5),
   };
 }

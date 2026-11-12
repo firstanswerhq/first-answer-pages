@@ -24,7 +24,7 @@ export const CHECKS = Object.freeze([
     label: 'AI assistants are allowed in',
     passText: 'Your website lets AI assistants read it.',
     failText: 'Your website tells some AI assistants to stay out.',
-    fix: 'Your website tells some AI assistants to stay out. Add the lines in your fix kit to robots.txt so they can read it.',
+    fix: "Add the lines in your fix kit to your website's rules file (robots.txt) so AI assistants can read your site.",
   },
   {
     id: 'business-labeled', group: 'ai_readable', points: 8,
@@ -36,9 +36,9 @@ export const CHECKS = Object.freeze([
   {
     id: 'info-sheet', group: 'ai_readable', points: 4,
     label: 'Info sheet for AI (llms.txt)',
-    passText: 'You have an llms.txt info sheet.',
-    failText: 'You do not have an llms.txt info sheet.',
-    fix: 'Add a plain text file named llms.txt at the top of your website. Your fix kit has a draft.',
+    passText: 'Your website has an info sheet for AI (llms.txt).',
+    failText: 'Your website has no info sheet for AI (llms.txt).',
+    fix: "Add a plain text file named llms.txt in your website's main folder. Your fix kit has a draft.",
   },
   {
     id: 'title-city-service', group: 'search_basics', points: 7,
@@ -59,7 +59,7 @@ export const CHECKS = Object.freeze([
     label: 'Search summary',
     passText: 'Your page has a search summary of a good length.',
     failText: 'Your page has no search summary, or it is too short or too long.',
-    fix: 'Add a page summary (meta description) of 50 to 170 characters. Your fix kit has one.',
+    fix: 'Add a page summary (meta description) of about two sentences, 50 to 170 characters. Your fix kit has one.',
   },
   {
     id: 'image-descriptions', group: 'search_basics', points: 3,
@@ -105,10 +105,10 @@ export const CHECKS = Object.freeze([
   },
   {
     id: 'ai-named', group: 'ai_answers', points: 30,
-    label: 'AI names your business',
-    passText: 'An AI assistant named your business.',
-    failText: 'AI assistants did not name your business.',
-    fix: 'Claim your free page and fix the items above. AI assistants pick up changes over days to weeks.',
+    label: 'Does AI name your business?',
+    passText: 'Yes. An AI assistant named your business.',
+    failText: 'No. AI assistants did not name your business.',
+    fix: "Claim your free page and work through the fixes below. That gives AI more to read. It can take days to weeks, and we can't promise AI will name you.",
   },
   {
     id: 'google-profile', group: 'google_profile', points: 15,
@@ -125,6 +125,14 @@ export const checkById = id => byId[id];
 const pass = (id, detail) => ({ id, result: 'pass', detail: detail ?? byId[id].passText });
 const fail = (id, detail, extra = {}) => ({ id, result: 'fail', detail: detail ?? byId[id].failText, ...extra });
 const notChecked = (id, detail) => ({ id, result: 'not_checked', detail });
+
+/** The AI assistant behind each crawler name, for owner-facing text. */
+const AGENT_OWNER = Object.freeze({
+  GPTBot: 'ChatGPT', 'OAI-SearchBot': 'ChatGPT search', 'ChatGPT-User': 'ChatGPT',
+  ClaudeBot: 'Claude', 'Claude-SearchBot': 'Claude search', 'Claude-User': 'Claude',
+  PerplexityBot: 'Perplexity', 'Google-Extended': 'Google Gemini',
+});
+const plainAgent = agent => (AGENT_OWNER[agent] ? `${AGENT_OWNER[agent]} (${agent})` : agent);
 
 const WEBSITE_IDS = CHECKS.filter(c => !['ai-named', 'google-profile'].includes(c.id)).map(c => c.id);
 const TEXT_BASED = new Set(['one-headline', 'hours-shown', 'address-shown', 'call-button']);
@@ -178,7 +186,7 @@ export function runWebsiteChecks({ facts, robots, llms, input, failure }) {
     const blocked = AI_AGENTS.filter(agent => !mayFetchRoot(groups, agent));
     out.push(blocked.length === 0
       ? pass('ai-bots-allowed')
-      : fail('ai-bots-allowed', `Blocked: ${blocked.join(', ')}.`, { blocked }));
+      : fail('ai-bots-allowed', `Blocked: ${blocked.map(plainAgent).join(', ')}.`, { blocked }));
   } else out.push(notChecked('ai-bots-allowed', "We couldn't read your robots.txt."));
 
   // Checks that read the home page
@@ -192,7 +200,7 @@ export function runWebsiteChecks({ facts, robots, llms, input, failure }) {
   out.push(home('business-labeled', f => {
     const b = f.jsonLd.business;
     if (b && b.name && b.telephone) return true;
-    if (f.jsonLd.unreadableCount > 0 && !b) return 'Your business label has a mistake, so AI cannot read it.';
+    if (f.jsonLd.unreadableCount > 0 && !b) return "The hidden business label in your website's code has a mistake, so AI cannot read it.";
     if (b) return 'Your business label is missing your name or phone.';
     return 'We found no business label on your home page.';
   }));

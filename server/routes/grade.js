@@ -28,7 +28,8 @@ import {
 } from '../lib/grade-html.js';
 
 const ID_PATTERN = /^[A-Za-z0-9_-]{22}$/;
-const CONTROL = /[\p{Cc}\u2028\u2029]/gu;
+// Control characters, plus the invisible marks that flip text direction.
+const CONTROL = /[\p{Cc}\u2028\u2029\u202A-\u202E\u2066-\u2069\u200E\u200F]/gu;
 
 const tidy = value => (typeof value === 'string' ? value.replace(CONTROL, ' ').replace(/\s+/g, ' ').trim() : '');
 const len = text => Array.from(text).length;
@@ -61,12 +62,12 @@ export function validateGradeForm(body) {
     name: tidy(b.name), city: tidy(b.city), state: tidy(b.state), service: tidy(b.service), website: tidy(b.website),
   };
   const errors = {};
-  if (values.name === '' || len(values.name) > 120) errors.name = 'Type your business name (up to 120 characters).';
-  if (values.city === '' || len(values.city) > 80) errors.city = 'Type your city (up to 80 characters).';
+  if (values.name === '' || len(values.name) > 120) errors.name = values.name === '' ? 'Type your business name.' : 'That business name is too long.';
+  if (values.city === '' || len(values.city) > 80) errors.city = values.city === '' ? 'Type your city.' : 'That city name is too long.';
   const state = normalizeState(values.state);
   // normalizeState hands back anything it does not know as typed, so check the code itself.
   if (!US_STATE_CODES.has(state)) errors.state = STATE_ERROR;
-  if (values.service === '' || len(values.service) > 60) errors.service = 'Say what you do, like roofers (up to 60 characters).';
+  if (values.service === '' || len(values.service) > 60) errors.service = values.service === '' ? 'Say what you do, like roofers.' : 'Please say what you do in fewer words.';
   const site = normalizeWebsite(values.website);
   if (site.error) errors.website = site.error;
   const input = Object.keys(errors).length === 0
@@ -86,7 +87,7 @@ export function createGradeRouter(ctx) {
   const formParser = express.urlencoded({ extended: false, limit: '8kb', parameterLimit: 20 });
 
   const send = (res, status, html) => res.status(status).type('html').send(html);
-  const notFound = res => send(res, 404, gradeMessagePage('Page not found', "We can't find that report.", { href: '/grade', text: 'Grade a business' }));
+  const notFound = res => send(res, 404, gradeMessagePage('Page not found', "We can't find that report. The link may be old: reports are deleted after 90 days.", { href: '/grade', text: 'Grade a business' }));
   const newStamp = () => makeStamp(secret, ctx.clock.now());
   const isUnlocked = (req, id) => hasToken(req, `g_${id}`, unlockToken(secret, id));
   const tooMany = (res, seconds) => {
@@ -183,7 +184,7 @@ export function createGradeRouter(ctx) {
       if (grade.status === 'failed') return send(res, 200, failedPage(grade, { stamp: newStamp() }));
       const unlocked = isUnlocked(req, grade.id);
       // With the gate off (or once unlocked) the extra AI questions start on the first view.
-      if (unlocked || config.graderLeadGate === false) grader.startExtraQuestions(grade.id);
+      if ((unlocked || config.graderLeadGate === false) && !grade.extraAiStartedAt) grader.startExtraQuestions(grade.id);
       return send(res, 200, renderReport(grade, unlocked));
     } catch (err) {
       return next(err);

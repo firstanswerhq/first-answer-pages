@@ -17,7 +17,7 @@ function setupCopyButtons(root) {
         const selection = window.getSelection();
         selection.removeAllRanges();
         selection.addRange(range);
-        button.textContent = 'Press Ctrl+C to copy';
+        button.textContent = 'Text selected. Copy it.';
       }
     });
   }

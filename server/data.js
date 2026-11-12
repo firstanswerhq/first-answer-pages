@@ -493,6 +493,21 @@ export function createDataStore({
           });
         }
       }
+      // A Lead never outlives its Grade: drop Leads whose Grade is gone.
+      if (grades && leads) {
+        const gradeList = await collection('grades').read();
+        const leadList = await collection('leads').read();
+        if (Array.isArray(gradeList) && Array.isArray(leadList)) {
+          const alive = new Set(gradeList.map(g => g?.id));
+          if (leadList.some(l => !alive.has(l?.gradeId))) {
+            await collection('leads').update(list => {
+              const kept = list.filter(l => alive.has(l?.gradeId));
+              removed.leads = (removed.leads ?? 0) + (list.length - kept.length);
+              return kept;
+            });
+          }
+        }
+      }
       return removed;
     });
   }

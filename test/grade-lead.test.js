@@ -222,7 +222,8 @@ test('gate on: the report shows the Lead_Form; a valid form stores one Lead, set
   const cookie = cookieOf(ok);
   const open = await (await get(env, `/grade/${id}`, { cookie })).text();
   assert.ok(open.includes('Your fix kit'));
-  assert.ok(open.includes('Check again'));
+  assert.equal(open.includes('Check again'), false, 'nothing to read again without a website');
+  assert.ok(open.includes('You did not give a website'));
   const stillLocked = await (await get(env, `/grade/${id}`)).text();
   assert.equal(stillLocked.includes('Your fix kit'), false, 'another visitor still sees the form');
 
@@ -238,7 +239,7 @@ test('gate on: the report shows the Lead_Form; a valid form stores one Lead, set
   }, 'the extra AI answers');
   assert.equal(assistant.calls, 3);
   assert.ok(grade.extraAiStartedAt);
-  assert.match(grade.results.find(r => r.id === 'ai-named').detail, /0 of 3 answers/);
+  assert.match(grade.results.find(r => r.id === 'ai-named').detail, /We asked 3 questions and AI did not name your business in any of them/);
   const after = await (await get(env, `/grade/${id}`, { cookie })).text();
   assert.ok(after.includes('Named in 0 of 3 answers.'));
 });

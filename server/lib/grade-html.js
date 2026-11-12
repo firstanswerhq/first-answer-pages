@@ -171,16 +171,22 @@ function aiSection(grade, now) {
     const r = resultOf(grade, 'ai-named');
     return `<section class="grade-ai">
     <h2>What AI says</h2>
-    <p>We couldn't ask AI this time${r?.detail ? ` (${e(r.detail.replace(/\.$/, ''))})` : ''}. You can run the AI check again later.</p>
+    <p>We couldn't ask AI this time${r?.detail ? ` (${e(r.detail.replace(/\.$/, ''))})` : ''}. To try again, start a new check later.</p>
   </section>`;
   }
   const list = entry.competitors.length > 0
     ? `<ol class="grade-competitors">${entry.competitors.map(c => `<li>${e(c)}</li>`).join('')}</ol>`
     : '';
+  const all = grade.ai ?? [];
+  const namedIn = all.filter(a => a.named).length;
+  const more = all.length > 1
+    ? `<p>In all we asked ${all.length} questions. AI named your business in ${namedIn} of them.</p>`
+    : '';
   return `<section class="grade-ai">
     <h2>What AI says</h2>
     <p>${e(aiSentence(entry, now))}</p>
     ${list}
+    ${more}
     ${answerBlock(entry)}
   </section>`;
 }
@@ -190,9 +196,17 @@ function scoreSection(grade) {
   const big = Number.isInteger(s.score)
     ? `<p class="grade-score-number"><span class="num">${s.score}</span> <span class="of">out of 100</span></p>`
     : '<p class="grade-score-number"><span class="num-text">Not enough to score yet</span></p>';
-  const failed = s.counted > 0
-    ? `<p class="grade-failed">${s.failed} of ${s.counted} checks failed</p>`
-    : '<p class="grade-failed">No checks could be run yet</p>';
+  let failed;
+  if (!grade.input.website && !Number.isInteger(s.score)) {
+    failed = '<p class="grade-failed">We could only run the AI check. Add a website to get a score.</p>';
+  } else if (s.counted > 0) {
+    failed = `<p class="grade-failed">${s.failed} of ${s.counted} checks need work</p>`;
+  } else {
+    failed = '<p class="grade-failed">No checks could be run yet</p>';
+  }
+  const kept = grade.recheckFailedAt
+    ? `<p class="notice" role="status">We couldn't reach your website when we checked again on ${e(formatRunTime(grade.recheckFailedAt))}. Your earlier results are kept.</p>`
+    : '';
   const prev = Number.isInteger(grade.previousScore) && Number.isInteger(s.score)
     ? `<p class="grade-prev">Before: ${grade.previousScore}. Now: ${s.score}.</p>`
     : '';
@@ -200,7 +214,7 @@ function scoreSection(grade) {
     <h1>${e(grade.input.name)}</h1>
     <p class="grade-where">${e(grade.input.service)} in ${e(grade.input.city)}, ${e(grade.input.state)}</p>
     ${big}
-    ${failed}${prev}
+    ${failed}${prev}${kept}
   </section>`;
 }
 
@@ -223,7 +237,7 @@ function topFailed(grade) {
   const order = new Map(CHECKS.map((c, i) => [c.id, i]));
   const byId = new Map(CHECKS.map(c => [c.id, c]));
   return (grade.results ?? [])
-    .filter(r => r.result === 'fail' && byId.has(r.id))
+    .filter(r => r.result === 'fail' && byId.has(r.id) && r.id !== 'ai-named') // only things the owner can change
     .sort((a, b) => byId.get(b.id).points - byId.get(a.id).points || order.get(a.id) - order.get(b.id))
     .slice(0, 3)
     .map(r => `<li><strong>${e(byId.get(r.id).label)}.</strong> ${e(r.detail)}</li>`)
@@ -240,13 +254,15 @@ function fixSection(grade) {
       <form method="POST" action="/grade/${e(grade.id)}/claim">
         <button type="submit" class="button">Claim my free page</button>
       </form>
-      <p class="hint">Goes live after you check it and we approve it.</p>
+      <p class="hint">A free listing for your business in our directory, ${e(DEFAULT_SITE_NAME)}. Next you check the details and send it to us for approval. Nothing goes live until you do.</p>
+      ${grade.input.website ? '' : '<p>You did not give a website. A free listing gives AI something to read about the business.</p>'}
     </section>
-    ${failed ? `<section class="grade-top-fails"><h2>Fix these first</h2><ul>${failed}</ul></section>` : ''}
+    ${failed ? `<section class="grade-top-fails"><h2>Fix these first</h2><ul>${failed}</ul><p class="hint">Not a computer person? Send this page to whoever built your website.</p></section>` : ''}
   </div>`;
 }
 
 function googleSection(grade) {
+  if (!grade.input.website) return ''; // nothing to preview without a website
   const found = foundFromGrade(grade);
   const facts = grade.facts;
   const nowTitle = facts?.title ? e(facts.title) : '<span class="blank">No page title found</span>';
@@ -288,7 +304,7 @@ function groupLines(grade) {
     const v = by[g];
     return `<li><strong>${e(GROUPS[g])}:</strong> ${v ? `${v.earned} of ${v.available} points` : 'Not checked'}</li>`;
   }).join('');
-  return `<section class="grade-groups"><h2>The short version</h2><ul>${lines}</ul></section>`;
+  return `<section class="grade-groups"><h2>Score by area</h2><ul>${lines}</ul></section>`;
 }
 
 function leadForm(grade, { values = {}, errors = {} } = {}) {
@@ -299,7 +315,8 @@ function leadForm(grade, { values = {}, errors = {} } = {}) {
     </div>`;
   return `<section class="grade-lead">
     <h2>See every check and the fixes</h2>
-    <p>Enter your name, email and phone to open the full report. It has every check, the fix for each one, and text you can copy and paste.</p>
+    <p>Enter your name, email and phone to open the full report right away, on this page. It has every check, the fix for each one, and text you can copy and paste.</p>
+    <p class="hint">We use your email and phone only to follow up about this report. We never sell them.</p>
     <form class="rise-form" method="POST" action="/grade/${e(grade.id)}/unlock">
 ${field('name', 'Your name', 'text', 'name')}
 ${field('email', 'Email', 'email', 'email')}
@@ -348,9 +365,12 @@ function fixKit(grade) {
   if (bots?.result === 'fail' && Array.isArray(bots.blocked) && bots.blocked.length > 0) {
     items.push(['Lines to add to robots.txt', robotsLines(bots.blocked)]);
   }
+  const intro = grade.input.website
+    ? 'Copy these into your website, or send them to whoever looks after it.'
+    : 'You did not give a website, so there is nothing to paste these into yet. Keep them for when you have one. Until then, your free page gives AI something to read.';
   return `<section class="grade-kit">
     <h2>Your fix kit</h2>
-    <p>Copy these into your website, or send them to whoever looks after it.</p>
+    <p>${intro}</p>
     ${items.map(([title, text], i) => kitItem(i + 1, title, text)).join('\n    ')}
   </section>`;
 }
@@ -375,7 +395,7 @@ function fullReport(grade, contact, rechecking = false) {
     ${groups}
   </section>
   ${fixKit(grade)}
-  <section class="grade-recheck">
+  ${grade.input.website ? `<section class="grade-recheck">
     <h2>Made some changes?</h2>
     ${rechecking
     ? '<p class="notice" role="status" data-grade-rechecking>Reading your website again. This page updates by itself.</p>'
@@ -383,7 +403,7 @@ function fullReport(grade, contact, rechecking = false) {
       <button type="submit" class="button">Check again</button>
     </form>`}
     <p class="hint">This reads your website again. It does not ask AI again.</p>
-  </section>
+  </section>` : ''}
   <section class="grade-offer">
     <p>Want us to make these changes for you? <a href="${e(contact.href)}">${e(contact.text)}</a>.</p>
   </section>`;
@@ -445,7 +465,7 @@ export function failedPage(grade, { stamp = '' } = {}) {
 export function aboutPage({ contactEmail, userAgent = '' } = {}) {
   const contact = contactEmail
     ? `<a href="mailto:${e(contactEmail)}">${e(contactEmail)}</a>`
-    : '<a href="/about">our contact page</a>';
+    : null;
   const body = `<section class="rise grade-about">
   <h1>What the Grader reads</h1>
   <p>When someone grades a business with a website, our server visits that website once. It is the same as opening the page in a browser.</p>
@@ -456,9 +476,9 @@ export function aboutPage({ contactEmail, userAgent = '' } = {}) {
   </ul>
   <p>We read only public pages. We do not log in, fill in forms, or run the page's scripts. We send no cookies. We visit only websites on the public internet.</p>
   ${userAgent ? `<p>Our visits identify themselves as <code>${e(userAgent)}</code>.</p>` : ''}
-  <p>We also ask one AI assistant for the best business of that kind in that city, and check whether the business is named.</p>
+  <p>We also ask one AI assistant up to three questions about the best businesses of that kind in that city, and check whether the business is named.</p>
   <p>Reports are not listed in search engines. We delete them after 90 days.</p>
-  <p>Questions, or want a report removed? Contact ${contact}.</p>
+  <p>Questions, or want a report removed? ${contact ? `Email ${contact}` : 'Use <a href="/about">our contact page</a>'}.</p>
   <p><a href="/grade">Grade a business</a></p>
 </section>`;
   return page('What the Grader reads', body);

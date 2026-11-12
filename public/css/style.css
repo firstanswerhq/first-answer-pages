@@ -748,6 +748,7 @@ details.discard-confirm summary {
 .grade-step .step-mark {
   display: inline-block;
   min-width: 7rem;
+  vertical-align: top;
   font-weight: bold;
   text-transform: uppercase;
   font-size: 0.85rem;

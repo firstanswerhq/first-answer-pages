@@ -29,7 +29,7 @@ export const MAX_ANSWER_CODE_POINTS = 4000;
 
 export const AI_NOT_CONNECTED = "AI check isn't connected";
 export const AI_LIMIT_REACHED = 'AI check limit reached for today';
-const AI_FAILED = "The AI check didn't finish. You can run it again later.";
+const AI_FAILED = "The AI check didn't finish.";
 
 /** The five Scan_Steps, in order. */
 export function stepNames(input) {
@@ -147,14 +147,14 @@ export function aiNamedResult(ai, reasonIfNone = AI_FAILED) {
   if (ran === 0) return { id: 'ai-named', result: 'not_checked', detail: reasonIfNone };
   const named = ai.filter(a => a.named).length;
   if (named === 0) {
-    return { id: 'ai-named', result: 'fail', earned: 0, detail: ran === 1 ? 'AI did not name your business.' : `AI named your business in 0 of ${ran} answers.` };
+    return { id: 'ai-named', result: 'fail', earned: 0, detail: ran === 1 ? 'No. AI did not name your business.' : `No. We asked ${ran} questions and AI did not name your business in any of them.` };
   }
   const points = CHECKS.find(c => c.id === 'ai-named').points;
   return {
     id: 'ai-named',
     result: 'pass',
     earned: Math.round((points * named) / ran),
-    detail: ran === 1 ? 'AI named your business.' : `AI named your business in ${named} of ${ran} answers.`,
+    detail: ran === 1 ? 'Yes. AI named your business.' : `Yes. AI named your business in ${named} of ${ran} answers.`,
   };
 }
 
@@ -219,7 +219,7 @@ export function createGrader({
       try {
         await addStep(id, step);
       } catch {
-        logId(id, `step=${name} not saved`);
+        logId(id, 'a step was not saved');
       }
     }
     return { value, state };
@@ -283,7 +283,7 @@ export function createGrader({
         get('/llms.txt', 'text/plain,*/*;q=0.5'),
       ]);
       const parts = [];
-      parts.push(out.robots ? 'Read your robots.txt.' : "Couldn't read your robots.txt.");
+      parts.push(out.robots ? "Read your website's rules for AI." : "Couldn't read your website's rules for AI.");
       parts.push(out.llms ? 'Checked for llms.txt.' : "Couldn't check for llms.txt.");
       return { finding: parts.join(' ') };
     }, track);
@@ -340,7 +340,7 @@ export function createGrader({
   async function aiPart(id, grade) {
     const name = stepNames(grade.input)[3];
     if (grade.ai.length > 0) {
-      await addStep(id, { name, state: 'skipped', ms: 0, finding: 'Used a recent answer.' });
+      await addStep(id, { name, state: 'done', ms: 0, finding: 'Used an answer from the last few days.' });
       return { ai: grade.ai, reason: undefined };
     }
     let reason;
@@ -350,7 +350,10 @@ export function createGrader({
       if (res.entry) {
         ai.push(res.entry);
         const e = res.entry;
-        return { finding: e.named ? 'AI named your business.' : `AI named ${e.competitors.length} other ${e.competitors.length === 1 ? 'business' : 'businesses'}.` };
+        if (e.named) return { finding: 'AI named your business.' };
+        const n = e.competitors.length;
+        if (n === 0) return { finding: 'AI did not name your business.' };
+        return { finding: `AI named ${n} other ${n === 1 ? 'business' : 'businesses'}, not yours.` };
       }
       reason = res.reason;
       return { finding: res.reason, state: 'failed' };
@@ -616,8 +619,17 @@ export function createGrader({
       const websiteResults = runWebsiteChecks({
         facts: site.facts, robots: site.robots, llms: site.llms, input: grade.input, failure: site.failure,
       });
+      // The site could not be read this time: keep the earlier results instead of wiping them.
+      if (grade.input.website && !site.facts) {
+        await updateGrade(id, g => {
+          g.recheckFailedAt = nowIso();
+          g.recheckRunning = false;
+        });
+        return;
+      }
       const facts = summarizeFacts(site.facts, grade.input);
       await updateGrade(id, g => {
+        delete g.recheckFailedAt;
         const ai = g.results.find(r => r.id === 'ai-named');
         g.previousScore = g.score?.score ?? null;
         g.results = [...websiteResults, ...(ai ? [ai] : [])];
