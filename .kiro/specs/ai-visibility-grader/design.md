@@ -2,9 +2,9 @@
 
 ## Overview
 
-The Grader is a public page, `/grade`, that checks one local business in under two minutes and ends with the fix on screen: the business's free First Answer Pages listing, already filled in from what the scan found. It is built on top of the finished `super-pages` spec and changes none of its behavior.
+The Grader is a public page, `/grade`, that checks one local business in about two minutes and ends with the fix on screen: the business's free First Answer Pages listing, already filled in from what the scan found. It is built on top of the finished `super-pages` spec and changes none of its behavior.
 
-A Grade has three halves:
+A Grade has three parts:
 
 1. **Website checks**: fetch the home page, `/robots.txt` and `/llms.txt` safely, read them with built-ins, and score 12 Checks.
 2. **AI answers**: ask the existing Assistant_Provider (Claude with web search in production, the mock in tests) "best <service> in <city>", find out whether the business is named, and pull out the competitors that were named instead.
@@ -200,7 +200,7 @@ CHECKS = [
 
 Group totals: ai_answers 30, ai_readable 20, search_basics 20, customer_basics 15, google_profile 15 = 100. Each entry also has `label` (plain name), `passText`, `failText` (detail), and `fix` (at most 160 characters). Example fixes:
 
-- `ai-bots-allowed`: "Your website tells AI assistants to stay out. Add the lines in your fix kit to robots.txt so they can read it."
+- `ai-bots-allowed`: "Your website tells some AI assistants to stay out. Add the lines in your fix kit to robots.txt so they can read it."
 - `business-labeled`: "Add the business label block from your fix kit to your home page so AI reads your name and phone correctly."
 - `title-city-service`: "Change your page title to the one in your fix kit so it says what you do and where."
 - `tap-to-call`: "Make your phone number a tap-to-call link so people on phones can call you in one tap."
@@ -214,8 +214,8 @@ Text-based Checks (`title-city-service` excepted, since the title is not page te
 ### fix-kit.js
 
 - `suggestedTitle({ name, service, city, state })`: try `name | Service in City, ST`; if over 60, try `name | Service in City`; then drop whole words from the end of the service; then `name | City`; finally the name cut at a word boundary to 60.
-- `suggestedSummary(...)`: "<Name> offers <service> in <City>, <ST>. Call <phone> for a free quote." with the phone part only when found, padded with "Locally owned and ready to help." when under 120 characters, cut at a word boundary to 160.
-- `jsonLdBlock(found)`: `{ "@context": "https://schema.org", "@type": "LocalBusiness", name, telephone?, url?, address?, openingHours?, areaServed: city }`, `JSON.stringify(…, null, 2)` with `<` replaced by `<`, wrapped in `<script type="application/ld+json">`.
+- `suggestedSummary(...)`: "<Name>: <service> in <City>, <ST>. Call <phone> today." with the phone part only when found, followed by "Serving <City> and nearby areas." when it fits, cut at a word boundary to 160.
+- `jsonLdBlock(found)`: `{ "@context": "https://schema.org", "@type": "LocalBusiness", name, telephone?, url?, address?, openingHours?, areaServed: city }`, `JSON.stringify(…, null, 2)` with `<` replaced by `\u003c`, wrapped in `<script type="application/ld+json">`.
 - `llmsDraft(found)`: Markdown: `# <Name>`, a one-line summary, then `- Service:`, `- Area:`, `- Phone:`, `- Website:`, `- Hours:` lines for found fields.
 - `robotsLines(blockedAgents)`: one `User-agent: <agent>` plus `Allow: /` group per blocked agent.
 
@@ -263,7 +263,7 @@ Today a notifier is `{ name, notify({ quote, listing }) }`. Each implementation 
   id: 'q8Zr0…22 chars',
   status: 'running' | 'done' | 'failed',
   input: { name, city, state, service, website: 'https://…/' | null },
-  key: 'normalized name|city|state|registered domain or -',   // reuse lookup
+  key: 'normalized name|city|state|service|registered domain or -',   // reuse lookup
   createdAt: ISO, finishedAt: ISO | null,
   steps: [{ name, state: 'done' | 'skipped' | 'failed', ms }],
   facts: { title, metaDescription, ogImage: boolean, h1s: [...], phone, hours, address, jsonLdTypes: [...] } | null,

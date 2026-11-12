@@ -70,7 +70,7 @@ Property tests are optional sub-tasks marked `*`. Every test uses `node:test` an
   - [ ]* 3.5 Write property tests for name matching and competitor extraction
     - **Property 7: Name matching ignores case, punctuation and spacing**
     - **Property 8: Competitors exclude the business and repeat no one**
-    - Examples from the Nov 11 test: "Bill Ragan Roofing Company" matches an answer saying "Bill Ragan Roofing"; a numbered list of five roofers yields five names
+    - Examples: "Acme Roofing Company" matches an answer saying "Acme Roofing"; a numbered list of five roofers yields five names
     - **Validates: Requirements 7.3, 7.4, 7.10**
   - [ ] 3.6 Create `server/lib/fix-kit.js`
     - Export `suggestedTitle`, `suggestedSummary`, `jsonLdBlock`, `llmsDraft` and `robotsLines` as designed
