@@ -316,7 +316,7 @@ function leadForm(grade, { values = {}, errors = {} } = {}) {
   return `<section class="grade-lead">
     <h2>See every check and the fixes</h2>
     <p>Enter your name, email and phone to open the full report right away, on this page. It has every check, the fix for each one, and text you can copy and paste.</p>
-    <p class="hint">We use your email and phone only to follow up about this report. We never sell them.</p>
+    <p class="hint">Why the phone number? A business AI recommends needs a number people can call, and it is how we reach you about this report. We never sell it.</p>
     <form class="rise-form" method="POST" action="/grade/${e(grade.id)}/unlock">
 ${field('name', 'Your name', 'text', 'name')}
 ${field('email', 'Email', 'email', 'email')}
