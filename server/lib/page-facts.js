@@ -11,6 +11,7 @@ export const MAX_HTML_BYTES = 2 * 1024 * 1024;
 const MAX_TAG_LENGTH = 4000; // an open tag longer than this is treated as junk
 const MAX_INNER = 2000; // longest piece of link/button text we look at
 const MAX_LABELS = 200;
+const MAX_LABEL_READS = 2000; // links and buttons whose text we read; keeps hostile pages fast
 
 export const BUSINESS_TYPES = new Set([
   'LocalBusiness', 'Restaurant', 'FoodEstablishment', 'CafeOrCoffeeShop', 'BarOrPub', 'Bakery',
@@ -336,9 +337,13 @@ export function readPageFacts(html) {
   // links (tel: and labels) and buttons
   const telLinks = [];
   const ctaLabels = [];
+  let labelReads = 0;
+  const canReadLabel = () => labelReads < MAX_LABEL_READS && ctaLabels.length < MAX_LABELS;
   const addLabel = raw => {
+    if (!canReadLabel()) return;
+    labelReads += 1;
     const label = cap(plainText(raw), 60);
-    if (label !== '' && ctaLabels.length < MAX_LABELS) ctaLabels.push(label);
+    if (label !== '') ctaLabels.push(label);
   };
   {
     const closeA = finder(lower, '</a');
@@ -351,8 +356,10 @@ export function readPageFacts(html) {
           telLinks.push(href.trim());
         }
       }
-      const close = closeA(end + 1);
-      if (close !== -1) addLabel(s.slice(end + 1, Math.min(close, end + 1 + MAX_INNER)));
+      if (canReadLabel()) {
+        const close = closeA(end + 1);
+        if (close !== -1) addLabel(s.slice(end + 1, Math.min(close, end + 1 + MAX_INNER)));
+      }
       return end + 1;
     });
   }
@@ -361,6 +368,7 @@ export function readPageFacts(html) {
     eachOpen(lower, 'button', i => {
       const end = gt(i);
       if (end === -1) return false;
+      if (!canReadLabel()) return false;
       const close = closeButton(end + 1);
       if (close !== -1) addLabel(s.slice(end + 1, Math.min(close, end + 1 + MAX_INNER)));
       return end + 1;
