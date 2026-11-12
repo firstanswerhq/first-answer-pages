@@ -1,0 +1,16 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Run grade tests on save",
+      "trigger": "PostFileSave",
+      "description": "Runs the grader tests when a grade file is saved",
+      "matcher": "(grade[^/\\\\]*\\.js|grader\\.js)$",
+      "action": {
+        "type": "command",
+        "command": "node --test test/grade-*.test.js",
+        "timeout": 120
+      }
+    }
+  ]
+}

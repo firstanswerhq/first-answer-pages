@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Grader wording check",
+      "trigger": "PostFileSave",
+      "description": "Checks grader page text against the wording rules",
+      "matcher": "(grade-html|fix-kit)\\.js$",
+      "action": {
+        "type": "agent",
+        "prompt": "The file just saved holds visitor-facing text. Check it for: British spellings (colour, neighbour, licence, centre, organise, favourite), the word \"YP\" as a whole word, a dollar sign followed by digits, and the word \"guarantee\". Fix any you find. Do not touch anything else."
+      }
+    }
+  ]
+}
