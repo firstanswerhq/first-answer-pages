@@ -4,9 +4,16 @@
 
 Plain JavaScript ES modules on Node 22 and plain Express, on top of the finished `super-pages` build. The plan builds the pure pieces first (address guard, safe fetcher, page reading, robots reading, checks, score, name matching, fix kit), then the grader flow and storage, then the pages and routes, then the lead gate, claim, recheck and admin, and ends with fixtures, the README and a full-suite checkpoint.
 
-Property tests are optional sub-tasks marked `*`. Every test uses `node:test` and `fast-check`, lives in `test/`, uses a temporary `DATA_DIR`, injects fakes for the network, DNS, clock, AI provider and notifier, and makes no network calls. Checkpoints run `node --test`.
+Property tests for the address guard, the score, name matching and the fix kit are required; the other property tests are optional sub-tasks marked `*`.
+
+Contest cut, in build order: (A) tasks 0 to 8 plus 9.2 and 10.1 give the full demo path; (B) 9.1 with one AI question, 9.3, 9.4, 10.2 and 10.3; (C) leave for last: the two extra AI questions, reuse of earlier AI results, the llms.txt draft and robots lines in the fix kit, and brotli. Every test uses `node:test` and `fast-check`, lives in `test/`, uses a temporary `DATA_DIR`, injects fakes for the network, DNS, clock, AI provider and notifier, and makes no network calls. Checkpoints run `node --test`.
 
 ## Tasks
+
+- [ ] 0. Before starting
+  - [ ] 0.1 Confirm every task in `.kiro/specs/super-pages/tasks.md` is done or deliberately skipped, and `node --test` passes
+  - [ ] 0.2 Update steering: bring `structure.md` and `tech.md` in line with the code as built (the `server/lib` folder, MCP built, web writes allowed for the listed collections); add `steering/wording.md` (always on: American spelling, plain words, no "Yellow Pages" or "YP", no dollar figures, never promise AI will name a business, say "days to weeks") and `steering/grader-safety.md` (for the fetch and grader files: never loosen the address guard, never log typed input, AI answers or lead details, always escape AI text)
+  - [ ] 0.3 Add two hooks in `.kiro/hooks/`: on save of a grade file, run `node --test test/grade-*.test.js`; on save of `grade-html.js` or `fix-kit.js`, check for British spellings, "YP" as a word, a dollar sign followed by digits, and the word "guarantee"
 
 - [ ] 1. Safe fetching
   - [ ] 1.1 Create `server/lib/ip-guard.js`
@@ -14,7 +21,7 @@ Property tests are optional sub-tasks marked `*`. Every test uses `node:test` an
     - Refuse every range listed in the design, judging IPv4-mapped, IPv4-compatible and NAT64 IPv6 forms by their embedded IPv4
     - Return false for anything `net.isIP` rejects
     - _Requirements: 3.2_
-  - [ ]* 1.2 Write property tests for the address guard
+  - [ ] 1.2 Write property tests for the address guard
     - **Property 1: Public-address test matches the range table**
     - Build an independent bit-mask oracle in the test from the same range table
     - **Validates: Requirements 3.2, 3.10**
@@ -61,13 +68,13 @@ Property tests are optional sub-tasks marked `*`. Every test uses `node:test` an
   - [ ] 3.2 Create `server/lib/grade-score.js`
     - Export `scoreGrade(results)` returning `{ score, earned, available, failed, counted, byGroup }`; `ai-named` uses its `earned` value; `score` is null under 40 available points
     - _Requirements: 6.5, 8.1, 8.2_
-  - [ ]* 3.3 Write property tests for the score
+  - [ ] 3.3 Write property tests for the score
     - **Property 6: Score bounds and invariance**
     - **Validates: Requirements 6.5, 6.6, 8.2**
   - [ ] 3.4 Create `server/lib/name-match.js`
     - Export `shortName`, `registeredDomain`, `isNamed(answer, { name, website })` and `extractCompetitors(answer, business)` as designed, reusing `normalizeForMatch` from `seance.js`
     - _Requirements: 7.3, 7.4_
-  - [ ]* 3.5 Write property tests for name matching and competitor extraction
+  - [ ] 3.5 Write property tests for name matching and competitor extraction
     - **Property 7: Name matching ignores case, punctuation and spacing**
     - **Property 8: Competitors exclude the business and repeat no one**
     - Examples: "Acme Roofing Company" matches an answer saying "Acme Roofing"; a numbered list of five roofers yields five names
@@ -75,7 +82,7 @@ Property tests are optional sub-tasks marked `*`. Every test uses `node:test` an
   - [ ] 3.6 Create `server/lib/fix-kit.js`
     - Export `suggestedTitle`, `suggestedSummary`, `jsonLdBlock`, `llmsDraft` and `robotsLines` as designed
     - _Requirements: 11.1, 11.2, 11.3, 11.4, 11.5_
-  - [ ]* 3.7 Write property tests for the fix kit
+  - [ ] 3.7 Write property tests for the fix kit
     - **Property 9: Fix kit stays within its limits**
     - **Validates: Requirements 11.1, 11.2, 11.3, 11.8**
 
@@ -83,7 +90,7 @@ Property tests are optional sub-tasks marked `*`. Every test uses `node:test` an
   - Run `node --test`; every earlier test and every new test passes. Ask the user if questions arise.
 
 - [ ] 5. Storage, budget and configuration
-  - [ ] 5.1 Add `grades` and `leads` to the data store's `COLLECTIONS` allow-list
+  - [ ] 5.1 Add `grades` and `leads` to the data store's `COLLECTIONS` allow-list, and add `grades.json` and `leads.json` to `ALLOWED_FILES` in `test/data-dir.test.js`
     - _Requirements: 14.5_
   - [ ] 5.2 Extend `pruneExpired` with `grades` and `leads` options that drop records older than 90 days and keep records with a missing or invalid `createdAt`; run it at startup with the existing retention call
     - _Requirements: 14.5_
@@ -97,14 +104,18 @@ Property tests are optional sub-tasks marked `*`. Every test uses `node:test` an
     - **Validates: Requirement 14.1**
   - [ ] 5.5 Extend `server/lib/config.js` with `graderEnabled`, `graderLeadGate`, `gradeAiCallsPerDay` and `graderSecret`, with the defaults in the design; warn once when `GRADER_SECRET` is missing in production and use a random per-process key
     - Add `GRADER_SECRET` (`generateValue: true`), `GRADER_LEAD_GATE` and `GRADE_AI_CALLS_PER_DAY` to `render.yaml`
+    - Add README rows for the four new settings in this task, so the existing test that checks every setting is documented keeps passing
     - Add `grade` (5 per hour), `grade-day` (20 per day), `grade-unlock` (5 per hour) and `grade-recheck` (10 per hour) to the rate limiter's `RULES`
     - _Requirements: 12.4, 13.3, 14.1, 14.2_
+
+  - [ ] 5.6 Add `roofers` ("Roofers") and `hvac` ("Heating and Air") to `data/categories.json`, with Seance phrases, and teach `mapCategory` common service words (roofing, roofer, hvac, heating, air conditioning) so a graded roofer's draft is not filed under Other
+    - _Requirements: 10.3_
 
 - [ ] 6. The grader flow
   - [ ] 6.1 Create `server/lib/grader.js`
     - `createGrader({ store, assistantProvider, aiBudget, safeFetcher, notifier, clock, newId, config })`
     - `start(input)`: normalize, build the reuse key, create the Grade as `running`, copy reusable AI results (only `ai`, labeled with their original time), schedule `run(id)` once
-    - `run(id)`: the five Scan_Steps in order, each appending `{ name, state, ms }`; website steps share a 30-second budget; the AI step uses `aiBudget.consume({ kind: 'grade' })` and a 120-second race; a failed step marks its Checks `not_checked` and the run continues; finish as `done` with results, AI results, score, facts and finish time
+    - `run(id)`: the website steps and the AI step started together, the five Scan_Steps listed in order, each appending a short finding and `{ name, state, ms }`; website steps share a 30-second budget; the AI step uses `aiBudget.consume({ kind: 'grade' })` and a 120-second race; a failed step marks its Checks `not_checked` and the run continues; finish as `done` with results, AI results, score, facts and finish time
     - `askAi`: store prompt, provider, model, web search flag, answer cut to 4,000 code points, named flag, competitors, time taken
     - `isStale(grade, now)`: `running` and older than 4 minutes
     - Log only the Grade_Id, step names, counts and timings

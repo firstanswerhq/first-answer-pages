@@ -130,7 +130,7 @@ createSafeFetcher({
 
 1. Parse with `new URL()`. Refuse unless protocol is `http:` or `https:`, `username` and `password` are empty, and the port is empty, `80` or `443`.
 2. If the host is an IP literal, refuse unless `isPublicAddress`.
-3. Call `request[protocol](url, { method: 'GET', headers, lookup: guardedLookup, signal })`. `guardedLookup(host, opts, cb)` calls `lookup(host, { all: true })`, refuses with `blocked_address` if the list is empty or any address is not public, and otherwise calls back with the first address. Node opens the socket to exactly that address, and TLS still verifies the certificate against the host name.
+3. Call `request[protocol](url, { method: 'GET', headers, lookup: guardedLookup, signal })`. `guardedLookup(host, opts, cb)` calls `lookup(host, { all: true })`, refuses with `blocked_address` if the list is empty or any address is not public, and otherwise answers in the shape Node asked for: the full checked list when Node's `options.all` is true (Node 22 does this for its connect logic), else the first address and family. Node only connects to addresses from that checked answer, and TLS still verifies the certificate against the host name.
 4. Headers: `User-Agent` (Requirement 3.7), `Accept`, `Accept-Encoding: gzip, deflate, br`. Nothing else.
 5. On status 301, 302, 303, 307 or 308 with a `Location`, resolve it against the current URL and repeat from step 1, up to 5 times.
 6. Pipe the body through `zlib.createGunzip`, `createInflate` or `createBrotliDecompress` per `Content-Encoding`, count decompressed bytes, and destroy the stream past `maxBytes` (result `truncated: true`, error `too_large` for the home page).
@@ -201,7 +201,7 @@ CHECKS = [
 Group totals: ai_answers 30, ai_readable 20, search_basics 20, customer_basics 15, google_profile 15 = 100. Each entry also has `label` (plain name), `passText`, `failText` (detail), and `fix` (at most 160 characters). Example fixes:
 
 - `ai-bots-allowed`: "Your website tells some AI assistants to stay out. Add the lines in your fix kit to robots.txt so they can read it."
-- `business-labeled`: "Add the business label block from your fix kit to your home page so AI reads your name and phone correctly."
+- `business-labeled`: "Add the business label block from your fix kit to your home page so AI can read your name and phone."
 - `title-city-service`: "Change your page title to the one in your fix kit so it says what you do and where."
 - `tap-to-call`: "Make your phone number a tap-to-call link so people on phones can call you in one tap."
 
@@ -242,12 +242,12 @@ Text-based Checks (`title-city-service` excepted, since the title is not page te
 
 ### Notifier change
 
-Today a notifier is `{ name, notify({ quote, listing }) }`. Each implementation gains `notifyLead({ business, score, reportUrl })`, which never receives the visitor's email or phone:
+Today a notifier is `{ name, notify({ quote, listing }) }`. Each implementation gains `notifyLead({ business, score, reportUrl, lead })`. Only the Resend email to the admin includes the visitor's name, phone and email; the mock and console notifiers never print them:
 
 - mock: records the call in memory;
 - console: prints one line with the business name, score and link;
 - none: does nothing;
-- Resend: emails `ADMIN_EMAIL` only (never a business owner) with the subject "New grader lead: <business>" and the report link; the admin reads the visitor's details on `/admin/leads`.
+- Resend: emails `ADMIN_EMAIL` only (never a business owner) with the subject "New grader lead: <business>" and the report link; and the visitor's name, phone and email, so the admin can follow up right away.
 
 `notifyLead` never throws, matching `notify`.
 

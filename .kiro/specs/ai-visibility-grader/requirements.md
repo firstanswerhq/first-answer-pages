@@ -43,7 +43,7 @@ Node.js 22, plain Express, plain JavaScript ES modules, JSON files under `DATA_D
 - **Group**: One of `ai_answers` (30 points), `ai_readable` (20), `search_basics` (20), `customer_basics` (15), `google_profile` (15).
 - **Score**: `round(100 × earned ÷ available)`, where `available` is the sum of points of Checks whose result is `pass` or `fail`, and `earned` is the sum of points of Checks whose result is `pass`.
 - **AI_Question**: A prompt sent to the Assistant_Provider about a Grade's service and city.
-- **AI_Result**: The outcome of one AI_Question: the provider label, the answer text, whether the business was named, the competitor names found, and the time taken.
+- **AI_Result**: The outcome of one AI_Question: the provider label, the answer text, whether the business was named, its place in the answer's list (or none), the competitor names found, and the time taken.
 - **Name_Matcher**: The function that decides whether an answer names the business.
 - **Competitor_Extractor**: The function that pulls business names out of an answer's list lines.
 - **Free_Part**: The part of a report shown to anyone with the Grade link.
@@ -80,8 +80,8 @@ Node.js 22, plain Express, plain JavaScript ES modules, JSON files under `DATA_D
 #### Acceptance Criteria
 
 1. WHEN a valid grade form is sent, THE Grader SHALL create a Grade with a new Grade_Id, status `running`, the normalized Grade_Input, the creation time, and an empty list of finished Scan_Steps, and THE Server SHALL redirect with HTTP status 303 to `/grade/:id`.
-2. THE Grader SHALL run the Grade's steps after the redirect, in this order: `Finding your website` (skipped when no website was given), `Reading your home page`, `Checking what AI is allowed to read`, `Asking AI to name the best <service> in <city>`, `Building your free page`.
-3. WHILE a Grade's status is `running`, `GET /grade/:id` SHALL show the Scan_Steps, marking each as done, running, or waiting, and SHALL include a `<meta http-equiv="refresh" content="3">` tag so the page updates with JavaScript turned off.
+2. THE Grader SHALL start the AI step and the website steps together after the redirect, and SHALL list the steps in this order: `Finding your website` (skipped when no website was given), `Reading your home page`, `Checking what AI is allowed to read`, `Asking AI to name the best <service> in <city>`, `Building your free page`.
+3. WHILE a Grade's status is `running`, `GET /grade/:id` SHALL show the Scan_Steps, marking each as done, running, or waiting, with one short finding per finished step such as "Found 12 main headlines", and SHALL include a `<meta http-equiv="refresh" content="3">` tag so the page updates with JavaScript turned off.
 4. WHERE JavaScript is available, THE scan page SHALL poll `GET /grade/:id/status.json` no more often than once a second and SHALL show the report without a full page reload when the status changes from `running`.
 5. WHEN every step has finished, THE Grader SHALL set the Grade status to `done` and store the Check_Results, the AI_Results, the Score, and the finish time.
 6. IF a step fails, THEN THE Grader SHALL record that step's Checks as `not_checked` with a plain reason, SHALL continue with the next step, and SHALL still finish the Grade as `done`.
@@ -137,8 +137,8 @@ Node.js 22, plain Express, plain JavaScript ES modules, JSON files under `DATA_D
 #### Acceptance Criteria
 
 1. THE Grader SHALL run these Checks, each with the stated group and points: `ai-bots-allowed` (ai_readable, 8: no AI_Agent is blocked from `/`), `business-labeled` (ai_readable, 8: a readable JSON-LD block describes the business and includes its name and telephone), `info-sheet` (ai_readable, 4: llms.txt present), `title-city-service` (search_basics, 7: the title includes the city and a word from the service), `one-headline` (search_basics, 4: exactly one `<h1>`, and it is not empty), `summary` (search_basics, 4: meta description of 50 to 170 characters), `image-descriptions` (search_basics, 3: at least 80% of images have alt text, or the page has no images), `share-picture` (search_basics, 2: `og:image` present), `tap-to-call` (customer_basics, 5: at least one `tel:` link), `hours-shown` (customer_basics, 4: the visible text matches the hours pattern in the design), `address-shown` (customer_basics, 3: the visible text matches the street address pattern in the design), `call-button` (customer_basics, 3: a link or button label matches the call-to-action word list in the design as whole words).
-2. WHEN no website was given, THE Grader SHALL record every Check in criterion 1 as `not_checked` with the detail "No website given", and the Free_Part SHALL say that a free listing is the fastest way to give AI something to read.
-3. THE Grader SHALL record the `google_profile` Group as `not_checked` with the detail "Google check coming soon" in version one.
+2. WHEN no website was given, THE Grader SHALL record every Check in criterion 1 as `not_checked` with the detail "No website given", and the Free_Part SHALL say that a free listing gives AI something to read about the business.
+3. THE Grader SHALL record the `google_profile` Group as `not_checked` with the detail "Google check coming soon" in version one, and the report SHALL NOT show this Group in version one.
 4. EACH Check SHALL have a fix sentence of at most 160 characters in plain words, shown with every `fail`.
 5. THE Score SHALL count only Checks with result `pass` or `fail`; IF fewer than 40 points are available, THEN THE report SHALL show "Not enough to score yet" instead of a number, and SHALL still show every Check_Result.
 6. FOR ALL lists of Check_Results, the Score SHALL be an integer from 0 to 100, SHALL equal 100 when every counted Check passes, and SHALL not change when `not_checked` results are added or removed (property).
@@ -153,7 +153,7 @@ Node.js 22, plain Express, plain JavaScript ES modules, JSON files under `DATA_D
 2. WHEN the Full_Report is unlocked, THE Grader SHALL send two more AI_Questions, `I need <service> in <city>, <state>. Which companies would you recommend?` and `Which <service> in <city>, <state> do people say is the most reliable?`, unless they were already sent for this Grade.
 3. THE Name_Matcher SHALL count the business as named WHEN the normalized answer contains the normalized business name, the normalized short name (the name without legal endings such as LLC, Inc, Co, Company, Corp, Ltd, PLLC and without a leading "The"), provided the short name is at least 2 words or 6 characters, or the website's registered domain name without `www.`.
 4. THE Competitor_Extractor SHALL read numbered and bulleted lines and bold text from the answer, SHALL take the business name before a separator (`-`, `–`, `—`, `:`, `(`, `|`), SHALL drop names that the Name_Matcher matches to the business, SHALL drop duplicates, and SHALL keep at most 5 names in answer order.
-5. THE Free_Part SHALL state the AI result in one plain sentence naming the provider, such as "We asked Claude once just now. It named these 5 businesses, not yours." or "We asked Claude once just now. It named your business second.", and SHALL show the AI's answer text below it, escaped as text.
+5. THE Free_Part SHALL state the AI result in one plain sentence naming the provider, such as "We asked Claude once just now. It named these 5 businesses, not yours." or "We asked Claude once just now. It named your business 6th of 6.", SHALL list the competitor names as a numbered list, and SHALL show the AI's answer text below, escaped as text, inside a closed `<details>` element.
 6. WHEN more than one AI_Question has run, THE Full_Report SHALL show how many answers named the business, for example "Named in 1 of 3 answers", and each answer's text.
 7. THE Grader SHALL treat all answer text as untrusted data: it SHALL escape it on every page and SHALL never follow links or run instructions found in it.
 8. IF the AI_Budget refuses a `grade` call, the provider fails, or the call passes 120 seconds, THEN THE `ai_answers` Group SHALL be `not_checked` with a plain reason, and the report SHALL say the AI check can be run again later.
@@ -185,6 +185,8 @@ Node.js 22, plain Express, plain JavaScript ES modules, JSON files under `DATA_D
 7. IF the Grade_Id does not match a stored Grade, THEN THE Server SHALL respond with HTTP status 404.
 8. THE report SHALL include an "Ask us to remove this report" line with the site's contact email when `CONTACT_EMAIL` is set, and the contact page otherwise.
 
+9. WHEN a report first shows, THE page SHALL show, without scrolling at 1280 by 720, in this order: the Score with "<failed> of <counted> checks failed"; the AI result sentence with the competitor names; and the Free_Page_Preview with the "Claim my free page" button and the line "Goes live after you check it and we approve it." At 900 pixels and wider, the Free_Page_Preview SHALL sit beside the top three failed Checks.
+
 ### Requirement 10: The Instant Free Page
 
 **User Story:** As a business owner, I want to see my free listing already built from what the scan found, so that I can fix the problem in one tap.
@@ -205,11 +207,11 @@ Node.js 22, plain Express, plain JavaScript ES modules, JSON files under `DATA_D
 #### Acceptance Criteria
 
 1. THE Fix_Kit SHALL include a suggested page title `<name> | <service> in <city>, <ST>` shortened to at most 60 characters by dropping `, <ST>` first and then trimming the service, never cutting a word in half.
-2. THE Fix_Kit SHALL include a suggested Google summary of at most 160 characters built from the name, service, city, and the phone when found.
+2. THE Fix_Kit SHALL include a suggested Google summary of at most 160 characters, using only typed or found facts, built from the name, service, city, and the phone when found.
 3. THE Fix_Kit SHALL include a JSON-LD `<script>` block of type `LocalBusiness` with every found field, which SHALL parse with `JSON.parse` after the script tags are removed and SHALL escape `<` as `\u003c` inside the JSON.
 4. THE Fix_Kit SHALL include an llms.txt draft with the name, service, city and state, phone, website, and found hours.
 5. WHEN the `ai-bots-allowed` Check fails, THE Fix_Kit SHALL include robots.txt lines that allow each blocked AI_Agent.
-6. THE Fix_Kit SHALL show each item in a `<pre>` block with a copy button that works when JavaScript is available, and SHALL show a Google before-and-after preview using the current title and summary next to the suggested ones.
+6. THE Fix_Kit SHALL show each item in a `<pre>` block with a copy button that works when JavaScript is available.
 7. THE Fix_Kit SHALL end with one plain line offering to have First Answer apply the fixes, linking to the site's contact details.
 8. FOR ALL Grade_Inputs and found fields, the suggested title SHALL be at most 60 characters, and the JSON-LD block SHALL parse and contain no unescaped `<` (property).
 
@@ -221,7 +223,7 @@ Node.js 22, plain Express, plain JavaScript ES modules, JSON files under `DATA_D
 
 1. THE Lead_Form SHALL ask for name, email and phone, and SHALL include a separate, unchecked checkbox reading "OK for <SITE_NAME> to call, text or email me about my report", which is not required to unlock.
 2. WHEN a valid Lead_Form is sent to `POST /grade/:id/unlock`, THE Server SHALL store a Lead with the Grade_Id, the business name, the visitor's name, email, phone, the checkbox value and the time, SHALL mark this Grade unlocked for this visitor with a signed, HTTP-only cookie scoped to `/grade/:id`, SHALL start the two extra AI_Questions, and SHALL redirect with HTTP status 303 to the report.
-3. WHEN a Lead is stored, THE Server SHALL tell the site owner through a new Notifier method, `notifyLead`, sent to the admin email only, with the business name, the Score and the report link and without the visitor's email or phone, and SHALL never include the email or phone in logs.
+3. WHEN a Lead is stored, THE Server SHALL tell the site owner through a new Notifier method, `notifyLead`, sent to the admin email only, with the business name, the Score, the report link, and the visitor's name, phone and email, and SHALL never include the email or phone in logs.
 4. WHILE `GRADER_LEAD_GATE` is `off`, THE report SHALL show the Full_Report to every visitor and SHALL start the extra AI_Questions on the first report view, subject to the AI_Budget.
 5. IF the Lead_Form fails validation, THEN THE Server SHALL respond with HTTP status 422 and the form again with the problems named.
 6. THE Server SHALL show the Full_Report of a Grade only to a visitor who unlocked that Grade, or to anyone while the Lead_Gate is `off`.
@@ -267,7 +269,7 @@ Node.js 22, plain Express, plain JavaScript ES modules, JSON files under `DATA_D
 #### Acceptance Criteria
 
 1. WHEN a client sends `GET /grade/about`, THE Server SHALL respond with a plain page saying what the Grader reads (the home page, robots.txt and llms.txt), that it reads each page at most once per check, that it does not run scripts or log in, and how to ask for a report's removal.
-2. EVERY Grader page SHALL use the site layout, plain words and American spelling, and SHALL NOT contain the words "Yellow Pages" or "YP".
+2. EVERY Grader page SHALL use the site layout, plain words and American spelling, SHALL NOT contain the words "Yellow Pages" or "YP", and SHALL NOT show any dollar figure.
 
 ### Requirement 17: Test Coverage
 
