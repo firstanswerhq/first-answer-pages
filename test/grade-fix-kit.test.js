@@ -78,3 +78,29 @@ test('examples: title shortening order, llms draft and robots lines', () => {
   assert.equal(robotsLines(['GPTBot', 'bad agent!']), 'User-agent: GPTBot\nAllow: /');
   assert.equal(robotsLines([]), '');
 });
+
+test('examples: a plural or ordinary service is lower-cased in a sentence, all-caps words stay as typed', () => {
+  const base = { name: 'Summit Heating', city: 'Franklin', state: 'TN' };
+  assert.match(suggestedSummary({ ...base, service: 'HVAC' }), /^Summit Heating: HVAC in Franklin, TN\./);
+  assert.match(suggestedSummary({ ...base, service: 'Heating and AC' }), /^Summit Heating: heating and AC in Franklin, TN\./);
+  assert.match(suggestedSummary({ ...base, service: 'Roofers' }), /^Summit Heating: roofers in Franklin, TN\./);
+  assert.match(suggestedSummary({ ...base, service: 'HVAC Repair' }), /^Summit Heating: HVAC repair in Franklin, TN\./);
+  // A single capital letter is not an all-caps word.
+  assert.match(suggestedSummary({ ...base, service: 'A Plumbers' }), /: a plumbers in /);
+  // The llms.txt line follows the same rule.
+  assert.match(llmsDraft({ ...base, service: 'HVAC' }), /\n> Summit Heating: HVAC in Franklin, TN\.\n/);
+  assert.match(llmsDraft({ ...base, service: 'Roofers' }), /\n> Summit Heating: roofers in Franklin, TN\.\n/);
+  // The Service line keeps the service exactly as typed.
+  assert.match(llmsDraft({ ...base, service: 'HVAC' }), /\n- Service: HVAC\n/);
+});
+
+test('property: lower-casing never changes the summary length rule', () => {
+  fc.assert(fc.property(fc.constantFrom('HVAC', 'Roofers', 'AC repair', 'Hair Salon', 'TV and DVD fixing'), service => {
+    const out = suggestedSummary({ name: 'Acme', service, city: 'Nashville', state: 'TN' });
+    assert.ok(len(out) <= 160);
+    for (const word of service.split(' ')) {
+      const allCaps = word.length >= 2 && word === word.toUpperCase();
+      assert.ok(out.includes(allCaps ? word : word.toLowerCase()), `${word} in ${out}`);
+    }
+  }), { numRuns: 25 });
+});

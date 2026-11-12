@@ -254,15 +254,24 @@ function googleSection(grade) {
   const host = (() => {
     try { return new URL(grade.input.website).hostname; } catch { return ''; }
   })();
-  return `<section class="grade-google">
-    <h2>How you look in search</h2>
-    <div class="grade-before-after">
-      <div class="serp serp-before">
+  const nowCard = `<div class="serp serp-before">
         <h3>Now</h3>
         <p class="serp-title">${nowTitle}</p>
         <p class="serp-url">${host ? e(host) : '<span class="blank">No website</span>'}</p>
         <p class="serp-desc">${nowDesc}</p>
-      </div>
+      </div>`;
+  // A good title and summary are left alone: no "With the fixes" card that swaps them for ours.
+  if (resultOf(grade, 'title-city-service')?.result === 'pass' && resultOf(grade, 'summary')?.result === 'pass') {
+    return `<section class="grade-google">
+    <h2>How you look in search</h2>
+    ${nowCard}
+    <p class="grade-search-good">Your title and summary already look good.</p>
+  </section>`;
+  }
+  return `<section class="grade-google">
+    <h2>How you look in search</h2>
+    <div class="grade-before-after">
+      ${nowCard}
       <div class="serp serp-after">
         <h3>With the fixes</h3>
         <p class="serp-title">${e(suggestedTitle(found))}</p>

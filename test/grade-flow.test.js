@@ -221,6 +221,13 @@ for (const [label, exp] of Object.entries(EXPECTED)) {
     assert.ok(html.includes('Your fix kit'), 'gate off shows the full report');
     assert.ok(html.includes(exp.input.name.replace(/&/g, '&amp;')));
     assert.equal(/\$\d/.test(html), false, 'no dollar figures');
+
+    // "How you look in search": a good title and summary are left alone; otherwise show our suggestion.
+    const searchIsGood = exp.results['title-city-service'] === 'pass' && exp.results.summary === 'pass';
+    assert.ok(html.includes('How you look in search'));
+    assert.equal(html.includes('Your title and summary already look good.'), searchIsGood);
+    assert.equal(html.includes('With the fixes'), !searchIsGood);
+    assert.ok(html.includes('<h3>Now</h3>'), 'the current title and summary always show');
   });
 }
 

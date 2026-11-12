@@ -176,9 +176,9 @@ Every task also follows the design's "Implementation notes from the code review"
     - Admin pages refuse without login; delete makes the report 404
     - **Validates: Requirements 10.3, 10.4, 10.5, 12.2, 12.6, 13.2, 13.3, 15.3, 15.4**
 
-- [ ] 10. Fixtures, README and final checkpoint
+- [x] 10. Fixtures, README and final checkpoint
   - [x] 10.1 Add `test/fixtures/grade/` with three saved home pages (restaurant with slider headlines, roofer with JSON-LD that fails to parse, large company with several JSON-LD blocks), personal details replaced, plus expected Page_Facts and Check_Results; add example tests that read each fixture
     - _Requirements: 17.3_
   - [x] 10.2 Update the README: what the Grader does, the four settings, how the AI cap is shared, how to turn the lead gate off for judges, and where leads appear
-  - [ ] 10.3 Final checkpoint: run `node --test`; every test passes, including every test from earlier specs. Ask the user if questions arise.
+  - [x] 10.3 Final checkpoint: run `node --test`; every test passes, including every test from earlier specs. Ask the user if questions arise.
     - _Requirements: 17.1, 17.2, 17.4_

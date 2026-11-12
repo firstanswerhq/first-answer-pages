@@ -24,6 +24,18 @@ function cutAtWord(text, max) {
 const stateCode = state => clean(state).toUpperCase().slice(0, 2);
 
 /**
+ * Lower-case a service for use inside a sentence ("Roofers" to "roofers"), but keep
+ * all-caps words as typed ("HVAC" stays "HVAC", "Heating and AC" gives "heating and AC").
+ */
+function sentenceCase(service) {
+  return service.split(' ').map(word => {
+    const letters = word.replace(/[^\p{L}]/gu, '');
+    const allCaps = Array.from(letters).length >= 2 && letters === letters.toUpperCase() && letters !== letters.toLowerCase();
+    return allCaps ? word : word.toLowerCase();
+  }).join(' ');
+}
+
+/**
  * `<name> | <Service> in <City>, <ST>`, shortened to 60 characters without
  * cutting a word in half (unless a single word is longer than 60).
  */
@@ -57,7 +69,7 @@ export function suggestedTitle({ name, service, city, state }) {
 /** Up to 160 characters, built from the name, service, city and (when found) the phone. */
 export function suggestedSummary({ name, service, city, state, phone }) {
   const n = clean(name);
-  const s = clean(service).toLowerCase();
+  const s = sentenceCase(clean(service));
   const c = clean(city);
   const st = stateCode(state);
   const place = c && st ? `${c}, ${st}` : c;
@@ -100,7 +112,7 @@ export function llmsDraft(found) {
   const place = city && st ? `${city}, ${st}` : city;
   const lines = [`# ${name}`, ''];
   // "Acme Roofing: roofers in Nashville, TN." reads right for any service word, plural or not.
-  if (service && place) lines.push(`> ${name}: ${service.toLowerCase()} in ${place}.`, '');
+  if (service && place) lines.push(`> ${name}: ${sentenceCase(service)} in ${place}.`, '');
   if (service) lines.push(`- Service: ${service}`);
   if (place) lines.push(`- Area: ${place}`);
   if (clean(found.phone)) lines.push(`- Phone: ${clean(found.phone)}`);
