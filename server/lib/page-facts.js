@@ -273,8 +273,9 @@ export function readPageFacts(html) {
 
   for (const tag of ['script', 'style', 'noscript', 'template', 'svg']) s = stripElements(s, tag);
   lower = asciiLower(s);
-  const gt = finder(lower, '>');
-  const openTagAttrs = i => {
+  // Each scan pass restarts at the top of the page, so each pass needs its own
+  // finder (a finder is only valid for queries that never go backwards).
+  const openTagAttrs = (gt, i) => {
     const end = gt(i);
     if (end === -1 || end - i > MAX_TAG_LENGTH) return null;
     return { attrs: parseAttrs(s.slice(i, end)), end };
@@ -284,6 +285,7 @@ export function readPageFacts(html) {
   let title = '';
   {
     const closeTitle = finder(lower, '</title');
+    const gt = finder(lower, '>');
     eachOpen(lower, 'title', i => {
       const end = gt(i);
       if (end === -1) return false;
@@ -296,8 +298,9 @@ export function readPageFacts(html) {
   // meta tags
   const meta = {};
   let hasViewport = false;
+  const gtMeta = finder(lower, '>');
   eachOpen(lower, 'meta', i => {
-    const tag = openTagAttrs(i);
+    const tag = openTagAttrs(gtMeta, i);
     if (!tag) return undefined;
     const key = (tag.attrs.get('name') ?? tag.attrs.get('property') ?? '').trim().toLowerCase();
     const content = tag.attrs.get('content');
@@ -312,6 +315,7 @@ export function readPageFacts(html) {
   const h1s = [];
   {
     const closeH1 = finder(lower, '</h1');
+    const gt = finder(lower, '>');
     eachOpen(lower, 'h1', i => {
       const end = gt(i);
       if (end === -1) return false;
@@ -325,8 +329,9 @@ export function readPageFacts(html) {
   // images
   let imgCount = 0;
   let imgMissingAlt = 0;
+  const gtImg = finder(lower, '>');
   eachOpen(lower, 'img', i => {
-    const end = gt(i);
+    const end = gtImg(i);
     if (end === -1) return false;
     imgCount += 1;
     const alt = end - i <= MAX_TAG_LENGTH ? parseAttrs(s.slice(i, end)).get('alt') : undefined;
@@ -347,6 +352,7 @@ export function readPageFacts(html) {
   };
   {
     const closeA = finder(lower, '</a');
+    const gt = finder(lower, '>');
     eachOpen(lower, 'a', i => {
       const end = gt(i);
       if (end === -1) return false;
@@ -365,6 +371,7 @@ export function readPageFacts(html) {
   }
   {
     const closeButton = finder(lower, '</button');
+    const gt = finder(lower, '>');
     eachOpen(lower, 'button', i => {
       const end = gt(i);
       if (end === -1) return false;
@@ -374,8 +381,9 @@ export function readPageFacts(html) {
       return end + 1;
     });
   }
+  const gtInput = finder(lower, '>');
   eachOpen(lower, 'input', i => {
-    const tag = openTagAttrs(i);
+    const tag = openTagAttrs(gtInput, i);
     if (!tag) return undefined;
     const type = (tag.attrs.get('type') ?? '').trim().toLowerCase();
     const value = tag.attrs.get('value');

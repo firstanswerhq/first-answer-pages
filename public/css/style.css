@@ -706,3 +706,231 @@ details.discard-confirm summary {
 }
 .owner-email { user-select: all; font-family: monospace; }
 .hours-none { font-style: italic; }
+
+/* AI Visibility Grader (/grade) */
+.hp {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+.grade-link {
+  margin: 0.25rem 0 1rem;
+  font-weight: bold;
+}
+
+.rise-form .field {
+  margin-top: 0.5rem;
+}
+
+.rise-form .field .hint {
+  display: block;
+  font-size: 0.9rem;
+  font-style: italic;
+}
+
+.rise-form .check {
+  display: block;
+  margin-top: 0.75rem;
+  font-weight: normal;
+}
+
+.grade-steps {
+  padding-left: 1.5rem;
+}
+
+.grade-step {
+  margin: 0.5rem 0;
+}
+
+.grade-step .step-mark {
+  display: inline-block;
+  min-width: 7rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  font-size: 0.85rem;
+}
+
+.grade-step.waiting {
+  color: #555;
+}
+
+.grade-step .finding {
+  display: block;
+  margin-left: 7.25rem;
+  font-size: 0.9rem;
+  font-style: italic;
+}
+
+.grade-score h1 {
+  margin-bottom: 0;
+}
+
+.grade-where {
+  margin: 0 0 0.5rem;
+  font-style: italic;
+}
+
+.grade-score-number {
+  margin: 0.25rem 0;
+}
+
+.grade-score-number .num {
+  font-size: 4rem;
+  font-weight: bold;
+  line-height: 1;
+}
+
+.grade-score-number .of {
+  font-size: 1.1rem;
+}
+
+.grade-score-number .num-text {
+  font-size: 1.6rem;
+  font-weight: bold;
+}
+
+.grade-failed {
+  margin: 0.25rem 0 0.75rem;
+  font-size: 1.2rem;
+  font-weight: bold;
+}
+
+.grade-report h2 {
+  margin: 1.25rem 0 0.5rem;
+  font-size: 1.3rem;
+  border-bottom: 2px solid var(--color-divider);
+}
+
+.grade-ai details {
+  margin-top: 0.5rem;
+}
+
+.grade-answer {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.grade-competitors {
+  margin: 0.25rem 0;
+  font-weight: bold;
+}
+
+.grade-fix {
+  display: block;
+}
+
+.grade-preview {
+  padding: 0.75rem;
+  border: 3px double var(--color-divider);
+  background: #fffbe0;
+}
+
+.grade-preview .blank,
+.serp .blank {
+  font-style: italic;
+  color: #8B0000;
+}
+
+.grade-fix .button,
+.grade-recheck .button,
+.grade-lead .button {
+  margin-top: 0.5rem;
+}
+
+.grade-before-after {
+  display: block;
+}
+
+.serp {
+  margin: 0 0 1rem;
+  padding: 0.5rem 0.75rem;
+  border: 2px solid var(--color-divider);
+  background: #fff;
+}
+
+.serp h3 {
+  margin: 0 0 0.25rem;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+}
+
+.serp p {
+  margin: 0.1rem 0;
+}
+
+.serp-title {
+  font-size: 1.1rem;
+  font-weight: bold;
+  color: #1a0dab;
+}
+
+.serp-url {
+  font-size: 0.85rem;
+  color: #006621;
+}
+
+.grade-checks {
+  list-style: none;
+  padding: 0;
+}
+
+.grade-check {
+  margin: 0 0 0.75rem;
+  padding: 0.4rem 0.6rem;
+  border-left: 6px solid var(--color-divider);
+}
+
+.grade-check.fail {
+  border-left-color: #8B0000;
+}
+
+.grade-check.pass {
+  border-left-color: #2e6b2e;
+}
+
+.grade-result {
+  font-size: 0.85rem;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+.grade-points {
+  font-size: 0.85rem;
+}
+
+.grade-meta {
+  font-size: 0.9rem;
+  font-style: italic;
+}
+
+.kit-item pre {
+  overflow-x: auto;
+  padding: 0.5rem;
+  border: 1px solid var(--color-divider);
+  background: #fff;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.copy-btn[hidden] {
+  display: none;
+}
+
+/* Wide screens: the free page preview sits beside the top failed checks. */
+@media (min-width: 900px) {
+  .grade-fix {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    align-items: start;
+  }
+
+  .grade-before-after {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+}

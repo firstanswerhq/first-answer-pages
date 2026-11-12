@@ -114,8 +114,8 @@ Every task also follows the design's "Implementation notes from the code review"
   - [x] 5.6 Add `roofers` ("Roofers") and `hvac` ("Heating and Air") to `data/categories.json`, with Seance phrases, and teach `mapCategory` common service words (roofing, roofer, hvac, heating, air conditioning) so a graded roofer's draft is not filed under Other
     - _Requirements: 10.3_
 
-- [ ] 6. The grader flow
-  - [ ] 6.1 Create `server/lib/grader.js`
+- [x] 6. The grader flow
+  - [x] 6.1 Create `server/lib/grader.js`
     - `createGrader({ store, assistantProvider, aiBudget, safeFetcher, notifier, clock, newId, config })`
     - `start(input)`: normalize, build the reuse key, create the Grade as `running`, copy reusable AI results (only `ai`, labeled with their original time), schedule `run(id)` once
     - `run(id)`: the website steps and the AI step started together, the five Scan_Steps listed in order, each appending a short finding and `{ name, state, ms }`; website steps share a 30-second budget; the AI step uses `aiBudget.consume({ kind: 'grade' })` and a 120-second race; a failed step marks its Checks `not_checked` and the run continues; finish as `done` with results, AI results, score, facts and finish time
@@ -123,31 +123,31 @@ Every task also follows the design's "Implementation notes from the code review"
     - `isStale(grade, now)`: `running` and older than 4 minutes
     - Log only the Grade_Id, step names, counts and timings
     - _Requirements: 2.1, 2.2, 2.5, 2.6, 2.7, 2.8, 7.1, 7.8, 8.1, 14.3, 14.4, 14.6_
-  - [ ]* 6.2 Write property and example tests for the grader flow
+  - [x]* 6.2 Write property and example tests for the grader flow
     - **Property 10: Reuse never copies a visitor's state**
     - Examples with the fixtures and the mock provider: a full run finishes `done`; an unreachable site gives `not_checked` website Checks and still a `done` Grade; an AI timeout gives `ai-named` `not_checked`; a stale Grade reads as failed
     - **Validates: Requirements 2.5, 2.6, 2.7, 14.3, 14.4**
 
-- [ ] 7. Pages and public routes
-  - [ ] 7.1 Create `server/lib/grade-html.js`
+- [x] 7. Pages and public routes
+  - [x] 7.1 Create `server/lib/grade-html.js`
     - `gradeFormPage({ values, errors, stamp, categories })`: headline asking whether AI can find the business, five fields, category suggestions through a `datalist`, honeypot and stamp, no email or phone field
     - `scanPage(grade)`: Scan_Steps with done, running and waiting marks; refresh meta tag
     - `reportPage(grade, { unlocked, leadGate, contactEmail, demo })`: Free_Part (score or "Not enough to score yet", "<failed> of <counted> checks failed", the AI sentence and escaped answer, Free_Page_Preview with "Add your <field>" blanks and the claim button, Google before-and-after preview, group lines, "Automated check" date in Central time, the "days to weeks" line, the removal line); Lead_Form or Full_Report (every Check with detail, points and fix; Fix_Kit in `<pre>` blocks; "Check again"; the First Answer offer line)
     - `failedPage(grade)` with a start-again button; `aboutPage()`
     - Use `layout()`, `escapeHtml` on every value, plain words, American spelling, no dollar figures
     - _Requirements: 1.1, 1.3, 1.4, 2.3, 7.5, 7.6, 7.9, 9.1, 9.2, 9.3, 9.4, 9.8, 10.1, 10.6, 11.6, 11.7, 16.1, 16.2_
-  - [ ] 7.2 Create `server/routes/grade.js` and mount it in `createApp`
+  - [x] 7.2 Create `server/routes/grade.js` and mount it in `createApp`
     - `GET /grade`, `POST /grade` (validation, website normalization to `https://<host>/`, honeypot, stamp, rate limits, 303), `GET /grade/about`, `GET /grade/:id`, `GET /grade/:id/status.json`
     - Reject malformed ids with 404 before reading the store
     - Send `X-Robots-Tag: noindex, nofollow` and `Referrer-Policy: no-referrer` on every `/grade` response
     - Return 404 for every `/grade` path when `GRADER_ENABLED` is `off`
     - _Requirements: 1.1, 1.2, 1.5, 1.6, 1.7, 2.1, 2.3, 9.5, 9.7, 14.2_
-  - [ ] 7.3 Create `public/js/grade.js`
+  - [x] 7.3 Create `public/js/grade.js`
     - Poll `status.json` at most once a second while running and swap in the report; copy buttons using `navigator.clipboard` with a select-text fallback; the page works fully without it
     - _Requirements: 2.4, 11.6_
-  - [ ] 7.4 Keep `/grade` out of `sitemap.xml`, `llms.txt`, the MCP tools and IndexNow, and add a plain link to `/grade` on the home page
+  - [x] 7.4 Keep `/grade` out of `sitemap.xml`, `llms.txt`, the MCP tools and IndexNow, and add a plain link to `/grade` on the home page
     - _Requirements: 9.6_
-  - [ ]* 7.5 Write example tests for the pages and routes
+  - [x]* 7.5 Write example tests for the pages and routes
     - Form 422s for each bad field, honeypot and too-fast stamp; 303 and Grade stored; refresh tag while running; report sections; noindex headers; 404 for unknown and malformed ids; sitemap and llms.txt free of `/grade`; no "Yellow Pages" or "YP" in any Grader page
     - **Validates: Requirements 1.1 to 1.7, 2.3, 9.1 to 9.8, 16.2**
 
@@ -177,7 +177,7 @@ Every task also follows the design's "Implementation notes from the code review"
     - **Validates: Requirements 10.3, 10.4, 10.5, 12.2, 12.6, 13.2, 13.3, 15.3, 15.4**
 
 - [ ] 10. Fixtures, README and final checkpoint
-  - [ ] 10.1 Add `test/fixtures/grade/` with three saved home pages (restaurant with slider headlines, roofer with JSON-LD that fails to parse, large company with several JSON-LD blocks), personal details replaced, plus expected Page_Facts and Check_Results; add example tests that read each fixture
+  - [x] 10.1 Add `test/fixtures/grade/` with three saved home pages (restaurant with slider headlines, roofer with JSON-LD that fails to parse, large company with several JSON-LD blocks), personal details replaced, plus expected Page_Facts and Check_Results; add example tests that read each fixture
     - _Requirements: 17.3_
   - [ ] 10.2 Update the README: what the Grader does, the four settings, how the AI cap is shared, how to turn the lead gate off for judges, and where leads appear
   - [ ] 10.3 Final checkpoint: run `node --test`; every test passes, including every test from earlier specs. Ask the user if questions arise.

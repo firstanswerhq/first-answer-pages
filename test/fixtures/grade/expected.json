@@ -1,0 +1,48 @@
+{
+  "restaurant": {
+    "file": "restaurant.html",
+    "input": { "name": "The Corner Table", "city": "Nashville", "state": "TN", "service": "restaurants", "website": "https://cornertable.example/" },
+    "robots": { "status": 404 },
+    "llms": { "status": 404 },
+    "facts": { "h1Count": 3, "imgCount": 3, "imgMissingAlt": 1, "telLinks": 1, "jsonLdBlocks": 0, "unreadableJsonLd": 0, "scriptBuilt": false, "title": "The Corner Table | Restaurant in Nashville, TN" },
+    "found": { "phone": "(615) 555-0123", "address": "123 Main Street" },
+    "results": {
+      "ai-bots-allowed": "pass", "business-labeled": "fail", "info-sheet": "fail", "title-city-service": "pass",
+      "one-headline": "fail", "summary": "pass", "image-descriptions": "fail", "share-picture": "pass",
+      "tap-to-call": "pass", "hours-shown": "pass", "address-shown": "pass", "call-button": "pass",
+      "google-profile": "not_checked", "ai-named": "fail"
+    },
+    "score": { "score": 42, "failed": 5, "counted": 13 }
+  },
+  "roofer": {
+    "file": "roofer.html",
+    "input": { "name": "Ridgeline Roofing LLC", "city": "Nashville", "state": "TN", "service": "roofers", "website": "https://ridgelineroofing.example/" },
+    "robots": { "status": 200, "text": "User-agent: GPTBot\nDisallow: /\n\nUser-agent: *\nAllow: /\n" },
+    "llms": { "status": 200, "contentType": "text/plain; charset=utf-8", "text": "# Ridgeline Roofing\n\nRoof repair and replacement.\n" },
+    "facts": { "h1Count": 1, "imgCount": 2, "imgMissingAlt": 0, "telLinks": 0, "jsonLdBlocks": 1, "unreadableJsonLd": 1, "scriptBuilt": false, "title": "Ridgeline Roofing" },
+    "found": { "phone": "(615) 555-0142", "address": "" },
+    "blocked": ["GPTBot"],
+    "results": {
+      "ai-bots-allowed": "fail", "business-labeled": "fail", "info-sheet": "pass", "title-city-service": "fail",
+      "one-headline": "pass", "summary": "fail", "image-descriptions": "pass", "share-picture": "fail",
+      "tap-to-call": "fail", "hours-shown": "pass", "address-shown": "fail", "call-button": "pass",
+      "google-profile": "not_checked", "ai-named": "fail"
+    },
+    "score": { "score": 21, "failed": 8, "counted": 13 }
+  },
+  "largeCompany": {
+    "file": "large-company.html",
+    "input": { "name": "Summit Heating & Air Inc", "city": "Franklin", "state": "TN", "service": "HVAC", "website": "https://summitair.example/" },
+    "robots": { "status": 200, "text": "User-agent: *\nDisallow: /admin/\n" },
+    "llms": { "status": 200, "contentType": "text/plain", "text": "# Summit Heating & Air\n\nHVAC repair in Franklin, TN.\n" },
+    "facts": { "h1Count": 1, "imgCount": 4, "imgMissingAlt": 0, "telLinks": 1, "jsonLdBlocks": 3, "unreadableJsonLd": 0, "scriptBuilt": false, "title": "Summit Heating & Air | HVAC Repair in Franklin, TN" },
+    "found": { "phone": "(615) 555-0188", "address": "400 Church Street, Franklin, TN, 37064" },
+    "results": {
+      "ai-bots-allowed": "pass", "business-labeled": "pass", "info-sheet": "pass", "title-city-service": "pass",
+      "one-headline": "pass", "summary": "pass", "image-descriptions": "pass", "share-picture": "pass",
+      "tap-to-call": "pass", "hours-shown": "pass", "address-shown": "pass", "call-button": "pass",
+      "google-profile": "not_checked", "ai-named": "fail"
+    },
+    "score": { "score": 65, "failed": 1, "counted": 13 }
+  }
+}

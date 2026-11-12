@@ -7,7 +7,7 @@
  */
 
 import express from 'express';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
@@ -19,6 +19,8 @@ import { createAiBudget } from './lib/ai-budget.js';
 import { createNotifier } from './lib/notifier.js';
 import { createAssistantProvider } from './lib/assistant.js';
 import { createIndexNow, indexNowOffReason } from './lib/indexnow.js';
+import { createSafeFetcher } from './lib/safe-fetch.js';
+import { createGrader } from './lib/grader.js';
 import { createHomeRouter }     from './routes/home.js';
 import { createListingsRouter } from './routes/listings.js';
 import { createApiRouter }      from './routes/api.js';
@@ -28,9 +30,12 @@ import { createRiseRouter }     from './routes/rise.js';
 import { createMcpRouter }      from './routes/mcp.js';
 import { createSeanceRouter }   from './routes/seance.js';
 import { createAdminRouter }   from './routes/admin.js';
+import { createGradeRouter }   from './routes/grade.js';
 import { createPagesRouter }    from './routes/pages.js';
 import { mountA2A }             from './routes/a2a.js';
 import { layout, markDemo, applySiteName } from './lib/html.js';
+
+let warnedGraderSecret = false;
 
 /** The only place in server/ that reads the system time. */
 const systemClock = Object.freeze({ now: () => Date.now() });
@@ -46,6 +51,8 @@ const systemClock = Object.freeze({ now: () => Date.now() });
  *   rateLimiter?: object,
  *   config?: object,
  *   newId?: () => string,
+ *   safeFetcher?: { fetchText: Function },
+ *   newGradeId?: () => string,
  *   a2a?: object,
  * }} [deps]
  */
@@ -96,6 +103,27 @@ export function createApp(deps = {}) {
     newId: deps.newId ?? (() => randomUUID()),
     a2a: deps.a2a,
   };
+
+  // AI Visibility Grader. Business websites are fetched only through the safe fetcher.
+  const botName = `${String(config.siteName ?? DEFAULT_SITE_NAME).replace(/[^A-Za-z0-9]/g, '') || 'FirstAnswerPages'}Bot`;
+  ctx.graderUserAgent = `${botName}/1.0 (+${config.baseUrl ?? ''}/grade/about)`;
+  if (config.production && config.graderSecretGenerated && !warnedGraderSecret) {
+    warnedGraderSecret = true;
+    process.stderr.write('[grader] GRADER_SECRET is not set; using a random key. Opened reports lock again after a restart.\n');
+  }
+  ctx.safeFetcher = deps.safeFetcher ?? createSafeFetcher({ userAgent: ctx.graderUserAgent });
+  // Grade ids are their own: 22 characters of URL-safe base64 from 16 random bytes.
+  ctx.newGradeId = deps.newGradeId ?? (() => randomBytes(16).toString('base64url'));
+  ctx.grader = createGrader({
+    store,
+    assistantProvider: ctx.assistantProvider,
+    aiBudget: ctx.aiBudget,
+    safeFetcher: ctx.safeFetcher,
+    notifier: ctx.notifier,
+    clock,
+    newId: ctx.newGradeId,
+    config,
+  });
 
   // IndexNow (Bing ping): real sites only; tests send only with their own fetch.
   if (deps.indexNow) {
@@ -199,6 +227,7 @@ export function createApp(deps = {}) {
   app.use(createMcpRouter(ctx));
   app.use(createSeanceRouter(ctx));
   app.use(createAdminRouter(ctx));
+  app.use(createGradeRouter(ctx));
 
   if (ctx.a2a) mountA2A(app, ctx.a2a); // registers BOTH the card route and ctx.a2a.path together
 

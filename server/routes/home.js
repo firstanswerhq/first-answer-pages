@@ -102,8 +102,11 @@ ${group.map(l => listingCard(l, categories)).join('\n')}
       results = `<div class="directory">\n${title}${sections.join('\n')}\n</div>`;
     }
 
+    const graderLink = ctx.config?.graderEnabled === false
+      ? ''
+      : '\n<p class="grade-link"><a href="/grade">Can AI find your business? Get a free check.</a></p>';
     const body = `<h1>Local Business Directory</h1>
-<p class="tagline">The phone book is back, and AI can read it.</p>
+<p class="tagline">The phone book is back, and AI can read it.</p>${graderLink}
 ${filterForm}
 ${results}`;
 
