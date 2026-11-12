@@ -15,10 +15,12 @@ Contest cut, in build order: (A) tasks 0 to 8 plus 9.2 and 10.1 give the full de
   - [ ] 0.2 Update steering: bring `structure.md` and `tech.md` in line with the code as built (the `server/lib` folder, MCP built, web writes allowed for the listed collections); add `steering/wording.md` (always on: American spelling, plain words, no "Yellow Pages" or "YP", no dollar figures, never promise AI will name a business, say "days to weeks") and `steering/grader-safety.md` (for the fetch and grader files: never loosen the address guard, never log typed input, AI answers or lead details, always escape AI text)
   - [ ] 0.3 Add two hooks in `.kiro/hooks/`: on save of a grade file, run `node --test test/grade-*.test.js`; on save of `grade-html.js` or `fix-kit.js`, check for British spellings, "YP" as a word, a dollar sign followed by digits, and the word "guarantee"
 
+Every task also follows the design's "Implementation notes from the code review" section.
+
 - [ ] 1. Safe fetching
   - [ ] 1.1 Create `server/lib/ip-guard.js`
     - Export `isPublicAddress(ip)` using `net.isIP`, a 32-bit IPv4 parser and an eight-group IPv6 expander that handles `::` and a dotted IPv4 tail
-    - Refuse every range listed in the design, judging IPv4-mapped, IPv4-compatible and NAT64 IPv6 forms by their embedded IPv4
+    - Follow the design's IPv6 rule (public only inside `2000::/3` minus the listed blocks) and refuse every IPv4 range listed in the design, judging IPv4-mapped, IPv4-compatible and NAT64 IPv6 forms by their embedded IPv4
     - Return false for anything `net.isIP` rejects
     - _Requirements: 3.2_
   - [ ] 1.2 Write property tests for the address guard
@@ -28,7 +30,8 @@ Contest cut, in build order: (A) tasks 0 to 8 plus 9.2 and 10.1 give the full de
   - [ ] 1.3 Create `server/lib/safe-fetch.js`
     - Export `createSafeFetcher({ request, lookup, timeoutMs, maxBytes, maxRedirects, userAgent })` and `SafeFetchError` with codes `bad_url`, `blocked_address`, `timeout`, `too_large`, `too_many_redirects`, `connect_failed`
     - URL checks: `http`/`https` only, ports 80 and 443 only, no user name or password; IP literal hosts must pass `isPublicAddress`
-    - Use `node:http`/`node:https` `request()` with a `guardedLookup` that resolves with `{ all: true }`, refuses when any address is not public, and calls back with the first address
+    - Strip brackets from `url.hostname` before the IP check; resolve and check in `fetchText`, then call `node:http`/`node:https` `request()` with `agent: false` and a `pinnedLookup` that answers with the checked list when `opts.all` is set and a single address otherwise
+    - Example tests for `http://[::1]/`, `http://[::ffff:7f00:1]/`, `http://2130706433/` and `http://0x7f.1/`
     - Send only `User-Agent`, `Accept` and `Accept-Encoding`; never forward visitor headers or cookies
     - Follow up to 5 redirects by hand, checking each target from the top
     - Decompress gzip, deflate and br with `node:zlib`; stop past 2 MiB decompressed; one 10-second timer per fetch
@@ -44,11 +47,11 @@ Contest cut, in build order: (A) tasks 0 to 8 plus 9.2 and 10.1 give the full de
     - Export `readPageFacts(html)` following the design's ten steps: comments out, JSON-LD collected first, script/style/noscript/template/svg removed, title, meta tags, h1s, images and alt counts, tel links, call-to-action labels, visible text with entities decoded
     - Parse each JSON-LD block in a try; collect `@type` from the top, arrays and `@graph`; read name, telephone, address, hours and url from the first business-typed node (type list in the design); mark failed blocks `unreadable`
     - Set `scriptBuilt` when visible text is under 200 characters and the page has a script tag
-    - Keep every pattern linear (no nested quantifiers); never run page scripts
+    - Remove elements and comments by `indexOf` scanning, never lazy regular expressions; never run page scripts
     - Export the hours, street-address and call-to-action patterns for the checks
     - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5_
   - [ ]* 2.2 Write property tests for page reading
-    - **Property 4: Page reading never throws and stays fast**
+    - **Property 4: Page reading never throws and stays fast** (random inputs up to 64 KiB, plus fixed 2 MiB worst cases: unclosed `<script`, `<!--` and `<a`)
     - **Validates: Requirements 4.1, 4.6**
   - [ ] 2.3 Create `server/lib/robots.js`
     - Export `parseRobots(text)` and `mayFetchRoot(groups, agent)` as designed: grouped user agents, comments and unknown fields ignored, specific group before `*`, longest rule wins, `Allow` wins a tie, empty `Disallow` allows

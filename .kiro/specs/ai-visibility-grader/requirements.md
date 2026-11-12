@@ -81,7 +81,7 @@ Node.js 22, plain Express, plain JavaScript ES modules, JSON files under `DATA_D
 
 1. WHEN a valid grade form is sent, THE Grader SHALL create a Grade with a new Grade_Id, status `running`, the normalized Grade_Input, the creation time, and an empty list of finished Scan_Steps, and THE Server SHALL redirect with HTTP status 303 to `/grade/:id`.
 2. THE Grader SHALL start the AI step and the website steps together after the redirect, and SHALL list the steps in this order: `Finding your website` (skipped when no website was given), `Reading your home page`, `Checking what AI is allowed to read`, `Asking AI to name the best <service> in <city>`, `Building your free page`.
-3. WHILE a Grade's status is `running`, `GET /grade/:id` SHALL show the Scan_Steps, marking each as done, running, or waiting, with one short finding per finished step such as "Found 12 main headlines", and SHALL include a `<meta http-equiv="refresh" content="3">` tag so the page updates with JavaScript turned off.
+3. WHILE a Grade's status is `running`, `GET /grade/:id` SHALL show the Scan_Steps, marking each as done, running, or waiting, with one short finding per finished step such as "Found 12 main headlines", and SHALL include a `<meta http-equiv="refresh" content="3">` tag inside `<noscript>` so the page updates with JavaScript turned off.
 4. WHERE JavaScript is available, THE scan page SHALL poll `GET /grade/:id/status.json` no more often than once a second and SHALL show the report without a full page reload when the status changes from `running`.
 5. WHEN every step has finished, THE Grader SHALL set the Grade status to `done` and store the Check_Results, the AI_Results, the Score, and the finish time.
 6. IF a step fails, THEN THE Grader SHALL record that step's Checks as `not_checked` with a plain reason, SHALL continue with the next step, and SHALL still finish the Grade as `done`.
@@ -95,7 +95,7 @@ Node.js 22, plain Express, plain JavaScript ES modules, JSON files under `DATA_D
 #### Acceptance Criteria
 
 1. THE Safe_Fetcher SHALL accept only `http` and `https` addresses on ports 80 and 443 with a host name or a public IP address, and SHALL refuse addresses that carry a user name or password.
-2. THE Safe_Fetcher SHALL resolve each host name itself and SHALL refuse to connect when any resolved address is not public: loopback, private (RFC 1918), carrier-grade NAT (100.64.0.0/10), link-local (including 169.254.169.254), unspecified, multicast, broadcast, reserved, documentation ranges, IPv6 unique-local (fc00::/7), IPv6 link-local (fe80::/10), and IPv4-mapped or IPv4-compatible IPv6 forms of any of these.
+2. THE Safe_Fetcher SHALL resolve each host name itself and SHALL refuse to connect when any resolved address is not public: loopback, private (RFC 1918), carrier-grade NAT (100.64.0.0/10), link-local (including 169.254.169.254), unspecified, multicast, broadcast, reserved, documentation ranges, IPv6 unique-local (fc00::/7), IPv6 site-local (fec0::/10), IPv6 link-local (fe80::/10), 6to4 (2002::/16), and IPv4-mapped or IPv4-compatible IPv6 forms of any of these.
 3. THE Safe_Fetcher SHALL connect only to the address it checked, so that a second DNS answer cannot redirect the connection to a private address.
 4. THE Safe_Fetcher SHALL follow at most 5 redirects and SHALL apply criteria 1 to 3 to every redirect target before following it.
 5. THE Safe_Fetcher SHALL stop each fetch after 10 seconds and SHALL stop reading a response after 2 MiB (2,097,152 bytes) of decompressed body, recording the result as too large.
@@ -141,7 +141,7 @@ Node.js 22, plain Express, plain JavaScript ES modules, JSON files under `DATA_D
 3. THE Grader SHALL record the `google_profile` Group as `not_checked` with the detail "Google check coming soon" in version one, and the report SHALL NOT show this Group in version one.
 4. EACH Check SHALL have a fix sentence of at most 160 characters in plain words, shown with every `fail`.
 5. THE Score SHALL count only Checks with result `pass` or `fail`; IF fewer than 40 points are available, THEN THE report SHALL show "Not enough to score yet" instead of a number, and SHALL still show every Check_Result.
-6. FOR ALL lists of Check_Results, the Score SHALL be an integer from 0 to 100, SHALL equal 100 when every counted Check passes, and SHALL not change when `not_checked` results are added or removed (property).
+6. FOR ALL lists of Check_Results, the Score SHALL be an integer from 0 to 100, SHALL equal 100 when every counted Check passes with full points, and SHALL not change when `not_checked` results are added or removed (property).
 
 ### Requirement 7: AI Answers Check
 
@@ -196,7 +196,7 @@ Node.js 22, plain Express, plain JavaScript ES modules, JSON files under `DATA_D
 1. THE Free_Page_Preview SHALL show the business name, the service, the city and state, and every one of phone, hours, address and website that the scan found, and SHALL show each field it did not find as a blank labeled "Add your <field>" (phone number, hours, address, website).
 2. THE Grader SHALL take found fields from a business JSON-LD block first, then from `tel:` links and the visible text, and SHALL normalize phone numbers with the existing phone normalizer.
 3. WHEN a visitor sends `POST /grade/:id/claim`, THE Server SHALL create one Draft through the existing Draft_Store with the found fields, the category from the existing category mapper (falling back to `other`), the service as the first entry in `services`, and every missing required field listed in `missingFields`, SHALL store the Draft id on the Grade, and SHALL redirect with HTTP status 303 to `/rise/drafts/:draftId`.
-4. IF the Grade already has a Draft id and that Draft still exists, THEN `POST /grade/:id/claim` SHALL redirect to it and SHALL NOT create a second Draft.
+4. IF the Grade already has a Draft and the same browser claimed it (shown by a signed cookie), THEN `POST /grade/:id/claim` SHALL redirect to that Draft and SHALL NOT create a second one; any other visitor SHALL get a new Draft, so one visitor never sees another's draft.
 5. THE claim SHALL publish nothing by itself: the existing confirmation and admin approval steps SHALL apply unchanged.
 6. THE claim button SHALL work with JavaScript turned off.
 
@@ -248,7 +248,7 @@ Node.js 22, plain Express, plain JavaScript ES modules, JSON files under `DATA_D
 2. THE Rate_Limiter SHALL allow at most 5 new Grades per client per hour and 20 per client per day, and SHALL answer more with HTTP status 429 and a `Retry-After` header.
 3. WHEN a new Grade has the same normalized name, city, state, service and website as a `done` Grade created in the last 7 days whose AI_Results exist, THE Grader SHALL copy those AI_Results into the new Grade, label them with their original time, and send no new AI_Question.
 4. THE copy in criterion 3 SHALL NOT copy the earlier Grade's unlock state, Lead, or Draft.
-5. THE Server SHALL delete Grades and their Leads 90 days after creation through the existing retention job.
+5. THE Server SHALL delete Grades and their Leads 90 days after creation, pruning at startup and whenever a new Grade starts.
 6. THE Grader SHALL never log Grade_Input values, answer text, or Lead fields; logs SHALL hold only the Grade_Id, the step names, the result counts and the timings.
 
 ### Requirement 15: Admin
