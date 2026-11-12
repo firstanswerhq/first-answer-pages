@@ -92,12 +92,12 @@ Every task also follows the design's "Implementation notes from the code review"
 - [x] 4. Checkpoint: pure pieces
   - Run `node --test`; every earlier test and every new test passes. Ask the user if questions arise.
 
-- [ ] 5. Storage, budget and configuration
-  - [ ] 5.1 Add `grades` and `leads` to the data store's `COLLECTIONS` allow-list, and add `grades.json` and `leads.json` to `ALLOWED_FILES` in `test/data-dir.test.js`
+- [x] 5. Storage, budget and configuration
+  - [x] 5.1 Add `grades` and `leads` to the data store's `COLLECTIONS` allow-list, and add `grades.json` and `leads.json` to `ALLOWED_FILES` in `test/data-dir.test.js`
     - _Requirements: 14.5_
-  - [ ] 5.2 Extend `pruneExpired` with `grades` and `leads` options that drop records older than 90 days and keep records with a missing or invalid `createdAt`; run it at startup with the existing retention call
+  - [x] 5.2 Extend `pruneExpired` with `grades` and `leads` options that drop records older than 90 days and keep records with a missing or invalid `createdAt`; run it at startup with the existing retention call
     - _Requirements: 14.5_
-  - [ ] 5.3 Extend `server/lib/ai-budget.js` with the `grade` kind
+  - [x] 5.3 Extend `server/lib/ai-budget.js` with the `grade` kind
     - Daily `grade` count persisted beside `photo`; files without it load as 0
     - Blocked when the total cap is reached, when `grade >= gradeCap`, or when `photo + grade >= cap - ceil(cap / 4)`
     - Existing photo and Seance behavior unchanged
@@ -105,13 +105,13 @@ Every task also follows the design's "Implementation notes from the code review"
   - [ ]* 5.4 Write example tests for the budget change
     - The Seance quarter stays available after photo and grade calls use their share; old budget files load
     - **Validates: Requirement 14.1**
-  - [ ] 5.5 Extend `server/lib/config.js` with `graderEnabled`, `graderLeadGate`, `gradeAiCallsPerDay` and `graderSecret`, with the defaults in the design; warn once when `GRADER_SECRET` is missing in production and use a random per-process key
+  - [x] 5.5 Extend `server/lib/config.js` with `graderEnabled`, `graderLeadGate`, `gradeAiCallsPerDay` and `graderSecret`, with the defaults in the design; warn once when `GRADER_SECRET` is missing in production and use a random per-process key
     - Add `GRADER_SECRET` (`generateValue: true`), `GRADER_LEAD_GATE` and `GRADE_AI_CALLS_PER_DAY` to `render.yaml`
     - Add README rows for the four new settings in this task, so the existing test that checks every setting is documented keeps passing
     - Add `grade` (5 per hour), `grade-day` (20 per day), `grade-unlock` (5 per hour) and `grade-recheck` (10 per hour) to the rate limiter's `RULES`
     - _Requirements: 12.4, 13.3, 14.1, 14.2_
 
-  - [ ] 5.6 Add `roofers` ("Roofers") and `hvac` ("Heating and Air") to `data/categories.json`, with Seance phrases, and teach `mapCategory` common service words (roofing, roofer, hvac, heating, air conditioning) so a graded roofer's draft is not filed under Other
+  - [x] 5.6 Add `roofers` ("Roofers") and `hvac` ("Heating and Air") to `data/categories.json`, with Seance phrases, and teach `mapCategory` common service words (roofing, roofer, hvac, heating, air conditioning) so a graded roofer's draft is not filed under Other
     - _Requirements: 10.3_
 
 - [ ] 6. The grader flow

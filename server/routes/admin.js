@@ -60,6 +60,7 @@ const QUOTE_NOTES = Object.freeze({
 function providerText(name) {
   if (name === 'mock') return 'Demo photo reader';
   if (name === 'manual') return 'Typed in by the owner';
+  if (name === 'grader') return 'Filled in from the Grader scan';
   if (name === 'anthropic') return 'Read from a photo by Claude';
   if (name === 'openai') return 'Read from a photo by AI';
   return 'Unknown source';

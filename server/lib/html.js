@@ -123,22 +123,23 @@ export function markDemo(html) {
  * Wraps page content in the full HTML shell (head, nav, footer).
  *
  * @param {{ title: string, body: string, jsonLd?: string, scripts?: string[], demo?: boolean,
- *   canonical?: string, description?: string }} options
+ *   canonical?: string, description?: string, head?: string }} options
  *   `jsonLd` is an optional serialized JSON-LD string placed in the head.
  *   `scripts` is an optional list of module script URLs (deferred by default).
  *   `demo` (default false) adds the noindex meta and the sample-listings footer line.
  *   `canonical` (absolute URL) adds <link rel="canonical">; only public pages pass it.
  *   `description` adds <meta name="description">.
+ *   `head` is optional trusted markup placed at the end of the head (default none).
  * @returns {string}
  */
 export function layout({
-  title, body, jsonLd, scripts, demo = false, siteName = DEFAULT_SITE_NAME, canonical, description,
+  title, body, jsonLd, scripts, demo = false, siteName = DEFAULT_SITE_NAME, canonical, description, head = '',
 }) {
-  const page = renderLayout({ title, body, jsonLd, scripts, siteName, canonical, description });
+  const page = renderLayout({ title, body, jsonLd, scripts, siteName, canonical, description, head });
   return demo ? markDemo(page) : page;
 }
 
-function renderLayout({ title, body, jsonLd, scripts, siteName, canonical, description }) {
+function renderLayout({ title, body, jsonLd, scripts, siteName, canonical, description, head }) {
   const name = escapeHtml(siteName);
   const descTag = typeof description === 'string' && description.trim() !== ''
     ? `\n  <meta name="description" content="${escapeHtml(description.replace(/\s+/g, ' ').trim())}">`
@@ -161,7 +162,7 @@ function renderLayout({ title, body, jsonLd, scripts, siteName, canonical, descr
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${escapeHtml(title)}</title>${descTag}${canonicalTag}
-  <link rel="stylesheet" href="/css/style.css">${ldBlock}${scriptTags}
+  <link rel="stylesheet" href="/css/style.css">${ldBlock}${scriptTags}${typeof head === 'string' && head !== '' ? `\n  ${head}` : ''}
 </head>
 <body>
   <nav class="site-nav">
