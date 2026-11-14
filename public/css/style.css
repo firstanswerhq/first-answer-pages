@@ -86,6 +86,55 @@
   unicode-range: U+0030-0039;
 }
 
+/* Phone-book lettering: a condensed sans, like the printed white pages (Fira Sans Condensed, SIL Open Font License) */
+@font-face {
+  font-family: "Fira Sans Condensed";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/fira-sans-condensed-latin-400-normal.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Fira Sans Condensed";
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/fira-sans-condensed-latin-400-italic.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Fira Sans Condensed";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/fonts/fira-sans-condensed-latin-500-normal.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Fira Sans Condensed";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/fonts/fira-sans-condensed-latin-600-normal.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Fira Sans Condensed";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/fira-sans-condensed-latin-700-normal.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Fira Sans Condensed";
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/fira-sans-condensed-latin-700-italic.woff2") format("woff2");
+}
+
 /* Old-style lettering for headings (Rozha One, SIL Open Font License) */
 @font-face {
   font-family: "Rozha One";
@@ -136,7 +185,7 @@ html {
 
 body {
   margin: 0;
-  font-family: "Old Numbers", "Source Serif 4", Georgia, "Times New Roman", serif;
+  font-family: "Old Numbers", "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
   font-size: 1rem;
   line-height: 1.5;
   color: var(--color-text);
@@ -174,7 +223,7 @@ img {
 /* ---------- Typography ---------- */
 
 h1, h2, h3, h4 {
-  font-family: "Old Numbers", "Source Serif 4", Georgia, "Times New Roman", serif;
+  font-family: "Old Numbers", "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
   font-weight: 700;
   line-height: 1.2;
   color: var(--color-text);
@@ -198,7 +247,7 @@ h3 {
 
 .tagline {
   margin: 0.25rem 0 1rem;
-  font-family: "Old Numbers", "Source Serif 4", Georgia, serif;
+  font-family: "Old Numbers", "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
   font-style: italic;
   font-weight: 400;
   font-size: 1.05rem;
@@ -216,7 +265,7 @@ h3 {
   padding: 0.85rem 1.25rem;
   border-bottom: 3px double var(--color-divider);
   background: var(--color-surface);
-  font-family: "Old Numbers", "Source Serif 4", Georgia, serif;
+  font-family: "Old Numbers", "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
   font-size: 1.15rem;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -232,7 +281,7 @@ h3 {
 }
 
 .site-nav a.nav-cta {
-  font-family: "Old Numbers", "Source Serif 4", Georgia, "Times New Roman", serif;
+  font-family: "Old Numbers", "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
   font-size: 0.9rem;
   font-weight: 600;
   padding: 0.45rem 0.9rem;
@@ -297,7 +346,7 @@ button.button {
   border-radius: var(--radius);
   background: var(--color-primary);
   color: var(--color-button-text);
-  font-family: "Old Numbers", "Source Serif 4", Georgia, "Times New Roman", serif;
+  font-family: "Old Numbers", "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
   font-size: 1rem;
   font-weight: 600;
   line-height: 1.25;
@@ -433,7 +482,7 @@ a.button:focus-visible {
   border-radius: var(--radius);
   background: var(--color-primary);
   color: var(--color-button-text);
-  font-family: "Old Numbers", "Source Serif 4", Georgia, "Times New Roman", serif;
+  font-family: "Old Numbers", "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
   font-size: 1.25rem;
   font-weight: 700;
   text-align: center;
@@ -546,7 +595,7 @@ details.advanced summary {
 .category-title {
   margin: 0 0 0.85rem;
   padding-bottom: 0.35rem;
-  font-family: "Old Numbers", "Source Serif 4", Georgia, serif;
+  font-family: "Old Numbers", "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
   font-size: 1.35rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -567,7 +616,7 @@ details.advanced summary {
 
 .listing-card h3 {
   margin: 0;
-  font-family: "Old Numbers", "Source Serif 4", Georgia, serif;
+  font-family: "Old Numbers", "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
   font-size: 1.1rem;
   font-weight: 700;
 }
@@ -637,7 +686,7 @@ details.advanced summary {
 
 .stamp-title {
   margin: 0;
-  font-family: "Old Numbers", "Source Serif 4", Georgia, serif;
+  font-family: "Old Numbers", "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
   font-size: 1.15rem;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -1103,7 +1152,7 @@ details.advanced summary {
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--color-text-muted);
-  font-family: "Old Numbers", "Source Serif 4", Georgia, "Times New Roman", serif;
+  font-family: "Old Numbers", "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
 }
 
 .grade-where {
@@ -1119,7 +1168,7 @@ details.advanced summary {
 
 .grade-score-number .num {
   display: inline-block;
-  font-family: "Old Numbers", "Source Serif 4", Georgia, serif;
+  font-family: "Old Numbers", "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
   font-size: clamp(3.5rem, 14vw, 5rem);
   font-weight: 700;
   line-height: 1;
@@ -1130,14 +1179,14 @@ details.advanced summary {
 .grade-score-number .of {
   display: block;
   margin-top: 0.15rem;
-  font-family: "Old Numbers", "Source Serif 4", Georgia, "Times New Roman", serif;
+  font-family: "Old Numbers", "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
   font-size: 1rem;
   font-weight: 500;
   color: var(--color-text-muted);
 }
 
 .grade-score-number .num-text {
-  font-family: "Old Numbers", "Source Serif 4", Georgia, serif;
+  font-family: "Old Numbers", "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
   font-size: 1.5rem;
   font-weight: 700;
 }
@@ -1301,7 +1350,7 @@ details.advanced summary {
 
 .serp h3 {
   margin: 0 0 0.3rem;
-  font-family: "Old Numbers", "Source Serif 4", Georgia, "Times New Roman", serif;
+  font-family: "Old Numbers", "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
   font-size: 0.8rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -1632,7 +1681,7 @@ summary {
 }
 
 .site-footer {
-  font-family: "Old Numbers", "Source Serif 4", Georgia, serif;
+  font-family: "Old Numbers", "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
   font-size: 1rem;
   color: var(--color-text);
 }
@@ -1671,7 +1720,7 @@ summary {
 
 .home-head .grade-link {
   margin: 1.1rem 0 0;
-  font-family: "Old Numbers", "Source Serif 4", Georgia, serif;
+  font-family: "Old Numbers", "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
   font-size: 1.1rem;
 }
 
@@ -1697,7 +1746,7 @@ summary {
   border: 1.5px solid var(--color-ink);
   border-radius: var(--radius);
   background: var(--color-surface) no-repeat 0.85rem center / 1.6rem;
-  font-family: "Old Numbers", "Source Serif 4", Georgia, serif;
+  font-family: "Old Numbers", "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
   font-size: 1.2rem;
   font-weight: 700;
 }
@@ -1724,7 +1773,7 @@ summary {
   padding: 0.5rem 0.25rem;
   border: 0;
   background: transparent;
-  font-family: "Old Numbers", "Source Serif 4", Georgia, "Times New Roman", serif;
+  font-family: "Old Numbers", "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
   color: var(--color-text-muted);
 }
 
@@ -1747,7 +1796,7 @@ summary {
   border: 1.5px solid var(--color-gold);
   border-radius: 10px;
   background: var(--color-tan);
-  font-family: "Old Numbers", "Source Serif 4", Georgia, serif;
+  font-family: "Old Numbers", "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
   font-size: clamp(1.4rem, 6vw, 1.9rem);
   font-weight: 700;
   line-height: 1.25;
@@ -1829,7 +1878,7 @@ summary {
   display: flex;
   flex: 1 1 auto;
   align-items: baseline;
-  font-family: "Old Numbers", "Source Serif 4", Georgia, "Times New Roman", serif;
+  font-family: "Old Numbers", "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
   font-size: 1rem;
 }
 
@@ -1894,7 +1943,7 @@ summary {
 
 .grade-eyebrow-title {
   display: block;
-  font-family: "Old Numbers", "Source Serif 4", Georgia, serif;
+  font-family: "Old Numbers", "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
   font-size: clamp(1.25rem, 5.5vw, 1.7rem);
   font-weight: 700;
   text-transform: uppercase;
@@ -1937,7 +1986,7 @@ summary {
 .grade-score-number .of::after {
   content: "/ 100";
   margin-left: 0.18em;
-  font-family: "Old Numbers", "Source Serif 4", Georgia, serif;
+  font-family: "Old Numbers", "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
   font-size: clamp(3rem, 15vw, 5rem);
   font-weight: 700;
   line-height: 1;
@@ -1947,7 +1996,7 @@ summary {
 .grade-score h1 {
   order: 2;
   margin: 0.4rem 0 0;
-  font-family: "Old Numbers", "Source Serif 4", Georgia, serif;
+  font-family: "Old Numbers", "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
   font-size: clamp(1.5rem, 6.5vw, 2rem);
   font-style: italic;
   font-weight: 400;
@@ -2062,7 +2111,7 @@ summary {
 }
 
 .grade-lead .field label {
-  font-family: "Old Numbers", "Source Serif 4", Georgia, serif;
+  font-family: "Old Numbers", "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
 }
 
 .grade-lead .field input {
@@ -2171,7 +2220,7 @@ summary {
 input,
 select,
 textarea {
-  font-family: "Source Serif 4", Georgia, "Times New Roman", serif !important;
+  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif !important;
 }
 
 /* Old lettering on every heading and title */
@@ -2190,17 +2239,9 @@ h4,
 .listing-card h3,
 .listing-card h3 a,
 .grade-preview h3 {
-  font-family: "Rozha One", "Source Serif 4", Georgia, serif;
+  font-family: "Old Numbers", "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
   font-style: normal;
-  font-weight: 400;
-}
-
-.listing-card h3 strong,
-.grade-preview h3 strong,
-h1 strong,
-h2 strong,
-h3 strong {
-  font-weight: 400;
+  font-weight: 700;
 }
 
 .home-head h1,
@@ -2209,7 +2250,7 @@ h3 strong {
 }
 
 body {
-  font-size: 1.0625rem;
+  font-size: 1.125rem;
 }
 
 /* ---------- Utility / print ---------- */
