@@ -185,7 +185,7 @@ export function createGradeRouter(ctx) {
       const unlocked = isUnlocked(req, grade.id);
       // With the gate off (or once unlocked) the extra AI questions start on the first view.
       if ((unlocked || config.graderLeadGate === false) && !grade.extraAiStartedAt) grader.startExtraQuestions(grade.id);
-      return send(res, 200, renderReport(grade, unlocked));
+      return send(res, 200, renderReport(grade, unlocked, { justOpened: req.query.opened === '1' }));
     } catch (err) {
       return next(err);
     }
@@ -223,7 +223,7 @@ export function createGradeRouter(ctx) {
       const result = await grader.unlock(id, lead);
       if (result.status !== 200) return res.redirect(303, `/grade/${id}`);
       setCookie(res, `g_${id}`, unlockToken(secret, id), id);
-      return res.redirect(303, `/grade/${id}#full-report`);
+      return res.redirect(303, `/grade/${id}?opened=1#full-report`);
     } catch (err) {
       return next(err);
     }

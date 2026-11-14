@@ -80,7 +80,7 @@ Node.js 22, plain Express, plain JavaScript ES modules, JSON files under `DATA_D
 #### Acceptance Criteria
 
 1. WHEN a valid grade form is sent, THE Grader SHALL create a Grade with a new Grade_Id, status `running`, the normalized Grade_Input, the creation time, and an empty list of finished Scan_Steps, and THE Server SHALL redirect with HTTP status 303 to `/grade/:id`.
-2. THE Grader SHALL start the AI step and the website steps together after the redirect, and SHALL list the steps in this order: `Finding your website` (skipped when no website was given), `Reading your home page`, `Checking what AI is allowed to read`, `Asking AI to name the best <service> in <city>`, `Building your free page`.
+2. THE Grader SHALL start the AI step and the website steps together after the redirect, and SHALL list the steps in this order: `Finding your website` (skipped when no website was given), `Reading your home page`, `Checking what AI is allowed to read`, `Asking AI to name the best <service> in <city>`, `Drafting your free directory listing`.
 3. WHILE a Grade's status is `running`, `GET /grade/:id` SHALL show the Scan_Steps, marking each as done, running, or waiting, with one short finding per finished step such as "Found 12 main headlines", and SHALL include a `<meta http-equiv="refresh" content="3">` tag inside `<noscript>` so the page updates with JavaScript turned off.
 4. WHERE JavaScript is available, THE scan page SHALL poll `GET /grade/:id/status.json` no more often than once a second and SHALL show the report without a full page reload when the status changes from `running`.
 5. WHEN every step has finished, THE Grader SHALL set the Grade status to `done` and store the Check_Results, the AI_Results, the Score, and the finish time.
@@ -176,7 +176,7 @@ Node.js 22, plain Express, plain JavaScript ES modules, JSON files under `DATA_D
 
 #### Acceptance Criteria
 
-1. WHEN a Grade's status is `done`, `GET /grade/:id` SHALL show the Free_Part: the business name and city, the Score (or "Not enough to score yet"), the line "<failed> of <counted> checks failed", the AI result sentence, the Free_Page_Preview with a "Claim my free page" button, the Google before-and-after preview, a one-line summary per Group, the date and time of the check in Central time labeled "Automated check", and a line saying AI assistants pick up changes over days to weeks.
+1. WHEN a Grade's status is `done`, `GET /grade/:id` SHALL show the Free_Part: the business name and city, the Score (or "Not enough to score yet"), the line "<failed> of <counted> checks failed", the AI result sentence, the Free_Page_Preview with a "Claim my free listing" button, the Google before-and-after preview, a one-line summary per Group, the date and time of the check in Central time labeled "Automated check", and a line saying AI assistants pick up changes over days to weeks.
 2. THE Free_Part SHALL NOT show any dollar figure or estimate of lost sales.
 3. WHILE the Lead_Gate is `on` and the visitor has not unlocked this Grade, THE report SHALL show the Lead_Form in place of the Full_Report.
 4. WHEN the Full_Report is shown, THE report SHALL list every Check with its result, detail, points and fix sentence, grouped by Group, and SHALL show the Fix_Kit.
@@ -185,7 +185,7 @@ Node.js 22, plain Express, plain JavaScript ES modules, JSON files under `DATA_D
 7. IF the Grade_Id does not match a stored Grade, THEN THE Server SHALL respond with HTTP status 404.
 8. THE report SHALL include an "Ask us to remove this report" line with the site's contact email when `CONTACT_EMAIL` is set, and the contact page otherwise.
 
-9. WHEN a report first shows, THE page SHALL show, without scrolling at 1280 by 720, in this order: the Score with "<failed> of <counted> checks failed"; the AI result sentence with the competitor names; and the Free_Page_Preview with the "Claim my free page" button and the line "Goes live after you check it and we approve it." At 900 pixels and wider, the Free_Page_Preview SHALL sit beside the top three failed Checks.
+9. WHEN a report first shows, THE page SHALL show, without scrolling at 1280 by 720, in this order: the Score with "<failed> of <counted> checks failed"; the AI result sentence with the competitor names; and the Free_Page_Preview with the "Claim my free listing" button and the line "Goes live after you check it and we approve it." At 900 pixels and wider, the Free_Page_Preview SHALL sit beside the top three failed Checks.
 
 ### Requirement 10: The Instant Free Page
 

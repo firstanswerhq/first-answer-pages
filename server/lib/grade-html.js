@@ -316,15 +316,18 @@ function groupLines(grade) {
 }
 
 function leadForm(grade, { values = {}, errors = {} } = {}) {
+  const firstError = ['name', 'email', 'phone'].find(k => errors[k]);
+  const errorNote = firstError ? '\n    <p class="notice" role="alert">Please fix the highlighted fields.</p>' : '';
   const field = (key, label, type, auto) => `    <div class="field${errors[key] ? ' missing' : ''}">
       <label for="l-${key}">${e(label)}</label>
-      <input type="${type}" id="l-${key}" name="${key}" value="${e(values[key] ?? '')}" maxlength="200" autocomplete="${auto}" required>
+      <input type="${type}" id="l-${key}" name="${key}" value="${e(values[key] ?? '')}" maxlength="200" autocomplete="${auto}" required${key === firstError ? ' autofocus' : ''}>
       ${errors[key] ? `<span class="missing-note">${e(errors[key])}</span>` : ''}
     </div>`;
-  return `<section class="grade-lead">
+  return `<section class="grade-lead" id="lead">
     <h2>See every check and the fixes</h2>
     <p>Enter your name, email and phone to open the full report right away, on this page. It has every check, the fix for each one, and text you can copy and paste.</p>
-    <p class="hint">Why the phone number? So we can reach the right person if something in your report needs explaining. We only call or text if you check the box below. We never sell it.</p>
+    <p class="hint">Why the phone number? It is the fastest way to help if you want a hand with your report. We only call, text or email you if you check the box below. We never sell it.</p>
+${errorNote}
     <form class="rise-form" method="POST" action="/grade/${e(grade.id)}/unlock">
 ${field('name', 'Your name', 'text', 'name')}
 ${field('email', 'Email', 'email', 'email')}
@@ -421,10 +424,11 @@ function fullReport(grade, contact, rechecking = false, justOpened = false) {
 /**
  * @param {object} grade a `done` Grade
  * @param {{ unlocked?: boolean, leadGate?: boolean, contactEmail?: string, now?: number,
- *   leadValues?: object, leadErrors?: object }} [opts]
+ *   leadValues?: object, leadErrors?: object, justOpened?: boolean }} [opts]
  */
 export function reportPage(grade, {
   unlocked = false, leadGate = true, contactEmail, now = NaN, leadValues, leadErrors, rechecking = false,
+  justOpened = false,
 } = {}) {
   const contact = contactEmail
     ? { href: `mailto:${contactEmail}`, text: contactEmail }
@@ -440,7 +444,7 @@ export function reportPage(grade, {
   ${googleSection(grade)}
   ${groupLines(grade)}
   <p class="grade-meta">Automated check, ${e(when)}. AI assistants pick up changes over days to weeks.</p>
-  ${showFull ? fullReport(grade, contact, rechecking, leadGate && unlocked) : leadForm(grade, { values: leadValues, errors: leadErrors })}
+  ${showFull ? fullReport(grade, contact, rechecking, justOpened && leadGate && unlocked) : leadForm(grade, { values: leadValues, errors: leadErrors })}
   <p class="hint">Ask us to remove this report: <a href="${e(contact.href)}">${e(contact.text)}</a></p>
 </article>`;
   return page(

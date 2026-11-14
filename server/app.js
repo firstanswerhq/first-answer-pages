@@ -218,6 +218,8 @@ export function createApp(deps = {}) {
     });
   }
 
+  // Font files never change under the same name, so browsers may keep them for a year.
+  app.use('/fonts', express.static(fileURLToPath(new URL('../public/fonts', import.meta.url)), { maxAge: '365d', immutable: true }));
   app.use(express.static(fileURLToPath(new URL('../public', import.meta.url))));
 
   app.use(createHomeRouter(ctx));

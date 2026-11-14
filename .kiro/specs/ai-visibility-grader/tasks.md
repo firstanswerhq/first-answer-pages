@@ -160,7 +160,7 @@ Every task also follows the design's "Implementation notes from the code review"
     - `GRADER_LEAD_GATE=off`: show the Full_Report to all and run the extra questions on the first view, subject to the budget
     - Add `notifyLead({ business, score, reportUrl })` to the mock, console, none and Resend notifiers as designed (Resend sends to `ADMIN_EMAIL` only; never throws)
     - _Requirements: 7.2, 7.6, 8.3, 12.1, 12.2, 12.3, 12.4, 12.5, 12.6_
-  - [x] 9.2 Claim the free page
+  - [x] 9.2 Claim the free listing
     - `POST /grade/:id/claim`: reuse an existing Draft when `draftId` points to one; else build fields (JSON-LD first, then tel links and text; phone through `normalizePhone`; category through `mapCategory` with `other` as fallback; service as the first service; city and state from the input) and call `draftStore.create` with `missingFields`; store `draftId`; 303 to `/rise/drafts/:draftId`
     - _Requirements: 10.2, 10.3, 10.4, 10.5_
   - [x] 9.3 Check again

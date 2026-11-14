@@ -46,7 +46,7 @@ export function mountGradeAdmin(router, ctx, { adminNav, wantsHtml, form }) {
         const link = ID_PATTERN.test(String(g.id)) ? `<a href="/grade/${e(g.id)}">${e(i.name ?? '(no name)')}</a>` : e(i.name ?? '(no name)');
         return `<li class="pending-item">
     <strong>${link}</strong> &middot; ${e(i.city ?? '')}, ${e(i.state ?? '')}
-    <br>Score: ${e(score)} &middot; Status: ${e(g.status ?? '')} &middot; Lead: ${leadIds.has(g.id) ? 'yes' : 'no'} &middot; Page claimed: ${g.draftId ? 'yes' : 'no'}
+    <br>Score: ${e(score)} &middot; Status: ${e(g.status ?? '')} &middot; Lead: ${leadIds.has(g.id) ? 'yes' : 'no'} &middot; Listing claimed: ${g.draftId ? 'yes' : 'no'}
     <br><small>${e(when(g.createdAt))}</small>
     <form method="POST" action="/admin/grades/${e(g.id)}/delete"><button type="submit" class="admin-button admin-button-secondary">Delete</button></form>
   </li>`;
