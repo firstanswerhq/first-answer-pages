@@ -498,7 +498,7 @@ details.advanced summary {
 .category-grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 0 2rem;
+  gap: 0;
 }
 
 @media (min-width: 640px) {
@@ -506,12 +506,12 @@ details.advanced summary {
   .category-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-}
 
-@media (min-width: 1000px) {
-  .category,
-  .category-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* the rule down the middle, like a phone book column */
+  .category > .listing-card:nth-of-type(even),
+  .category-grid > .listing-card:nth-of-type(even) {
+    padding-left: 2rem;
+    border-left: 1px solid var(--color-divider);
   }
 }
 
@@ -1371,7 +1371,13 @@ details.advanced summary {
   }
 
   .grade-score {
-    padding: 1.75rem 1.5rem;
+    text-align: left;
+    padding: 1.5rem 1.5rem;
+  }
+
+  .grade-score-number .of {
+    display: inline;
+    margin-left: 0.35rem;
   }
 }
 
@@ -1389,13 +1395,9 @@ details.discard-confirm summary {
   font-weight: 600;
 }
 
-/* Phone number stays on one line and sits under the name */
+/* A phone number never splits across two lines */
 .listing-card .phone {
-  display: block;
   white-space: nowrap;
-  font-family: Inter, system-ui, sans-serif;
-  font-size: 1rem;
-  font-weight: 600;
 }
 
 /* "No photo? Type it in" is a second choice, so it looks like one */
@@ -1430,83 +1432,6 @@ main .rise-form.type-it-in button:not([class]):focus-visible {
   width: 1.75rem;
   height: 1.75rem;
   fill: var(--color-primary);
-}
-
-/* Home page cover: the front of the phone book */
-.home-cover {
-  margin: 0 0 1.5rem;
-  padding: 1.5rem 1.15rem 1.35rem;
-  border: 2px solid var(--color-divider);
-  outline: 1px solid var(--color-divider);
-  outline-offset: 4px;
-  border-radius: var(--radius);
-  background: var(--color-surface);
-  text-align: center;
-}
-
-.home-cover h1 {
-  margin: 0;
-  font-family: Inter, system-ui, sans-serif;
-  font-size: 0.85rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.18em;
-  color: var(--color-text-muted);
-}
-
-.home-cover .tagline {
-  margin: 0.6rem auto 1.1rem;
-  max-width: 22ch;
-  font-size: clamp(1.9rem, 7vw, 3rem);
-  font-style: normal;
-  font-weight: 700;
-  line-height: 1.1;
-  letter-spacing: -0.015em;
-  color: var(--color-text);
-}
-
-.home-cover .grade-link {
-  margin: 0;
-}
-
-.home-cover .grade-link a {
-  display: inline-block;
-  padding: 0.8rem 1.4rem;
-  min-height: 2.75rem;
-  border: 2px solid var(--color-primary);
-  border-radius: var(--radius);
-  background: var(--color-primary);
-  color: var(--color-button-text);
-  font-size: 1.05rem;
-  font-weight: 600;
-  text-decoration: none;
-  transition: background 0.15s ease, border-color 0.15s ease;
-}
-
-.home-cover .grade-link a:hover,
-.home-cover .grade-link a:focus-visible {
-  background: var(--color-primary-hover);
-  border-color: var(--color-primary-hover);
-  color: var(--color-button-text);
-}
-
-@media (min-width: 720px) {
-  .home-cover {
-    padding: 2.5rem 2rem 2.25rem;
-  }
-}
-
-/* Listing cards read like phone book entries: only the name is a link color */
-.listing-card h3 a {
-  text-decoration: none;
-}
-
-.listing-card h3 a:hover {
-  text-decoration: underline;
-}
-
-.listing-card .phone a {
-  color: var(--color-text);
 }
 
 /* Any form button without its own class gets the standard look */
@@ -1637,19 +1562,6 @@ summary {
 
 .grade-ai details {
   margin-top: 0.5rem;
-}
-
-/* Score color follows the score: low, middle, good */
-.grade-score-number.score-low .num {
-  color: var(--color-fail);
-}
-
-.grade-score-number.score-mid .num {
-  color: var(--color-warn);
-}
-
-.grade-score-number.score-good .num {
-  color: var(--color-success);
 }
 
 /* ---------- Utility / print ---------- */
