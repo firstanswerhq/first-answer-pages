@@ -162,14 +162,12 @@ function renderLayout({ title, body, jsonLd, scripts, siteName, canonical, descr
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${escapeHtml(title)}</title>${descTag}${canonicalTag}
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,wght@0,400;0,600;0,700;1,400&amp;family=Inter:wght@400;500;600;700&amp;display=swap">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/css/style.css">${ldBlock}${scriptTags}${typeof head === 'string' && head !== '' ? `\n  ${head}` : ''}
 </head>
 <body>
   <nav class="site-nav">
-    <a href="/">${name}</a>
+    <a class="brand" href="/"><svg class="brand-mark" viewBox="0 0 64 64" width="28" height="28" aria-hidden="true" focusable="false"><path d="M12 14v36l18-4V18z"/><path d="M34 18v28l18 4V14z"/></svg>${name}</a>
     <a class="nav-cta" href="/rise">List your business free</a>
   </nav>
   <main>

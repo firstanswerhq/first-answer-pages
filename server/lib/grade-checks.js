@@ -24,7 +24,7 @@ export const CHECKS = Object.freeze([
     label: 'AI assistants are allowed in',
     passText: 'Your website lets AI assistants read it.',
     failText: 'Your website tells some AI assistants to stay out.',
-    fix: "Add the lines in your fix kit to your website's rules file (robots.txt) so AI assistants can read your site.",
+    fix: "Your website tells some AI assistants to stay out. Your fix kit has the lines that let them in. They go in a file called robots.txt.",
   },
   {
     id: 'business-labeled', group: 'ai_readable', points: 8,
@@ -59,7 +59,7 @@ export const CHECKS = Object.freeze([
     label: 'Search summary',
     passText: 'Your page has a search summary of a good length.',
     failText: 'Your page has no search summary, or it is too short or too long.',
-    fix: 'Add a page summary (meta description) of about two sentences, 50 to 170 characters. Your fix kit has one.',
+    fix: 'Add a short summary of your business that search engines show under your name. Your fix kit has one written for you.',
   },
   {
     id: 'image-descriptions', group: 'search_basics', points: 3,
@@ -73,7 +73,7 @@ export const CHECKS = Object.freeze([
     label: 'Share picture',
     passText: 'Your page has a picture for sharing.',
     failText: 'Your page has no picture for sharing.',
-    fix: 'Add a share picture (og:image) so links to your site show a photo when people share them.',
+    fix: 'Add a share picture so links to your site show a photo when people text or post them.',
   },
   {
     id: 'tap-to-call', group: 'customer_basics', points: 5,
@@ -108,7 +108,7 @@ export const CHECKS = Object.freeze([
     label: 'Does AI name your business?',
     passText: 'Yes. An AI assistant named your business.',
     failText: 'No. AI assistants did not name your business.',
-    fix: "Claim your free page and work through the fixes below. That gives AI more to read. It can take days to weeks, and we can't promise AI will name you.",
+    fix: "Claim your free listing and work through the fixes below. That gives AI more to read. It can take days to weeks, and we can't promise AI will name you.",
   },
   {
     id: 'google-profile', group: 'google_profile', points: 15,
@@ -200,7 +200,7 @@ export function runWebsiteChecks({ facts, robots, llms, input, failure }) {
   out.push(home('business-labeled', f => {
     const b = f.jsonLd.business;
     if (b && b.name && b.telephone) return true;
-    if (f.jsonLd.unreadableCount > 0 && !b) return "The hidden business label in your website's code has a mistake, so AI cannot read it.";
+    if (f.jsonLd.unreadableCount > 0 && !b) return "Your website has a behind-the-scenes label that tells AI your business name and phone. Yours has a mistake, so AI cannot read it.";
     if (b) return 'Your business label is missing your name or phone.';
     return 'We found no business label on your home page.';
   }));

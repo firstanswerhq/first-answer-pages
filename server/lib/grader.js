@@ -38,7 +38,7 @@ export function stepNames(input) {
     'Reading your home page',
     'Checking what AI is allowed to read',
     `Asking AI to name the best ${input.service} in ${input.city}`,
-    'Building your free page',
+    'Drafting your free directory listing',
   ];
 }
 
@@ -340,7 +340,7 @@ export function createGrader({
   async function aiPart(id, grade) {
     const name = stepNames(grade.input)[3];
     if (grade.ai.length > 0) {
-      await addStep(id, { name, state: 'done', ms: 0, finding: 'Used an answer from the last few days.' });
+      await addStep(id, { name, state: 'done', ms: 0, finding: 'Used the answer AI gave us for this same question a few days ago.' });
       return { ai: grade.ai, reason: undefined };
     }
     let reason;
@@ -384,7 +384,7 @@ export function createGrader({
     let facts = null;
     await timed(id, stepNames(input)[4], async () => {
       facts = summarizeFacts(site.facts, input);
-      return { finding: facts ? 'Built your free page from what we found.' : 'Built your free page from what you typed.' };
+      return { finding: facts ? 'Built your free listing from what we found.' : 'Built your free listing from what you typed.' };
     });
 
     const score = scoreGrade(results);

@@ -121,14 +121,14 @@ describe('SITE_NAME in pages', () => {
   test('default name: home nav still reads First Answer Pages', async () => {
     await withApp({ siteName: DEFAULT_SITE_NAME }, async ({ base }) => {
       const { text } = await getText(base, '/');
-      assert.ok(text.includes('<a href="/">First Answer Pages</a>'));
+      assert.ok(/<a class="brand" href="\/">.*<\/svg>First Answer Pages<\/a>/.test(text));
     });
   });
 
   test('custom name: footer shows it; /healthz and JSON are unaffected', async () => {
     await withApp({ siteName: 'Music City Pages' }, async ({ base }) => {
       const home = await getText(base, '/');
-      assert.ok(home.text.includes('<a href="/">Music City Pages</a>'));
+      assert.ok(/<a class="brand" href="\/">.*<\/svg>Music City Pages<\/a>/.test(home.text));
       assert.ok(home.text.includes('<p>Music City Pages. A free local business directory.</p>'));
 
       const health = await getText(base, '/healthz');
@@ -169,7 +169,7 @@ describe('SITE_NAME property', () => {
           for (const p of HTML_PATHS) {
             const { res, text } = await getText(base, p);
             assert.equal(res.status, 200, p);
-            assert.ok(text.includes(`<a href="/">${escaped}</a>`), `nav on ${p}`);
+            assert.ok(text.includes(`</svg>${escaped}</a>`), `nav on ${p}`);
             const title = /<title>([^]*?)<\/title>/.exec(text)?.[1] ?? '';
             assert.ok(title.includes(escaped), `title on ${p}`);
             assert.ok(!text.includes(DEFAULT_SITE_NAME), `default name left on ${p}`);

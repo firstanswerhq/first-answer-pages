@@ -198,7 +198,7 @@ test('gate on: the report shows the Lead_Form; a valid form stores one Lead, set
 
   const ok = await post(env, `/grade/${id}/unlock`, LEAD);
   assert.equal(ok.status, 303);
-  assert.equal(ok.headers.get('location'), `/grade/${id}`);
+  assert.equal(ok.headers.get('location'), `/grade/${id}#full-report`);
   const setCookie = ok.headers.get('set-cookie');
   assert.match(setCookie, new RegExp(`^g_${id}=`));
   assert.match(setCookie, /HttpOnly/);

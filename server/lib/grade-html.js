@@ -231,7 +231,7 @@ function previewCard(found) {
   const hours = found.hours.length > 0 ? e(found.hours.join('; ')) : blank('Add your hours');
   const address = found.address ? e(found.address) : blank('Add your address');
   const website = found.website ? e(found.website) : blank('Add your website');
-  return `<article class="listing-card grade-preview" aria-label="Your free page, as it would look">
+  return `<article class="listing-card grade-preview" aria-label="Your free listing, as it would look">
       <h3><strong>${e(found.name)}</strong> <span class="phone">${phone}</span></h3>
       <p>${e(found.service)} &middot; ${e(found.city)}, ${e(found.state)}</p>
       <p>${address}</p>
@@ -256,10 +256,10 @@ function fixSection(grade) {
   const failed = topFailed(grade);
   return `<div class="grade-fix">
     <section class="grade-claim">
-      <h2>Your free page</h2>
+      <h2>Your free listing in our directory</h2>
       ${previewCard(found)}
       <form method="POST" action="/grade/${e(grade.id)}/claim">
-        <button type="submit" class="button">Claim my free page</button>
+        <button type="submit" class="button">Claim my free listing</button>
       </form>
       <p class="hint">A free listing for your business in our directory, ${e(DEFAULT_SITE_NAME)}. Next you check the details and send it to us for approval. Nothing goes live until you do.</p>
       ${grade.input.website ? '' : '<p>You did not give a website. A free listing gives AI something to read about the business.</p>'}
@@ -323,7 +323,7 @@ function leadForm(grade, { values = {}, errors = {} } = {}) {
   return `<section class="grade-lead">
     <h2>See every check and the fixes</h2>
     <p>Enter your name, email and phone to open the full report right away, on this page. It has every check, the fix for each one, and text you can copy and paste.</p>
-    <p class="hint">Why the phone number? A business AI recommends needs a number people can call, and it is how we reach you about this report. We never sell it.</p>
+    <p class="hint">Why the phone number? So we can reach the right person if something in your report needs explaining. We only call or text if you check the box below. We never sell it.</p>
     <form class="rise-form" method="POST" action="/grade/${e(grade.id)}/unlock">
 ${field('name', 'Your name', 'text', 'name')}
 ${field('email', 'Email', 'email', 'email')}
@@ -374,7 +374,7 @@ function fixKit(grade) {
   }
   const intro = grade.input.website
     ? 'Copy these into your website, or send them to whoever looks after it.'
-    : 'You did not give a website, so there is nothing to paste these into yet. Keep them for when you have one. Until then, your free page gives AI something to read.';
+    : 'You did not give a website, so there is nothing to paste these into yet. Keep them for when you have one. Until then, your free listing gives AI something to read.';
   return `<section class="grade-kit">
     <h2>Your fix kit</h2>
     <p>${intro}</p>
@@ -382,7 +382,8 @@ function fixKit(grade) {
   </section>`;
 }
 
-function fullReport(grade, contact, rechecking = false) {
+function fullReport(grade, contact, rechecking = false, justOpened = false) {
+  const openedNote = justOpened ? '\n    <p class="notice saved-note" role="status">Your full report is open. Every check and its fix is below.</p>' : '';
   const groups = SHOWN_GROUPS.map(g => {
     const checks = CHECKS.filter(c => c.group === g);
     const extra = g === 'ai_answers' ? allAnswers(grade) : '';
@@ -395,8 +396,8 @@ function fullReport(grade, contact, rechecking = false) {
   </section>`;
   }).join('\n');
   const used = (grade.ai ?? []).length;
-  const answersNote = used > 0 ? `<p class="hint">The AI part of this score uses ${used} ${used === 1 ? 'answer' : 'answers'}.</p>` : '';
-  return `<section class="grade-full">
+  const answersNote = used > 0 ? `<p class="hint">We asked AI ${used} ${used === 1 ? 'question' : 'questions'}. Your score counts ${used === 1 ? 'that answer' : `all ${used} answers`}.</p>` : '';
+  return `<section class="grade-full" id="full-report">${openedNote}
     <h2>Every check</h2>
     ${answersNote}
     ${groups}
@@ -438,7 +439,7 @@ export function reportPage(grade, {
   ${googleSection(grade)}
   ${groupLines(grade)}
   <p class="grade-meta">Automated check, ${e(when)}. AI assistants pick up changes over days to weeks.</p>
-  ${showFull ? fullReport(grade, contact, rechecking) : leadForm(grade, { values: leadValues, errors: leadErrors })}
+  ${showFull ? fullReport(grade, contact, rechecking, leadGate && unlocked) : leadForm(grade, { values: leadValues, errors: leadErrors })}
   <p class="hint">Ask us to remove this report: <a href="${e(contact.href)}">${e(contact.text)}</a></p>
 </article>`;
   return page(

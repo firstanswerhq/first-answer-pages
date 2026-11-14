@@ -223,7 +223,7 @@ export function createGradeRouter(ctx) {
       const result = await grader.unlock(id, lead);
       if (result.status !== 200) return res.redirect(303, `/grade/${id}`);
       setCookie(res, `g_${id}`, unlockToken(secret, id), id);
-      return res.redirect(303, `/grade/${id}`);
+      return res.redirect(303, `/grade/${id}#full-report`);
     } catch (err) {
       return next(err);
     }

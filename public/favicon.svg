@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <title>First Answer Pages</title>
+  <rect width="64" height="64" rx="8" fill="#F8F1E3"/>
+  <g fill="#1E3A5F">
+    <path d="M12 14v36l18-4V18z"/>
+    <path d="M34 18v28l18 4V14z"/>
+  </g>
+</svg>

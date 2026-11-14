@@ -3,6 +3,71 @@
    Mobile-first. American spelling.
 */
 
+/* Fonts are served from this site (no outside requests). Inter and Source Serif 4, SIL Open Font License. */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/inter-latin-400-normal.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Inter";
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/inter-latin-400-italic.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/fonts/inter-latin-500-normal.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/fonts/inter-latin-600-normal.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/inter-latin-700-normal.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Source Serif 4";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/source-serif-4-latin-400-normal.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Source Serif 4";
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/source-serif-4-latin-400-italic.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Source Serif 4";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/source-serif-4-latin-700-normal.woff2") format("woff2");
+}
+
 :root {
   /* Paper & ink */
   --color-page-bg:    #F8F1E3;   /* warm cream paper */
@@ -50,6 +115,8 @@ body {
   color: var(--color-text);
   background: var(--color-page-bg);
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 a {
@@ -158,6 +225,8 @@ h3 {
 }
 
 main {
+  flex: 1 0 auto;
+  width: 100%;
   max-width: 42rem;
   margin: 0 auto;
   padding: 1.25rem 1.15rem 2.5rem;
@@ -707,6 +776,8 @@ details.advanced summary {
 .admin-button:hover,
 .admin-button:focus-visible {
   background: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
+  color: var(--color-button-text);
 }
 
 .admin-button-secondary {
@@ -950,10 +1021,15 @@ details.advanced summary {
   border: 1px solid transparent;
 }
 
+.grade-step {
+  display: grid;
+  grid-template-columns: 6.5rem minmax(0, 1fr);
+  column-gap: 0.5rem;
+  align-items: baseline;
+}
+
 .grade-step .step-mark {
-  display: inline-block;
-  min-width: 6.5rem;
-  vertical-align: top;
+  grid-row: 1 / span 2;
   font-weight: 700;
   text-transform: uppercase;
   font-size: 0.8rem;
@@ -966,18 +1042,12 @@ details.advanced summary {
 
 .grade-step .finding {
   display: block;
+  grid-column: 2;
   margin-left: 0;
   margin-top: 0.2rem;
   font-size: 0.9rem;
   font-style: italic;
   color: var(--color-text-muted);
-}
-
-@media (min-width: 480px) {
-  .grade-step .finding {
-    display: inline;
-    margin-left: 0.5rem;
-  }
 }
 
 /* Report — the money page */
@@ -1100,6 +1170,7 @@ details.advanced summary {
 
 .grade-result {
   display: inline-block;
+  white-space: nowrap;
   margin-left: 0.35rem;
   padding: 0.1rem 0.45rem;
   font-size: 0.75rem;
@@ -1122,6 +1193,7 @@ details.advanced summary {
 }
 
 .grade-points {
+  white-space: nowrap;
   font-size: 0.8rem;
   color: var(--color-text-muted);
   font-weight: 500;
@@ -1299,13 +1371,7 @@ details.advanced summary {
   }
 
   .grade-score {
-    text-align: left;
-    padding: 1.5rem 1.5rem;
-  }
-
-  .grade-score-number .of {
-    display: inline;
-    margin-left: 0.35rem;
+    padding: 1.75rem 1.5rem;
   }
 }
 
@@ -1333,7 +1399,7 @@ details.discard-confirm summary {
 }
 
 /* "No photo? Type it in" is a second choice, so it looks like one */
-.rise-form.type-it-in button {
+main .rise-form.type-it-in button:not([class]) {
   margin-top: 0;
   min-height: 2.75rem;
   padding: 0.55rem 1.1rem;
@@ -1346,10 +1412,212 @@ details.discard-confirm summary {
   cursor: pointer;
 }
 
-.rise-form.type-it-in button:hover,
-.rise-form.type-it-in button:focus-visible {
+main .rise-form.type-it-in button:not([class]):hover,
+main .rise-form.type-it-in button:not([class]):focus-visible {
   background: var(--color-primary);
   color: var(--color-button-text);
+}
+
+/* Brand mark beside the name in the nav */
+.site-nav a.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.brand-mark {
+  flex: 0 0 auto;
+  width: 1.75rem;
+  height: 1.75rem;
+  fill: var(--color-primary);
+}
+
+/* Home page cover: the front of the phone book */
+.home-cover {
+  margin: 0 0 1.5rem;
+  padding: 1.5rem 1.15rem 1.35rem;
+  border: 2px solid var(--color-divider);
+  outline: 1px solid var(--color-divider);
+  outline-offset: 4px;
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  text-align: center;
+}
+
+.home-cover h1 {
+  margin: 0;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--color-text-muted);
+}
+
+.home-cover .tagline {
+  margin: 0.6rem auto 1.1rem;
+  max-width: 22ch;
+  font-size: clamp(1.9rem, 7vw, 3rem);
+  font-style: normal;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.015em;
+  color: var(--color-text);
+}
+
+.home-cover .grade-link {
+  margin: 0;
+}
+
+.home-cover .grade-link a {
+  display: inline-block;
+  padding: 0.8rem 1.4rem;
+  min-height: 2.75rem;
+  border: 2px solid var(--color-primary);
+  border-radius: var(--radius);
+  background: var(--color-primary);
+  color: var(--color-button-text);
+  font-size: 1.05rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.home-cover .grade-link a:hover,
+.home-cover .grade-link a:focus-visible {
+  background: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
+  color: var(--color-button-text);
+}
+
+@media (min-width: 720px) {
+  .home-cover {
+    padding: 2.5rem 2rem 2.25rem;
+  }
+}
+
+/* Listing cards read like phone book entries: only the name is a link color */
+.listing-card h3 a {
+  text-decoration: none;
+}
+
+.listing-card h3 a:hover {
+  text-decoration: underline;
+}
+
+.listing-card .phone a {
+  color: var(--color-text);
+}
+
+/* Any form button without its own class gets the standard look */
+main form button:not([class]) {
+  min-height: 2.75rem;
+  padding: 0.6rem 1.25rem;
+  border: 2px solid var(--color-primary);
+  border-radius: var(--radius);
+  background: var(--color-primary);
+  color: var(--color-button-text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+main form button:not([class]):hover,
+main form button:not([class]):focus-visible {
+  background: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
+}
+
+.grade-full {
+  scroll-margin-top: 1rem;
+}
+
+/* Long names, emails and addresses wrap instead of pushing the page wide */
+h1, h2, h3, p, li, dd, .listing-card, .owner-email, code {
+  overflow-wrap: anywhere;
+}
+
+/* Quieter look for the second-choice buttons on the draft page */
+main .rise-form .confirm button:not([class]):first-of-type,
+main .rise-form.discard button:not([class]) {
+  background: var(--color-surface);
+  color: var(--color-primary);
+}
+
+main .rise-form .confirm button:not([class]):first-of-type:hover,
+main .rise-form .confirm button:not([class]):first-of-type:focus-visible,
+main .rise-form.discard button:not([class]):hover,
+main .rise-form.discard button:not([class]):focus-visible {
+  background: var(--color-primary);
+  color: var(--color-button-text);
+}
+
+/* Bigger tap targets */
+.site-nav a.nav-cta {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+}
+
+.site-nav a.brand {
+  padding: 0.5rem 0;
+}
+
+summary {
+  padding: 0.6rem 0;
+}
+
+.listing-card p a {
+  display: inline-block;
+  padding: 0.3rem 0;
+}
+
+.site-footer a {
+  display: inline-block;
+  padding: 0.5rem 0.25rem;
+}
+
+.rise-form .check input {
+  width: 1.25rem;
+  height: 1.25rem;
+  vertical-align: middle;
+}
+
+.filters select,
+.filters input {
+  font-size: 1rem;
+  font-weight: 400;
+}
+
+/* A status note is not an error */
+.notice[role="status"]:not(.saved-note) {
+  border-color: var(--color-divider);
+  background: var(--color-surface);
+}
+
+/* Keyboard focus shows on the big photo button itself */
+.rise-form:has(.visually-hidden-file:focus-visible) label.big-button {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* The lead form sits in one card, not a card inside a card */
+.grade-lead .rise-form {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.hours-edit {
+  padding: 0.5rem 0.75rem 0.75rem;
+}
+
+.hours-edit legend {
+  padding: 0 0.35rem;
+  font-weight: 600;
 }
 
 /* Rules carried over from the earlier stylesheet */

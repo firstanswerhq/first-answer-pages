@@ -213,7 +213,7 @@ for (const [label, exp] of Object.entries(EXPECTED)) {
     const html = await page.text();
     assert.ok(html.includes(`<span class="num">${exp.score.score}</span>`), 'score shown');
     assert.ok(html.includes(`${exp.score.failed} of ${exp.score.counted} checks need work`));
-    assert.ok(html.includes('Claim my free page'));
+    assert.ok(html.includes('Claim my free listing'));
     assert.ok(html.includes('Nothing goes live until you do.'));
     assert.ok(html.includes('days to weeks'));
     assert.ok(html.includes('Automated check'));
