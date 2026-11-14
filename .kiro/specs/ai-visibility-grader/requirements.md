@@ -185,7 +185,7 @@ Node.js 22, plain Express, plain JavaScript ES modules, JSON files under `DATA_D
 7. IF the Grade_Id does not match a stored Grade, THEN THE Server SHALL respond with HTTP status 404.
 8. THE report SHALL include an "Ask us to remove this report" line with the site's contact email when `CONTACT_EMAIL` is set, and the contact page otherwise.
 
-9. WHEN a report first shows, THE page SHALL show, without scrolling at 1280 by 720, in this order: the Score with "<failed> of <counted> checks failed"; the AI result sentence with the competitor names; and the Free_Page_Preview with the "Claim my free listing" button and the line "Goes live after you check it and we approve it." At 900 pixels and wider, the Free_Page_Preview SHALL sit beside the top three failed Checks.
+9. WHEN a report first shows, THE Score with "<failed> of <counted> checks need work" and the start of the AI result sentence SHALL be visible without scrolling at 1280 by 720; the Free_Page_Preview with the "Claim my free listing" button and the line "Nothing goes live until you do." SHALL follow next, in that order. At 900 pixels and wider, the Free_Page_Preview SHALL sit beside the top three failed Checks.
 
 ### Requirement 10: The Instant Free Page
 

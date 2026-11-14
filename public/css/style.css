@@ -63,15 +63,6 @@
   src: url("/fonts/fira-sans-condensed-latin-700-italic.woff2") format("woff2");
 }
 
-/* Old-style lettering for headings (Rozha One, SIL Open Font License) */
-@font-face {
-  font-family: "Rozha One";
-  font-style: normal;
-  font-weight: 400 900;
-  font-display: swap;
-  src: url("/fonts/rozha-one-latin-400-normal.woff2") format("woff2");
-}
-
 :root {
   /* Paper & ink */
   --color-page-bg:    #F8F1E3;   /* warm cream paper */
@@ -1424,20 +1415,6 @@ main .rise-form.type-it-in button:not([class]):focus-visible {
   color: var(--color-button-text);
 }
 
-/* Brand mark beside the name in the nav */
-.site-nav a.brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.brand-mark {
-  flex: 0 0 auto;
-  width: 1.75rem;
-  height: 1.75rem;
-  fill: var(--color-primary);
-}
-
 /* Any form button without its own class gets the standard look */
 main form button:not([class]) {
   min-height: 2.75rem;
@@ -1589,10 +1566,6 @@ summary {
   flex-wrap: nowrap;
   font-size: clamp(1.1rem, 4.6vw, 1.5rem);
   letter-spacing: 0;
-}
-
-.brand-mark {
-  display: none;
 }
 
 .site-nav a.nav-cta {
@@ -2221,6 +2194,96 @@ body {
 
 .grade-eyebrow-sub {
   font-size: 0.95rem;
+}
+
+/* ---------- Final review fixes ---------- */
+
+/* The old-style digits have no italic or bold of their own, so never fake one */
+body {
+  font-synthesis: none;
+}
+
+/* No sideways scroll on the narrowest phones */
+.filters {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (max-width: 380px) {
+  .site-nav {
+    gap: 0.5rem;
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+
+  .site-nav a.brand {
+    font-size: 1rem;
+  }
+
+  .site-nav a.nav-cta {
+    padding: 0.5rem 0.6rem;
+    font-size: 0.9rem;
+  }
+}
+
+.grade-points {
+  font-size: 0.95rem;
+}
+
+/* Decorations are drawn for the eye only; screen readers skip them */
+.grade-score-number .of::after {
+  content: "/ 100" / "";
+}
+
+.grade-eyebrow::before {
+  content: "\2733" / "";
+}
+
+.grade-lead .button::after {
+  content: "\2192" / "";
+}
+
+/* Headings that wrap split evenly, never leaving one word alone */
+h1,
+h2,
+h3,
+.home-head .grade-link a {
+  text-wrap: balance;
+}
+
+/* A phone number never splits across lines in the search preview */
+.serp-desc,
+.serp-title {
+  overflow-wrap: break-word;
+}
+
+.grade-preview h3 .blank {
+  font-size: 0.95rem;
+  font-weight: 400;
+}
+
+/* What a visitor types in the search boxes is as dark as other text */
+.filters input {
+  color: var(--color-text);
+}
+
+.filters input::placeholder {
+  color: var(--color-text-muted);
+}
+
+/* Bigger tap targets on the directory and listing pages */
+.listing-card h3 a,
+.listing-detail > p:first-child a,
+.listing-card p a {
+  display: inline-block;
+  padding: 0.5rem 0;
+}
+
+/* "No photo? Type it in" sits on the paper, not alone in a box */
+.rise-form.type-it-in {
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
 }
 
 /* ---------- Utility / print ---------- */

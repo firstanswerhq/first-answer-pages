@@ -83,3 +83,10 @@ setupCopyButtons(document);
 const scan = document.querySelector('[data-grade-scan]');
 if (scan) watchScan(scan);
 if (document.querySelector('[data-grade-rechecking]')) watchRecheck();
+
+// The "report is open" note shows once: drop ?opened=1 so a reload does not bring it back.
+(function () {
+  if (typeof history === 'undefined' || !history.replaceState) return;
+  if (!/[?&]opened=1/.test(location.search)) return;
+  history.replaceState(null, '', location.pathname + location.hash);
+})();

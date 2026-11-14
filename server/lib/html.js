@@ -167,7 +167,7 @@ function renderLayout({ title, body, jsonLd, scripts, siteName, canonical, descr
 </head>
 <body>
   <nav class="site-nav">
-    <a class="brand" href="/"><svg class="brand-mark" viewBox="0 0 64 64" width="28" height="28" aria-hidden="true" focusable="false"><path d="M12 14v36l18-4V18z"/><path d="M34 18v28l18 4V14z"/></svg>${name}</a>
+    <a class="brand" href="/">${name}</a>
     <a class="nav-cta" href="/rise">List your business free</a>
   </nav>
   <main>

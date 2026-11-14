@@ -195,6 +195,11 @@ test('gate on: the report shows the Lead_Form; a valid form stores one Lead, set
   assert.ok(badHtml.includes('Type a real email address'));
   assert.ok(badHtml.includes('Type a 10-digit phone number'));
   assert.deepEqual(await readJson(env, 'leads.json', []), []);
+  // The form says something went wrong, and the cursor goes to the first bad field only.
+  assert.ok(badHtml.includes('Please fix the highlighted fields.'));
+  assert.equal(badHtml.split(' autofocus').length - 1, 1);
+  assert.match(badHtml, /id="l-name"[^>]* aria-invalid="true" aria-describedby="l-err-name"[^>]* autofocus/);
+  assert.ok(badHtml.includes('id="l-err-phone"'));
 
   const ok = await post(env, `/grade/${id}/unlock`, LEAD);
   assert.equal(ok.status, 303);
@@ -220,6 +225,11 @@ test('gate on: the report shows the Lead_Form; a valid form stores one Lead, set
   assert.equal(notice[0].lead.email, 'pat@example.com');
 
   const cookie = cookieOf(ok);
+  // The "report is open" note shows once: only with ?opened=1 and the unlock cookie.
+  const NOTE = 'Your full report is open.';
+  assert.ok((await (await get(env, `/grade/${id}?opened=1`, { cookie })).text()).includes(NOTE));
+  assert.equal((await (await get(env, `/grade/${id}`, { cookie })).text()).includes(NOTE), false);
+  assert.equal((await (await get(env, `/grade/${id}?opened=1`)).text()).includes(NOTE), false);
   const open = await (await get(env, `/grade/${id}`, { cookie })).text();
   assert.ok(open.includes('Your fix kit'));
   assert.equal(open.includes('Check again'), false, 'nothing to read again without a website');

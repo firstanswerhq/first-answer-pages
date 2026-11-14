@@ -191,17 +191,10 @@ function aiSection(grade, now) {
   </section>`;
 }
 
-// Color band for the big number: under 50 is low, 50 to 79 is middle, 80 and up is good.
-function scoreBand(score) {
-  if (score >= 80) return 'score-good';
-  if (score >= 50) return 'score-mid';
-  return 'score-low';
-}
-
 function scoreSection(grade) {
   const s = grade.score ?? {};
   const big = Number.isInteger(s.score)
-    ? `<p class="grade-score-number ${scoreBand(s.score)}"><span class="num">${s.score}</span> <span class="of">out of 100</span></p>`
+    ? `<p class="grade-score-number"><span class="num">${s.score}</span> <span class="of">out of 100</span></p>`
     : '<p class="grade-score-number"><span class="num-text">Not enough to score yet</span></p>';
   let failed;
   if (!grade.input.website && !Number.isInteger(s.score)) {
@@ -320,8 +313,8 @@ function leadForm(grade, { values = {}, errors = {} } = {}) {
   const errorNote = firstError ? '\n    <p class="notice" role="alert">Please fix the highlighted fields.</p>' : '';
   const field = (key, label, type, auto) => `    <div class="field${errors[key] ? ' missing' : ''}">
       <label for="l-${key}">${e(label)}</label>
-      <input type="${type}" id="l-${key}" name="${key}" value="${e(values[key] ?? '')}" maxlength="200" autocomplete="${auto}" required${key === firstError ? ' autofocus' : ''}>
-      ${errors[key] ? `<span class="missing-note">${e(errors[key])}</span>` : ''}
+      <input type="${type}" id="l-${key}" name="${key}" value="${e(values[key] ?? '')}" maxlength="200" autocomplete="${auto}" required${errors[key] ? ` aria-invalid="true" aria-describedby="l-err-${key}"` : ''}${key === firstError ? ' autofocus' : ''}>
+      ${errors[key] ? `<span class="missing-note" id="l-err-${key}">${e(errors[key])}</span>` : ''}
     </div>`;
   return `<section class="grade-lead" id="lead">
     <h2>See every check and the fixes</h2>

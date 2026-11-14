@@ -391,7 +391,7 @@ ${preview}
           : `<form method="POST" action="/admin/quotes/${encodeURIComponent(q.id ?? '')}/handled"><button type="submit" class="admin-button admin-button-secondary">Mark handled</button></form>`;
         return `<li class="pending-item">
   <h2>${target}</h2>
-  ${business}${forward}<p>Quote ${escapeHtml(q.id ?? '')} &middot; ${escapeHtml(adminTime(q.createdAt ?? ''))} &middot; Emailed: ${emailed}</p>
+  ${business}${forward}<p>Quote <code>${escapeHtml(q.id ?? '')}</code> &middot; ${escapeHtml(adminTime(q.createdAt ?? ''))} &middot; Emailed: ${emailed}</p>
   <p>From: ${escapeHtml(q.name ?? '')} &middot; Contact: ${contactHtml(q.contact)}</p>
   <p class="quote-details">${escapeHtml(q.details ?? '')}</p>
   ${action}
