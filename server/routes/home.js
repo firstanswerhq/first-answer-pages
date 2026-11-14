@@ -63,7 +63,7 @@ export function createHomeRouter(ctx) {
   <label>City
     <input type="text" name="city" value="${escapeHtml(city)}">
   </label>
-  <button type="submit">Search</button>
+  <button type="submit">Search Directory</button>
 </form>`;
 
     // Page heading for filtered views, e.g. "Plumbers in Nashville".
@@ -105,8 +105,10 @@ ${group.map(l => listingCard(l, categories)).join('\n')}
     const graderLink = ctx.config?.graderEnabled === false
       ? ''
       : '\n<p class="grade-link"><a href="/grade">Can AI find your business? Get a free check.</a></p>';
-    const body = `<h1>Local Business Directory</h1>
+    const body = `<header class="home-head">
+<h1>Local Business Directory</h1>
 <p class="tagline">The phone book is back, and AI can read it.</p>${graderLink}
+</header>
 ${filterForm}
 ${results}`;
 

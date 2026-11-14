@@ -218,6 +218,7 @@ function scoreSection(grade) {
     ? `<p class="grade-prev">Before: ${grade.previousScore}. Now: ${s.score}.</p>`
     : '';
   return `<section class="grade-score">
+    <p class="grade-eyebrow"><span class="grade-eyebrow-title">AI Visibility Check</span> <span class="grade-eyebrow-sub">Report &middot; ${e(DEFAULT_SITE_NAME)}</span></p>
     <h1>${e(grade.input.name)}</h1>
     <p class="grade-where">${e(grade.input.service)} in ${e(grade.input.city)}, ${e(grade.input.state)}</p>
     ${big}

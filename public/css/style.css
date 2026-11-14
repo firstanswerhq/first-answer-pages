@@ -62,6 +62,14 @@
 
 @font-face {
   font-family: "Source Serif 4";
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/source-serif-4-latin-700-italic.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Source Serif 4";
   font-style: normal;
   font-weight: 700;
   font-display: swap;
@@ -1562,6 +1570,576 @@ summary {
 
 .grade-ai details {
   margin-top: 0.5rem;
+}
+
+
+/* =====================================================================
+   Match the designer's mockups (Direction A, Modern Phone Book)
+   Centered serif headings, gold rules, icon fields, big score, check rows
+   ===================================================================== */
+
+:root {
+  --color-primary: #0C2C73;        /* phone-book blue for buttons and links */
+  --color-primary-hover: #081F52;
+  --color-link: #0C2C73;
+  --color-focus: #0C2C73;
+  --color-ink: #0F1B33;            /* score number and dark buttons */
+  --color-gold: #B8893B;           /* thin rules and ornaments */
+  --color-tan: #F3E7CC;            /* empty-state card */
+  --radius: 6px;
+}
+
+/* Top bar and footer sit on the paper, with the double rule */
+.site-nav,
+.site-footer {
+  background: var(--color-page-bg);
+}
+
+.site-nav {
+  flex-wrap: nowrap;
+  font-size: clamp(1.1rem, 4.6vw, 1.5rem);
+  letter-spacing: 0;
+}
+
+.brand-mark {
+  display: none;
+}
+
+.site-nav a.nav-cta {
+  flex: 0 0 auto;
+  font-size: clamp(0.78rem, 3.3vw, 0.95rem);
+  padding: 0.45rem 0.8rem;
+  text-align: center;
+}
+
+.site-footer {
+  font-family: "Source Serif 4", Georgia, serif;
+  font-size: 1rem;
+  color: var(--color-text);
+}
+
+/* ---------- Home ---------- */
+
+.home-head {
+  text-align: center;
+  margin: 1.5rem 0 1.5rem;
+}
+
+.home-head h1 {
+  margin: 0;
+  font-style: italic;
+  font-size: clamp(2.6rem, 12.5vw, 4.5rem);
+  line-height: 1.02;
+  letter-spacing: -0.02em;
+  color: var(--color-ink);
+}
+
+.home-head .tagline {
+  margin: 0.9rem 0 0;
+  font-size: clamp(1.1rem, 4.6vw, 1.5rem);
+  color: var(--color-text);
+}
+
+.home-head .tagline::after {
+  content: "";
+  display: block;
+  width: 9rem;
+  max-width: 40%;
+  height: 2px;
+  margin: 1.1rem auto 0;
+  background: var(--color-ink);
+}
+
+.home-head .grade-link {
+  margin: 1.1rem 0 0;
+  font-family: "Source Serif 4", Georgia, serif;
+  font-size: 1.1rem;
+}
+
+.filters {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.85rem;
+  max-width: 44rem;
+  margin: 0 auto 1.5rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.filters label {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 3.5rem;
+  margin: 0;
+  padding: 0.25rem 0.75rem 0.25rem 3.1rem;
+  border: 1.5px solid var(--color-ink);
+  border-radius: var(--radius);
+  background: var(--color-surface) no-repeat 0.85rem center / 1.6rem;
+  font-family: "Source Serif 4", Georgia, serif;
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+.filters label:nth-of-type(1) {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230F1B33' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 12V4h8l10 10-8 8z'/%3E%3Ccircle cx='7.5' cy='8.5' r='1.3'/%3E%3C/svg%3E");
+}
+
+.filters label:nth-of-type(2) {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230F1B33' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 21s-7-6.2-7-11.5a7 7 0 0114 0C19 14.8 12 21 12 21z'/%3E%3Ccircle cx='12' cy='9.5' r='2.3'/%3E%3C/svg%3E");
+}
+
+.filters label:focus-within {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.filters select,
+.filters input {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+  margin: 0;
+  padding: 0.5rem 0.25rem;
+  border: 0;
+  background: transparent;
+  font-family: Inter, system-ui, sans-serif;
+  color: var(--color-text-muted);
+}
+
+.filters select:focus-visible,
+.filters input:focus-visible {
+  outline: none;
+}
+
+.filters button {
+  width: 100%;
+  min-height: 3.5rem;
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+
+.no-results {
+  max-width: 44rem;
+  margin: 1.5rem auto;
+  padding: 1.5rem 1.25rem;
+  border: 1.5px solid var(--color-gold);
+  border-radius: 10px;
+  background: var(--color-tan);
+  font-family: "Source Serif 4", Georgia, serif;
+  font-size: clamp(1.4rem, 6vw, 1.9rem);
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--color-ink);
+}
+
+.no-results a {
+  display: block;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1.5px solid var(--color-ink);
+  font-size: clamp(1.15rem, 5vw, 1.5rem);
+  font-weight: 400;
+  text-decoration: none;
+}
+
+.no-results a:hover {
+  text-decoration: underline;
+}
+
+/* Section heads: centered capitals with a gold rule on each side */
+.category-head,
+.category-title,
+.grade-group h2,
+.grade-report h2,
+.grade-ai h2,
+.grade-kit h2,
+.grade-lead h2,
+.grade-offer h2 {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.9rem;
+  padding-bottom: 0;
+  border-bottom: 0;
+  font-size: 1.2rem;
+  font-weight: 700;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-ink);
+}
+
+.category-head::before,
+.category-head::after,
+.category-title::before,
+.category-title::after,
+.grade-report h2::before,
+.grade-report h2::after {
+  content: "";
+  flex: 1 1 1.5rem;
+  min-width: 1rem;
+  height: 1px;
+  background: var(--color-gold);
+}
+
+/* Directory entries: name, dotted leader, number, like a phone book line */
+.directory,
+.directory-single {
+  max-width: 60rem;
+  margin: 0 auto;
+}
+
+.listing-card h3 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+}
+
+.listing-card h3 a {
+  text-decoration: none;
+}
+
+.listing-card h3 a:hover {
+  text-decoration: underline;
+}
+
+.listing-card .phone {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: baseline;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 1rem;
+}
+
+.listing-card .phone::before {
+  content: "";
+  flex: 1 1 1rem;
+  min-width: 1rem;
+  margin: 0 0.45rem;
+  border-bottom: 2px dotted var(--color-text-muted);
+  transform: translateY(-0.25em);
+}
+
+.listing-card .phone a {
+  color: var(--color-ink);
+  text-decoration: none;
+}
+
+@media (min-width: 640px) {
+  .category > .listing-card:nth-of-type(odd),
+  .category-grid > .listing-card:nth-of-type(odd) {
+    padding-right: 2rem;
+  }
+}
+
+/* ---------- Grader report ---------- */
+
+.grade-score {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 0 0 1.5rem;
+  padding: 0.5rem 0 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  text-align: center;
+}
+
+@media (min-width: 900px) {
+  .grade-score {
+    padding: 1rem 0 0;
+    text-align: center;
+  }
+}
+
+.grade-eyebrow {
+  order: 0;
+  width: 100%;
+  margin: 0 0 0.4rem;
+  padding-bottom: 0.9rem;
+  border-bottom: 1px solid var(--color-gold);
+}
+
+.grade-eyebrow::before {
+  content: "\2733";
+  display: block;
+  margin-bottom: 0.15rem;
+  font-size: 1.4rem;
+  line-height: 1;
+  color: var(--color-gold);
+}
+
+.grade-eyebrow-title {
+  display: block;
+  font-family: "Source Serif 4", Georgia, serif;
+  font-size: clamp(1.25rem, 5.5vw, 1.7rem);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--color-ink);
+}
+
+.grade-eyebrow-sub {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--color-text-muted);
+}
+
+.grade-score-number {
+  order: 1;
+  margin: 0.2rem 0 0.4rem;
+  padding: 0 1rem 0.5rem;
+  border-bottom: 1px solid var(--color-gold);
+  white-space: nowrap;
+}
+
+.grade-score-number .num {
+  font-size: clamp(5.5rem, 27vw, 9rem);
+  line-height: 1.05;
+  color: var(--color-ink);
+}
+
+/* The page says "out of 100"; it is drawn as "/ 100" */
+.grade-score-number .of,
+.grade-score-number .of:only-child {
+  display: inline;
+  margin: 0;
+  font-size: 0;
+}
+
+.grade-score-number .of::after {
+  content: "/ 100";
+  margin-left: 0.18em;
+  font-family: "Source Serif 4", Georgia, serif;
+  font-size: clamp(3rem, 15vw, 5rem);
+  font-weight: 700;
+  line-height: 1;
+  color: var(--color-ink);
+}
+
+.grade-score h1 {
+  order: 2;
+  margin: 0.4rem 0 0;
+  font-family: "Source Serif 4", Georgia, serif;
+  font-size: clamp(1.5rem, 6.5vw, 2rem);
+  font-style: italic;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--color-ink);
+}
+
+.grade-where {
+  order: 3;
+  margin: 0.1rem 0 0;
+  font-size: 1rem;
+  color: var(--color-text);
+}
+
+.grade-failed {
+  order: 4;
+  margin: 0.35rem 0 0;
+  font-style: italic;
+  font-weight: 600;
+}
+
+.grade-prev,
+.grade-score .notice {
+  order: 5;
+}
+
+/* Check rows: icon on the left, pill on the right */
+.grade-check,
+.grade-check.pass,
+.grade-check.fail,
+.grade-check.needs_work {
+  position: relative;
+  margin: 0;
+  padding: 0.7rem 0.85rem 0.7rem 3.25rem;
+  border: 1px solid #D9CDB4;
+  border-left: 4px solid var(--color-divider);
+  border-radius: 0;
+  background: var(--color-surface) no-repeat 0.7rem 0.75rem / 1.75rem;
+  box-shadow: none;
+  overflow: hidden;
+}
+
+.grade-check + .grade-check {
+  border-top: 0;
+}
+
+.grade-check.pass {
+  border-left-color: var(--color-success);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='11' fill='%232D6A4F'/%3E%3Cpath d='M7 12.5l3.2 3.2L17 9' fill='none' stroke='%23fff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+.grade-check.fail,
+.grade-check.needs_work {
+  border-left-color: var(--color-fail);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='11' fill='%239B2C2C'/%3E%3Cpath d='M12 6.500v7' stroke='%23fff' stroke-width='2.6' stroke-linecap='round'/%3E%3Ccircle cx='12' cy='17.200' r='1.500' fill='%23fff'/%3E%3C/svg%3E");
+}
+
+.grade-check.not_checked {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='11' fill='%238A8279'/%3E%3Cpath d='M7.500 12h9' stroke='%23fff' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E");
+  opacity: 1;
+}
+
+.grade-result,
+.grade-check.pass .grade-result,
+.grade-check.fail .grade-result,
+.grade-check.needs_work .grade-result {
+  float: right;
+  margin: 0 0 0.25rem 0.75rem;
+  padding: 0.2rem 0.7rem;
+  border: 1.5px solid currentColor;
+  border-radius: 999px;
+  background: transparent;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+}
+
+/* "Fix these first" uses the same rows */
+.grade-top-fails ul {
+  list-style: none;
+  margin: 0.75rem 0;
+  padding: 0;
+}
+
+.grade-top-fails li {
+  padding: 0.7rem 0.85rem 0.7rem 3.25rem;
+  border: 1px solid #D9CDB4;
+  border-left: 4px solid var(--color-fail);
+  background: var(--color-surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='11' fill='%239B2C2C'/%3E%3Cpath d='M12 6.500v7' stroke='%23fff' stroke-width='2.6' stroke-linecap='round'/%3E%3Ccircle cx='12' cy='17.200' r='1.500' fill='%23fff'/%3E%3C/svg%3E") no-repeat 0.7rem 0.75rem / 1.75rem;
+}
+
+.grade-top-fails li + li {
+  border-top: 0;
+}
+
+/* Free listing preview: double-rule card on paper */
+.grade-preview {
+  background: var(--color-surface);
+  border: 3px double var(--color-ink);
+}
+
+/* Lead form */
+.grade-lead {
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.grade-lead > p {
+  text-align: center;
+}
+
+.grade-lead .field label {
+  font-family: "Source Serif 4", Georgia, serif;
+}
+
+.grade-lead .field input {
+  padding-left: 2.9rem;
+  border: 1.5px solid var(--color-gold);
+  background: #fff no-repeat 0.8rem center / 1.35rem;
+}
+
+#l-name {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230F1B33' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='8' r='4'/%3E%3Cpath d='M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7'/%3E%3C/svg%3E");
+}
+
+#l-email {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230F1B33' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='5' width='18' height='14' rx='1.5'/%3E%3Cpath d='M3.5 6.5l8.5 6.5 8.5-6.5'/%3E%3C/svg%3E");
+}
+
+#l-phone {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230F1B33' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6.5 3h3l1.5 4.5-2 1.5a12 12 0 006 6l1.5-2 4.5 1.5v3a2 2 0 01-2 2A16 16 0 014.500 5a2 2 0 012-2z'/%3E%3C/svg%3E");
+}
+
+.grade-lead .button {
+  min-height: 3.25rem;
+  border-color: var(--color-ink);
+  background: var(--color-ink);
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.grade-lead .button::after {
+  content: "\2192";
+  margin-left: 0.75rem;
+  color: var(--color-gold);
+}
+
+.grade-lead .button:hover,
+.grade-lead .button:focus-visible {
+  border-color: #000;
+  background: #000;
+}
+
+.site-nav {
+  padding: 0.85rem 1rem;
+}
+
+.site-nav a.brand {
+  white-space: nowrap;
+}
+
+.home-head .grade-link {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.grade-preview h3 {
+  display: block;
+}
+
+.grade-preview .phone {
+  display: inline;
+  font-family: inherit;
+  font-size: inherit;
+}
+
+.grade-preview .phone::before {
+  display: none;
+}
+
+/* Check rows: pill pinned top right, label and points stacked beside it */
+.grade-check {
+  overflow: visible;
+}
+
+.grade-check > strong {
+  display: block;
+  padding-right: 7.25rem;
+}
+
+.grade-check > .grade-points {
+  display: block;
+  margin-bottom: 0.15rem;
+}
+
+.grade-check > br:first-of-type {
+  display: none;
+}
+
+.grade-result,
+.grade-check.pass .grade-result,
+.grade-check.fail .grade-result,
+.grade-check.needs_work .grade-result {
+  position: absolute;
+  top: 0.7rem;
+  right: 0.75rem;
+  float: none;
+  margin: 0;
 }
 
 /* ---------- Utility / print ---------- */
