@@ -513,7 +513,7 @@ export function createGrader({
 
   const extraPrompts = input => [
     `I need ${input.service} in ${input.city}, ${input.state}. Which companies would you recommend?`,
-    `Which ${input.service} in ${input.city}, ${input.state} do people say is the most reliable?`,
+    `Which ${input.service} in ${input.city}, ${input.state} do people say are the most reliable?`,
   ];
 
   async function runExtraQuestions(id) {

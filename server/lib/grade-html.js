@@ -30,7 +30,7 @@ const page = (title, body, head = '') => layout({
 const e = escapeHtml;
 
 /** A short page for 404s, limits and other messages (always not indexed). */
-export function gradeMessagePage(title, message, link = { href: '/grade', text: 'Grade a business' }) {
+export function gradeMessagePage(title, message, link = { href: '/grade', text: 'Check a business' }) {
   return page(title, `<section class="message">
   <h1>${e(title)}</h1>
   <p>${e(message)}</p>
@@ -293,7 +293,7 @@ function googleSection(grade) {
         <h3>With the fixes</h3>
         <p class="serp-title">${e(suggestedTitle(found))}</p>
         <p class="serp-url">${host ? e(host) : e('your-website')}</p>
-        <p class="serp-desc">${e(suggestedSummary(found))}</p>
+        <p class="serp-desc">${e(suggestedSummary(found)).replace(/\) (\d)/g, ')&nbsp;$1')}</p>
       </div>
     </div>
   </section>`;
@@ -473,8 +473,8 @@ export function aboutPage({ contactEmail, userAgent = '' } = {}) {
     ? `<a href="mailto:${e(contactEmail)}">${e(contactEmail)}</a>`
     : null;
   const body = `<section class="rise grade-about">
-  <h1>What the Grader reads</h1>
-  <p>When someone grades a business with a website, our server visits that website once. It is the same as opening the page in a browser.</p>
+  <h1>What the AI Visibility Check reads</h1>
+  <p>When someone checks a business with a website, our server visits that website once. It is the same as opening the page in a browser.</p>
   <ul>
     <li>The home page.</li>
     <li>The file <code>/robots.txt</code>, to see whether AI assistants are allowed in.</li>
@@ -485,7 +485,7 @@ export function aboutPage({ contactEmail, userAgent = '' } = {}) {
   <p>We also ask one AI assistant up to three questions about the best businesses of that kind in that city, and check whether the business is named.</p>
   <p>Reports are not listed in search engines. We delete them after 90 days.</p>
   <p>Questions, or want a report removed? ${contact ? `Email ${contact}` : 'Use <a href="/about">our contact page</a>'}.</p>
-  <p><a href="/grade">Grade a business</a></p>
+  <p><a href="/grade">Check a business</a></p>
 </section>`;
-  return page('What the Grader reads', body);
+  return page('What the AI Visibility Check reads', body);
 }

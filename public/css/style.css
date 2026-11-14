@@ -2250,19 +2250,14 @@ h3,
   text-wrap: balance;
 }
 
-/* A phone number never splits across lines in the search preview */
-.serp-desc,
-.serp-title {
-  overflow-wrap: break-word;
-}
-
 .grade-preview h3 .blank {
   font-size: 0.95rem;
   font-weight: 400;
 }
 
 /* What a visitor types in the search boxes is as dark as other text */
-.filters input {
+.filters input,
+.filters select {
   color: var(--color-text);
 }
 
@@ -2284,6 +2279,37 @@ h3,
   border: 0;
   background: none;
   box-shadow: none;
+}
+
+.grade-preview h3 {
+  text-wrap: wrap;
+}
+
+.confirm-cta {
+  text-wrap: balance;
+}
+
+/* Inline contact links on the report are big enough to tap */
+.grade-report p > a[href^="mailto:"],
+.grade-report p > a[href="/about"] {
+  display: inline-block;
+  padding: 0.5rem 0;
+}
+
+/* On the narrowest phones the pill drops under the check title */
+@media (max-width: 359px) {
+  .grade-check > strong {
+    padding-right: 0;
+  }
+
+  .grade-result,
+  .grade-check.pass .grade-result,
+  .grade-check.fail .grade-result,
+  .grade-check.needs_work .grade-result {
+    position: static;
+    display: inline-block;
+    margin: 0.25rem 0;
+  }
 }
 
 /* ---------- Utility / print ---------- */
