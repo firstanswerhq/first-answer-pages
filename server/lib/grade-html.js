@@ -191,10 +191,17 @@ function aiSection(grade, now) {
   </section>`;
 }
 
+// Color band for the big number: under 50 is low, 50 to 79 is middle, 80 and up is good.
+function scoreBand(score) {
+  if (score >= 80) return 'score-good';
+  if (score >= 50) return 'score-mid';
+  return 'score-low';
+}
+
 function scoreSection(grade) {
   const s = grade.score ?? {};
   const big = Number.isInteger(s.score)
-    ? `<p class="grade-score-number"><span class="num">${s.score}</span> <span class="of">out of 100</span></p>`
+    ? `<p class="grade-score-number ${scoreBand(s.score)}"><span class="num">${s.score}</span> <span class="of">out of 100</span></p>`
     : '<p class="grade-score-number"><span class="num-text">Not enough to score yet</span></p>';
   let failed;
   if (!grade.input.website && !Number.isInteger(s.score)) {

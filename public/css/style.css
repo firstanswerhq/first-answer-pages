@@ -1,36 +1,131 @@
-/* First Answer Pages: classic phone-book look. Hand-written, no frameworks. */
+/* First Answer Pages — Modern Phone Book
+   Hand-written CSS. No frameworks. Keeps existing class names.
+   Mobile-first. American spelling.
+*/
 
 :root {
-  --color-page-bg: #FDF3C0; /* paper yellow */
-  --color-text:    #1A1A1A; /* near-black */
-  --color-divider: #333333;
-  --color-link:    #0000EE; /* classic blue hyperlink */
+  /* Paper & ink */
+  --color-page-bg:    #F8F1E3;   /* warm cream paper */
+  --color-surface:    #FFFEF9;   /* soft off-white cards */
+  --color-text:       #1C1917;   /* near-black */
+  --color-text-muted: #57534E;   /* secondary text */
+  --color-divider:    #44403C;   /* charcoal rules */
+
+  /* Accent & status */
+  --color-primary:    #1E3A5F;   /* deep ink blue */
+  --color-primary-hover: #152A45;
+  --color-link:       #1E3A5F;
+  --color-success:    #2D6A4F;   /* forest green */
+  --color-success-bg: #E8F5E9;
+  --color-fail:       #9B2C2C;   /* deep brick */
+  --color-fail-bg:    #FEF2F2;
+  --color-warn:       #B45309;   /* amber */
+  --color-warn-bg:    #FFFBEB;
+
+  /* Surfaces */
+  --color-button-text: #FFFEF9;
+  --color-focus:      #1E3A5F;
+  --radius:           4px;
+  --shadow-sm:        0 1px 2px rgba(28, 25, 23, 0.06);
+  --shadow-md:        0 4px 12px rgba(28, 25, 23, 0.08);
 }
 
-* {
+/* ---------- Reset & base ---------- */
+
+*,
+*::before,
+*::after {
   box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
   margin: 0;
-  font-family: Georgia, serif;
-  line-height: 1.4;
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 1rem;
+  line-height: 1.5;
   color: var(--color-text);
   background: var(--color-page-bg);
+  min-height: 100vh;
 }
 
 a {
   color: var(--color-link);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 2px;
 }
 
-/* Nav and footer */
+a:hover {
+  color: var(--color-primary-hover);
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* ---------- Typography ---------- */
+
+h1, h2, h3, h4 {
+  font-family: "Source Serif 4", Georgia, "Times New Roman", serif;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--color-text);
+}
+
+h1 {
+  margin: 0.5rem 0;
+  font-size: clamp(1.75rem, 5vw, 2.25rem);
+  letter-spacing: -0.01em;
+}
+
+h2 {
+  margin: 1.5rem 0 0.6rem;
+  font-size: 1.35rem;
+}
+
+h3 {
+  margin: 0.75rem 0 0.35rem;
+  font-size: 1.1rem;
+}
+
+.tagline {
+  margin: 0.25rem 0 1rem;
+  font-family: "Source Serif 4", Georgia, serif;
+  font-style: italic;
+  font-weight: 400;
+  font-size: 1.05rem;
+  color: var(--color-text-muted);
+}
+
+/* ---------- Layout shell ---------- */
+
 .site-nav {
-  padding: 0.75rem 1.5rem;
-  border-bottom: 4px double var(--color-divider);
-  font-size: 1.3rem;
-  font-weight: bold;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  padding: 0.85rem 1.25rem;
+  border-bottom: 3px double var(--color-divider);
+  background: var(--color-surface);
+  font-family: "Source Serif 4", Georgia, serif;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .site-nav a {
@@ -38,515 +133,222 @@ a {
   text-decoration: none;
 }
 
-main {
-  max-width: 60rem;
-  margin: 0 auto;
-  padding: 1rem 1.5rem 2rem;
+.site-nav a:hover {
+  color: var(--color-primary);
 }
 
-.site-footer .demo-note {
-  font-weight: bold;
+.site-nav a.nav-cta {
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 0.45rem 0.9rem;
+  border: 2px solid var(--color-primary);
+  border-radius: var(--radius);
+  background: var(--color-primary);
+  color: var(--color-button-text);
+  text-decoration: none;
+  letter-spacing: 0;
+}
+
+.site-nav a.nav-cta:hover,
+.site-nav a.nav-cta:focus-visible {
+  background: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
+  color: var(--color-button-text);
+}
+
+main {
+  max-width: 42rem;
+  margin: 0 auto;
+  padding: 1.25rem 1.15rem 2.5rem;
+}
+
+@media (min-width: 720px) {
+  main {
+    max-width: 60rem;
+    padding: 1.75rem 1.75rem 3rem;
+  }
 }
 
 .site-footer {
-  padding: 0.75rem 1.5rem;
-  border-top: 4px double var(--color-divider);
-  font-size: 0.9rem;
+  padding: 1rem 1.25rem;
+  border-top: 3px double var(--color-divider);
+  background: var(--color-surface);
+  font-size: 0.875rem;
   text-align: center;
+  color: var(--color-text-muted);
 }
 
-h1 {
-  margin: 0.5rem 0;
-  font-size: 2rem;
-  text-transform: uppercase;
+.site-footer a {
+  color: var(--color-text);
 }
 
-.tagline {
-  margin-top: 0;
-  font-style: italic;
+.site-footer .demo-note {
+  font-weight: 600;
+  color: var(--color-text);
 }
 
-/* Filters */
+/* ---------- Buttons ---------- */
+
+.button,
+a.button,
+button.button {
+  display: inline-block;
+  margin: 0.35rem 0;
+  padding: 0.65rem 1.25rem;
+  min-height: 2.75rem;
+  border: 2px solid var(--color-primary);
+  border-radius: var(--radius);
+  background: var(--color-primary);
+  color: var(--color-button-text);
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.25;
+  text-decoration: none;
+  text-align: center;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.button:hover,
+.button:focus-visible,
+a.button:hover,
+a.button:focus-visible {
+  background: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
+  color: var(--color-button-text);
+}
+
+.button:active {
+  transform: translateY(1px);
+}
+
+/* ---------- Forms (shared: rise, grade, quote) ---------- */
+
+.rise-form,
+.quote-form,
 .filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
-  align-items: flex-end;
-  margin: 1rem 0 1.5rem;
-  padding: 0.75rem;
+  margin: 1rem 0;
+  padding: 1rem;
   border: 2px solid var(--color-divider);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
 }
 
+.rise-form label,
+.quote-form label,
 .filters label {
-  display: flex;
-  flex-direction: column;
-  font-weight: bold;
-}
-
-.filters select,
-.filters input,
-.filters button {
-  font: inherit;
-  padding: 0.25rem 0.5rem;
-}
-
-.no-results {
-  font-weight: bold;
-}
-
-/* Directory: two columns */
-.directory {
-  columns: 2;
-  column-gap: 2rem;
-  column-rule: 1px solid var(--color-divider);
-}
-
-.category-head {
-  margin: 0 0 0.75rem;
-  font-size: 1.4rem;
-  font-weight: bold;
-  text-transform: uppercase;
-  border-bottom: 3px solid var(--color-divider);
-  break-after: avoid;
-}
-
-.category {
-  margin-bottom: 1.5rem;
-}
-
-.listing-card {
-  break-inside: avoid;
-  margin-bottom: 1rem;
-}
-
-.listing-card h3 {
-  margin: 0;
-  font-size: 1.1rem;
-  font-weight: bold;
-}
-
-.listing-card p {
-  margin: 0.1rem 0;
-}
-
-/* Single listing page */
-.listing-detail dl {
-  margin: 1rem 0;
-}
-
-.listing-detail dt {
-  margin-top: 0.75rem;
-  font-weight: bold;
-  text-transform: uppercase;
-  font-size: 0.9rem;
-  border-bottom: 1px solid var(--color-divider);
-}
-
-.listing-detail dd {
-  margin: 0.25rem 0 0;
-}
-
-.listing-detail ul {
-  margin: 0;
-  padding-left: 1.25rem;
-}
-
-.hours {
-  border-collapse: collapse;
-}
-
-.hours th,
-.hours td {
-  padding: 0.15rem 1rem 0.15rem 0;
-  text-align: left;
-}
-
-.hours th {
-  font-weight: bold;
-}
-
-.message {
-  padding: 1rem 0;
-}
-
-/* Narrow screens: single column */
-@media (max-width: 600px) {
-  .directory {
-    columns: 1;
-  }
-
-  main {
-    padding: 0.75rem;
-  }
-}
-
-/* owner listing (/rise): upload and review forms */
-.rise-form {
-  margin: 1rem 0;
-  padding: 0.75rem;
-  border: 2px solid var(--color-divider);
-}
-
-.rise-form label {
   display: block;
-  margin-top: 0.5rem;
-  font-weight: bold;
+  margin-top: 0.75rem;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.rise-form label:first-child,
+.quote-form label:first-child {
+  margin-top: 0;
 }
 
 .rise-form input[type="text"],
 .rise-form input[type="tel"],
 .rise-form input[type="email"],
+.rise-form input[type="url"],
+.rise-form select,
+.rise-form textarea,
+.quote-form input[type="text"],
+.quote-form textarea,
 .field input[type="tel"],
 .field input[type="email"],
-.rise-form select,
-.rise-form textarea {
+.field input[type="text"],
+.filters select,
+.filters input {
   width: 100%;
+  margin-top: 0.25rem;
+  padding: 0.55rem 0.75rem;
+  min-height: 2.75rem;
+  border: 1.5px solid var(--color-divider);
+  border-radius: var(--radius);
+  background: #fff;
   font: inherit;
-  padding: 0.25rem 0.5rem;
+  color: var(--color-text);
 }
 
 .rise-form input[type="text"][size] {
   width: auto;
 }
 
-.rise-form button {
-  margin-top: 0.75rem;
-  font: inherit;
-  font-weight: bold;
-  padding: 0.3rem 1rem;
+.rise-form textarea,
+.quote-form textarea {
+  min-height: 6rem;
+  resize: vertical;
 }
 
 .rise-form .hint,
-.rise .hint {
-  font-size: 0.9rem;
+.rise .hint,
+.quote-request .hint {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.875rem;
   font-style: italic;
+  color: var(--color-text-muted);
+  font-weight: 400;
+}
+
+.rise-form .field {
+  margin-top: 0.75rem;
 }
 
 .rise-form .field.missing {
-  padding: 0.25rem 0.5rem;
-  border: 3px solid #8B0000;
-  background: #FFE9A8;
+  padding: 0.5rem 0.65rem;
+  border: 2px solid var(--color-fail);
+  border-radius: var(--radius);
+  background: var(--color-fail-bg);
 }
 
 .missing-note {
-  color: #8B0000;
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--color-fail);
   font-size: 0.85rem;
+  font-weight: 600;
   text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 
-.hours-edit {
-  margin-top: 0.75rem;
-  border: 1px solid var(--color-divider);
-}
-
-/* Admin approval queue */
-.pending-list {
-  list-style: none;
-  padding: 0;
-}
-
-.pending-item {
-  margin-bottom: 1rem;
-  padding: 0.75rem;
-  border: 2px solid #000;
-}
-
-.pending-item form {
-  display: inline-block;
-  margin-right: 0.5rem;
-}
-
-.admin-button {
-  font: inherit;
-  font-weight: bold;
-  min-height: 3rem;
-  padding: 0.5rem 1.5rem;
-  background: #FFE600;
-  color: #000;
-  border: 2px solid #000;
-  cursor: pointer;
-}
-
-.admin-button:hover,
-.admin-button:focus {
-  background: #fff8dc;
-}
-
-.admin-button-secondary {
-  background: #fff;
-}
-
-.admin-nav {
-  margin-bottom: 1rem;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.35rem 0.5rem;
-}
-
-/* The Log out button sits in the same row as the admin links, also on a phone. */
-.admin-nav .admin-logout {
-  display: inline-flex;
-  margin: 0;
-}
-
-.admin-nav .admin-logout .admin-button {
-  padding: 0.2rem 0.6rem;
-  font-size: 0.9rem;
-}
-
-.admin-note {
-  padding: 0.75rem;
-  background: #dff5df;
-  color: #000;
-  border: 2px solid #1b6b1b;
-}
-
-.admin-error {
-  padding: 0.75rem;
-  background: #fff;
-  border: 2px solid #000;
-  font-weight: bold;
-}
-
-.admin-login label,
-.admin-login input {
+.rise-form .check {
   display: block;
-  font: inherit;
-  margin-bottom: 0.75rem;
+  margin-top: 0.85rem;
+  font-weight: 400;
 }
 
-.admin-login input {
-  width: 100%;
-  max-width: 24rem;
-  padding: 0.5rem;
-}
-
-.demo-banner {
-  margin: 0.75rem 0;
-  padding: 0.5rem 0.75rem;
-  background: #FFE600;
-  color: #000;
-  border: 2px solid #000;
-  font-weight: bold;
-}
-
-.notice {
-  padding: 0.5rem 0.75rem;
-  border: 2px solid #8B0000;
-  font-weight: bold;
-}
-
-.rise pre {
-  overflow-x: auto;
-  padding: 0.5rem;
-  border: 1px solid var(--color-divider);
-}
-
-/* Quote request form on listing pages */
-.quote-request {
-  margin-top: 2rem;
-  padding-top: 0.5rem;
-  border-top: 4px double var(--color-divider);
-}
-
-.quote-request h2 {
-  margin: 0.5rem 0;
-  font-size: 1.4rem;
-  text-transform: uppercase;
-}
-
-.quote-request .hint {
-  font-size: 0.9rem;
-  font-style: italic;
-}
-
-.quote-form {
-  padding: 0.75rem;
-  border: 2px solid var(--color-divider);
-}
-
-.quote-form label {
-  display: block;
-  margin-top: 0.5rem;
-  font-weight: bold;
-}
-
-.quote-form input[type="text"],
-.quote-form textarea {
-  width: 100%;
-  font: inherit;
-  padding: 0.25rem 0.5rem;
-}
-
+.rise-form button,
 .quote-form button {
-  margin-top: 0.75rem;
-  font: inherit;
-  font-weight: bold;
-  padding: 0.3rem 1rem;
+  margin-top: 1rem;
 }
 
-/* Owner-confirmed stamp: rubber-stamp look on the listing page */
-.stamp {
-  display: inline-block;
-  max-width: 100%;
-  margin: 1rem 0;
-  padding: 0.5rem 1rem;
-  border: 4px double #8B0000;
-  color: #8B0000;
-  transform: rotate(-2deg);
-  overflow-wrap: anywhere;
-}
-
-.stamp-title {
-  margin: 0;
-  font-size: 1.2rem;
-  font-weight: bold;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-
-.stamp-note {
-  margin: 0.25rem 0 0;
-  color: var(--color-text);
-  font-size: 0.85rem;
-  font-style: italic;
-}
-
-.stamp-hash {
-  margin: 0.25rem 0 0;
-  color: var(--color-text);
-  font-size: 0.8rem;
-}
-
-.stamp-unconfirmed {
-  border: 3px dashed var(--color-divider);
-  color: var(--color-text);
-  transform: none;
-}
-
-/* Seance report: plain phone-book entries on paper yellow */
-.seance h2 {
-  margin: 1.5rem 0 0.5rem;
-  border-bottom: 2px solid var(--color-divider);
-}
-
-.seance-group,
-.seance-run {
-  margin: 0 0 1rem;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid var(--color-divider);
-}
-
-.seance-group h3,
-.seance-run h3 {
-  margin: 0 0 0.25rem;
-  font-size: 1.05rem;
-}
-
-.seance-tag {
-  display: inline-block;
-  margin-left: 0.5rem;
-  padding: 0 0.4rem;
-  border: 1px solid var(--color-divider);
-  font-size: 0.85rem;
-  font-weight: normal;
-  text-transform: uppercase;
-}
-
-.seance-meta {
-  margin: 0 0 0.5rem;
-  font-size: 0.9rem;
-}
-
-.seance-answer {
-  margin: 0;
-  padding-left: 0.75rem;
-  border-left: 4px solid var(--color-divider);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.quote-details {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-/* Launch fixes 17.1: header link, small unconfirmed note, buttons */
-.site-nav {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.5rem 1rem;
-}
-
-.site-nav a.nav-cta {
-  font-size: 0.95rem;
-  text-decoration: underline;
-}
-
-.stamp.stamp-unconfirmed {
-  display: block;
-  margin: 0.75rem 0;
-  padding: 0.4rem 0.75rem;
-  border: 1px dashed var(--color-divider);
-  color: var(--color-text);
-  transform: none;
-}
-
-.unconfirmed-note {
-  display: inline;
-  margin: 0 0.75rem 0 0;
-  font-size: 0.9rem;
-  font-style: italic;
-}
-
-.button,
-a.button {
-  display: inline-block;
-  margin: 0.25rem 0;
-  padding: 0.4rem 0.9rem;
-  border: 2px solid var(--color-text);
-  background: var(--color-text);
-  color: #fff8dc;
-  font-weight: bold;
-  text-decoration: none;
-}
-
-.button:hover,
-.button:focus {
-  background: #fff8dc;
-  color: var(--color-text);
-}
-
-.confirm-cta {
-  font-size: 0.95rem;
-}
-
-.seance-link {
-  margin: 0.5rem 0;
-}
-
-/* Launch fixes 17.2: simple /rise page */
+/* Big photo upload button on /rise */
 .rise-form label.big-button {
   display: block;
-  margin: 1rem 0 0.5rem;
-  padding: 1.25rem 1rem;
-  border: 3px solid var(--color-text);
-  background: var(--color-text);
-  color: #fff8dc;
-  font-size: 1.5rem;
-  font-weight: bold;
+  margin: 1.25rem 0 0.5rem;
+  padding: 1.35rem 1rem;
+  border: 3px solid var(--color-primary);
+  border-radius: var(--radius);
+  background: var(--color-primary);
+  color: var(--color-button-text);
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 1.25rem;
+  font-weight: 700;
   text-align: center;
   cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
 .rise-form label.big-button:hover,
-.rise-form .visually-hidden-file:focus + .hint,
 .rise-form label.big-button:focus-within {
-  background: #fff8dc;
-  color: var(--color-text);
+  background: var(--color-primary-hover);
+  color: var(--color-button-text);
 }
 
 .rise-form .visually-hidden-file {
@@ -559,7 +361,7 @@ a.button {
 
 .rise-form .visually-hidden-file:focus-visible ~ details,
 .rise-form .visually-hidden-file:focus-visible {
-  outline: 3px solid var(--color-text);
+  outline: 3px solid var(--color-focus);
 }
 
 details.advanced {
@@ -568,103 +370,231 @@ details.advanced {
 
 details.advanced summary {
   cursor: pointer;
-  font-weight: bold;
+  font-weight: 600;
 }
 
-/* Filtered view heading ("Plumbers in Nashville") with one grid under it */
-.category-title {
-  column-span: all;
-  margin: 0 0 1rem;
-  font-size: 1.6rem;
-  font-weight: bold;
-  text-transform: uppercase;
-  border-bottom: 3px solid var(--color-divider);
+.hours-edit {
+  margin-top: 0.75rem;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  overflow: hidden;
 }
 
+/* ---------- Home / directory ---------- */
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem 1rem;
+  align-items: flex-end;
+}
+
+.filters label {
+  flex: 1 1 8rem;
+  margin-top: 0;
+}
+
+.filters button {
+  flex: 0 0 auto;
+  margin-top: 0;
+  min-height: 2.75rem;
+  padding: 0.55rem 1.25rem;
+  border: 2px solid var(--color-primary);
+  border-radius: var(--radius);
+  background: var(--color-primary);
+  color: var(--color-button-text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.filters button:hover,
+.filters button:focus-visible {
+  background: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
+}
+
+.no-results {
+  margin: 1.5rem 0;
+  padding: 1.25rem;
+  border: 2px solid var(--color-divider);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  font-weight: 600;
+  text-align: center;
+}
+
+.category,
 .category-grid {
-  columns: 2;
-  column-gap: 2rem;
-  column-rule: 1px solid var(--color-divider);
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0 2rem;
 }
 
-@media (max-width: 600px) {
+@media (min-width: 640px) {
+  .category,
   .category-grid {
-    columns: 1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
-/* Launch fixes 17.3: save and confirm buttons share one form */
-.rise-form .confirm button {
-  margin-right: 0.75rem;
+@media (min-width: 1000px) {
+  .category,
+  .category-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
-/* Séance report headline */
-.seance-result {
-  font-weight: bold;
-  padding: 0.6rem 0.8rem;
-  border-left: 6px solid #000;
+.category-head,
+.category-title {
+  margin: 0 0 0.85rem;
+  padding-bottom: 0.35rem;
+  font-family: "Source Serif 4", Georgia, serif;
+  font-size: 1.35rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 3px solid var(--color-divider);
+  grid-column: 1 / -1;
+}
+
+.category {
+  margin-bottom: 1.75rem;
+}
+
+.listing-card {
+  min-width: 0;
+  margin-bottom: 1.1rem;
+  padding-bottom: 0.35rem;
+}
+
+.listing-card h3 {
+  margin: 0;
+  font-family: "Source Serif 4", Georgia, serif;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.listing-card p {
+  margin: 0.15rem 0;
+  font-size: 0.95rem;
+}
+
+/* ---------- Single listing page ---------- */
+
+.listing-detail dl {
   margin: 1rem 0;
 }
-.seance-named {
-  color: #1b5e20;
-  background: #e8f5e9;
-  border-left-color: #2e7d32;
+
+.listing-detail dt {
+  margin-top: 0.85rem;
+  font-weight: 700;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-divider);
+  padding-bottom: 0.15rem;
 }
-.seance-not-named {
-  color: #7a4f00;
-  background: #fff3cd;
-  border-left-color: #b7791f;
+
+.listing-detail dd {
+  margin: 0.3rem 0 0;
 }
-/* Demo answers are gray: not green, not amber */
-.seance-demo {
-  color: #555;
+
+.listing-detail ul {
+  margin: 0;
+  padding-left: 1.25rem;
 }
-.seance-result.seance-demo {
-  background: #eee;
-  border-left-color: #888;
+
+.hours {
+  border-collapse: collapse;
+  width: 100%;
+  max-width: 20rem;
 }
-.seance-sources {
-  margin: 0.25rem 0 0;
-  font-size: 0.85rem;
+
+.hours th,
+.hours td {
+  padding: 0.2rem 1rem 0.2rem 0;
+  text-align: left;
+  vertical-align: top;
+}
+
+.hours th {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Owner-confirmed stamp */
+.stamp {
+  display: inline-block;
+  max-width: 100%;
+  margin: 1rem 0;
+  padding: 0.6rem 1rem;
+  border: 3px double var(--color-fail);
+  border-radius: 2px;
+  color: var(--color-fail);
+  transform: rotate(-1.5deg);
   overflow-wrap: anywhere;
+  background: rgba(255, 254, 249, 0.9);
 }
 
-/* Owner-confirmed stamp: hash tucked under a toggle */
-.stamp-details summary {
+.stamp-title {
+  margin: 0;
+  font-family: "Source Serif 4", Georgia, serif;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.stamp-note,
+.stamp-date {
+  margin: 0.2rem 0 0;
+  color: var(--color-text);
   font-size: 0.85rem;
-  cursor: pointer;
+  font-style: italic;
 }
 
-/* Quote form error and success box (task 17.6) */
-.form-error { color: #7a1f0f; border-left: 4px solid #7a1f0f; padding: 0.4rem 0.75rem; margin: 0.75rem 0; font-weight: bold; }
-.success-box { background: #e8f5e9; border: 2px solid #2e7d32; padding: 0.75rem 1rem; margin: 0 0 1rem; }
-
-/* Launch fixes 21.3: owner wording and polish */
 .stamp-date,
 .stamp-title {
   white-space: nowrap;
 }
 
-/* "Saved." sits at the top of the draft page, so a phone sees it after the reload */
-.notice.saved-note {
-  margin: 0.5rem 0 1rem;
-  border-color: #2e7d32;
-  background: #e8f5e9;
-  color: #1b5e20;
+.stamp-hash {
+  margin: 0.2rem 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
-/* Neutral tag on a fresh typed-in form (before the first save or confirm) */
-.required-note {
-  color: #555;
+.stamp.stamp-unconfirmed {
+  display: block;
+  margin: 0.75rem 0;
+  padding: 0.45rem 0.75rem;
+  border: 1.5px dashed var(--color-divider);
+  color: var(--color-text);
+  transform: none;
+  background: transparent;
+}
+
+.unconfirmed-note {
+  display: inline;
+  margin: 0 0.75rem 0 0;
+  font-size: 0.9rem;
+  font-style: italic;
+  color: var(--color-text-muted);
+}
+
+.stamp-details summary {
   font-size: 0.85rem;
-  font-weight: normal;
-  text-transform: uppercase;
+  cursor: pointer;
 }
 
-/* The stamp must fit inside its border on a phone (390px wide) */
 @media (max-width: 480px) {
   .stamp {
-    padding: 0.4rem 0.6rem;
+    padding: 0.45rem 0.65rem;
     transform: rotate(-1deg);
   }
   .stamp-title {
@@ -674,40 +604,319 @@ details.advanced summary {
   }
 }
 
-details.discard-confirm {
-  margin: 1rem 0;
+/* Quote request on listing */
+.quote-request {
+  margin-top: 2rem;
+  padding-top: 0.75rem;
+  border-top: 3px double var(--color-divider);
 }
 
-details.discard-confirm summary {
+.quote-request h2 {
+  margin: 0.5rem 0;
+  font-size: 1.3rem;
+  text-transform: none;
+}
+
+/* ---------- Messages, notices, banners ---------- */
+
+.message {
+  padding: 1.25rem 0;
+}
+
+.notice {
+  margin: 0.75rem 0;
+  padding: 0.65rem 0.9rem;
+  border: 2px solid var(--color-fail);
+  border-radius: var(--radius);
+  font-weight: 600;
+  background: var(--color-fail-bg);
+}
+
+.notice.saved-note {
+  border-color: var(--color-success);
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+
+.demo-banner {
+  margin: 0.75rem 0;
+  padding: 0.55rem 0.85rem;
+  background: #FEF3C7;
+  color: var(--color-text);
+  border: 2px solid var(--color-divider);
+  border-radius: var(--radius);
+  font-weight: 600;
+}
+
+.form-error {
+  margin: 0.75rem 0;
+  padding: 0.5rem 0.85rem;
+  border-left: 4px solid var(--color-fail);
+  color: var(--color-fail);
+  font-weight: 600;
+}
+
+.success-box {
+  margin: 0 0 1rem;
+  padding: 0.85rem 1rem;
+  background: var(--color-success-bg);
+  border: 2px solid var(--color-success);
+  border-radius: var(--radius);
+}
+
+.required-note {
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* ---------- Admin (kept functional) ---------- */
+
+.pending-list {
+  list-style: none;
+  padding: 0;
+}
+
+.pending-item {
+  margin-bottom: 1rem;
+  padding: 0.85rem;
+  border: 2px solid var(--color-divider);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.pending-item form {
+  display: inline-block;
+  margin-right: 0.5rem;
+}
+
+.admin-button {
+  font: inherit;
+  font-weight: 600;
+  min-height: 2.75rem;
+  padding: 0.5rem 1.25rem;
+  background: var(--color-primary);
+  color: var(--color-button-text);
+  border: 2px solid var(--color-primary);
+  border-radius: var(--radius);
   cursor: pointer;
-  font-weight: bold;
 }
 
-/* Admin review preview (third review round) */
+.admin-button:hover,
+.admin-button:focus-visible {
+  background: var(--color-primary-hover);
+}
+
+.admin-button-secondary {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-color: var(--color-divider);
+}
+
+.admin-nav {
+  margin-bottom: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+}
+
+.admin-nav .admin-logout {
+  display: inline-flex;
+  margin: 0;
+}
+
+.admin-nav .admin-logout .admin-button {
+  padding: 0.25rem 0.7rem;
+  font-size: 0.9rem;
+  min-height: 2.25rem;
+}
+
+.admin-note {
+  padding: 0.75rem;
+  background: var(--color-success-bg);
+  color: var(--color-text);
+  border: 2px solid var(--color-success);
+  border-radius: var(--radius);
+}
+
+.admin-error {
+  padding: 0.75rem;
+  background: var(--color-surface);
+  border: 2px solid var(--color-divider);
+  border-radius: var(--radius);
+  font-weight: 600;
+}
+
+.admin-login label,
+.admin-login input {
+  display: block;
+  font: inherit;
+  margin-bottom: 0.75rem;
+}
+
+.admin-login input {
+  width: 100%;
+  max-width: 24rem;
+  padding: 0.55rem 0.75rem;
+  min-height: 2.75rem;
+  border: 1.5px solid var(--color-divider);
+  border-radius: var(--radius);
+}
+
 .admin-preview {
   display: grid;
   grid-template-columns: max-content 1fr;
   gap: 0.25rem 0.75rem;
   margin: 0.5rem 0;
 }
-.admin-preview dt { font-weight: bold; }
-.admin-preview dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
-@media (max-width: 480px) {
-  .admin-preview { grid-template-columns: 1fr; }
-  .admin-preview dd { margin-bottom: 0.4rem; }
-}
-.admin-warning {
-  background: #fff4d6;
-  border-left: 4px solid #a65c00;
-  color: #5a3200;
-  padding: 0.5rem 0.75rem;
-  margin: 0.5rem 0;
-  font-weight: bold;
-}
-.owner-email { user-select: all; font-family: monospace; }
-.hours-none { font-style: italic; }
 
-/* AI Visibility Grader (/grade) */
+.admin-preview dt {
+  font-weight: 600;
+}
+
+.admin-preview dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 480px) {
+  .admin-preview {
+    grid-template-columns: 1fr;
+  }
+  .admin-preview dd {
+    margin-bottom: 0.4rem;
+  }
+}
+
+.admin-warning {
+  background: var(--color-warn-bg);
+  border-left: 4px solid var(--color-warn);
+  color: #5A3200;
+  padding: 0.55rem 0.85rem;
+  margin: 0.5rem 0;
+  font-weight: 600;
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+
+.owner-email {
+  user-select: all;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.hours-none {
+  font-style: italic;
+  color: var(--color-text-muted);
+}
+
+/* ---------- Séance (kept) ---------- */
+
+.seance h2 {
+  margin: 1.5rem 0 0.5rem;
+  border-bottom: 2px solid var(--color-divider);
+  padding-bottom: 0.25rem;
+}
+
+.seance-group,
+.seance-run {
+  margin: 0 0 1rem;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.seance-group h3,
+.seance-run h3 {
+  margin: 0 0 0.25rem;
+  font-size: 1.05rem;
+}
+
+.seance-tag {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.1rem 0.45rem;
+  border: 1px solid var(--color-divider);
+  border-radius: 2px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.seance-meta {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+}
+
+.seance-answer {
+  margin: 0;
+  padding-left: 0.85rem;
+  border-left: 4px solid var(--color-divider);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.seance-result {
+  font-weight: 600;
+  padding: 0.65rem 0.85rem;
+  border-left: 5px solid var(--color-divider);
+  margin: 1rem 0;
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+
+.seance-named {
+  color: var(--color-success);
+  background: var(--color-success-bg);
+  border-left-color: var(--color-success);
+}
+
+.seance-not-named {
+  color: #7A4F00;
+  background: var(--color-warn-bg);
+  border-left-color: var(--color-warn);
+}
+
+.seance-demo {
+  color: #555;
+}
+
+.seance-result.seance-demo {
+  background: #eee;
+  border-left-color: #888;
+}
+
+.seance-sources {
+  margin: 0.25rem 0 0;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+  color: var(--color-text-muted);
+}
+
+.seance-link {
+  margin: 0.5rem 0;
+}
+
+.quote-details {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.rise pre {
+  overflow-x: auto;
+  padding: 0.65rem;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  background: #fff;
+  font-size: 0.875rem;
+}
+
+/* ---------- AI Visibility Grader ---------- */
+
 .hp {
   position: absolute;
   left: -9999px;
@@ -718,127 +927,265 @@ details.discard-confirm summary {
 
 .grade-link {
   margin: 0.25rem 0 1rem;
-  font-weight: bold;
+  font-weight: 600;
 }
 
-.rise-form .field {
-  margin-top: 0.5rem;
+.grade-start .tagline,
+.grade-scan .tagline {
+  margin-bottom: 1.25rem;
 }
 
-.rise-form .field .hint {
-  display: block;
-  font-size: 0.9rem;
-  font-style: italic;
-}
-
-.rise-form .check {
-  display: block;
-  margin-top: 0.75rem;
-  font-weight: normal;
-}
-
+/* Scanning progress */
 .grade-steps {
-  padding-left: 1.5rem;
+  list-style: none;
+  margin: 1.25rem 0;
+  padding: 0;
 }
 
 .grade-step {
-  margin: 0.5rem 0;
+  margin: 0.55rem 0;
+  padding: 0.5rem 0.65rem;
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  border: 1px solid transparent;
 }
 
 .grade-step .step-mark {
   display: inline-block;
-  min-width: 7rem;
+  min-width: 6.5rem;
   vertical-align: top;
-  font-weight: bold;
+  font-weight: 700;
   text-transform: uppercase;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
 }
 
 .grade-step.waiting {
-  color: #555;
+  color: var(--color-text-muted);
 }
 
 .grade-step .finding {
   display: block;
-  margin-left: 7.25rem;
+  margin-left: 0;
+  margin-top: 0.2rem;
   font-size: 0.9rem;
   font-style: italic;
+  color: var(--color-text-muted);
+}
+
+@media (min-width: 480px) {
+  .grade-step .finding {
+    display: inline;
+    margin-left: 0.5rem;
+  }
+}
+
+/* Report — the money page */
+.grade-report {
+  /* nothing extra; inherits body */
+}
+
+.grade-top {
+  margin-bottom: 1.5rem;
+}
+
+.grade-score {
+  margin: 0 0 1.25rem;
+  padding: 1.25rem 1rem;
+  background: var(--color-surface);
+  border: 2px solid var(--color-divider);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  text-align: center;
 }
 
 .grade-score h1 {
-  margin-bottom: 0;
+  margin: 0 0 0.35rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  font-family: Inter, system-ui, sans-serif;
 }
 
 .grade-where {
-  margin: 0 0 0.5rem;
+  margin: 0 0 0.75rem;
   font-style: italic;
+  color: var(--color-text-muted);
+  font-size: 0.95rem;
 }
 
 .grade-score-number {
-  margin: 0.25rem 0;
+  margin: 0.15rem 0 0.35rem;
 }
 
 .grade-score-number .num {
-  font-size: 4rem;
-  font-weight: bold;
+  display: inline-block;
+  font-family: "Source Serif 4", Georgia, serif;
+  font-size: clamp(3.5rem, 14vw, 5rem);
+  font-weight: 700;
   line-height: 1;
+  color: var(--color-text);
+  letter-spacing: -0.02em;
 }
 
 .grade-score-number .of {
-  font-size: 1.1rem;
+  display: block;
+  margin-top: 0.15rem;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--color-text-muted);
 }
 
 .grade-score-number .num-text {
-  font-size: 1.6rem;
-  font-weight: bold;
+  font-family: "Source Serif 4", Georgia, serif;
+  font-size: 1.5rem;
+  font-weight: 700;
 }
 
 .grade-failed {
-  margin: 0.25rem 0 0.75rem;
-  font-size: 1.2rem;
-  font-weight: bold;
+  margin: 0.5rem 0 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--color-fail);
 }
 
-.grade-report h2 {
-  margin: 1.25rem 0 0.5rem;
-  font-size: 1.3rem;
+.grade-prev {
+  margin: 0.35rem 0 0;
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+}
+
+.grade-meta {
+  margin: 0.75rem 0 0;
+  font-size: 0.875rem;
+  font-style: italic;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+/* Checks list — easy to scan */
+.grade-checks {
+  list-style: none;
+  margin: 0.75rem 0 1.25rem;
+  padding: 0;
+}
+
+.grade-check {
+  margin: 0 0 0.65rem;
+  padding: 0.65rem 0.85rem;
+  border-left: 5px solid var(--color-divider);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.grade-check.pass {
+  border-left-color: var(--color-success);
+  background: linear-gradient(90deg, var(--color-success-bg) 0%, var(--color-surface) 2.5rem);
+}
+
+.grade-check.fail,
+.grade-check.needs_work {
+  border-left-color: var(--color-fail);
+  background: linear-gradient(90deg, var(--color-fail-bg) 0%, var(--color-surface) 2.5rem);
+}
+
+.grade-check.not_checked {
+  border-left-color: #A8A29E;
+  opacity: 0.85;
+}
+
+.grade-result {
+  display: inline-block;
+  margin-left: 0.35rem;
+  padding: 0.1rem 0.45rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-radius: 2px;
+  vertical-align: middle;
+}
+
+.grade-check.pass .grade-result {
+  color: var(--color-success);
+  background: rgba(45, 106, 79, 0.12);
+}
+
+.grade-check.fail .grade-result,
+.grade-check.needs_work .grade-result {
+  color: var(--color-fail);
+  background: rgba(155, 44, 44, 0.1);
+}
+
+.grade-points {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
+.grade-group {
+  margin-bottom: 1.5rem;
+}
+
+.grade-group h2,
+.grade-report h2,
+.grade-ai h2,
+.grade-kit h2,
+.grade-lead h2,
+.grade-offer h2 {
+  margin: 1.5rem 0 0.6rem;
+  padding-bottom: 0.3rem;
+  font-size: 1.25rem;
   border-bottom: 2px solid var(--color-divider);
 }
 
-.grade-ai details {
-  margin-top: 0.5rem;
+/* AI answers section */
+.grade-ai {
+  margin: 1.25rem 0;
+}
+
+.grade-competitors {
+  margin: 0.5rem 0 0.75rem;
+  padding-left: 1.25rem;
+  font-weight: 600;
 }
 
 .grade-answer {
+  margin: 0.5rem 0 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
-.grade-competitors {
-  margin: 0.25rem 0;
-  font-weight: bold;
+.grade-all-answers {
+  margin: 1rem 0;
 }
 
+.grade-all-answers ol {
+  padding-left: 1.25rem;
+}
+
+/* Free page preview */
 .grade-fix {
   display: block;
+  margin: 1.5rem 0;
 }
 
 .grade-preview {
-  padding: 0.75rem;
+  padding: 1rem;
   border: 3px double var(--color-divider);
-  background: #fffbe0;
+  border-radius: var(--radius);
+  background: #FFFBE0;
+  box-shadow: var(--shadow-sm);
 }
 
 .grade-preview .blank,
 .serp .blank {
   font-style: italic;
-  color: #8B0000;
-}
-
-.grade-fix .button,
-.grade-recheck .button,
-.grade-lead .button {
-  margin-top: 0.5rem;
+  color: var(--color-fail);
 }
 
 .grade-before-after {
@@ -847,24 +1194,29 @@ details.discard-confirm summary {
 
 .serp {
   margin: 0 0 1rem;
-  padding: 0.5rem 0.75rem;
-  border: 2px solid var(--color-divider);
+  padding: 0.65rem 0.85rem;
+  border: 1.5px solid var(--color-divider);
+  border-radius: var(--radius);
   background: #fff;
 }
 
 .serp h3 {
-  margin: 0 0 0.25rem;
-  font-size: 0.9rem;
+  margin: 0 0 0.3rem;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 0.8rem;
+  font-weight: 600;
   text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
 }
 
 .serp p {
-  margin: 0.1rem 0;
+  margin: 0.15rem 0;
 }
 
 .serp-title {
   font-size: 1.1rem;
-  font-weight: bold;
+  font-weight: 600;
   color: #1a0dab;
 }
 
@@ -873,54 +1225,65 @@ details.discard-confirm summary {
   color: #006621;
 }
 
-.grade-checks {
-  list-style: none;
-  padding: 0;
+/* Fix kit */
+.grade-kit {
+  margin: 1.5rem 0;
 }
 
-.grade-check {
-  margin: 0 0 0.75rem;
-  padding: 0.4rem 0.6rem;
-  border-left: 6px solid var(--color-divider);
-}
-
-.grade-check.fail {
-  border-left-color: #8B0000;
-}
-
-.grade-check.pass {
-  border-left-color: #2e6b2e;
-}
-
-.grade-result {
-  font-size: 0.85rem;
-  font-weight: bold;
-  text-transform: uppercase;
-}
-
-.grade-points {
-  font-size: 0.85rem;
-}
-
-.grade-meta {
-  font-size: 0.9rem;
-  font-style: italic;
+.kit-item {
+  margin: 0.75rem 0;
+  padding: 0.85rem;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  background: var(--color-surface);
 }
 
 .kit-item pre {
   overflow-x: auto;
-  padding: 0.5rem;
+  margin: 0.5rem 0 0;
+  padding: 0.65rem;
   border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
   background: #fff;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  font-size: 0.85rem;
 }
 
 .copy-btn[hidden] {
   display: none;
 }
 
-/* Wide screens: the free page preview sits beside the top failed checks. */
+/* Lead form (unlock / contact) */
+.grade-lead {
+  margin: 1.75rem 0;
+  padding: 1.15rem;
+  border: 2px solid var(--color-divider);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-md);
+}
+
+.grade-lead .button {
+  width: 100%;
+  margin-top: 0.85rem;
+}
+
+.grade-offer {
+  margin: 1.5rem 0;
+}
+
+.grade-recheck {
+  margin: 1.25rem 0;
+}
+
+.grade-fix .button,
+.grade-recheck .button,
+.grade-lead .button {
+  margin-top: 0.65rem;
+}
+
+/* Wide screens: preview beside checks */
 @media (min-width: 900px) {
   .grade-fix {
     display: grid;
@@ -933,5 +1296,107 @@ details.discard-confirm summary {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 1rem;
+  }
+
+  .grade-score {
+    text-align: left;
+    padding: 1.5rem 1.5rem;
+  }
+
+  .grade-score-number .of {
+    display: inline;
+    margin-left: 0.35rem;
+  }
+}
+
+/* Confirm CTAs etc. */
+.confirm-cta {
+  font-size: 0.95rem;
+}
+
+details.discard-confirm {
+  margin: 1rem 0;
+}
+
+details.discard-confirm summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+/* Phone number stays on one line and sits under the name */
+.listing-card .phone {
+  display: block;
+  white-space: nowrap;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+/* "No photo? Type it in" is a second choice, so it looks like one */
+.rise-form.type-it-in button {
+  margin-top: 0;
+  min-height: 2.75rem;
+  padding: 0.55rem 1.1rem;
+  border: 2px solid var(--color-primary);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-primary);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.rise-form.type-it-in button:hover,
+.rise-form.type-it-in button:focus-visible {
+  background: var(--color-primary);
+  color: var(--color-button-text);
+}
+
+/* Rules carried over from the earlier stylesheet */
+.rise-form .confirm button {
+  margin-right: 0.75rem;
+}
+
+.rise-form .field .hint {
+  display: block;
+}
+
+.rise-form .visually-hidden-file:focus + .hint,
+.rise-form .visually-hidden-file:focus-visible + .hint {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.grade-ai details {
+  margin-top: 0.5rem;
+}
+
+/* Score color follows the score: low, middle, good */
+.grade-score-number.score-low .num {
+  color: var(--color-fail);
+}
+
+.grade-score-number.score-mid .num {
+  color: var(--color-warn);
+}
+
+.grade-score-number.score-good .num {
+  color: var(--color-success);
+}
+
+/* ---------- Utility / print ---------- */
+
+@media print {
+  body {
+    background: #fff;
+  }
+  .site-nav,
+  .site-footer,
+  .grade-lead,
+  .button {
+    display: none !important;
+  }
+  .grade-score {
+    border: 2px solid #000;
   }
 }
