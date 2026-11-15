@@ -12,7 +12,7 @@ import { DEFAULT_SITE_NAME } from './config.js';
 import { STATE_HINT } from './listing-fields.js';
 import { formatRunTime, DEMO_LABEL } from './seance-html.js';
 import { CHECKS, GROUPS } from './grade-checks.js';
-import { stepNames, foundFromGrade } from './grader.js';
+import { stepNames, foundFromGrade, SECOND_OPINIONS } from './grader.js';
 import {
   suggestedTitle, suggestedSummary, jsonLdBlock, llmsDraft, robotsLines,
 } from './fix-kit.js';
@@ -133,7 +133,7 @@ const ordinal = n => {
   return `${n}${({ 1: 'st', 2: 'nd', 3: 'rd' })[n % 10] ?? 'th'}`;
 };
 
-const providerWho = name => (name === 'anthropic' ? 'Claude' : name === 'chatgpt' ? 'ChatGPT' : name === 'openai' ? 'ChatGPT' : name === 'mock' ? 'a demo assistant' : 'an AI assistant');
+const providerWho = name => (name === 'anthropic' ? 'Claude' : name === 'chatgpt' ? 'ChatGPT' : name === 'openai' ? 'OpenAI' : name === 'mock' ? 'a demo assistant' : 'an AI assistant');
 
 const resultOf = (grade, id) => (grade.results ?? []).find(r => r.id === id);
 
@@ -406,11 +406,15 @@ function fullReport(grade, contact, rechecking = false, justOpened = false) {
   const used = (grade.ai ?? []).length;
   const asked = new Set((grade.ai ?? []).map(a => a.prompt)).size;
   const who = new Set((grade.ai ?? []).map(a => a.provider)).size;
-  const names = [...new Set((grade.ai ?? []).map(a => providerWho(a.provider)))];
+  // Per assistant: how many questions it answered. Second opinions are shown but not scored.
+  const per = new Map();
+  for (const a of grade.ai ?? []) per.set(a.provider, (per.get(a.provider) ?? 0) + 1);
+  const scored = (grade.ai ?? []).filter(a => !SECOND_OPINIONS.has(a.provider)).length;
+  const plural = n => `${n} ${n === 1 ? 'question' : 'questions'}`;
   const answersNote = used <= 0 ? ''
     : who > 1
-      ? `<p class="hint">We asked ${names.join(' and ')} the same ${asked === 1 ? 'question' : `${asked} questions`} (${used} answers in all). Your score counts all ${used}.</p>`
-      : `<p class="hint">We asked AI ${asked} ${asked === 1 ? 'question' : 'questions'}. Your score counts ${used === 1 ? 'that answer' : `all ${used} answers`}.</p>`;
+      ? `<p class="hint">${[...per].map(([p, n]) => `${providerWho(p)} answered ${plural(n)}`).join(' and ')}. Your score counts ${providerWho([...per.keys()].find(p => !SECOND_OPINIONS.has(p)))}'s ${scored === 1 ? 'answer' : `${scored} answers`}; ChatGPT's are shown so you can compare.</p>`
+      : `<p class="hint">We asked AI ${plural(asked)}. Your score counts ${used === 1 ? 'that answer' : `all ${used} answers`}.</p>`;
   return `<section class="grade-full" id="full-report">${openedNote}
     <h2>Every check</h2>
     ${answersNote}

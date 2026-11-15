@@ -144,8 +144,14 @@ function summarizeFacts(facts, input) {
  * @param {object[]} ai
  * @param {string} [reasonIfNone] used when no answer ran
  */
-export function aiNamedResult(ai, reasonIfNone = AI_FAILED) {
-  const ran = Array.isArray(ai) ? ai.length : 0;
+/** Assistants asked only as second opinions. */
+export const SECOND_OPINIONS = new Set(['chatgpt']);
+
+export function aiNamedResult(allAi, reasonIfNone = AI_FAILED) {
+  // Second opinions (ChatGPT) are shown beside the main answers but never scored,
+  // so the score does not move with whether ChatGPT happened to be asked.
+  const ai = Array.isArray(allAi) ? allAi.filter(a => !SECOND_OPINIONS.has(a?.provider)) : [];
+  const ran = ai.length;
   if (ran === 0) return { id: 'ai-named', result: 'not_checked', detail: reasonIfNone };
   const named = ai.filter(a => a.named).length;
   if (named === 0) {
@@ -197,8 +203,8 @@ export function createGrader({
     return !(left <= EXTRA_RESERVE);
   };
   const noteExtra = (provider, ok) => {
-    if (ok) return void extraHealth.delete(provider.name);
     const h = extraHealth.get(provider.name) ?? { fails: 0, pausedUntil: 0 };
+    if (ok) { h.fails = 0; extraHealth.set(provider.name, h); return; }
     h.fails += 1;
     if (h.fails >= EXTRA_MAX_FAILS) { h.fails = 0; h.pausedUntil = nowMs() + EXTRA_PAUSE_MS; }
     extraHealth.set(provider.name, h);
@@ -213,7 +219,8 @@ export function createGrader({
   /** Providers (main first) that have no stored answer to this prompt yet. */
   const missingFor = (ai, prompt) => {
     const have = new Set((ai ?? []).filter(a => a.prompt === prompt).map(a => a.provider));
-    return [assistantProvider, ...extras].filter(p => p && !have.has(p.name));
+    const pool = assistantProvider?.name === 'mock' ? [assistantProvider] : [assistantProvider, ...extras];
+    return pool.filter(p => p && !have.has(p.name));
   };
   const grades = () => store.collection('grades');
   const nowIso = () => new Date(clock.now()).toISOString();
@@ -401,7 +408,8 @@ export function createGrader({
       // This question's answers first (main assistant first), then anything else carried over.
       const mine = [...kept.filter(a => a.prompt === prompt), ...fresh];
       const order = [assistantProvider, ...extras].map(p => p?.name);
-      mine.sort((a, b) => order.indexOf(a.provider) - order.indexOf(b.provider));
+      const rank = a => { const i = order.indexOf(a.provider); return i < 0 ? order.length : i; };
+      mine.sort((a, b) => rank(a) - rank(b));
       ai = [...mine, ...kept.filter(a => a.prompt !== prompt)];
       if (mine.length > 0) {
         if (mine.some(a => a.named)) return { finding: 'AI named your business.' };

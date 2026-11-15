@@ -159,10 +159,10 @@ Node.js 22, plain Express, plain JavaScript ES modules, JSON files under `DATA_D
 8. IF the AI_Budget refuses a `grade` call, the provider fails, or the call passes 120 seconds, THEN THE `ai_answers` Group SHALL be `not_checked` with a plain reason, and the report SHALL say the AI check can be run again later.
 9. WHILE the mock Assistant_Provider is in use, THE report SHALL label each AI answer "Demo answer (no AI connected)".
 10. FOR ALL business names and answers, the Name_Matcher SHALL return the same result when case, punctuation and runs of spaces in either string change (property).
-11. WHEN `CHATGPT_API_KEY` is set (and the run is not a test run), THE Grader SHALL also send every AI_Question to ChatGPT (OpenAI's Responses API with web search, at most 3 searches, `store: false`) as a second opinion, at the same time as the main Assistant_Provider; THE report SHALL show each assistant's answer under its own name.
+11. WHEN `CHATGPT_API_KEY` is set (and the run is not a test run), THE Grader SHALL also send every AI_Question to ChatGPT (OpenAI's Responses API with web search, at most 3 searches, `store: false`) as a second opinion, at the same time as the main Assistant_Provider; THE report SHALL show each assistant's answer under its own name. ChatGPT's answers SHALL be shown for comparison and SHALL NOT count toward the `ai-named` points, so the Score does not change with whether ChatGPT was asked. ChatGPT SHALL NOT be asked while the main Assistant_Provider is the mock.
 12. A ChatGPT reply whose status is not `completed` SHALL count as a failure, never as an answer; a ChatGPT failure SHALL never change the main assistant's result.
 13. THE Grader SHALL NOT send a ChatGPT question when 12 or fewer `grade` calls remain for the day, so second opinions never use the main assistant's last calls; after 3 ChatGPT failures in a row it SHALL skip ChatGPT for 15 minutes.
-14. THE Full_Report SHALL count questions and answers separately, for example "We asked 2 AI assistants 3 questions each. Your score counts all 6 answers."
+14. THE Full_Report SHALL say how many questions each assistant answered and which answers the Score counts, for example "Claude answered 3 questions and ChatGPT answered 3 questions. Your score counts Claude's 3 answers; ChatGPT's are shown so you can compare."
 
 ### Requirement 8: AI Answer Points
 
