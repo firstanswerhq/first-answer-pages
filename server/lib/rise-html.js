@@ -4,7 +4,7 @@
  * escapeHtml. Plain template literals, no engine.
  */
 
-import { layout, escapeHtml } from './html.js';
+import { layout, escapeHtml, foundersInvite } from './html.js';
 import { DAYS, STATE_HINT, STATE_ERROR } from './listing-fields.js';
 
 const DAY_LABELS = Object.freeze(
@@ -62,7 +62,9 @@ export const DEMO_BANNER_TEXT = 'Demo: no photo reader is connected, so this is 
  * Page for the upload form: GET /rise.
  * @param {{ photoEnabled?: boolean, discarded?: boolean }} [opts]
  */
-export function uploadPage({ photoEnabled = true, discarded = false } = {}) {
+export function uploadPage({ photoEnabled = true, discarded = false, founders } = {}) {
+  const inviteHtml = foundersInvite(founders);
+  const invite = inviteHtml ? `\n  ${inviteHtml}` : '';
   const discardedNote = discarded ? '\n  <p class="notice" role="status">Draft discarded.</p>' : '';
   const typeItIn = `<form class="rise-form type-it-in" method="POST" action="/rise/manual">
     <button type="submit">No photo? Type it in</button>
@@ -71,7 +73,7 @@ export function uploadPage({ photoEnabled = true, discarded = false } = {}) {
     const manualBody = `<section class="rise">
   <h1>List your business free</h1>${discardedNote}
   <p class="tagline">Type in your business name, phone, hours and what you do. It takes a few minutes.</p>
-  <p>You get to look over every field before anything is published.</p>
+  <p>You get to look over every field before anything is published.</p>${invite}
   <form class="rise-form type-it-in" method="POST" action="/rise/manual">
     <button type="submit">Type it in</button>
   </form>
@@ -81,7 +83,7 @@ export function uploadPage({ photoEnabled = true, discarded = false } = {}) {
   const body = `<section class="rise">
   <h1>List your business free</h1>${discardedNote}
   <p class="tagline">Send a photo of a business card, flyer, sign or storefront. We will read it into a draft listing.</p>
-  <p>You get to look over and fix every field before anything is published. The photo is read once and is not saved.</p>
+  <p>You get to look over and fix every field before anything is published. The photo is read once and is not saved.</p>${invite}
   <form id="rise-form" class="rise-form" method="POST" action="/rise" enctype="application/x-www-form-urlencoded">
     <label for="imageFile" class="big-button">Take or choose a photo</label>
     <input type="file" id="imageFile" class="visually-hidden-file" accept="image/jpeg,image/png,image/webp" capture="environment">

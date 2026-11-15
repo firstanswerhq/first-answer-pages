@@ -4,6 +4,7 @@
 
 import { getCategories } from '../data.js';
 import { DEFAULT_SITE_NAME } from './config.js';
+import { formatFoundersDeadline } from './founders.js';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -183,6 +184,33 @@ ${body}
 }
 
 /**
+ * Founding Member badge, e.g. "Founding Member No. 12 of 500". Empty string
+ * when the listing is not a founder.
+ * @param {{ number: number, cap?: number }|null|undefined} founder
+ * @returns {string}
+ */
+export function founderBadge(founder) {
+  if (!founder || !Number.isInteger(founder.number) || founder.number <= 0) return '';
+  const of = Number.isInteger(founder.cap) && founder.cap >= founder.number ? ` of ${founder.cap}` : '';
+  return `<p class="founder-badge"><span class="founder-badge-title">Founding Member</span> <span class="founder-badge-number">No. ${founder.number}${of}</span></p>`;
+}
+
+/**
+ * Founding Member invite for owners, shown while spots are open. Empty string otherwise.
+ * @param {{ cap: number, left: number, open: boolean, deadline: string }|null|undefined} status
+ * @returns {string}
+ */
+export function foundersInvite(status) {
+  if (!status || status.open !== true) return '';
+  const day = formatFoundersDeadline(status.deadline);
+  const left = status.left === 1 ? '1 spot left' : `${status.left} spots left`;
+  return `<aside class="founders-invite">
+  <p class="founders-invite-title">Founding Members</p>
+  <p>The first ${status.cap} businesses listed by ${escapeHtml(day)} get a free listing and a Founding Member badge for life. <strong>${left}.</strong></p>
+</aside>`;
+}
+
+/**
  * Renders a compact listing card for the home page directory.
  *
  * @param {object} listing
@@ -190,10 +218,11 @@ ${body}
  *   (ignored when not an array, so it is safe to use with Array#map)
  * @returns {string}
  */
-export function listingCard(listing, categories) {
+export function listingCard(listing, categories, opts) {
+  const badge = founderBadge(opts?.founder);
   return `<article class="listing-card">
   <h3><strong><a href="/listings/${encodeURIComponent(listing.id)}">${escapeHtml(listing.name)}</a></strong> <span class="phone">${telLink(listing.phone)}</span></h3>
-  <p>${escapeHtml(listing.city)}, ${escapeHtml(listing.state)} &middot; ${escapeHtml(categoryLabel(listing.category, categories))}</p>
+  <p>${escapeHtml(listing.city)}, ${escapeHtml(listing.state)} &middot; ${escapeHtml(categoryLabel(listing.category, categories))}</p>${badge ? `\n  ${badge}` : ''}
   <p><a href="/listings/${encodeURIComponent(listing.id)}">View details →</a></p>
 </article>`;
 }
@@ -325,9 +354,12 @@ ${days.map(([day, text]) => `      <tr><th scope="row">${day}</th><td>${escapeHt
     ? `\n    <p class="seance-link"><a href="/seance/${encodeURIComponent(listing.id)}">See what AI says about this business</a></p>`
     : '';
 
+  const badge = founderBadge(opts?.founder);
+  const founderLine = badge ? `\n    ${badge}` : '';
+
   return `${ld}  <article class="listing-detail">
     <p><a href="/">← Back to directory</a></p>
-    <h1>${escapeHtml(listing.name)}</h1>
+    <h1>${escapeHtml(listing.name)}</h1>${founderLine}
     <p>${escapeHtml(listing.description)}</p>${seanceLink}${stampBlock}
     <dl>
     <dt>Category</dt>

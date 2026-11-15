@@ -1,0 +1,201 @@
+/**
+ * Founding Member program: the first `cap` approved listings whose owners
+ * signed up before the deadline get a permanent number and badge.
+ * Every test uses its own temporary data folder.
+ */
+
+import { test, after } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import fc from 'fast-check';
+
+import { createDataStore } from '../server/data.js';
+import { createApp } from '../server/app.js';
+import { configFromEnv } from '../server/lib/config.js';
+import {
+  parseFoundersCap, parseFoundersDeadline, earnsFounderSpot, nextFounderNumber, foundersStatus,
+  formatFoundersDeadline, DEFAULT_FOUNDERS_CAP, DEFAULT_FOUNDERS_DEADLINE,
+} from '../server/lib/founders.js';
+import { founderBadge, foundersInvite } from '../server/lib/html.js';
+
+const REPO_DATA = fileURLToPath(new URL('../data/', import.meta.url));
+const DEADLINE = '2027-02-01T06:00:00.000Z';
+const BEFORE = '2026-12-01T12:00:00.000Z';
+const dirs = [];
+after(async () => { for (const d of dirs) await fs.rm(d, { recursive: true, force: true }); });
+
+function draft(i, status = 'pending') {
+  return {
+    id: `d${i}`, status, missingFields: [], createdAt: BEFORE,
+    fields: {
+      name: `Founder Test Plumbing ${i}`, category: 'plumbers', phone: `(615) 555-01${String(i).padStart(2, '0')}`,
+      services: ['Leak repair'], serviceArea: 'Greater Springfield', description: 'We fix pipes and leaks.',
+      city: 'Springfield', state: 'TN',
+    },
+  };
+}
+
+async function makeDir(count, { submittedAt = BEFORE } = {}) {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'fap-founders-'));
+  dirs.push(dir);
+  await fs.copyFile(path.join(REPO_DATA, 'categories.json'), path.join(dir, 'categories.json'));
+  await fs.writeFile(path.join(dir, 'listings.json'), '[]');
+  const drafts = Array.from({ length: count }, (_, i) => draft(i + 1));
+  await fs.writeFile(path.join(dir, 'drafts.json'), JSON.stringify(drafts));
+  await fs.writeFile(path.join(dir, 'pending.json'), JSON.stringify(
+    drafts.map(d => ({ id: d.id, draftId: d.id, submittedAt, status: 'pending' })),
+  ));
+  return dir;
+}
+
+function storeFor(dir, { cap = 500, now = BEFORE, deadline = DEADLINE } = {}) {
+  const clock = { at: now, now() { return new Date(this.at); } };
+  const store = createDataStore({ dataDir: dir, clock, includeSamples: false, founders: { cap, deadline } });
+  return { store, clock };
+}
+
+test('settings: defaults, and bad values fall back to the defaults', () => {
+  assert.equal(parseFoundersCap(undefined), DEFAULT_FOUNDERS_CAP);
+  assert.equal(parseFoundersCap('250'), 250);
+  assert.equal(parseFoundersCap('0'), 0);
+  assert.equal(parseFoundersCap('-5'), DEFAULT_FOUNDERS_CAP);
+  assert.equal(parseFoundersCap('lots'), DEFAULT_FOUNDERS_CAP);
+  assert.equal(parseFoundersDeadline(undefined), DEFAULT_FOUNDERS_DEADLINE);
+  assert.equal(parseFoundersDeadline('not a date'), DEFAULT_FOUNDERS_DEADLINE);
+  assert.equal(parseFoundersDeadline('2027-03-01T00:00:00Z'), '2027-03-01T00:00:00.000Z');
+  const cfg = configFromEnv({}, { warn: () => {} });
+  assert.deepEqual(cfg.founders, { cap: 500, deadline: DEFAULT_FOUNDERS_DEADLINE });
+});
+
+test('the default deadline reads as January 31, 2027', () => {
+  assert.equal(formatFoundersDeadline(DEFAULT_FOUNDERS_DEADLINE), 'January 31, 2027');
+});
+
+test('approved listings get numbers 1, 2, 3 in approval order', async () => {
+  const { store } = storeFor(await makeDir(3));
+  for (const id of ['d2', 'd1', 'd3']) assert.equal((await store.publishDraft(id)).status, 200);
+  const numbers = store.getListings().map(l => [l.name, store.getFounder(l.id)?.number]);
+  assert.deepEqual(Object.fromEntries(numbers), {
+    'Founder Test Plumbing 2': 1, 'Founder Test Plumbing 1': 2, 'Founder Test Plumbing 3': 3,
+  });
+  assert.deepEqual(store.getFoundersStatus(), { cap: 500, taken: 3, left: 497, open: true, deadline: DEADLINE });
+});
+
+test('approving the same listing twice keeps its number', async () => {
+  const { store } = storeFor(await makeDir(2));
+  const first = await store.publishDraft('d1');
+  await store.publishDraft('d1');
+  await store.publishDraft('d2');
+  assert.equal(store.getFounder(first.listing.id).number, 1);
+  assert.equal(store.getFoundersStatus().taken, 2);
+});
+
+test('the cap is firm: listing number cap + 1 is not a founder', async () => {
+  const { store } = storeFor(await makeDir(3), { cap: 2 });
+  const results = [];
+  for (const id of ['d1', 'd2', 'd3']) results.push(await store.publishDraft(id));
+  assert.deepEqual(results.map(r => store.getFounder(r.listing.id)?.number), [1, 2, undefined]);
+  assert.equal(store.getFoundersStatus().open, false);
+  assert.equal(store.getFoundersStatus().left, 0);
+});
+
+test('signed up before the deadline but approved after it: still a founder', async () => {
+  const { store } = storeFor(await makeDir(1, { submittedAt: '2027-01-31T23:00:00.000Z' }), { now: '2027-02-10T12:00:00.000Z' });
+  const r = await store.publishDraft('d1');
+  assert.equal(store.getFounder(r.listing.id).number, 1);
+});
+
+test('signed up after the deadline: not a founder', async () => {
+  const { store } = storeFor(await makeDir(1, { submittedAt: '2027-02-01T06:00:00.000Z' }), { now: '2027-02-10T12:00:00.000Z' });
+  const r = await store.publishDraft('d1');
+  assert.equal(r.status, 200);
+  assert.equal(store.getFounder(r.listing.id), undefined);
+  assert.equal(store.getFoundersStatus().open, false);
+});
+
+test('cap 0 turns the program off', async () => {
+  const { store } = storeFor(await makeDir(1), { cap: 0 });
+  const r = await store.publishDraft('d1');
+  assert.equal(store.getFounder(r.listing.id), undefined);
+  assert.equal(foundersInvite(store.getFoundersStatus()), '');
+});
+
+test('an unpublished founder loses the badge and the number is never reused', async () => {
+  const { store } = storeFor(await makeDir(2));
+  const a = await store.publishDraft('d1');
+  await store.unpublish(a.listing.id);
+  assert.equal(store.getFounder(a.listing.id), undefined);
+  const b = await store.publishDraft('d2');
+  assert.equal(store.getFounder(b.listing.id).number, 2);
+  assert.equal(store.getFoundersStatus().left, 498);
+});
+
+test('founder numbers survive a restart', async () => {
+  const dir = await makeDir(2);
+  const one = storeFor(dir);
+  const a = await one.store.publishDraft('d1');
+  const two = storeFor(dir);
+  assert.equal(two.store.getFounder(a.listing.id).number, 1);
+  const b = await two.store.publishDraft('d2');
+  assert.equal(two.store.getFounder(b.listing.id).number, 2);
+});
+
+test('property: numbers are unique, start at 1, and never pass the cap', () => {
+  fc.assert(fc.property(fc.integer({ min: 0, max: 12 }), fc.integer({ min: 0, max: 20 }), (cap, signups) => {
+    const map = {};
+    for (let i = 0; i < signups; i += 1) {
+      if (earnsFounderSpot({ cap, deadline: DEADLINE }, map, BEFORE)) {
+        map[`l${i}`] = { number: nextFounderNumber(map) };
+      }
+    }
+    const numbers = Object.values(map).map(e => e.number);
+    assert.equal(numbers.length, Math.min(cap, signups));
+    assert.deepEqual(numbers, Array.from({ length: numbers.length }, (_, i) => i + 1));
+    const status = foundersStatus({ cap, deadline: DEADLINE }, map, BEFORE);
+    assert.equal(status.taken + status.left, cap);
+  }));
+});
+
+test('badge and invite wording', () => {
+  assert.equal(founderBadge(undefined), '');
+  assert.equal(founderBadge({ number: 0 }), '');
+  assert.match(founderBadge({ number: 12, cap: 500 }), /Founding Member<\/span> <span class="founder-badge-number">No\. 12 of 500</);
+  const invite = foundersInvite({ cap: 500, taken: 3, left: 497, open: true, deadline: DEADLINE });
+  assert.match(invite, /The first 500 businesses listed by January 31, 2027 get a free listing and a Founding Member badge for life\. <strong>497 spots left\.<\/strong>/);
+  assert.match(foundersInvite({ cap: 500, left: 1, open: true, deadline: DEADLINE }), /1 spot left\./);
+  assert.equal(foundersInvite({ cap: 500, left: 0, open: false, deadline: DEADLINE }), '');
+});
+
+test('pages: badge on the card and the listing page, invite on home and sign-up, nothing added to the API or the hash', async () => {
+  const dir = await makeDir(1);
+  const config = { ...configFromEnv({ ADMIN_TOKEN: 't', BASE_URL: 'http://example.test' }, { warn: () => {} }), demoMode: false };
+  const app = createApp({ dataDir: dir, config, clock: { now: () => new Date(BEFORE) } });
+  const server = app.listen(0);
+  const base = `http://127.0.0.1:${server.address().port}`;
+  try {
+    const before = await (await fetch(`${base}/`)).text();
+    assert.match(before, /500 spots left\./);
+    assert.doesNotMatch(before, /founder-badge/);
+    assert.match(await (await fetch(`${base}/rise`)).text(), /Founding Members/);
+
+    const approve = await fetch(`${base}/admin/pending/d1/approve`, { method: 'POST', headers: { Authorization: 'Bearer t' } });
+    assert.ok(approve.status < 400, `approve returned ${approve.status}`);
+
+    const home = await (await fetch(`${base}/`)).text();
+    assert.match(home, /No\. 1 of 500/);
+    assert.match(home, /499 spots left\./);
+    const filtered = await (await fetch(`${base}/?category=plumbers`)).text();
+    assert.match(filtered, /No\. 1 of 500/);
+    assert.doesNotMatch(filtered, /founders-invite/);
+
+    const id = /href="\/listings\/([^"]+)"/.exec(home)[1];
+    assert.match(await (await fetch(`${base}/listings/${id}`)).text(), /Founding Member<\/span> <span class="founder-badge-number">No\. 1 of 500/);
+    const api = await (await fetch(`${base}/api/listings/${id}`)).text();
+    assert.doesNotMatch(api, /founding|joinedAt/i);
+  } finally {
+    await new Promise(r => server.close(r));
+  }
+});

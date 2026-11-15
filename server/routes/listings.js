@@ -113,6 +113,7 @@ export function createListingsRouter(ctx) {
     // JSON-LD goes to layout() only, so the page has exactly one ld+json block
     const detail = listingDetail(listing, undefined, {
       categories: store.getCategories(), verification, hasSeanceRuns: hasSeance,
+      founder: typeof store.getFounder === 'function' ? store.getFounder(listing.id) : undefined,
     });
     const form = quoteForm(listing, { error, values });
     // After a failed submit the error and form come first so a phone shows them without scrolling.

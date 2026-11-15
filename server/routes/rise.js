@@ -125,7 +125,9 @@ export function createRiseRouter(ctx) {
   }
 
   router.get('/rise', (req, res) => {
-    sendPage(res, 200, uploadPage({ photoEnabled: !photoListingClosed(), discarded: req.query.discarded === '1' }));
+    sendPage(res, 200, uploadPage({ photoEnabled: !photoListingClosed(), discarded: req.query.discarded === '1',
+      founders: typeof ctx.store.getFoundersStatus === 'function' ? ctx.store.getFoundersStatus() : undefined,
+    }));
   });
 
   // Type it in: an empty draft with the same edit page. Never uses the AI budget.

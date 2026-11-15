@@ -2348,3 +2348,42 @@ a.tel,
     border: 2px solid #000;
   }
 }
+
+/* ---- Founding Members ------------------------------------------------ */
+.founder-badge {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0 0.5em;
+  margin: 0.35rem 0 0;
+  padding: 0.15rem 0.6rem;
+  border: 2px solid #B8893B;
+  border-radius: 3px;
+  background: #F3E7CC;
+  color: #0C2C73;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.founder-badge-title {
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.founder-badge-number { font-weight: 600; white-space: nowrap; }
+.listing-detail .founder-badge { font-size: 0.95rem; margin: 0 0 0.75rem; }
+.founders-invite {
+  margin: 1.5rem 0;
+  padding: 0.9rem 1.1rem;
+  border: 2px solid #B8893B;
+  border-radius: 4px;
+  background: #F3E7CC;
+  color: #0F1B33;
+}
+.founders-invite p { margin: 0; }
+.founders-invite-title {
+  color: #0C2C73;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 0.25rem !important;
+}

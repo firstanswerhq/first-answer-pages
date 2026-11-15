@@ -72,6 +72,7 @@ export function createApp(deps = {}) {
   const store = deps.dataDir || deps.clock || deps.seedDir || config.demoMode !== envDemoMode
     ? createDataStore({
       dataDir: deps.dataDir ?? config.dataDir, seedDir, clock, includeSamples: Boolean(config.demoMode),
+      founders: config.founders,
     })
     : getDefaultStore();
 

@@ -6,6 +6,7 @@
 // configFromEnv() for internal use. Use redactConfig() for anything that
 // could be logged or returned.
 
+import { parseFoundersCap, parseFoundersDeadline } from './founders.js';
 import { fileURLToPath } from 'node:url';
 import { randomBytes } from 'node:crypto';
 import path from 'node:path';
@@ -271,6 +272,10 @@ export function configFromEnv(env = process.env, opts = {}) {
     // INDEXNOW=off stops the Bing ping on approve/unpublish (it only runs on the live site anyway).
     indexNow: nonEmpty(env.INDEXNOW)?.toLowerCase() === 'off' ? 'off' : 'on',
     testRun: isTestRun(env),
+
+    // Founding Member program: first FOUNDERS_CAP approved listings signed up before FOUNDERS_DEADLINE.
+    // FOUNDERS_CAP=0 turns it off.
+    founders: { cap: parseFoundersCap(env.FOUNDERS_CAP), deadline: parseFoundersDeadline(env.FOUNDERS_DEADLINE) },
 
     // AI Visibility Grader (/grade).
     graderEnabled: parseOnOff(env.GRADER_ENABLED),

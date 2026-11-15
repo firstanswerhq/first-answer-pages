@@ -27,6 +27,7 @@
  *   makeSlug(name, city, takenIds: Set<string>) -> string
  */
 
+import { earnsFounderSpot, nextFounderNumber, foundersStatus } from './lib/founders.js';
 import nodeFs from 'node:fs';
 import path from 'node:path';
 import { readJsonFile, updateJsonFile, StoreError } from './lib/json-file.js';
@@ -102,6 +103,7 @@ const defaultClock = { now: () => new Date() };
  */
 export function createDataStore({
   dataDir, seedDir, fs, clock = defaultClock, validateFields, makeSlug, includeSamples = true,
+  founders: foundersProgram = { cap: 0, deadline: '' },
 } = {}) {
   if (typeof dataDir !== 'string' || dataDir === '') {
     throw new TypeError('createDataStore requires a dataDir');
@@ -130,18 +132,32 @@ export function createDataStore({
       expectArray(loadSync(fsImpl, file('published.json'), []), 'published.json'),
     );
     const verified = expectObject(loadSync(fsImpl, file('verified.json'), {}), 'verified.json');
+    const founders = expectObject(loadSync(fsImpl, file('founders.json'), {}), 'founders.json');
     state = {
       published,
       verified: Object.freeze({ ...verified }),
+      founders: Object.freeze({ ...founders }),
       listings: mergeListings(seed, published),
     };
   }
   load();
 
   /** Replace the snapshot atomically (readers never see a partial state). */
-  function swap({ published = state.published, verified = state.verified } = {}) {
-    state = { published, verified, listings: mergeListings(seed, published) };
+  function swap({ published = state.published, verified = state.verified, founders = state.founders } = {}) {
+    state = { published, verified, founders, listings: mergeListings(seed, published) };
   }
+
+  // ---- founders ---------------------------------------------------------
+  /** Founder entry { number, joinedAt } for a listing that is public right now, else undefined. */
+  function getFounder(id) {
+    if (!Object.hasOwn(state.founders, id)) return undefined;
+    const e = state.founders[id];
+    if (!e || !Number.isInteger(e.number) || e.number <= 0) return undefined;
+    if (!state.published.some(l => l && l.id === id)) return undefined;
+    return { number: e.number, joinedAt: e.joinedAt, cap: foundersProgram.cap };
+  }
+  /** { cap, taken, left, open, deadline } for the Founding Member program. */
+  const getFoundersStatus = () => foundersStatus(foundersProgram, state.founders, clock.now());
 
   // ---- locks --------------------------------------------------------------
   const locks = new Map();
@@ -314,6 +330,17 @@ export function createDataStore({
         date = map[id];
       }, { ...io, fallback: {} });
 
+      // 5b. Founding Member number: judged by when the owner sent the listing in,
+      // so a slow review never costs anyone their spot. Kept on retry.
+      const pendingAll = await collection('pending').read();
+      const entry = Array.isArray(pendingAll) ? pendingAll.find(e => e && e.draftId === draftId) : undefined;
+      const signedUpAt = entry && typeof entry.submittedAt === 'string' ? entry.submittedAt : clock.now();
+      const foundersNext = await updateJsonFile(file('founders.json'), map => {
+        if (!Object.hasOwn(map, id) && earnsFounderSpot(foundersProgram, map, signedUpAt)) {
+          map[id] = { number: nextFounderNumber(map), joinedAt: new Date(clock.now()).toISOString() };
+        }
+      }, { ...io, fallback: {} });
+
       // 6. mark the draft published
       await drafts.update(list => {
         const d = list.find(x => x.id === draftId);
@@ -324,6 +351,7 @@ export function createDataStore({
       swap({
         published: withoutComments(publishedNext),
         verified: Object.freeze({ ...verifiedNext }),
+        founders: Object.freeze({ ...foundersNext }),
       });
       void date;
       return { status: 200, listing: findById(id) ?? listing };
@@ -519,6 +547,7 @@ export function createDataStore({
 
   return {
     getListings, getCategories, findById, searchListings, getVerifiedDate, getVerifiedAt, isSeed,
+    getFounder, getFoundersStatus,
     publishDraft, submitDraft, rejectDraft, unpublish, updatePublished, reload, withLock, collection,
     pruneExpired,
   };
@@ -534,8 +563,8 @@ let defaultStore;
 export function getDefaultStore() {
   if (!defaultStore) {
     try {
-      const { dataDir, seedDir, demoMode } = configFromEnv(process.env, { warn: () => {} });
-      defaultStore = createDataStore({ dataDir, seedDir, includeSamples: demoMode });
+      const { dataDir, seedDir, demoMode, founders } = configFromEnv(process.env, { warn: () => {} });
+      defaultStore = createDataStore({ dataDir, seedDir, includeSamples: demoMode, founders });
     } catch (err) {
       process.stderr.write(`[data] Failed to load data files: ${err.message}\n`);
       process.exit(1);
