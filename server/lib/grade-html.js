@@ -133,7 +133,7 @@ const ordinal = n => {
   return `${n}${({ 1: 'st', 2: 'nd', 3: 'rd' })[n % 10] ?? 'th'}`;
 };
 
-const providerWho = name => (name === 'anthropic' ? 'Claude' : name === 'chatgpt' ? 'ChatGPT' : name === 'openai' ? 'OpenAI' : name === 'mock' ? 'a demo assistant' : 'an AI assistant');
+const providerWho = name => (name === 'anthropic' ? 'Claude' : name === 'chatgpt' ? 'ChatGPT' : name === 'openai' ? 'ChatGPT' : name === 'mock' ? 'a demo assistant' : 'an AI assistant');
 
 const resultOf = (grade, id) => (grade.results ?? []).find(r => r.id === id);
 
@@ -141,13 +141,13 @@ const resultOf = (grade, id) => (grade.results ?? []).find(r => r.id === id);
 function aiSentence(entry, now) {
   const justNow = !entry.reusedFrom && Number.isFinite(now) && now - Date.parse(entry.at) < 10 * 60 * 1000;
   const asked = justNow
-    ? `We asked ${providerWho(entry.provider)} once just now.`
+    ? `We just asked ${providerWho(entry.provider)}.`
     : `We asked ${providerWho(entry.provider)} on ${formatRunTime(entry.at)}.`;
   const n = entry.competitors.length;
   let tail;
   if (entry.named) {
     tail = entry.position && entry.total > 1
-      ? `It named your business ${ordinal(entry.position)} of ${entry.total}.`
+      ? `It listed ${entry.total} businesses, and yours was ${ordinal(entry.position)}.`
       : 'It named your business.';
   } else if (n === 0) {
     tail = 'It did not name your business.';
@@ -160,7 +160,7 @@ function aiSentence(entry, now) {
 function answerBlock(entry) {
   const demo = entry.provider === 'mock' ? ` <span class="seance-demo">${DEMO_LABEL}</span>` : '';
   return `<details>
-      <summary>See the AI's answer${demo}</summary>
+      <summary>${entry.provider === 'mock' ? 'See the demo answer' : `See ${providerWho(entry.provider)}'s answer`}${demo}</summary>
       <blockquote class="seance-answer grade-answer">${e(entry.answer)}</blockquote>
     </details>`;
 }
@@ -190,7 +190,7 @@ function aiSection(grade, now) {
     ${answerBlock(a)}`;
   }).join('\n    ');
   const more = all.length > 1 + seconds.length
-    ? `<p>In all we asked AI ${all.length} times. AI named your business in ${namedIn} of them.</p>`
+    ? `<p>In all, AI named your business in ${namedIn} of ${all.length} answers.</p>`
     : '';
   return `<section class="grade-ai">
     <h2>What AI says</h2>
@@ -406,7 +406,11 @@ function fullReport(grade, contact, rechecking = false, justOpened = false) {
   const used = (grade.ai ?? []).length;
   const asked = new Set((grade.ai ?? []).map(a => a.prompt)).size;
   const who = new Set((grade.ai ?? []).map(a => a.provider)).size;
-  const answersNote = used > 0 ? `<p class="hint">We asked ${who > 1 ? `${who} AI assistants` : 'AI'} ${asked} ${asked === 1 ? 'question' : 'questions'}${who > 1 ? ' each' : ''}. Your score counts ${used === 1 ? 'that answer' : `all ${used} answers`}.</p>` : '';
+  const names = [...new Set((grade.ai ?? []).map(a => providerWho(a.provider)))];
+  const answersNote = used <= 0 ? ''
+    : who > 1
+      ? `<p class="hint">We asked ${names.join(' and ')} the same ${asked === 1 ? 'question' : `${asked} questions`} (${used} answers in all). Your score counts all ${used}.</p>`
+      : `<p class="hint">We asked AI ${asked} ${asked === 1 ? 'question' : 'questions'}. Your score counts ${used === 1 ? 'that answer' : `all ${used} answers`}.</p>`;
   return `<section class="grade-full" id="full-report">${openedNote}
     <h2>Every check</h2>
     ${answersNote}
@@ -495,7 +499,7 @@ export function aboutPage({ contactEmail, userAgent = '' } = {}) {
   </ul>
   <p>We read only public pages. We do not log in, fill in forms, or run the page's scripts. We send no cookies. We visit only websites on the public internet.</p>
   ${userAgent ? `<p>Our visits identify themselves as <code>${e(userAgent)}</code>.</p>` : ''}
-  <p>We also ask AI assistants up to three questions each about the best businesses of that kind in that city, and check whether the business is named. The questions carry the kind of business and the city, never the business name. They go to Anthropic (Claude) and, when a second opinion is switched on, to OpenAI (ChatGPT).</p>
+  <p>We also ask AI assistants up to three questions each about the best businesses of that kind in that city, and check whether the business is named. The questions name the kind of business and the city, never the business name. They go to Claude, and sometimes to ChatGPT too.</p>
   <p>Reports are not listed in search engines. We delete them after 90 days.</p>
   <p>Questions, or want a report removed? ${contact ? `Email ${contact}` : 'Use <a href="/about">our contact page</a>'}.</p>
   <p><a href="/grade">Check a business</a></p>

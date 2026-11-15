@@ -156,7 +156,9 @@ export function aiNamedResult(ai, reasonIfNone = AI_FAILED) {
     id: 'ai-named',
     result: 'pass',
     earned: Math.round((points * named) / ran),
-    detail: ran === 1 ? 'Yes. AI named your business.' : `Yes. AI named your business in ${named} of ${ran} answers.`,
+    detail: ran === 1 ? 'Yes. AI named your business.'
+      : named === ran ? `Yes. AI named your business in all ${ran} answers.`
+        : `Partly. AI named your business in ${named} of ${ran} answers.`,
   };
 }
 

@@ -249,7 +249,7 @@ test('a stub AI that names the business gives full AI points and a place in the 
   // Before the report is viewed: with the gate off, a view starts the extra questions in the background.
   assert.equal(assistant.calls, 1);
   const html = await (await get(env, `/grade/${id}`)).text();
-  assert.ok(html.includes('We asked Claude once just now. It named your business 1st of 2.'));
+  assert.ok(html.includes('We just asked Claude. It listed 2 businesses, and yours was 1st.'));
 });
 
 test('AI answer text is escaped on the page', async () => {

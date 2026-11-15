@@ -497,8 +497,8 @@ test('ChatGPT is asked the same questions as Claude, and both show in the report
   assert.equal(grade.ai[1].named, true);
 
   const page = await (await get(env, `/grade/${id}`)).text();
-  assert.match(page, /We asked Claude once just now\. It named these 3 businesses, not yours\./);
-  assert.match(page, /We asked ChatGPT once just now\. It named your business 1st of 2\./);
+  assert.match(page, /We just asked Claude\. It named these 3 businesses, not yours\./);
+  assert.match(page, /We just asked ChatGPT\. It listed 2 businesses, and yours was 1st\./);
 
   // After the report is opened, each extra question also goes to both.
   const ok = await post(env, `/grade/${id}/unlock`, LEAD);
@@ -513,7 +513,7 @@ test('ChatGPT is asked the same questions as Claude, and both show in the report
   assert.equal(grade.ai.filter(a => a.provider === 'chatgpt').length, 3);
   const after = await (await get(env, `/grade/${id}`, { cookie })).text();
   assert.ok(after.includes('Named in 3 of 6 answers.'));
-  assert.ok(after.includes('We asked 2 AI assistants 3 questions each. Your score counts all 6 answers.'));
+  assert.ok(after.includes('We asked Claude and ChatGPT the same 3 questions (6 answers in all). Your score counts all 6.'));
 });
 
 test('turning ChatGPT on later: a repeat check keeps Claude\'s stored answer and asks only ChatGPT', async () => {
@@ -569,7 +569,7 @@ test('a ChatGPT failure never blocks the check: Claude\'s answer still counts', 
   const grade = (await readJson(env, 'grades.json', [])).find(x => x.id === id);
   assert.deepEqual(grade.ai.map(a => a.provider), ['anthropic']);
   const page = await (await get(env, `/grade/${id}`)).text();
-  assert.match(page, /We asked Claude once just now/);
+  assert.match(page, /We just asked Claude/);
   assert.doesNotMatch(page, /ChatGPT/);
 });
 
