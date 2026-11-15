@@ -136,6 +136,20 @@ function logStatus(provider, status) {
   process.stderr.write(`[assistant] provider=${provider} status=${status}\n`);
 }
 
+/**
+ * Log the shape of a reply, never its content: why it stopped, which kinds of
+ * blocks came back and how many tokens were written. Enough to tell an empty
+ * answer from a paused or cut-off one.
+ */
+function logShape(provider, data) {
+  const clean = v => String(v ?? 'none').replace(/[^a-z0-9_]/gi, '').slice(0, 40) || 'none';
+  const blocks = Array.isArray(data?.content)
+    ? data.content.slice(0, 40).map(b => clean(b?.type)).join(',')
+    : 'none';
+  const out = Number.isFinite(data?.usage?.output_tokens) ? data.usage.output_tokens : 'unknown';
+  process.stderr.write(`[assistant] provider=${provider} stop=${clean(data?.stop_reason)} blocks=${blocks || 'none'} out=${out}\n`);
+}
+
 /** One fetch call; returns parsed response JSON. Logs name and status only. */
 async function callProvider(name, url, headers, body, timeoutMs, outerSignal) {
   const ctrl = new AbortController();
@@ -260,6 +274,7 @@ function createAnthropicAssistantProvider({ apiKey, model, timeoutMs }) {
 
       try {
         let data = await send(messages);
+        logShape('anthropic', data);
         // pause_turn: the server-side search loop paused mid-turn. Continue exactly
         // once by resending the user message plus the assistant content so far, then
         // use the second reply. No further loop, even if it also pauses. The resend
@@ -267,6 +282,7 @@ function createAnthropicAssistantProvider({ apiKey, model, timeoutMs }) {
         // first reply is used as it is.
         if (data?.stop_reason === 'pause_turn' && Array.isArray(data.content) && extraAllowed(consumeExtra)) {
           data = await send([...messages, { role: 'assistant', content: data.content }]);
+          logShape('anthropic', data);
         }
         return {
           answer: requireText(joinTextBlocks(data)),

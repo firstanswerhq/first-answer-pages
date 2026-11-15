@@ -330,7 +330,10 @@ export function createGrader({
           at: nowIso(),
         },
       };
-    } catch {
+    } catch (err) {
+      // Name and code only: provider messages are fixed strings, and nothing from a reply is logged.
+      const clean = v => String(v ?? '').replace(/[^a-z0-9_ .:'-]/gi, '').slice(0, 80);
+      process.stderr.write(`[grader] ai-failed name=${clean(err?.name)} code=${clean(err?.code)} message=${clean(err?.message)}\n`);
       return { reason: AI_FAILED };
     }
   }
