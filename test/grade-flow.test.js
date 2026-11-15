@@ -262,6 +262,35 @@ test('AI answer text is escaped on the page', async () => {
   assert.ok(html.includes('&lt;script&gt;alert(1)&lt;/script&gt;'));
 });
 
+/** Run fn while collecting everything written to stderr. */
+async function captureStderr(fn) {
+  const chunks = [];
+  const orig = process.stderr.write;
+  process.stderr.write = (c) => { chunks.push(typeof c === 'string' ? c : Buffer.from(c).toString()); return true; };
+  try {
+    await fn();
+  } finally {
+    process.stderr.write = orig;
+  }
+  return chunks.join('');
+}
+
+test('a failed AI step logs a fixed code and never the error message', async () => {
+  const assistant = {
+    name: 'stub',
+    async ask() { throw new Error('body: SECRET sk-ant-abc123 Joe Plumbing'); },
+  };
+  const env = await startEnv({ assistantProvider: assistant });
+  const logged = await captureStderr(async () => {
+    const id = idOf(await postGrade(env, NO_SITE));
+    await waitDone(env, id);
+  });
+  assert.ok(logged.includes('[grader] ai-failed code=internal\n'));
+  for (const secret of ['SECRET', 'sk-ant', 'Joe', 'Plumbing', 'body']) {
+    assert.equal(logged.includes(secret), false, secret);
+  }
+});
+
 test('no website: website checks are not_checked and the report says Not enough to score yet', async () => {
   const env = await startEnv();
   const id = idOf(await postGrade(env, NO_SITE));

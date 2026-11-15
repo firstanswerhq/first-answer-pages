@@ -12,8 +12,9 @@
  * Only the mock reads category and businessName; real adapters send just the
  * prompt and never the business name.
  *
- * Keys go only in a request header. Logs carry the provider name and HTTP
- * status, never keys, prompts, or response bodies.
+ * Keys go only in a request header. Logs carry the provider name, the HTTP
+ * status and the shape of a reply (why it stopped, block type names, a token
+ * count), never keys, prompts, or response bodies.
  */
 
 import { createHash } from 'node:crypto';
@@ -289,6 +290,12 @@ function createAnthropicAssistantProvider({ apiKey, model, timeoutMs }) {
         if (data?.stop_reason === 'pause_turn' && Array.isArray(data.content) && extraAllowed(consumeExtra)) {
           data = await send([...messages, { role: 'assistant', content: data.content }]);
           logShape('anthropic', data);
+        }
+        // Cut off before the answer was written: any text so far is only a preamble
+        // such as "I'll search for that", not something to score a business on.
+        if (data?.stop_reason === 'max_tokens' && Array.isArray(data.content)
+          && data.content[data.content.length - 1]?.type !== 'text') {
+          throw new AssistantError('unparseable');
         }
         return {
           answer: requireText(joinTextBlocks(data)),

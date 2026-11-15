@@ -7,8 +7,8 @@
  * marks the Grade `done`. A failed step marks its Checks `not_checked` and the
  * run continues.
  *
- * Logs hold only the Grade_Id, step names, counts and timings. Never log typed
- * input, AI answers or lead details. Every background promise ends in a
+ * Logs hold only the Grade_Id, step names, counts, timings and a fixed failure
+ * code for the AI step. Never log typed input, AI answers or lead details. Every background promise ends in a
  * .catch that logs the Grade_Id only.
  */
 
@@ -19,6 +19,7 @@ import { runWebsiteChecks, CHECKS } from './grade-checks.js';
 import { scoreGrade } from './grade-score.js';
 import { analyzeAnswer, registeredDomain } from './name-match.js';
 import { normalizeForMatch } from './seance.js';
+import { AssistantError } from './assistant.js';
 import { mapCategory, normalizePhone, validateFields } from './listing-fields.js';
 
 export const WEBSITE_BUDGET_MS = 30000;
@@ -26,6 +27,7 @@ export const AI_TIMEOUT_MS = 120000;
 export const STALE_AFTER_MS = 4 * 60 * 1000;
 export const REUSE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 export const MAX_ANSWER_CODE_POINTS = 4000;
+export const MAX_ANALYZED_CODE_POINTS = 20000;
 
 export const AI_NOT_CONNECTED = "AI check isn't connected";
 export const AI_LIMIT_REACHED = 'AI check limit reached for today';
@@ -314,7 +316,8 @@ export function createGrader({
         consumeExtra: () => (isMock ? true : aiBudget.consume({ kind: 'grade' }).allowed === true),
       }), AI_TIMEOUT_MS, 'ai timeout');
       const answer = cutCodePoints(res.answer, MAX_ANSWER_CODE_POINTS);
-      const analysis = analyzeAnswer(answer, input);
+      // Read the whole answer for names (bounded), so a business named late is not missed; store the capped one.
+      const analysis = analyzeAnswer(cutCodePoints(res.answer, MAX_ANALYZED_CODE_POINTS), input);
       return {
         entry: {
           prompt,
@@ -331,9 +334,11 @@ export function createGrader({
         },
       };
     } catch (err) {
-      // Name and code only: provider messages are fixed strings, and nothing from a reply is logged.
-      const clean = v => String(v ?? '').replace(/[^a-z0-9_ .:'-]/gi, '').slice(0, 80);
-      process.stderr.write(`[grader] ai-failed name=${clean(err?.name)} code=${clean(err?.code)} message=${clean(err?.message)}\n`);
+      // A fixed code only, never the error's message: a message could carry a key, a reply or typed input.
+      const code = err instanceof AssistantError ? err.code
+        : err?.message === 'ai timeout' ? 'ai_timeout'
+          : 'internal';
+      process.stderr.write(`[grader] ai-failed code=${code}\n`);
       return { reason: AI_FAILED };
     }
   }

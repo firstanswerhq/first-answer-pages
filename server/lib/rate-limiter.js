@@ -21,7 +21,8 @@ export const RULES = Object.freeze({
   'admin-auth': Object.freeze({ limit: 10, windowMs: 60 * 60 * 1000 }),
   // AI Visibility Grader
   grade: Object.freeze({ limit: 5, windowMs: 60 * 60 * 1000 }),
-  'grade-day': Object.freeze({ limit: 20, windowMs: 24 * 60 * 60 * 1000 }),
+  // 6 a day per visitor: each check can use 3 AI calls and the whole site shares 60 a day.
+  'grade-day': Object.freeze({ limit: 6, windowMs: 24 * 60 * 60 * 1000 }),
   'grade-unlock': Object.freeze({ limit: 5, windowMs: 60 * 60 * 1000 }),
   'grade-recheck': Object.freeze({ limit: 10, windowMs: 60 * 60 * 1000 }),
   'grade-recheck-grade': Object.freeze({ limit: 1, windowMs: 2 * 60 * 1000 }),

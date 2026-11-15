@@ -112,6 +112,19 @@ export function createMockVisionProvider() {
   };
 }
 
+// Thinking counts toward max_tokens; 1024 can be spent before the answer is written.
+const ANTHROPIC_MAX_TOKENS = 4096;
+
+/** Log the shape of a reply, never its content: why it stopped, block type names, tokens written. */
+function logShape(provider, data) {
+  const clean = v => String(v ?? 'none').replace(/[^a-z0-9_]/gi, '').slice(0, 40) || 'none';
+  const blocks = Array.isArray(data?.content)
+    ? data.content.slice(0, 40).map(b => clean(b?.type)).join(',')
+    : 'none';
+  const out = Number.isFinite(data?.usage?.output_tokens) ? data.usage.output_tokens : 'unknown';
+  process.stderr.write(`[vision] provider=${provider} stop=${clean(data?.stop_reason)} blocks=${blocks || 'none'} out=${out}\n`);
+}
+
 function logStatus(provider, status) {
   process.stderr.write(`[vision] provider=${provider} status=${status}\n`);
 }
@@ -201,8 +214,7 @@ function createAnthropicVisionProvider({ apiKey, model, timeoutMs }) {
         { 'x-api-key': apiKey, 'anthropic-version': ANTHROPIC_VERSION },
         {
           model,
-          // Thinking counts toward max_tokens; 1024 can be spent before the answer is written.
-          max_tokens: 4096,
+          max_tokens: ANTHROPIC_MAX_TOKENS,
           messages: [{
             role: 'user',
             content: [
@@ -217,6 +229,7 @@ function createAnthropicVisionProvider({ apiKey, model, timeoutMs }) {
         timeoutMs,
         signal,
       );
+      logShape('anthropic', data);
       const block = Array.isArray(data?.content) ? data.content.find(b => b?.type === 'text') : undefined;
       return parseReply(block?.text);
     },

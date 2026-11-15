@@ -639,6 +639,85 @@ describe('anthropic web search request', () => {
     });
   });
 
+  // The live failure of Nov 15, 2026: the reply held only search and thinking blocks.
+  const shapeReply = (stop, types, extra = {}) => ({
+    stop_reason: stop,
+    usage: { output_tokens: 1085 },
+    content: types.map(t => (typeof t === 'string' ? { type: t, ...(t === 'text' ? { text: 'x' } : {}) } : t)),
+    ...extra,
+  });
+
+  test('max_tokens with only search and thinking blocks rejects with unparseable, one call', async () => {
+    const reply = shapeReply('max_tokens', ['server_tool_use', 'web_search_tool_result', 'thinking', 'thinking']);
+    await withFetch(() => jsonResponse(reply), async (calls) => {
+      await assert.rejects(askAnthropic(), err => err.code === 'unparseable');
+      assert.equal(calls.length, 1);
+    });
+  });
+
+  test('max_tokens with only a preamble before the search is not an answer', async () => {
+    const reply = shapeReply('max_tokens', [{ type: 'text', text: 'I will search for that.' }, 'server_tool_use', 'thinking']);
+    await withFetch(() => jsonResponse(reply), async () => {
+      await assert.rejects(askAnthropic(), err => err.code === 'unparseable');
+    });
+  });
+
+  test('max_tokens that ends in answer text keeps the text', async () => {
+    const reply = shapeReply('max_tokens', ['thinking', { type: 'text', text: 'Acme Roofing and' }]);
+    await withFetch(() => jsonResponse(reply), async () => {
+      assert.equal((await askAnthropic()).answer, 'Acme Roofing and');
+    });
+  });
+
+  test('thinking and redacted_thinking blocks are ignored', async () => {
+    const reply = shapeReply('end_turn', ['thinking', { type: 'text', text: 'A' }, 'redacted_thinking', { type: 'text', text: 'B' }]);
+    await withFetch(() => jsonResponse(reply), async () => {
+      assert.equal((await askAnthropic()).answer, 'AB');
+    });
+  });
+
+  test('the shape of a reply is logged on one fixed-format line', async () => {
+    const reply = shapeReply('max_tokens', ['server_tool_use', 'web_search_tool_result', 'thinking', 'thinking']);
+    await withFetch(() => jsonResponse(reply), async () => {
+      const output = await captureOutput(async () => { await askAnthropic().catch(() => {}); });
+      assert.ok(output.includes('[assistant] provider=anthropic stop=max_tokens blocks=server_tool_use,web_search_tool_result,thinking,thinking out=1085\n'));
+    });
+  });
+
+  test('no reply text, thinking, search result, prompt or key reaches the logs', async () => {
+    const reply = {
+      stop_reason: 'end_turn',
+      usage: { output_tokens: 12 },
+      content: [
+        { type: 'thinking', thinking: 'MARKER_THINKING', signature: 'MARKER_SIG' },
+        { type: 'web_search_tool_result', content: [{ type: 'web_search_result', title: 'MARKER_TITLE', url: 'https://marker-url.example/' }] },
+        { type: 'text', text: 'MARKER_ANSWER', citations: [{ url: 'https://marker-cite.example/', title: 'MARKER_CITE' }] },
+      ],
+    };
+    await withFetch(() => jsonResponse(reply), async () => {
+      const output = await captureOutput(async () => { await askAnthropic(); });
+      for (const marker of ['MARKER_', 'marker-', PROMPT, KEY]) assert.ok(!output.includes(marker), marker);
+    });
+  });
+
+  test('a hostile stop_reason or block type cannot forge or flood a log line', async () => {
+    const reply = {
+      stop_reason: `end_turn\n[assistant] forged=1 ${'x'.repeat(200)}`,
+      usage: { output_tokens: 'NaN\nforged' },
+      content: Array.from({ length: 100 }, () => ({ type: `te\nxt${'y'.repeat(100)}` })),
+    };
+    await withFetch(() => jsonResponse(reply), async () => {
+      const output = await captureOutput(async () => { await askAnthropic().catch(() => {}); });
+      const line = output.split('\n').find(l => l.includes(' stop='));
+      assert.ok(line, 'shape line present');
+      assert.ok(!output.includes('forged=1'));
+      const blocks = line.match(/ blocks=(\S*)/)[1].split(',');
+      assert.ok(blocks.length <= 40);
+      for (const b of blocks) assert.ok(b.length <= 40 && /^[a-z0-9_]+$/i.test(b));
+      assert.ok(line.endsWith(' out=unknown'));
+    });
+  });
+
   test('sends no anthropic-beta header; key only in x-api-key and never in logs', async () => {
     await withFetch(() => jsonResponse(anthropicReply('ok')), async (calls) => {
       const output = await captureOutput(async () => { await askAnthropic(); });
