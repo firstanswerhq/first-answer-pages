@@ -206,7 +206,7 @@ export function verifiedBadge(trust, opts) {
   if (!trust || trust.verified !== true) return '';
   if (opts?.detail !== true) return '<p class="verified-badge"><span class="verified-badge-title">Verified</span></p>';
   const day = formatStampDate({ verifiedAt: trust.verifiedAt });
-  return `<p class="verified-badge"><span class="verified-badge-title">Verified</span> <span class="verified-badge-note">Business phone confirmed and owner's photo ID checked${day ? `, ${escapeHtml(day)}` : ''}</span></p>`;
+  return `<p class="verified-badge"><span class="verified-badge-title">Verified</span> <span class="verified-badge-note">Business phone confirmed. Photo ID checked for the person who manages this listing${day ? `, ${escapeHtml(day)}` : ''}. <a href="/verified">What this means</a></span></p>`;
 }
 
 /**
@@ -222,7 +222,7 @@ export function foundersInvite(status, opts) {
   const link = opts?.link === true ? '\n  <p class="founders-invite-link"><a href="/rise">Claim your spot &rarr;</a></p>' : '';
   const fees = opts?.fees;
   const deal = fees
-    ? `\n  <p>Founding Members can also get the Verified stamp for a one-time ${formatFee(fees.founderCents)}, good for life. For everyone else it is ${formatFee(fees.yearlyCents)} a year.</p>`
+    ? `\n  <p class="founders-invite-deal">Optional: the <a href="/verified">Verified stamp</a> shows customers we confirmed your business phone and checked a photo ID. Founding Members pay ${formatFee(fees.founderCents)} once, good for the life of the listing. Everyone else pays ${formatFee(fees.yearlyCents)} a year, with no automatic renewal.</p>`
     : '';
   return `<aside class="founders-invite">
   <p class="founders-invite-title">Founding Members</p>

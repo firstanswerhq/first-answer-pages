@@ -58,7 +58,7 @@ test('fees: founders pay once, everyone else per year', () => {
   assert.equal(paidThroughAfter('founder', {}, Date.parse(NOW)), null);
   assert.equal(paidThroughAfter('yearly', {}, Date.parse(NOW)), '2027-12-01T18:00:00.000Z');
   // Renewing early adds a year to the end date, not to today.
-  assert.equal(paidThroughAfter('yearly', { paidThrough: '2027-06-01T00:00:00.000Z' }, Date.parse(NOW)), '2028-05-31T00:00:00.000Z');
+  assert.equal(paidThroughAfter('yearly', { paidThrough: '2027-06-01T00:00:00.000Z' }, Date.parse(NOW)), '2028-06-01T00:00:00.000Z');
 });
 
 test('the stamp needs all three: fee, phone, photo ID', () => {
@@ -90,7 +90,7 @@ test('badge wording', () => {
   assert.equal(verifiedBadge(undefined), '');
   assert.match(verifiedBadge({ verified: true }), />Verified</);
   assert.match(verifiedBadge({ verified: true, verifiedAt: '2026-12-01T18:10:00.000Z' }, { detail: true }),
-    /Business phone confirmed and owner&#39;s photo ID checked, Dec 1, 2026|Business phone confirmed and owner's photo ID checked, Dec 1, 2026/);
+    /Business phone confirmed\. Photo ID checked for the person who manages this listing, Dec 1, 2026\. <a href="\/verified">What this means<\/a>/);
 });
 
 // ---- provider clients -----------------------------------------------------
@@ -189,16 +189,16 @@ test('verification is off unless every key is set', () => {
 
 // ---- the whole flow through the site ---------------------------------------
 
-function fakes() {
+function fakes({ testMode = false } = {}) {
   const state = { checkouts: new Map(), idChecks: new Map(), sent: [], code: '424242', n: 0 };
   return {
     state,
     payments: {
-      name: 'fake', testMode: true, webhookEnabled: true,
+      name: 'fake', testMode, webhookEnabled: true,
       async createCheckout(o) { const id = `cs_${++state.n}`; state.checkouts.set(id, { ...o, paid: false }); return { id, url: `https://pay.example/${id}` }; },
       async getCheckout(id) { const c = state.checkouts.get(id); return { paid: Boolean(c?.paid), listingId: c?.listingId, plan: c?.plan }; },
       async createIdCheck(o) { const id = `vs_${++state.n}`; state.idChecks.set(id, { ...o, status: 'requires_input' }); return { id, url: `https://id.example/${id}` }; },
-      async getIdCheck(id) { const c = state.idChecks.get(id); return { status: c?.status ?? '', listingId: c?.listingId }; },
+      async getIdCheck(id) { const c = state.idChecks.get(id); return { status: c?.status ?? '', failed: c?.status === 'failed', listingId: c?.listingId }; },
       parseWebhook(raw, header) { if (header !== 'good') throw new Error('bad_signature'); const e = JSON.parse(raw.toString()); return { type: e.type, object: e.data.object }; },
     },
     phone: {
@@ -209,14 +209,14 @@ function fakes() {
   };
 }
 
-async function site({ founders = { cap: 500, deadline: '2027-02-01T06:00:00.000Z' }, withTrust = true } = {}) {
+async function site({ founders = { cap: 500, deadline: '2027-02-01T06:00:00.000Z' }, withTrust = true, testMode = false, phone = '(615) 555-0101' } = {}) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'fap-trust-'));
   dirs.push(dir);
   await fs.copyFile(path.join(REPO_DATA, 'categories.json'), path.join(dir, 'categories.json'));
   await fs.writeFile(path.join(dir, 'listings.json'), '[]');
   const draft = {
     id: 'owner-link-1', status: 'pending', missingFields: [], createdAt: NOW,
-    fields: { name: 'Ridge Roofing', category: 'roofers', phone: '(615) 555-0101', services: ['Roof repair'], serviceArea: 'Greater Nashville', description: 'Roof repair and replacement.', city: 'Nashville', state: 'TN' },
+    fields: { name: 'Ridge Roofing', category: 'roofers', phone, services: ['Roof repair'], serviceArea: 'Greater Nashville', description: 'Roof repair and replacement.', city: 'Nashville', state: 'TN' },
   };
   const cats = JSON.parse(await fs.readFile(path.join(dir, 'categories.json'), 'utf8'));
   if (!cats.some(c => c.slug === 'roofers')) draft.fields.category = cats[0].slug;
@@ -224,7 +224,7 @@ async function site({ founders = { cap: 500, deadline: '2027-02-01T06:00:00.000Z
   await fs.writeFile(path.join(dir, 'pending.json'), JSON.stringify([{ id: draft.id, draftId: draft.id, submittedAt: NOW, status: 'pending' }]));
   const clock = { at: NOW, now() { return new Date(this.at); } };
   const config = { ...configFromEnv({ ADMIN_TOKEN: 't', BASE_URL: 'http://example.test' }, { warn: () => {} }), demoMode: false, founders };
-  const f = fakes();
+  const f = fakes({ testMode });
   const app = createApp({ dataDir: dir, config, clock, ...(withTrust ? { trust: { payments: f.payments, phone: f.phone } } : {}) });
   const server = app.listen(0);
   servers.push(server);
@@ -253,11 +253,12 @@ test('off: with no keys every verification address is a 404 and nothing mentions
 test('a founder goes through all three steps and gets the stamp for a one-time $19', async () => {
   const s = await site();
   assert.match((await s.get('/rise/drafts/owner-link-1')).text, /href="\/rise\/drafts\/owner-link-1\/verify">Get the Verified stamp/);
-  assert.match((await s.get('/')).text, /one-time \$19, good for life\. For everyone else it is \$49 a year\./);
+  assert.match((await s.get('/')).text, /Founding Members pay \$19 once, good for the life of the listing\. Everyone else pays \$49 a year, with no automatic renewal\./);
 
   let page = (await s.get(s.V)).text;
-  assert.match(page, /As a Founding Member you pay \$19 once and stay verified for life\./);
-  assert.match(page, /Test mode/);
+  assert.match(page, /As a Founding Member you pay \$19 once\. The stamp stays for as long as your listing is up/);
+  assert.doesNotMatch(page, /Test mode/);
+  assert.match(page, /Customers see proof/);
   assert.equal((page.match(/Opens after the fee is paid/g) ?? []).length, 2);
 
   // Steps 2 and 3 do nothing before the fee is paid.
@@ -279,7 +280,7 @@ test('a founder goes through all three steps and gets the stamp for a one-time $
   assert.match((await s.get(s.V)).text, /Pay \$19/);
   checkout.paid = true;
   page = (await s.get(s.V)).text;
-  assert.match(page, /Fee paid\./);
+  assert.match(page, /Fee paid\. One time, nothing more to pay\./);
   assert.match(page, /ending in 0101/);
 
   const sent = await s.post(`${s.V}/phone/send`, 'channel=call');
@@ -296,9 +297,9 @@ test('a founder goes through all three steps and gets the stamp for a one-time $
   s.f.state.idChecks.get('vs_2').status = 'verified';
   assert.match((await s.get(s.V)).text, /Ridge Roofing is Verified\./);
 
-  assert.match((await s.get(`/listings/${s.id}`)).text, /verified-badge-title">Verified<\/span> <span class="verified-badge-note">Business phone confirmed/);
+  assert.match((await s.get(`/listings/${s.id}`)).text, /verified-badge-title">Verified<\/span> <span class="verified-badge-note">Business phone confirmed\. Photo ID checked for the person who manages this listing/);
   assert.match((await s.get('/')).text, /verified-badge/);
-  assert.match((await s.get('/llms.txt')).text, /Verified: yes \(business phone confirmed and owner's photo ID checked\)/);
+  assert.match((await s.get('/llms.txt')).text, /Verified: yes \(business phone confirmed; photo ID checked for the person who manages this listing; not proof of ownership or licensing\)/);
   // Nothing private is stored, and the listing JSON and hash are untouched.
   const stored = await fs.readFile(path.join(s.dir, 'trust.json'), 'utf8');
   assert.doesNotMatch(stored, /424242|selfie|license/i);
@@ -310,13 +311,14 @@ test('a founder goes through all three steps and gets the stamp for a one-time $
 
 test('a later business pays $49 for one year, and the stamp lapses until it renews', async () => {
   const s = await site({ founders: { cap: 0, deadline: '2027-02-01T06:00:00.000Z' } });
-  assert.match((await s.get(s.V)).text, /Verification is \$49 per year\./);
+  assert.match((await s.get(s.V)).text, /Verification is \$49 for one year\. It does not renew by itself and your card is not charged again\./);
   await s.post(`${s.V}/pay`);
   const c = s.f.state.checkouts.get('cs_1');
   assert.equal(c.amountCents, 4900);
   assert.equal(c.plan, 'yearly');
   c.paid = true;
-  assert.match((await s.get(s.V)).text, /Paid through December 1, 2027\./);
+  assert.match((await s.get(s.V)).text, /Paid through December 1, 2027\. It will not renew by itself\. Come back to this page to pay for another year\./);
+  assert.equal((await s.post(`${s.V}/pay`)).headers.get('location'), s.V, 'no second charge while the year is fresh');
   await s.post(`${s.V}/phone/check`, 'code=424242');
   await s.post(`${s.V}/id`);
   s.f.state.idChecks.get('vs_2').status = 'verified';
@@ -326,6 +328,7 @@ test('a later business pays $49 for one year, and the stamp lapses until it rene
   s.clock.at = '2027-12-02T00:00:00.000Z';
   assert.doesNotMatch((await s.get(`/listings/${s.id}`)).text, /verified-badge/);
   const page = (await s.get(s.V)).text;
+  assert.match(page, /Your year ended on December 1, 2027\. The stamp is off your listing\./);
   assert.match(page, /Pay \$49/);
   assert.match(page, /Photo ID and selfie matched\./, 'no second ID check to renew');
   await s.post(`${s.V}/pay`);
@@ -352,7 +355,7 @@ test('webhook: a signed Stripe message marks payment and ID even if the owner ne
   assert.deepEqual(record.payments, ['cs_hook']);
 });
 
-test('limits: three codes an hour and three photo ID tries per payment', async () => {
+test('limits: three codes an hour, and three failed photo ID tries per payment', async () => {
   const s = await site();
   await s.post(`${s.V}/pay`);
   s.f.state.checkouts.get('cs_1').paid = true;
@@ -360,11 +363,75 @@ test('limits: three codes an hour and three photo ID tries per payment', async (
   for (let i = 0; i < 3; i += 1) assert.equal((await s.post(`${s.V}/phone/send`, 'channel=sms')).headers.get('location'), `${s.V}?note=sent`);
   assert.equal((await s.post(`${s.V}/phone/send`, 'channel=sms')).headers.get('location'), `${s.V}?note=slow`);
   assert.equal(s.f.state.sent.length, 3);
-  for (let i = 0; i < MAX_ID_ATTEMPTS; i += 1) assert.equal((await s.post(`${s.V}/id`)).status, 303);
-  const fourth = await s.post(`${s.V}/id`);
-  assert.equal(fourth.headers.get('location'), s.V);
-  assert.equal(s.f.state.idChecks.size, MAX_ID_ATTEMPTS);
-  assert.match((await s.get(s.V)).text, /did not pass after three tries/);
+
+  // Backing out of the ID page does not use up a try.
+  assert.equal((await s.post(`${s.V}/id`)).status, 303);
+  assert.match((await s.get(s.V)).text, /You get 3 tries\./);
+  // While Stripe is still checking, there is no button to start another.
+  const first = [...s.f.state.idChecks.keys()].at(-1);
+  s.f.state.idChecks.get(first).status = 'processing';
+  assert.match((await s.get(s.V)).text, /Stripe is checking your ID/);
+  assert.equal((await s.post(`${s.V}/id`)).headers.get('location'), s.V);
+  // Three finished checks that did not pass, then it is locked.
+  s.f.state.idChecks.get(first).status = 'failed';
+  assert.match((await s.get(s.V)).text, /That check did not pass\. .* Tries left: 2\./);
+  for (let i = 0; i < 2; i += 1) {
+    assert.equal((await s.post(`${s.V}/id`)).status, 303);
+    s.f.state.idChecks.get([...s.f.state.idChecks.keys()].at(-1)).status = 'failed';
+    await s.get(s.V);
+  }
+  assert.match((await s.get(s.V)).text, /did not pass after 3 tries/);
+  const before = s.f.state.idChecks.size;
+  assert.equal((await s.post(`${s.V}/id`)).headers.get('location'), s.V);
+  assert.equal(s.f.state.idChecks.size, before);
+});
+
+test('a yearly plan can be renewed in its last 30 days, and the new year starts when the old one ends', async () => {
+  const s = await site({ founders: { cap: 0, deadline: '2027-02-01T06:00:00.000Z' } });
+  await s.post(`${s.V}/pay`);
+  s.f.state.checkouts.get('cs_1').paid = true;
+  await s.get(s.V);
+  s.clock.at = '2027-11-15T18:00:00.000Z';
+  assert.match((await s.get(s.V)).text, /Pay \$49 for another year/);
+  assert.equal((await s.post(`${s.V}/pay`)).status, 303);
+  s.f.state.checkouts.get('cs_2').paid = true;
+  assert.match((await s.get(s.V)).text, /Paid through December 1, 2028\./);
+});
+
+test('test mode is a practice run: every step works but no stamp is shown, and it is wiped on a live key', async () => {
+  const s = await site({ testMode: true });
+  assert.match((await s.get(s.V)).text, /Test mode\. This is a practice run/);
+  await s.post(`${s.V}/pay`);
+  s.f.state.checkouts.get('cs_1').paid = true;
+  await s.get(s.V);
+  await s.post(`${s.V}/phone/check`, 'code=424242');
+  await s.post(`${s.V}/id`);
+  s.f.state.idChecks.get('vs_2').status = 'verified';
+  assert.match((await s.get(s.V)).text, /Practice run complete/);
+  assert.doesNotMatch((await s.get(`/listings/${s.id}`)).text, /verified-badge/);
+  assert.doesNotMatch((await s.get('/llms.txt')).text, /Verified: yes/);
+  assert.equal(JSON.parse(await fs.readFile(path.join(s.dir, 'trust.json'), 'utf8'))[s.id].test, true);
+});
+
+test('a listing whose phone cannot be checked is told before paying, and cannot pay', async () => {
+  const s = await site({ phone: '(015) 555-0101' });
+  const page = (await s.get(s.V)).text;
+  assert.match(page, /We can only check 10-digit US phone numbers, and the number on your listing is not one\./);
+  assert.doesNotMatch(page, /<button type="submit">Pay/);
+  assert.equal((await s.post(`${s.V}/pay`)).headers.get('location'), s.V);
+  assert.equal(s.f.state.checkouts.size, 0);
+});
+
+test('the public page says what Verified means, and the privacy page covers it', async () => {
+  const s = await site();
+  const info = await s.get('/verified');
+  assert.equal(info.status, 200);
+  assert.match(info.text, /It is not a license check, a background check, or a promise about the quality/);
+  assert.match(info.text, /\$19 once for Founding Members, \$49 a year for everyone else, with no automatic renewal/);
+  assert.match((await s.get('/privacy')).text, /We store only the results: paid or not, phone confirmed, ID passed, and the dates\./);
+  const off = await site({ withTrust: false });
+  assert.equal((await off.get('/verified')).status, 404);
+  assert.doesNotMatch((await off.get('/privacy')).text, /Verified stamp/);
 });
 
 test('a wrong private link gets nothing', async () => {

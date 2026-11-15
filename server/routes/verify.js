@@ -1,6 +1,7 @@
 /**
  * verify.js — the paid "Verified" stamp, reached from the owner's private link
  *
+ *   GET  /verified                            public page: what the stamp means
  *   GET  /rise/drafts/:id/verify              where the owner stands, and the next step
  *   POST /rise/drafts/:id/verify/pay          go to the payment page
  *   POST /rise/drafts/:id/verify/phone/send   text or call the listing's phone with a code
@@ -18,16 +19,18 @@ import { RULES } from '../lib/rate-limiter.js';
 import { createDraftStore } from '../lib/drafts.js';
 import { layout, escapeHtml } from '../lib/html.js';
 import { baseUrlFor } from '../lib/base-url.js';
+import { DEFAULT_SITE_NAME } from '../lib/config.js';
 import {
-  trustStatus, planFor, paidThroughAfter, toE164, lastFour, formatFee,
+  trustStatus, planFor, paidThroughAfter, toE164, lastFour, formatFee, MAX_ID_ATTEMPTS,
 } from '../lib/trust.js';
 
 const NOTES = Object.freeze({
-  sent: 'Code sent. It can take a minute to arrive.',
-  called: 'We are calling that number now with your code.',
-  wrong: 'That code did not match. Check it and try again, or ask for a new one.',
-  slow: 'Too many tries. Please wait a while and try again.',
-  down: 'We could not reach the service just now. Nothing was charged. Please try again in a minute.',
+  sent: "Code sent. It can take a minute. No text? Tap 'Call me with the code'.",
+  called: 'We are calling that number now. A recording will read your code.',
+  wrong: 'That code did not match. Codes stop working after 10 minutes. Check it and try again, or ask for a new one.',
+  slow: 'Too many tries. Please wait an hour and try again.',
+  down: 'We could not reach the service just now. Please try again in a minute.',
+  paydown: 'We could not reach the payment page just now. Nothing was charged. Please try again in a minute.',
   canceled: 'Payment canceled. Nothing was charged.',
 });
 
@@ -37,27 +40,56 @@ function formatDay(iso) {
   return new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', month: 'long', day: 'numeric', year: 'numeric' }).format(at);
 }
 
+/** "Email us at x" with the address as plain, selectable text, or a link to the About page. */
+function contactHtml(email) {
+  return typeof email === 'string' && email.trim() !== ''
+    ? `email us at ${escapeHtml(email.trim())}`
+    : 'contact us through the <a href="/about">About page</a>';
+}
+
+/** What the stamp does for a business. Shared by the owner page and the public page. */
+export const VERIFIED_BENEFITS = `<ul class="verify-benefits">
+    <li><strong>Customers see proof.</strong> We confirmed the business phone is answered, and we checked a photo ID for the person who manages the listing.</li>
+    <li><strong>AI assistants are told.</strong> The page we publish for AI tools marks the business as verified and says what was checked. We cannot promise an AI will name any business, but it gives the AI a reason to trust this listing.</li>
+    <li><strong>It protects the business name.</strong> A copycat listing cannot pass the phone check, so it can never carry the stamp.</li>
+  </ul>`;
+
 /** The owner's verification page. Exported for tests. */
-export function verifyPage({ draftId, listing, status, price, note, testMode }) {
+export function verifyPage({ draftId, listing, status, price, fees, note, testMode, idProcessing, contactEmail }) {
   const base = `/rise/drafts/${encodeURIComponent(draftId)}/verify`;
   const done = '<span class="verify-done">Done</span>';
+  const contact = contactHtml(contactEmail);
   const noteHtml = note && Object.hasOwn(NOTES, note)
-    ? `\n  <p class="notice" role="status">${escapeHtml(NOTES[note])}</p>` : '';
+    ? `\n  <p class="notice verify-note" role="status">${escapeHtml(NOTES[note])}</p>` : '';
   const testHtml = testMode
-    ? '\n  <p class="notice" role="note">Test mode: no real money moves and no real ID is checked.</p>' : '';
-  const priceLine = price.plan === 'founder'
-    ? `As a Founding Member you pay ${formatFee(price.amountCents)} once and stay verified for life.`
-    : `Verification is ${formatFee(price.amountCents)} per year.`;
+    ? '\n  <p class="notice verify-note" role="note">Test mode. This is a practice run: no real money moves, no real ID is checked, and no stamp is shown to the public.</p>' : '';
+  const fee = formatFee(price.amountCents);
+  const canCheckPhone = Boolean(toE164(listing.phone));
 
   let payStep;
   if (status.removed) {
-    payStep = '<p>Verification for this listing has been turned off. Please contact us.</p>';
-  } else if (status.paid) {
-    const until = status.plan === 'yearly' && status.paidThrough ? ` Paid through ${escapeHtml(formatDay(status.paidThrough))}.` : '';
-    payStep = `<p>${done} Fee paid.${until}</p>`;
+    payStep = `<p>Verification for this listing has been turned off. Please ${contact}.</p>`;
+  } else if (status.paid && !status.canRenew) {
+    payStep = status.plan === 'yearly'
+      ? `<p>${done} Fee paid. Paid through ${escapeHtml(formatDay(status.paidThrough))}. It will not renew by itself. Come back to this page to pay for another year.</p>`
+      : `<p>${done} Fee paid. One time, nothing more to pay.</p>`;
+  } else if (!canCheckPhone) {
+    payStep = `<p>We can only check 10-digit US phone numbers, and the number on your listing is not one. Please ${contact} before you pay and we will help.</p>`;
+  } else if (status.paid && status.canRenew) {
+    payStep = `<p>${done} Fee paid. Paid through ${escapeHtml(formatDay(status.paidThrough))}. It will not renew by itself.</p>
+    <p>Your year is almost up. Pay now and the new year starts when this one ends.</p>
+    <form method="POST" action="${base}/pay"><button type="submit">Pay ${fee} for another year</button></form>`;
   } else {
-    payStep = `<p>${escapeHtml(priceLine)} You pay on a secure Stripe page. We never see your card number.</p>
-    <form method="POST" action="${base}/pay"><button type="submit">Pay ${formatFee(price.amountCents)}</button></form>`;
+    const lapsed = status.expired
+      ? `<p>Your year ended on ${escapeHtml(formatDay(status.paidThrough))}. The stamp is off your listing. Pay again to put it back. You will not need to redo the phone or ID steps.</p>\n    `
+      : '';
+    const priceLine = price.plan === 'founder'
+      ? `As a Founding Member you pay ${fee} once. The stamp stays for as long as your listing is up with the same business name and phone number. If either changes, you confirm again at no charge.`
+      : `Verification is ${fee} for one year. It does not renew by itself and your card is not charged again. When the year ends, the stamp comes off until you pay for another year.`;
+    payStep = `${lapsed}<p>${escapeHtml(priceLine)}</p>
+    <p>You pay on a secure Stripe page. We never see your card number.</p>
+    <p class="hint">Wrong phone number on the listing? Please ${contact} to fix it before you pay.</p>
+    <form method="POST" action="${base}/pay"><button type="submit">Pay ${fee}</button></form>`;
   }
 
   const four = lastFour(listing.phone);
@@ -66,14 +98,15 @@ export function verifyPage({ draftId, listing, status, price, note, testMode }) 
     phoneStep = `<p>${done} The phone number on your listing is confirmed.</p>`;
   } else if (!status.paid || status.removed) {
     phoneStep = '<p class="hint">Opens after the fee is paid.</p>';
-  } else if (!toE164(listing.phone)) {
-    phoneStep = '<p>We can only check 10-digit US phone numbers. Please contact us and we will help.</p>';
+  } else if (!canCheckPhone) {
+    phoneStep = `<p>We can only check 10-digit US phone numbers. Please ${contact} and we will help.</p>`;
   } else {
-    phoneStep = `<p>We send a code to the phone number on your listing, ending in ${escapeHtml(four)}. Answer it to show the number is yours.</p>
+    phoneStep = `<p>We send a 6-digit code to the phone number on your listing, ending in ${escapeHtml(four)}. Type the code below. Landline or office phone? Tap 'Call me with the code' and a recording will read it to you.</p>
     <form method="POST" action="${base}/phone/send" class="verify-inline">
       <button type="submit" name="channel" value="sms">Text me the code</button>
       <button type="submit" name="channel" value="call" class="button-secondary">Call me with the code</button>
     </form>
+    <p class="hint">You can ask for a code 3 times an hour.</p>
     <form method="POST" action="${base}/phone/check" class="verify-code">
       <label for="verify-code">Type the code</label>
       <input id="verify-code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{4,8}" maxlength="8" required>
@@ -86,32 +119,71 @@ export function verifyPage({ draftId, listing, status, price, note, testMode }) 
     idStep = `<p>${done} Photo ID and selfie matched.</p>`;
   } else if (!status.paid || status.removed) {
     idStep = '<p class="hint">Opens after the fee is paid.</p>';
+  } else if (idProcessing) {
+    idStep = '<p>Stripe is checking your ID. This usually takes a minute. Refresh this page to see the result.</p>';
   } else if (status.idAttemptsLeft === 0) {
-    idStep = '<p>The photo ID check did not pass after three tries. Please contact us and we will help.</p>';
+    idStep = `<p>The photo ID check did not pass after ${MAX_ID_ATTEMPTS} tries. Please ${contact} and we will help.</p>`;
   } else {
-    idStep = `<p>Take a photo of your driver's license or other government ID, then a selfie. Stripe checks that they match. We are told only whether it passed. We never see or keep your ID or your photo.</p>
-    <form method="POST" action="${base}/id"><button type="submit">Start the photo ID check</button></form>`;
+    const failed = status.idFailed
+      ? `<p class="notice verify-note" role="status">That check did not pass. Make sure the ID is in focus and not expired, then try again. Tries left: ${status.idAttemptsLeft}.</p>\n    `
+      : '';
+    idStep = `${failed}<p>Take a photo of your driver's license or other government ID, then a selfie. Stripe, the payment company, runs the check and holds the photos. This site does not store them. We are told only whether it passed.</p>
+    <form method="POST" action="${base}/id"><button type="submit">Start the photo ID check</button></form>
+    <p class="hint">You get ${MAX_ID_ATTEMPTS} tries.</p>`;
   }
 
-  const headline = status.verified
-    ? `<p class="notice success-box" role="status">${escapeHtml(listing.name)} is Verified. The stamp is on your listing now.</p>`
+  let headline = '';
+  if (status.verified) {
+    headline = `<p class="notice success-box" role="status">${escapeHtml(listing.name)} is Verified. The stamp is on your listing now.</p>`;
+  } else if (status.practiceDone) {
+    headline = '<p class="notice verify-note" role="status">Practice run complete. All three steps work. No stamp is shown because this was test mode.</p>';
+  }
+
+  const prices = fees
+    ? `<p class="hint">${formatFee(fees.founderCents)} once for Founding Members. ${formatFee(fees.yearlyCents)} a year for everyone else, with no automatic renewal. Your listing stays free either way.</p>`
     : '';
 
   const body = `<section class="verify">
   <h1>Get the Verified stamp</h1>
   <p class="tagline">Show customers there is a real person behind ${escapeHtml(listing.name)}.</p>${testHtml}${noteHtml}
   ${headline}
+  <h2>What you get</h2>
+  ${VERIFIED_BENEFITS}
+  ${prices}
+  <h2>Three steps</h2>
   <ol class="verify-steps">
-    <li><h2>Pay the fee</h2>
+    <li><h3>Pay the fee</h3>
     ${payStep}</li>
-    <li><h2>Confirm your business phone</h2>
+    <li><h3>Confirm your business phone</h3>
     ${phoneStep}</li>
-    <li><h2>Check your photo ID</h2>
+    <li><h3>Check your photo ID</h3>
     ${idStep}</li>
   </ol>
   <p><a href="/listings/${encodeURIComponent(listing.id)}">See your listing</a></p>
+  <p class="hint">Save this page now: bookmark it, or text the link to yourself. It is the only way back to get or renew the Verified stamp.</p>
 </section>`;
-  return layout({ title: 'Get the Verified stamp: First Answer Pages', body });
+  return layout({ title: `Get the Verified stamp: ${DEFAULT_SITE_NAME}`, body });
+}
+
+/** Public page linked from the stamp. */
+export function verifiedInfoPage({ fees, canonical }) {
+  const body = `<section class="message verify-info">
+  <h1>What "Verified" means</h1>
+  <p>A Verified stamp on a ${DEFAULT_SITE_NAME} listing means two things were checked:</p>
+  <ol>
+    <li><strong>The business phone.</strong> We sent a code to the phone number on the listing, and the person asking for the stamp answered it.</li>
+    <li><strong>A photo ID.</strong> The person who manages the listing showed a government photo ID and a selfie, and Stripe confirmed they match.</li>
+  </ol>
+  <p>It is not a license check, a background check, or a promise about the quality of anyone's work. It tells you a real, reachable person stands behind the listing.</p>
+  <h2>For business owners</h2>
+  ${VERIFIED_BENEFITS}
+  <p>Listing is free for everyone, always. The Verified stamp is optional: ${formatFee(fees.founderCents)} once for Founding Members, ${formatFee(fees.yearlyCents)} a year for everyone else, with no automatic renewal. You start from the private link you got when your listing was approved.</p>
+  <p><a href="/rise">List your business free &rarr;</a></p>
+</section>`;
+  return layout({
+    title: `What "Verified" means | ${DEFAULT_SITE_NAME}`, body, canonical,
+    description: 'What the Verified stamp on a listing means: the business phone was confirmed and a photo ID was checked.',
+  });
 }
 
 /**
@@ -124,6 +196,7 @@ export function createVerifyRouter(ctx) {
 
   const { store } = ctx;
   const { payments, phone } = providers;
+  const testMode = payments.testMode === true;
   const drafts = createDraftStore({ store, clock: ctx.clock, newId: ctx.newId });
   const form = express.urlencoded({ extended: false, limit: 2048, parameterLimit: 5 });
   const now = () => new Date(ctx.clock ? ctx.clock.now() : Date.now());
@@ -136,7 +209,12 @@ export function createVerifyRouter(ctx) {
     const draft = found.status === 200 ? found.draft : undefined;
     if (draft?.status !== 'published' || typeof draft.listingId !== 'string') return undefined;
     const listing = store.findById(draft.listingId);
-    return listing && !store.isSeed(listing.id) ? listing : undefined;
+    if (!listing || store.isSeed(listing.id)) return undefined;
+    // Practice results from a test key are thrown away once the site runs on a live key.
+    if (!testMode && store.getTrustRecord(listing.id)?.test === true) {
+      await store.updateTrustRecord(listing.id, r => { for (const k of Object.keys(r)) if (k !== 'removedAt') delete r[k]; });
+    }
+    return listing;
   }
 
   const statusOf = listing => trustStatus(store.getTrustRecord(listing.id), listing, now());
@@ -153,7 +231,9 @@ export function createVerifyRouter(ctx) {
       r.paymentRef = ref;
       r.payments = [...seen, ref].slice(-20);
       r.idAttempts = 0;
-      delete r.pendingCheckout;
+      delete r.idFailed;
+      if (testMode) r.test = true; else delete r.test;
+      if (r.pendingCheckout?.id === ref) delete r.pendingCheckout;
     });
   }
 
@@ -162,42 +242,66 @@ export function createVerifyRouter(ctx) {
     if (!listing) return;
     await store.updateTrustRecord(listingId, r => {
       r.identity = { ref, at: now().toISOString(), name: listing.name };
+      delete r.idFailed;
+      if (r.pendingIdCheck === ref) delete r.pendingIdCheck;
+    });
+  }
+
+  /** Count one failed photo ID try. Only the check that is waiting counts, and only once. */
+  async function markIdFailed(listingId, ref) {
+    await store.updateTrustRecord(listingId, r => {
+      if (r.pendingIdCheck !== ref) return;
+      r.idAttempts = (Number.isInteger(r.idAttempts) ? r.idAttempts : 0) + 1;
+      r.idFailed = true;
       delete r.pendingIdCheck;
     });
   }
 
-  /** Ask Stripe about anything the owner started and we have not heard back on. */
+  /**
+   * Ask Stripe about anything the owner started and we have not heard back on.
+   * @returns {Promise<{ idProcessing: boolean }>}
+   */
   async function catchUp(listing) {
     const record = store.getTrustRecord(listing.id);
-    if (!record) return;
+    const out = { idProcessing: false };
+    if (!record) return out;
     const status = trustStatus(record, listing, now());
     try {
-      if (!status.paid && typeof record.pendingCheckout?.id === 'string') {
+      if (typeof record.pendingCheckout?.id === 'string' && (!status.paid || status.canRenew)) {
         const s = await payments.getCheckout(record.pendingCheckout.id);
         if (s.paid && s.listingId === listing.id) await markPaid(listing.id, s.plan, record.pendingCheckout.id);
       }
       if (!status.idOk && typeof record.pendingIdCheck === 'string') {
         const s = await payments.getIdCheck(record.pendingIdCheck);
-        if (s.status === 'verified' && s.listingId === listing.id) await markIdPassed(listing.id, record.pendingIdCheck);
+        if (s.listingId === listing.id) {
+          if (s.status === 'verified') await markIdPassed(listing.id, record.pendingIdCheck);
+          else if (s.failed) await markIdFailed(listing.id, record.pendingIdCheck);
+          else if (s.status === 'processing') out.idProcessing = true;
+        }
       }
     } catch (err) {
       logFail('catch-up', err);
     }
+    return out;
   }
 
   const back = (res, draftId, note) => res.redirect(303, `/rise/drafts/${encodeURIComponent(draftId)}/verify${note ? `?note=${note}` : ''}`);
   const notFound = (req, res, next) => next(); // falls through to the site's 404 page
 
+  router.get('/verified', (req, res) => {
+    res.status(200).type('html').send(verifiedInfoPage({ fees, canonical: `${baseUrlFor(req, ctx.config)}/verified` }));
+  });
+
   router.get('/rise/drafts/:id/verify', async (req, res, next) => {
     try {
       const listing = await ownerListing(req.params.id);
       if (!listing) return notFound(req, res, next);
-      await catchUp(listing);
+      const { idProcessing } = await catchUp(listing);
       const price = planFor(store.getFounder(listing.id), fees);
       res.status(200).type('html').send(verifyPage({
-        draftId: req.params.id, listing, status: statusOf(listing), price,
+        draftId: req.params.id, listing, status: statusOf(listing), price, fees,
         note: typeof req.query.note === 'string' ? req.query.note : '',
-        testMode: payments.testMode === true,
+        testMode, idProcessing, contactEmail: ctx.config.contactEmail,
       }));
     } catch (err) { next(err); }
   });
@@ -207,7 +311,8 @@ export function createVerifyRouter(ctx) {
       const listing = await ownerListing(req.params.id);
       if (!listing) return notFound(req, res, next);
       const status = statusOf(listing);
-      if (status.paid || status.removed) return back(res, req.params.id);
+      // Never take money for a listing whose phone we cannot check.
+      if ((status.paid && !status.canRenew) || status.removed || !toE164(listing.phone)) return back(res, req.params.id);
       const limited = ctx.rateLimiter.consume(`verify-pay:${listing.id}`, RULES['verify-pay']);
       if (!limited.allowed) return back(res, req.params.id, 'slow');
       const price = planFor(store.getFounder(listing.id), fees);
@@ -218,13 +323,13 @@ export function createVerifyRouter(ctx) {
         session = await payments.createCheckout({
           listingId: listing.id, plan: price.plan, amountCents: price.amountCents,
           description: price.plan === 'founder'
-            ? 'First Answer Pages verification, Founding Member (one time, for life)'
-            : 'First Answer Pages verification (one year)',
+            ? `${DEFAULT_SITE_NAME} Verified stamp, Founding Member (one time)`
+            : `${DEFAULT_SITE_NAME} Verified stamp (one year, does not renew by itself)`,
           successUrl: page, cancelUrl: `${page}?note=canceled`,
         });
       } catch (err) {
         logFail('checkout', err);
-        return back(res, req.params.id, 'down');
+        return back(res, req.params.id, 'paydown');
       }
       await store.updateTrustRecord(listing.id, r => { r.pendingCheckout = { id: session.id, plan: price.plan }; });
       res.redirect(303, session.url);
@@ -279,8 +384,12 @@ export function createVerifyRouter(ctx) {
     try {
       const listing = await ownerListing(req.params.id);
       if (!listing) return notFound(req, res, next);
+      // Settle any check already under way before starting another.
+      const { idProcessing } = await catchUp(listing);
       const status = statusOf(listing);
-      if (!status.paid || status.removed || status.idOk || status.idAttemptsLeft === 0) return back(res, req.params.id);
+      if (!status.paid || status.removed || status.idOk || idProcessing || status.idAttemptsLeft === 0) return back(res, req.params.id);
+      const limited = ctx.rateLimiter.consume(`verify-id:${listing.id}`, RULES['verify-id']);
+      if (!limited.allowed) return back(res, req.params.id, 'slow');
       const base = baseUrlFor(req, ctx.config);
       let session;
       try {
@@ -291,10 +400,7 @@ export function createVerifyRouter(ctx) {
         logFail('id-check', err);
         return back(res, req.params.id, 'down');
       }
-      await store.updateTrustRecord(listing.id, r => {
-        r.idAttempts = (Number.isInteger(r.idAttempts) ? r.idAttempts : 0) + 1;
-        r.pendingIdCheck = session.id;
-      });
+      await store.updateTrustRecord(listing.id, r => { r.pendingIdCheck = session.id; });
       res.redirect(303, session.url);
     } catch (err) { next(err); }
   });
@@ -316,6 +422,8 @@ export function createVerifyRouter(ctx) {
           await markPaid(listingId, o.metadata?.plan, o.id);
         } else if (event.type === 'identity.verification_session.verified') {
           await markIdPassed(listingId, o.id);
+        } else if (event.type === 'identity.verification_session.requires_input' && o.last_error != null) {
+          await markIdFailed(listingId, o.id);
         }
       }
       res.status(200).json({ received: true });

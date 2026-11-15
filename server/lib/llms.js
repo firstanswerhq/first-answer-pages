@@ -104,7 +104,7 @@ export function generateLlmsTxt(listings, baseUrl, categories, options = {}) {
         lines.push(`Owner-confirmed: yes${date ? ` (${date})` : ''}`);
       }
       if (options?.identityVerified instanceof Set && options.identityVerified.has(l.id)) {
-        lines.push("Verified: yes (business phone confirmed and owner's photo ID checked)");
+        lines.push('Verified: yes (business phone confirmed; photo ID checked for the person who manages this listing; not proof of ownership or licensing)');
       }
       lines.push('');
     }

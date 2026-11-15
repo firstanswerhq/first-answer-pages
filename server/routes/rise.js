@@ -18,6 +18,7 @@ import { extractDraft, ExtractionError } from '../lib/extractor.js';
 import { createDraftStore, draftProvider } from '../lib/drafts.js';
 import { validateFields, DAYS } from '../lib/listing-fields.js';
 import { uploadPage, reviewPage, messagePage } from '../lib/rise-html.js';
+import { formatFee } from '../lib/trust.js';
 
 const FORM_TYPE = 'application/x-www-form-urlencoded';
 const DRAFT_FORM_LIMIT = 64 * 1024;
@@ -47,14 +48,17 @@ function pendingMessage() {
 }
 
 /** The owner's link after approval: point them at the live listing, not an edit form. */
-function livePage(draft, { verifyOn = false } = {}) {
+function livePage(draft, { verifyOn = false, fees } = {}) {
+  const prices = fees
+    ? `Optional. ${formatFee(fees.founderCents)} once for Founding Members, ${formatFee(fees.yearlyCents)} a year for everyone else.`
+    : undefined;
   return messagePage(
     'Your listing is live',
     verifyOn
-      ? 'Your listing has been approved and is live in the directory. Keep this page: it is your private link for the Verified stamp.'
+      ? 'Your listing has been approved and is live in the directory. Save this page now: bookmark it, or text the link to yourself. It is the only way back to get or renew the Verified stamp.'
       : 'Your listing has been approved and is live in the directory.',
     { href: `/listings/${encodeURIComponent(draft.listingId)}`, text: 'See your listing' },
-    verifyOn ? { href: `/rise/drafts/${encodeURIComponent(draft.id)}/verify`, text: 'Get the Verified stamp' } : undefined,
+    verifyOn ? { href: `/rise/drafts/${encodeURIComponent(draft.id)}/verify`, text: 'Get the Verified stamp', note: prices } : undefined,
   );
 }
 
@@ -121,7 +125,7 @@ export function createRiseRouter(ctx) {
   async function lockedPage(id) {
     const found = await drafts.get(id);
     const draft = found.status === 200 ? found.draft : undefined;
-    if (isLive(draft)) return livePage(draft, { verifyOn: Boolean(ctx.trust) });
+    if (isLive(draft)) return livePage(draft, { verifyOn: Boolean(ctx.trust), fees: ctx.config?.trust });
     if (draft?.status === 'pending') return messagePage('Thanks!', pendingMessage(draft, ctx.config), HOME_LINK);
     if (draft?.status === 'rejected') return messagePage('Not approved', 'This listing was not approved.', HOME_LINK);
     return messagePage('Already sent for review', 'This listing was already sent for review, so it can no longer be changed here.', HOME_LINK);
@@ -254,7 +258,7 @@ export function createRiseRouter(ctx) {
         return sendPage(res, 200, messagePage('Thanks!', pendingMessage(found.draft, ctx.config), HOME_LINK));
       }
       if (isLive(found.draft)) {
-        return sendPage(res, 200, livePage(found.draft, { verifyOn: Boolean(ctx.trust) }));
+        return sendPage(res, 200, livePage(found.draft, { verifyOn: Boolean(ctx.trust), fees: ctx.config?.trust }));
       }
       if (found.draft.status === 'rejected') {
         return sendPage(res, 200, messagePage('Not approved', 'This listing was not approved.', HOME_LINK));

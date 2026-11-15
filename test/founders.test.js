@@ -207,7 +207,7 @@ test('badge and invite wording', () => {
   assert.match(foundersInvite({ cap: 500, left: 1, open: true, deadline: DEADLINE }), /1 spot left\./);
   assert.doesNotMatch(invite, /\$/, 'no prices while verification is off');
   assert.match(foundersInvite({ cap: 500, left: 9, open: true, deadline: DEADLINE }, { fees: { founderCents: 1900, yearlyCents: 4900 } }),
-    /Verified stamp for a one-time \$19, good for life\. For everyone else it is \$49 a year\./);
+    /Founding Members pay \$19 once, good for the life of the listing\. Everyone else pays \$49 a year, with no automatic renewal\./);
   assert.equal(foundersInvite({ cap: 500, left: 0, open: false, deadline: DEADLINE }), '');
 });
 

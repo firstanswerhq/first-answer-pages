@@ -91,10 +91,11 @@ export function createStripePayments({ secretKey, webhookSecret, fetch: fetchImp
       return { id: s.id, url: s.url };
     },
 
-    /** @returns {Promise<{ status: string, listingId?: string }>} status 'verified' means passed */
+    /** @returns {Promise<{ status: string, failed: boolean, listingId?: string }>} status 'verified' means passed */
     async getIdCheck(id) {
       const s = await call(fetchImpl, `${STRIPE}/identity/verification_sessions/${encodeURIComponent(id)}`, { auth });
-      return { status: String(s.status ?? ''), listingId: s.metadata?.listing_id };
+      // requires_input with a last_error means a finished check that did not pass.
+      return { status: String(s.status ?? ''), failed: s.status === 'requires_input' && s.last_error != null, listingId: s.metadata?.listing_id };
     },
 
     webhookEnabled: typeof webhookSecret === 'string' && webhookSecret !== '',

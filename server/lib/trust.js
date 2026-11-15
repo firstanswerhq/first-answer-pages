@@ -11,14 +11,16 @@
  * Record shape (trust.json, keyed by listing id):
  *   { plan: 'founder'|'yearly', paidAt, paidThrough|null, paymentRef,
  *     pendingCheckout, phone: { number, at }, identity: { ref, at, name },
- *     pendingIdCheck, idAttempts, removedAt }
+ *     pendingIdCheck, idAttempts, idFailed, removedAt, test }
+ * `test: true` marks a practice run made with a Stripe test key.
  */
 
 export const DEFAULT_FOUNDER_FEE_CENTS = 1900;
 export const DEFAULT_YEARLY_FEE_CENTS = 4900;
 /** Photo ID attempts allowed per payment; each one costs the site money. */
 export const MAX_ID_ATTEMPTS = 3;
-const YEAR_MS = 365 * 24 * 60 * 60 * 1000;
+/** A yearly plan can be renewed this long before it ends. */
+export const RENEW_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 
 /** Whole cents from 100 to 100000, else the fallback. */
 export function parseFeeCents(value, fallback) {
@@ -60,7 +62,9 @@ export function paidThroughAfter(plan, record, nowMs) {
   if (plan === 'founder') return null;
   const current = Date.parse(record?.paidThrough ?? '');
   const from = Number.isFinite(current) && current > nowMs ? current : nowMs;
-  return new Date(from + YEAR_MS).toISOString();
+  const end = new Date(from);
+  end.setUTCFullYear(end.getUTCFullYear() + 1); // a calendar year, so the date reads the same next year
+  return end.toISOString();
 }
 
 /**
@@ -78,9 +82,16 @@ export function trustStatus(record, listing, now) {
   const phoneOk = Boolean(number) && r.phone?.number === number && typeof r.phone?.at === 'string';
   const idOk = typeof r.identity?.at === 'string' && r.identity?.name === listing?.name;
   const removed = typeof r.removedAt === 'string';
-  const verified = paid && phoneOk && idOk && !removed;
+  // A practice run with a test key never shows a stamp to the public.
+  const practice = r.test === true;
+  const verified = paid && phoneOk && idOk && !removed && !practice;
+  const yearly = r.plan === 'yearly' && Number.isFinite(through);
   const out = {
-    paid, phoneOk, idOk, verified, removed,
+    paid, phoneOk, idOk, verified, removed, practice,
+    practiceDone: practice && paid && phoneOk && idOk && !removed,
+    expired: yearly && typeof r.paidAt === 'string' && !paid,
+    canRenew: yearly && paid && through - nowMs <= RENEW_WINDOW_MS,
+    idFailed: r.idFailed === true,
     plan: r.plan, paidThrough: r.paidThrough ?? null,
     idAttemptsLeft: Math.max(MAX_ID_ATTEMPTS - (Number.isInteger(r.idAttempts) ? r.idAttempts : 0), 0),
   };

@@ -103,14 +103,16 @@ export function uploadPage({ photoEnabled = true, discarded = false, founders, f
  * @param {string} title
  * @param {string} message plain text, escaped here
  * @param {{ href: string, text: string }} [link]
- * @param {{ href: string, text: string }} [second] optional button under the link
+ * @param {{ href: string, text: string, note?: string }} [second] optional button above the link, with a small note
  */
 export function messagePage(title, message, link = { href: '/rise', text: 'Back to the start' }, second) {
-  const more = second ? `\n  <p><a class="button" href="${escapeHtml(second.href)}">${escapeHtml(second.text)}</a></p>` : '';
+  const more = second
+    ? `\n  <p><a class="button" href="${escapeHtml(second.href)}">${escapeHtml(second.text)}</a></p>${second.note ? `\n  <p class="hint">${escapeHtml(second.note)}</p>` : ''}`
+    : '';
   const body = `<section class="message">
   <h1>${escapeHtml(title)}</h1>
-  <p>${escapeHtml(message)}</p>
-  <p><a href="${escapeHtml(link.href)}">${escapeHtml(link.text)}</a></p>${more}
+  <p>${escapeHtml(message)}</p>${more}
+  <p><a href="${escapeHtml(link.href)}">${escapeHtml(link.text)}</a></p>
 </section>`;
   return layout({ title, body });
 }

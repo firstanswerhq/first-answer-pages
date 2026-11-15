@@ -23,6 +23,7 @@ export const RULES = Object.freeze({
   'verify-pay': Object.freeze({ limit: 10, windowMs: 60 * 60 * 1000 }),
   'verify-send': Object.freeze({ limit: 3, windowMs: 60 * 60 * 1000 }),
   'verify-check': Object.freeze({ limit: 10, windowMs: 60 * 60 * 1000 }),
+  'verify-id': Object.freeze({ limit: 6, windowMs: 60 * 60 * 1000 }),
   // AI Visibility Grader
   grade: Object.freeze({ limit: 5, windowMs: 60 * 60 * 1000 }),
   // 6 a day per visitor: each check can use 3 AI calls and the whole site shares 60 a day.

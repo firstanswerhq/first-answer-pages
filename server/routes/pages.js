@@ -78,6 +78,12 @@ export function createPagesRouter(ctx) {
   });
 
   router.get('/privacy', (req, res) => {
+    // Shown only when the paid Verified stamp is switched on.
+    const verifiedPrivacy = ctx.trust
+      ? `<h2>Verified stamp</h2>
+<p>The fee is paid on Stripe; we never see your card number. Twilio sends a code to the phone number on the listing. Stripe checks a photo ID and a selfie and holds those photos under its own privacy policy. We store only the results: paid or not, phone confirmed, ID passed, and the dates.</p>
+`
+      : '';
     const body = `<section class="message">
 <h1>Privacy</h1>
 <p>This page explains, in plain words, what ${DEFAULT_SITE_NAME} collects and what we do with it.</p>
@@ -88,7 +94,7 @@ export function createPagesRouter(ctx) {
 <li><strong>Quote requests:</strong> the name, phone or email, and job details a visitor sends to a business. They are not shown on the site.</li>
 <li><strong>AI visibility check:</strong> the business details a visitor types, what we read on that business's public website, and the AI answers we get. If a visitor opens the full report, we also keep the name, email and phone they give us. Reports are not listed in search engines.</li>
 </ul>
-<h2>Photos</h2>
+${verifiedPrivacy}<h2>Photos</h2>
 <p>If an owner lists their business with a photo, the photo is read by Anthropic's Claude to fill in the listing. We never save the photo.</p>
 <h2>How long we keep it</h2>
 <ul>

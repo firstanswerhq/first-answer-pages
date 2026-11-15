@@ -2437,3 +2437,23 @@ a.tel,
   font-weight: 600;
   cursor: pointer;
 }
+
+.notice.verify-note {
+  border-color: var(--color-gold);
+  background: var(--color-tan);
+  color: var(--color-ink);
+}
+.verify h2 { margin: 1.5rem 0 0.5rem; }
+.verify-steps h3 { margin: 0 0 0.4rem; font-size: 1.2rem; }
+.verify-benefits { padding-left: 1.2rem; }
+.verify-benefits li { margin-bottom: 0.5rem; }
+.verify-inline button, .verify-inline .button-secondary { min-height: 2.75rem; }
+.verify-code input {
+  min-height: 2.75rem;
+  padding: 0 0.6rem;
+  border: 1.5px solid var(--color-ink);
+  border-radius: 6px;
+  background: #FFFEF9;
+}
+.verified-badge a { color: inherit; text-decoration: underline; }
+.founders-invite .founders-invite-deal { margin-top: 0.5rem; }
