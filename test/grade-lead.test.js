@@ -512,7 +512,7 @@ test('ChatGPT is asked the same questions as Claude, and both show in the report
   assert.equal(chatgpt.calls, 3);
   assert.equal(grade.ai.filter(a => a.provider === 'chatgpt').length, 3);
   const after = await (await get(env, `/grade/${id}`, { cookie })).text();
-  assert.ok(after.includes('Named in 3 of 6 answers.'));
+  assert.ok(after.includes('Named in 0 of 3 scored answers.'));
   assert.ok(after.includes("Claude answered 3 questions and ChatGPT answered 3 questions. Your score counts Claude's 3 answers; ChatGPT's are shown so you can compare."));
   // Only Claude's answers are scored, so ChatGPT naming the business does not change the score.
   assert.equal(grade.results.find(r => r.id === 'ai-named').detail, 'No. AI did not name your business in any of 3 answers.');
@@ -536,6 +536,19 @@ test('turning ChatGPT on later: a repeat check keeps Claude\'s stored answer and
   assert.deepEqual(grade.ai.map(a => a.provider), ['anthropic', 'chatgpt']);
   assert.ok(grade.ai[0].reusedFrom);
   assert.equal(grade.ai[1].reusedFrom, undefined);
+});
+
+test('when Claude fails and ChatGPT answers, the report says there is no AI score', async () => {
+  const claude = { name: 'anthropic', async ask() { throw new Error('down'); } };
+  const chatgpt = stubChatGpt('1. Ace Accounting');
+  const env = await startEnv({ assistantProvider: claude, extraAssistants: [chatgpt] });
+  const id = await startGrade(env, NO_SITE);
+  const grade = (await readJson(env, 'grades.json', [])).find(x => x.id === id);
+  assert.equal(grade.results.find(r => r.id === 'ai-named').result, 'not_checked');
+  const page = await (await get(env, `/grade/${id}`)).text();
+  assert.match(page, /Claude did not answer this time, so this check has no AI score\./);
+  assert.match(page, /Shown for comparison, not scored/);
+  assert.doesNotMatch(page, /AI named your business\./);
 });
 
 test('with the demo assistant in charge, ChatGPT is never asked', async () => {

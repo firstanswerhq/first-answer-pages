@@ -411,13 +411,15 @@ export function createGrader({
       const rank = a => { const i = order.indexOf(a.provider); return i < 0 ? order.length : i; };
       mine.sort((a, b) => rank(a) - rank(b));
       ai = [...mine, ...kept.filter(a => a.prompt !== prompt)];
-      if (mine.length > 0) {
-        if (mine.some(a => a.named)) return { finding: 'AI named your business.' };
-        const n = Math.max(...mine.map(a => a.competitors.length));
+      const counted = mine.filter(a => !SECOND_OPINIONS.has(a.provider));
+      if (counted.length > 0) {
+        if (counted.some(a => a.named)) return { finding: 'AI named your business.' };
+        const n = Math.max(...counted.map(a => a.competitors.length));
         if (n === 0) return { finding: 'AI did not name your business.' };
         return { finding: `AI named ${n} other ${n === 1 ? 'business' : 'businesses'}, not yours.` };
       }
       reason = results[0]?.reason;
+      if (mine.length > 0) return { finding: 'Claude did not answer. ChatGPT did, but its answer is not scored.' };
       return { finding: reason, state: 'failed' };
     });
     return { ai, reason };

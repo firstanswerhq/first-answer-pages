@@ -165,8 +165,21 @@ function answerBlock(entry) {
     </details>`;
 }
 
+/** Answers that count toward the score (second opinions like ChatGPT are shown, not scored). */
+const scoredAnswers = grade => (grade.ai ?? []).filter(a => !SECOND_OPINIONS.has(a.provider));
+
 function aiSection(grade, now) {
-  const entry = (grade.ai ?? [])[0];
+  const entry = scoredAnswers(grade)[0];
+  const onlySeconds = !entry ? (grade.ai ?? []).filter(a => SECOND_OPINIONS.has(a.provider)) : [];
+  if (!entry && onlySeconds.length > 0) {
+    const first = onlySeconds[0];
+    return `<section class="grade-ai">
+    <h2>What AI says</h2>
+    <p>Claude did not answer this time, so this check has no AI score. To try again, start a new check later.</p>
+    <p>${e(aiSentence(first, now))} (Shown for comparison, not scored.)</p>
+    ${answerBlock(first)}
+  </section>`;
+  }
   if (!entry) {
     const r = resultOf(grade, 'ai-named');
     return `<section class="grade-ai">
@@ -178,7 +191,8 @@ function aiSection(grade, now) {
     ? `<ol class="grade-competitors">${entry.competitors.map(c => `<li>${e(c)}</li>`).join('')}</ol>`
     : '';
   const all = grade.ai ?? [];
-  const namedIn = all.filter(a => a.named).length;
+  const scored = scoredAnswers(grade);
+  const namedIn = scored.filter(a => a.named).length;
   // Second opinions on the same question (for example ChatGPT beside Claude).
   const seconds = all.filter(a => a !== entry && a.prompt === entry.prompt && a.provider !== entry.provider);
   const secondHtml = seconds.map(a => {
@@ -189,8 +203,8 @@ function aiSection(grade, now) {
     ${names}
     ${answerBlock(a)}`;
   }).join('\n    ');
-  const more = all.length > 1 + seconds.length
-    ? `<p>In all, AI named your business in ${namedIn} of ${all.length} answers.</p>`
+  const more = scored.length > 1
+    ? `<p>In all, ${e(providerWho(entry.provider))} named your business in ${namedIn} of ${scored.length} answers.</p>`
     : '';
   return `<section class="grade-ai">
     <h2>What AI says</h2>
@@ -355,9 +369,10 @@ function checkItem(check, result) {
 function allAnswers(grade) {
   const ai = grade.ai ?? [];
   if (ai.length === 0) return '';
-  const named = ai.filter(a => a.named).length;
+  const scored = scoredAnswers(grade);
+  const named = scored.filter(a => a.named).length;
   const items = ai.map(a => `<li><p><strong>${e(a.prompt)}</strong></p>${a.provider === 'mock' ? `<p class="seance-demo">${DEMO_LABEL}</p>` : ''}<p>${e(aiSentence(a, NaN))}</p>${answerBlock(a)}</li>`).join('');
-  return `<div class="grade-all-answers"><p>Named in ${named} of ${ai.length} ${ai.length === 1 ? 'answer' : 'answers'}.</p><ol>${items}</ol></div>`;
+  return `<div class="grade-all-answers">${scored.length > 0 ? `<p>Named in ${named} of ${scored.length}${scored.length < ai.length ? ' scored' : ''} ${scored.length === 1 ? 'answer' : 'answers'}.</p>` : ''}<ol>${items}</ol></div>`;
 }
 
 function kitItem(index, title, text) {
@@ -409,12 +424,15 @@ function fullReport(grade, contact, rechecking = false, justOpened = false) {
   // Per assistant: how many questions it answered. Second opinions are shown but not scored.
   const per = new Map();
   for (const a of grade.ai ?? []) per.set(a.provider, (per.get(a.provider) ?? 0) + 1);
-  const scored = (grade.ai ?? []).filter(a => !SECOND_OPINIONS.has(a.provider)).length;
+  const scoredN = scoredAnswers(grade).length;
+  const mainName = providerWho(scoredAnswers(grade)[0]?.provider);
   const plural = n => `${n} ${n === 1 ? 'question' : 'questions'}`;
   const answersNote = used <= 0 ? ''
-    : who > 1
-      ? `<p class="hint">${[...per].map(([p, n]) => `${providerWho(p)} answered ${plural(n)}`).join(' and ')}. Your score counts ${providerWho([...per.keys()].find(p => !SECOND_OPINIONS.has(p)))}'s ${scored === 1 ? 'answer' : `${scored} answers`}; ChatGPT's are shown so you can compare.</p>`
-      : `<p class="hint">We asked AI ${plural(asked)}. Your score counts ${used === 1 ? 'that answer' : `all ${used} answers`}.</p>`;
+    : scoredN === 0
+      ? '<p class="hint">Claude did not answer, so this check has no AI score. ChatGPT\'s answers are shown so you can compare.</p>'
+      : who > 1
+        ? `<p class="hint">${[...per].map(([p, n]) => `${providerWho(p)} answered ${plural(n)}`).join(' and ')}. Your score counts ${mainName}'s ${scoredN === 1 ? 'answer' : `${scoredN} answers`}; ChatGPT's are shown so you can compare.</p>`
+        : `<p class="hint">We asked AI ${plural(asked)}. Your score counts ${used === 1 ? 'that answer' : `all ${used} answers`}.</p>`;
   return `<section class="grade-full" id="full-report">${openedNote}
     <h2>Every check</h2>
     ${answersNote}
