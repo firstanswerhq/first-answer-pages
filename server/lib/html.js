@@ -198,15 +198,17 @@ export function founderBadge(founder) {
 /**
  * Founding Member invite for owners, shown while spots are open. Empty string otherwise.
  * @param {{ cap: number, left: number, open: boolean, deadline: string }|null|undefined} status
+ * @param {{ link?: boolean }} [opts] link: add a "Claim your spot" link to /rise
  * @returns {string}
  */
-export function foundersInvite(status) {
+export function foundersInvite(status, opts) {
   if (!status || status.open !== true) return '';
   const day = formatFoundersDeadline(status.deadline);
   const left = status.left === 1 ? '1 spot left' : `${status.left} spots left`;
+  const link = opts?.link === true ? '\n  <p class="founders-invite-link"><a href="/rise">Claim your spot &rarr;</a></p>' : '';
   return `<aside class="founders-invite">
   <p class="founders-invite-title">Founding Members</p>
-  <p>The first ${status.cap} businesses listed by ${escapeHtml(day)} get a free listing and a Founding Member badge for life. <strong>${left}.</strong></p>
+  <p>Listing is free for everyone. The first ${status.cap} businesses that send in their listing by ${escapeHtml(day)} (Central time) and are approved also get a numbered Founding Member badge for life. Spots go in the order listings are approved. <strong>${left}.</strong></p>${link}
 </aside>`;
 }
 

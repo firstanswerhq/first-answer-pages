@@ -4,7 +4,7 @@
 
 This spec adds two things to First Answer Pages.
 
-1. **Founding Members.** The first 500 businesses listed by January 31, 2027 get a free listing and a permanent Founding Member badge with their number ("Founding Member No. 12 of 500"). The program gives early owners a reason to sign up now and a mark that later listings cannot get.
+1. **Founding Members.** The first 500 businesses that send in their listing by January 31, 2027 (Central time) and are approved get a permanent Founding Member badge with their number ("Founding Member No. 12 of 500"). The program gives early owners a reason to sign up now and a mark that later listings cannot get.
 2. **Verified businesses.** An owner can pay a one-time $19 fee to prove there is a real person behind a real business: a code texted to the business phone, plus a photo ID and selfie check. A listing that passes shows a "Verified" stamp. This is what makes the directory more trustworthy than an open one. Founding Members pay the same fee; the fee covers the cost of the checks and keeps fake listings out.
 
 Part 1 is built. Part 2 is specified here and built next; it needs a Twilio account (text codes) and a Stripe account (the fee and the ID check), which the site owner opens himself.

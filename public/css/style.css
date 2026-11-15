@@ -2357,10 +2357,10 @@ a.tel,
   gap: 0 0.5em;
   margin: 0.35rem 0 0;
   padding: 0.15rem 0.6rem;
-  border: 2px solid #B8893B;
+  border: 2px solid var(--color-gold);
   border-radius: 3px;
-  background: #F3E7CC;
-  color: #0C2C73;
+  background: var(--color-tan);
+  color: var(--color-primary);
   font-size: 0.85rem;
   line-height: 1.5;
 }
@@ -2374,16 +2374,18 @@ a.tel,
 .founders-invite {
   margin: 1.5rem 0;
   padding: 0.9rem 1.1rem;
-  border: 2px solid #B8893B;
+  border: 2px solid var(--color-gold);
   border-radius: 4px;
-  background: #F3E7CC;
-  color: #0F1B33;
+  background: var(--color-tan);
+  color: var(--color-ink);
 }
 .founders-invite p { margin: 0; }
-.founders-invite-title {
-  color: #0C2C73;
+.founders-invite .founders-invite-title {
+  color: var(--color-primary);
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  margin-bottom: 0.25rem !important;
+  margin-bottom: 0.25rem;
 }
+
+.founders-invite .founders-invite-link { margin-top: 0.5rem; font-weight: 600; }

@@ -23,13 +23,33 @@ export function parseFoundersCap(value) {
 }
 
 /**
- * @param {unknown} value FOUNDERS_DEADLINE, an ISO date-time
+ * @param {unknown} value FOUNDERS_DEADLINE: a day (YYYY-MM-DD, the last day to sign up) or an ISO date-time with a zone
  * @returns {string} ISO date-time; the default when missing or unreadable
  */
 export function parseFoundersDeadline(value) {
   if (typeof value !== 'string' || value.trim() === '') return DEFAULT_FOUNDERS_DEADLINE;
-  const ms = Date.parse(value.trim());
+  const text = value.trim();
+  // A plain day ("2027-02-28") means through the end of that day in Nashville.
+  const day = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+  if (day) return endOfCentralDay(Number(day[1]), Number(day[2]), Number(day[3])) ?? DEFAULT_FOUNDERS_DEADLINE;
+  // A time with no zone would follow the server's own clock: refuse it.
+  if (!/(z|[+-]\d{2}:?\d{2})$/i.test(text)) return DEFAULT_FOUNDERS_DEADLINE;
+  const ms = Date.parse(text);
   return Number.isFinite(ms) ? new Date(ms).toISOString() : DEFAULT_FOUNDERS_DEADLINE;
+}
+
+/** ISO instant of midnight Central time at the end of the given day, or undefined for a bad date. */
+function endOfCentralDay(year, month, dayOfMonth) {
+  const next = new Date(Date.UTC(year, month - 1, dayOfMonth + 1));
+  const sameDay = new Date(Date.UTC(year, month - 1, dayOfMonth));
+  if (sameDay.getUTCMonth() !== month - 1 || sameDay.getUTCDate() !== dayOfMonth) return undefined;
+  const hourIn = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', hour: 'numeric', hourCycle: 'h23' });
+  // Central midnight is 05:00 UTC in summer and 06:00 UTC in winter.
+  for (const utcHour of [5, 6]) {
+    const at = new Date(next.getTime() + utcHour * 3600000);
+    if (Number(hourIn.format(at)) === 0) return at.toISOString();
+  }
+  return undefined;
 }
 
 /** Entries that carry a real founder number. */

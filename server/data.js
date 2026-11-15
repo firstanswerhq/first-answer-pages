@@ -313,6 +313,19 @@ export function createDataStore({
         });
       }
 
+      // 3b. Founding Member number, reserved before the listing goes public so a
+      // crash and retry cannot let a later approval jump ahead. Judged by when the
+      // owner sent the listing in, so a slow review never costs anyone their spot.
+      const pendingAll = await collection('pending').read();
+      const entry = Array.isArray(pendingAll) ? pendingAll.find(e => e && e.draftId === draftId) : undefined;
+      const sentAt = entry && typeof entry.submittedAt === 'string' ? Date.parse(entry.submittedAt) : NaN;
+      const signedUpAt = Number.isFinite(sentAt) ? sentAt : clock.now();
+      const foundersNext = await updateJsonFile(file('founders.json'), map => {
+        if (!Object.hasOwn(map, id) && earnsFounderSpot(foundersProgram, map, signedUpAt)) {
+          map[id] = { number: nextFounderNumber(map), joinedAt: new Date(clock.now()).toISOString() };
+        }
+      }, { ...io, fallback: {} });
+
       // 4. append to published.json unless present
       let listing;
       const publishedNext = await updateJsonFile(file('published.json'), list => {
@@ -328,17 +341,6 @@ export function createDataStore({
           map[id] = { verifiedDate: todayUtc(), verifiedAt: new Date(clock.now()).toISOString() };
         }
         date = map[id];
-      }, { ...io, fallback: {} });
-
-      // 5b. Founding Member number: judged by when the owner sent the listing in,
-      // so a slow review never costs anyone their spot. Kept on retry.
-      const pendingAll = await collection('pending').read();
-      const entry = Array.isArray(pendingAll) ? pendingAll.find(e => e && e.draftId === draftId) : undefined;
-      const signedUpAt = entry && typeof entry.submittedAt === 'string' ? entry.submittedAt : clock.now();
-      const foundersNext = await updateJsonFile(file('founders.json'), map => {
-        if (!Object.hasOwn(map, id) && earnsFounderSpot(foundersProgram, map, signedUpAt)) {
-          map[id] = { number: nextFounderNumber(map), joinedAt: new Date(clock.now()).toISOString() };
-        }
       }, { ...io, fallback: {} });
 
       // 6. mark the draft published

@@ -65,6 +65,10 @@ test('settings: defaults, and bad values fall back to the defaults', () => {
   assert.equal(parseFoundersCap('lots'), DEFAULT_FOUNDERS_CAP);
   assert.equal(parseFoundersDeadline(undefined), DEFAULT_FOUNDERS_DEADLINE);
   assert.equal(parseFoundersDeadline('not a date'), DEFAULT_FOUNDERS_DEADLINE);
+  assert.equal(parseFoundersDeadline('2027-01-31'), DEFAULT_FOUNDERS_DEADLINE);
+  assert.equal(parseFoundersDeadline('2027-06-30'), '2027-07-01T05:00:00.000Z'); // summer time
+  assert.equal(parseFoundersDeadline('2027-02-30'), DEFAULT_FOUNDERS_DEADLINE); // no such day
+  assert.equal(parseFoundersDeadline('2027-03-01T00:00:00'), DEFAULT_FOUNDERS_DEADLINE); // no zone
   assert.equal(parseFoundersDeadline('2027-03-01T00:00:00Z'), '2027-03-01T00:00:00.000Z');
   const cfg = configFromEnv({}, { warn: () => {} });
   assert.deepEqual(cfg.founders, { cap: 500, deadline: DEFAULT_FOUNDERS_DEADLINE });
@@ -116,6 +120,41 @@ test('signed up after the deadline: not a founder', async () => {
   assert.equal(store.getFoundersStatus().open, false);
 });
 
+test('a retry after a crash keeps the reserved number and its place in line', async () => {
+  const dir = await makeDir(2);
+  // d1 crashed mid-approval after its number was reserved: draft left at "publishing".
+  const drafts = JSON.parse(await fs.readFile(path.join(dir, 'drafts.json'), 'utf8'));
+  drafts[0].status = 'publishing';
+  drafts[0].reservedId = 'crashed-one';
+  await fs.writeFile(path.join(dir, 'drafts.json'), JSON.stringify(drafts));
+  await fs.writeFile(path.join(dir, 'founders.json'), JSON.stringify({ 'crashed-one': { number: 1, joinedAt: BEFORE } }));
+  const { store } = storeFor(dir);
+  assert.equal(store.getFounder('crashed-one'), undefined, 'no badge until the listing is public');
+  const second = await store.publishDraft('d2');
+  const first = await store.publishDraft('d1');
+  assert.equal(first.listing.id, 'crashed-one');
+  assert.equal(store.getFounder('crashed-one').number, 1);
+  assert.equal(store.getFounder(second.listing.id).number, 2);
+});
+
+test('an unreadable sign-up time falls back to the approval time', async () => {
+  const { store } = storeFor(await makeDir(1, { submittedAt: 'yesterday' }));
+  const r = await store.publishDraft('d1');
+  assert.equal(store.getFounder(r.listing.id).number, 1);
+});
+
+test('sample listings are never founders', async () => {
+  const dir = await makeDir(1);
+  await fs.copyFile(path.join(REPO_DATA, 'listings.json'), path.join(dir, 'listings.json'));
+  const clock = { now: () => new Date(BEFORE) };
+  const store = createDataStore({ dataDir: dir, clock, includeSamples: true, founders: { cap: 500, deadline: DEADLINE } });
+  await store.publishDraft('d1');
+  const samples = store.getListings().filter(l => store.isSeed(l.id));
+  assert.ok(samples.length > 0);
+  for (const l of samples) assert.equal(store.getFounder(l.id), undefined);
+  assert.equal(store.getFoundersStatus().taken, 1);
+});
+
 test('cap 0 turns the program off', async () => {
   const { store } = storeFor(await makeDir(1), { cap: 0 });
   const r = await store.publishDraft('d1');
@@ -164,7 +203,7 @@ test('badge and invite wording', () => {
   assert.equal(founderBadge({ number: 0 }), '');
   assert.match(founderBadge({ number: 12, cap: 500 }), /Founding Member<\/span> <span class="founder-badge-number">No\. 12 of 500</);
   const invite = foundersInvite({ cap: 500, taken: 3, left: 497, open: true, deadline: DEADLINE });
-  assert.match(invite, /The first 500 businesses listed by January 31, 2027 get a free listing and a Founding Member badge for life\. <strong>497 spots left\.<\/strong>/);
+  assert.match(invite, /The first 500 businesses that send in their listing by January 31, 2027 \(Central time\) and are approved also get a numbered Founding Member badge for life\. Spots go in the order listings are approved\. <strong>497 spots left\.<\/strong>/);
   assert.match(foundersInvite({ cap: 500, left: 1, open: true, deadline: DEADLINE }), /1 spot left\./);
   assert.equal(foundersInvite({ cap: 500, left: 0, open: false, deadline: DEADLINE }), '');
 });
@@ -178,8 +217,12 @@ test('pages: badge on the card and the listing page, invite on home and sign-up,
   try {
     const before = await (await fetch(`${base}/`)).text();
     assert.match(before, /500 spots left\./);
+    assert.ok(before.indexOf('founders-invite') < before.indexOf('no-results'), 'invite comes before the listings');
+    assert.match(before, /<a href="\/rise">Claim your spot/);
     assert.doesNotMatch(before, /founder-badge/);
-    assert.match(await (await fetch(`${base}/rise`)).text(), /Founding Members/);
+    const rise = await (await fetch(`${base}/rise`)).text();
+    assert.match(rise, /Founding Members/);
+    assert.doesNotMatch(rise, /Claim your spot/);
 
     const approve = await fetch(`${base}/admin/pending/d1/approve`, { method: 'POST', headers: { Authorization: 'Bearer t' } });
     assert.ok(approve.status < 400, `approve returned ${approve.status}`);
@@ -195,6 +238,14 @@ test('pages: badge on the card and the listing page, invite on home and sign-up,
     assert.match(await (await fetch(`${base}/listings/${id}`)).text(), /Founding Member<\/span> <span class="founder-badge-number">No\. 1 of 500/);
     const api = await (await fetch(`${base}/api/listings/${id}`)).text();
     assert.doesNotMatch(api, /founding|joinedAt/i);
+    const page = await (await fetch(`${base}/listings/${id}`)).text();
+    const ld = /<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec(page)[1];
+    assert.doesNotMatch(ld, /founding|joinedAt/i);
+    assert.doesNotMatch(await (await fetch(`${base}/llms.txt`)).text(), /founding member/i);
+    // The tamper-check hash is the same with or without the founder number.
+    const hash = JSON.parse(api).verificationHash;
+    const check = await (await fetch(`${base}/api/verify/${id}?hash=${hash}`)).json();
+    assert.equal(JSON.stringify(check).includes('true'), true);
   } finally {
     await new Promise(r => server.close(r));
   }
