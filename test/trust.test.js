@@ -196,7 +196,7 @@ function fakes({ testMode = false } = {}) {
     payments: {
       name: 'fake', testMode, webhookEnabled: true,
       async createCheckout(o) { const id = `cs_${++state.n}`; state.checkouts.set(id, { ...o, paid: false }); return { id, url: `https://pay.example/${id}` }; },
-      async getCheckout(id) { const c = state.checkouts.get(id); return { paid: Boolean(c?.paid), listingId: c?.listingId, plan: c?.plan }; },
+      async getCheckout(id) { const c = state.checkouts.get(id); return { paid: Boolean(c?.paid), open: Boolean(c) && !c.paid && !c.expired, url: `https://pay.example/${id}`, paymentIntent: c?.paid ? `pi_${id}` : undefined, listingId: c?.listingId, plan: c?.plan }; },
       async createIdCheck(o) { const id = `vs_${++state.n}`; state.idChecks.set(id, { ...o, status: 'requires_input' }); return { id, url: `https://id.example/${id}` }; },
       async getIdCheck(id) { const c = state.idChecks.get(id); return { status: c?.status ?? '', failed: c?.status === 'failed', listingId: c?.listingId }; },
       parseWebhook(raw, header) { if (header !== 'good') throw new Error('bad_signature'); const e = JSON.parse(raw.toString()); return { type: e.type, object: e.data.object }; },
@@ -238,7 +238,7 @@ async function site({ founders = { cap: 500, deadline: '2027-02-01T06:00:00.000Z
   assert.ok(approve.status < 400);
   const home = await get('/');
   const id = /href="\/listings\/([^"]+)"/.exec(home.text)[1];
-  return { base, post, get, f, id, clock, dir, V: '/rise/drafts/owner-link-1/verify' };
+  return { base, post, get, f, id, clock, dir, reload: () => app.locals.ctx.store.reload(), V: '/rise/drafts/owner-link-1/verify' };
 }
 
 test('off: with no keys every verification address is a 404 and nothing mentions it', async () => {
@@ -348,8 +348,13 @@ test('webhook: a signed Stripe message marks payment and ID even if the owner ne
   assert.equal((await send('checkout.session.completed', paid)).status, 200);
   assert.equal((await send('checkout.session.completed', paid)).status, 200); // sent twice: counted once
   assert.match((await s.get(s.V)).text, /Fee paid\./);
-  assert.equal((await send('identity.verification_session.verified', { id: 'vs_hook', metadata: { listing_id: 'no-such-listing' } })).status, 200);
-  assert.equal((await send('identity.verification_session.verified', { id: 'vs_hook', metadata: { listing_id: s.id } })).status, 200);
+  // An ID result for a check this listing never started is ignored.
+  assert.equal((await send('identity.verification_session.verified', { id: 'vs_stranger', metadata: { listing_id: s.id } })).status, 200);
+  assert.doesNotMatch((await s.get(s.V)).text, /Photo ID and selfie matched\./);
+  const start = await s.post(`${s.V}/id`);
+  const vs = start.headers.get('location').split('/').pop();
+  assert.equal((await send('identity.verification_session.verified', { id: vs, metadata: { listing_id: 'no-such-listing' } })).status, 200);
+  assert.equal((await send('identity.verification_session.verified', { id: vs, metadata: { listing_id: s.id } })).status, 200);
   assert.match((await s.get(s.V)).text, /Photo ID and selfie matched\./);
   const record = JSON.parse(await fs.readFile(path.join(s.dir, 'trust.json'), 'utf8'))[s.id];
   assert.deepEqual(record.payments, ['cs_hook']);
@@ -434,6 +439,98 @@ test('the public page says what Verified means, and the privacy page covers it',
   assert.doesNotMatch((await off.get('/privacy')).text, /Verified stamp/);
 });
 
+test('a repeated ID message from Stripe cannot put the stamp back after the business name changes', async () => {
+  const s = await site();
+  const send = (type, object) => s.post('/webhooks/stripe', JSON.stringify({ type, data: { object } }), { 'Stripe-Signature': 'good', 'Content-Type': 'application/json' });
+  await s.post(`${s.V}/pay`);
+  s.f.state.checkouts.get('cs_1').paid = true;
+  await s.get(s.V);
+  await s.post(`${s.V}/phone/check`, 'code=424242');
+  const vs = (await s.post(`${s.V}/id`)).headers.get('location').split('/').pop();
+  await send('identity.verification_session.verified', { id: vs, metadata: { listing_id: s.id } });
+  assert.match((await s.get(`/listings/${s.id}`)).text, /verified-badge/);
+  // The name on the listing changes (a hand edit of the published file).
+  const file = path.join(s.dir, 'published.json');
+  const published = JSON.parse(await fs.readFile(file, 'utf8'));
+  published[0].name = 'Ridge Roofing and Siding';
+  await fs.writeFile(file, JSON.stringify(published));
+  s.reload();
+  assert.doesNotMatch((await s.get(`/listings/${s.id}`)).text, /verified-badge/);
+  await send('identity.verification_session.verified', { id: vs, metadata: { listing_id: s.id } });
+  assert.doesNotMatch((await s.get(`/listings/${s.id}`)).text, /verified-badge/);
+});
+
+test('only one payment page is ever open: clicking Pay again goes back to the same one', async () => {
+  const s = await site({ founders: { cap: 0, deadline: '2027-02-01T06:00:00.000Z' } });
+  const first = await s.post(`${s.V}/pay`);
+  const again = await s.post(`${s.V}/pay`);
+  assert.equal(again.headers.get('location'), first.headers.get('location'));
+  const burst = await Promise.all(Array.from({ length: 6 }, () => s.post(`${s.V}/pay`)));
+  assert.deepEqual([...new Set(burst.map(r => r.headers.get('location')))], [first.headers.get('location')]);
+  assert.equal(s.f.state.checkouts.size, 1);
+});
+
+test('a burst of clicks cannot start more than one photo ID check', async () => {
+  const s = await site();
+  await s.post(`${s.V}/pay`);
+  s.f.state.checkouts.get('cs_1').paid = true;
+  await s.get(s.V);
+  await Promise.all(Array.from({ length: 8 }, () => s.post(`${s.V}/id`)));
+  for (const c of s.f.state.idChecks.values()) c.status = 'failed';
+  await s.get(s.V);
+  const tries = JSON.parse(await fs.readFile(path.join(s.dir, 'trust.json'), 'utf8'))[s.id].idAttempts;
+  assert.equal(tries, 1, 'only the check that was waiting counts as a try');
+  assert.ok(s.f.state.idChecks.size <= 6, 'starts are capped per hour');
+});
+
+test('a refund or a dispute takes the stamp off until the owner pays again', async () => {
+  const s = await site();
+  const send = (type, object) => s.post('/webhooks/stripe', JSON.stringify({ type, data: { object } }), { 'Stripe-Signature': 'good', 'Content-Type': 'application/json' });
+  await s.post(`${s.V}/pay`);
+  s.f.state.checkouts.get('cs_1').paid = true;
+  await s.get(s.V);
+  await s.post(`${s.V}/phone/check`, 'code=424242');
+  await s.post(`${s.V}/id`);
+  s.f.state.idChecks.get('vs_2').status = 'verified';
+  await s.get(s.V);
+  assert.match((await s.get(`/listings/${s.id}`)).text, /verified-badge/);
+  await send('charge.refunded', { id: 'ch_1', refunded: false, payment_intent: 'pi_cs_1' }); // partial refund: no change
+  assert.match((await s.get(`/listings/${s.id}`)).text, /verified-badge/);
+  await send('charge.dispute.created', { id: 'dp_1', payment_intent: 'pi_someone_else' });
+  assert.match((await s.get(`/listings/${s.id}`)).text, /verified-badge/);
+  await send('charge.refunded', { id: 'ch_1', refunded: true, payment_intent: 'pi_cs_1' });
+  assert.doesNotMatch((await s.get(`/listings/${s.id}`)).text, /verified-badge/);
+  const page = (await s.get(s.V)).text;
+  assert.match(page, /Your last payment was refunded or disputed/);
+  assert.match(page, /Photo ID and selfie matched\./, 'checks already passed are kept');
+  await s.post(`${s.V}/pay`);
+  s.f.state.checkouts.get('cs_3').paid = true;
+  await s.get(s.V);
+  assert.match((await s.get(`/listings/${s.id}`)).text, /verified-badge/);
+});
+
+test('the real signature check guards the webhook address', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'fap-hook-'));
+  dirs.push(dir);
+  await fs.copyFile(path.join(REPO_DATA, 'categories.json'), path.join(dir, 'categories.json'));
+  await fs.writeFile(path.join(dir, 'listings.json'), '[]');
+  const clock = { now: () => new Date(NOW) };
+  const payments = createStripePayments({ secretKey: 'sk_live_x', webhookSecret: 'whsec_real', clock, fetch: fakeFetch(() => ({ json: {} })) });
+  const config = { ...configFromEnv({ ADMIN_TOKEN: 't' }, { warn: () => {} }), demoMode: false };
+  const app = createApp({ dataDir: dir, config, clock, trust: { payments, phone: { name: 'none' } } });
+  const server = app.listen(0);
+  servers.push(server);
+  const url = `http://127.0.0.1:${server.address().port}/webhooks/stripe`;
+  const body = JSON.stringify({ type: 'charge.refunded', data: { object: { id: 'ch_1', refunded: true, payment_intent: 'pi_none' } } });
+  const t = Math.floor(Date.parse(NOW) / 1000);
+  const post = (payload, sig) => fetch(url, { method: 'POST', body: payload, headers: { 'Stripe-Signature': sig, 'Content-Type': 'application/json; charset=utf-8' } });
+  assert.equal((await post(body, sign('whsec_real', body, t))).status, 200);
+  assert.equal((await post(body, `${sign('whsec_other', body, t)},v1=${sign('whsec_real', body, t).split('v1=')[1]}`)).status, 200, 'any matching v1 is enough');
+  assert.equal((await post(body.replace('ch_1', 'ch_2'), sign('whsec_real', body, t))).status, 400);
+  assert.equal((await post(body, sign('whsec_other', body, t))).status, 400);
+  assert.equal((await post(body, '')).status, 400);
+});
+
 test('a wrong private link gets nothing', async () => {
   const s = await site();
   assert.equal((await s.get('/rise/drafts/not-a-real-link/verify')).status, 404);
@@ -459,4 +556,9 @@ test('admin can see the state and take the stamp off', async () => {
   assert.ok(off.status < 400);
   assert.doesNotMatch((await s.get(`/listings/${s.id}`)).text, /verified-badge/);
   assert.match((await s.get(s.V)).text, /has been turned off/);
+  const adminAfter = await (await fetch(`${s.base}/admin/pending`, { headers: { Authorization: 'Bearer t', Accept: 'text/html' } })).text();
+  assert.match(adminAfter, /Turn verification back on/);
+  const on = await s.post(`/admin/listings/${s.id}/reverify`, undefined, { Authorization: 'Bearer t' });
+  assert.ok(on.status < 400);
+  assert.match((await s.get(`/listings/${s.id}`)).text, /verified-badge/);
 });

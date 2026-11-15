@@ -11,7 +11,8 @@
  * Record shape (trust.json, keyed by listing id):
  *   { plan: 'founder'|'yearly', paidAt, paidThrough|null, paymentRef,
  *     pendingCheckout, phone: { number, at }, identity: { ref, at, name },
- *     pendingIdCheck, idAttempts, idFailed, removedAt, test }
+ *     paymentIntents, pendingIdCheck, idAttempts, idFailed, removedAt, refundedAt, test }
+ * `refundedAt` is set when the last payment is refunded or disputed; a new payment clears it.
  * `test: true` marks a practice run made with a Stripe test key.
  */
 
@@ -76,7 +77,7 @@ export function trustStatus(record, listing, now) {
   const r = record && typeof record === 'object' ? record : {};
   const nowMs = new Date(now).getTime();
   const through = Date.parse(r.paidThrough ?? '');
-  const paid = typeof r.paidAt === 'string'
+  const paid = typeof r.paidAt === 'string' && typeof r.refundedAt !== 'string'
     && (r.plan === 'founder' || (Number.isFinite(through) && nowMs < through));
   const number = toE164(listing?.phone);
   const phoneOk = Boolean(number) && r.phone?.number === number && typeof r.phone?.at === 'string';
@@ -92,6 +93,7 @@ export function trustStatus(record, listing, now) {
     expired: yearly && typeof r.paidAt === 'string' && !paid,
     canRenew: yearly && paid && through - nowMs <= RENEW_WINDOW_MS,
     idFailed: r.idFailed === true,
+    refunded: typeof r.refundedAt === 'string',
     plan: r.plan, paidThrough: r.paidThrough ?? null,
     idAttemptsLeft: Math.max(MAX_ID_ATTEMPTS - (Number.isInteger(r.idAttempts) ? r.idAttempts : 0), 0),
   };

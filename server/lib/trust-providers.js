@@ -60,6 +60,7 @@ export function createStripePayments({ secretKey, webhookSecret, fetch: fetchImp
           client_reference_id: listingId,
           'metadata[listing_id]': listingId,
           'metadata[plan]': plan,
+          'payment_method_types[0]': 'card', // cards settle at once; no delayed bank payments
           'line_items[0][quantity]': '1',
           'line_items[0][price_data][currency]': 'usd',
           'line_items[0][price_data][unit_amount]': String(amountCents),
@@ -70,10 +71,20 @@ export function createStripePayments({ secretKey, webhookSecret, fetch: fetchImp
       return { id: s.id, url: s.url };
     },
 
-    /** @returns {Promise<{ paid: boolean, listingId?: string, plan?: string }>} */
+    /**
+     * @returns {Promise<{ paid: boolean, open: boolean, url?: string, paymentIntent?: string, listingId?: string, plan?: string }>}
+     *   open: the payment page can still be used
+     */
     async getCheckout(id) {
       const s = await call(fetchImpl, `${STRIPE}/checkout/sessions/${encodeURIComponent(id)}`, { auth });
-      return { paid: s.payment_status === 'paid', listingId: s.metadata?.listing_id, plan: s.metadata?.plan };
+      return {
+        paid: s.payment_status === 'paid',
+        open: s.status === 'open' && typeof s.url === 'string',
+        url: typeof s.url === 'string' ? s.url : undefined,
+        paymentIntent: typeof s.payment_intent === 'string' ? s.payment_intent : undefined,
+        listingId: s.metadata?.listing_id,
+        plan: s.metadata?.plan,
+      };
     },
 
     /** Photo ID plus selfie check, hosted by Stripe. @returns {Promise<{ id: string, url: string }>} */

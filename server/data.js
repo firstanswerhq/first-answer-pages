@@ -174,7 +174,7 @@ export function createDataStore({
    * @returns {Promise<object>} the updated record
    */
   function updateTrustRecord(id, mutator) {
-    return withLock('trust', async () => {
+    return withLock('trust-file', async () => {
       const next = await updateJsonFile(file('trust.json'), map => {
         const record = Object.hasOwn(map, id) && map[id] && typeof map[id] === 'object' ? map[id] : {};
         mutator(record);

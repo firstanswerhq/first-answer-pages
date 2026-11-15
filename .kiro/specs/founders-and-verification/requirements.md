@@ -55,14 +55,19 @@ Listing is free for everyone, always. Verification is the paid step. A Founding 
 
 1. THE owner of an approved listing SHALL reach verification from their private listing link (`/rise/drafts/:id/verify`). An unknown link SHALL get a 404.
 2. THE fee SHALL be taken on a Stripe Checkout page: VERIFY_FOUNDER_FEE_CENTS (default $19, one time, for life) for a Founding Member, VERIFY_YEARLY_FEE_CENTS (default $49, one year) for everyone else. The site never sees or stores card numbers.
-3. A yearly payment SHALL cover one year. WHEN it lapses, THE stamp SHALL come off until the owner pays again; the phone and photo ID checks SHALL NOT need repeating. Renewing early SHALL add a year to the current end date.
+3. A yearly payment SHALL cover one year. WHEN it lapses, THE stamp SHALL come off until the owner pays again; the phone and photo ID checks SHALL NOT need repeating. A yearly plan SHALL be renewable in its last 30 days, and renewing early SHALL add a calendar year to the current end date. It SHALL NOT renew by itself.
 4. Phone check: Twilio Verify SHALL text or call the phone number on the listing with a code, and the owner SHALL type it in. The number checked SHALL be the listing's public number, never a number typed at verification time.
 5. Identity check: Stripe Identity SHALL check a government photo ID against a selfie. The site SHALL store only the result (when, and the provider's reference id), never the ID image, the ID number or the selfie.
 6. The phone and identity checks SHALL open only after the fee is paid.
 7. WHEN the fee is paid AND both checks pass, THE listing SHALL show a "Verified" stamp on its card and its page, and llms.txt SHALL say so. Until then it SHALL show nothing new.
 8. WHEN a verified listing's phone number changes, THE stamp SHALL come off until the phone check is passed again; WHEN its name changes, until the identity check is passed again.
-9. A failed or abandoned check SHALL be retryable without paying again, within limits that cap the site's cost: three codes an hour and three photo ID tries per payment.
+9. A failed or abandoned check SHALL be retryable without paying again, within limits that cap the site's cost: three codes an hour and three failed photo ID checks per payment. An admin SHALL be able to give fresh tries.
 10. A payment or identity result SHALL be believed only when Stripe says so: a signed webhook, or the server asking Stripe directly. A browser redirect alone SHALL change nothing. The same payment SHALL be counted once.
 11. Without the Stripe key and all three Twilio values, verification SHALL be off: every verification address SHALL return 404 and no page SHALL mention prices.
-12. An admin SHALL see each listing's verification state and be able to remove a Verified stamp.
+12. An admin SHALL see each listing's verification state and be able to remove a Verified stamp (after a confirm step) and put it back.
 13. Verification data SHALL NOT be added to the listing JSON, the JSON-LD, or the tamper-check hash.
+14. Results earned with a Stripe test key SHALL be a practice run: no public stamp, and wiped once the site runs on a live key.
+15. At most one payment page SHALL be open per listing at a time, and a listing whose phone number cannot be checked SHALL NOT be able to pay.
+16. WHEN a payment is fully refunded or disputed, THE stamp SHALL come off until the owner pays again; checks already passed SHALL be kept.
+17. An identity result SHALL count only for the check the owner most recently started, so a repeated message can never restore a stamp.
+18. A public page (`/verified`) SHALL say what the stamp means and what it does not, and the Privacy page SHALL say who holds the ID photos.

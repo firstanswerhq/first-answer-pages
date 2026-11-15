@@ -41,6 +41,7 @@ const NOTES = Object.freeze({
   rejected: 'Rejected.',
   unpublished: 'Unpublished.',
   unverified: 'Verified stamp removed.',
+  reverified: 'Verification turned back on for that listing, with fresh photo ID tries.',
   notfound: 'That entry was not found.',
   notpending: 'That entry is not waiting for review.',
   invalid: 'That listing is missing required fields, so it was not approved.',
@@ -312,9 +313,13 @@ ${preview}
           ? '\n  <p class="hint">Verified stamp: turned off by admin.</p>'
           : `\n  <p class="hint">Verified stamp: ${t.verified ? 'showing' : 'not yet'} &middot; fee paid: ${yesNo(t.paid)} &middot; phone: ${yesNo(t.phoneOk)} &middot; photo ID: ${yesNo(t.idOk)}</p>`;
         const founderLine = founder ? `\n  <p class="hint">Founding Member No. ${founder.number}</p>` : '';
-        const unverify = started && !t.removed
-          ? `\n  <form method="POST" action="/admin/listings/${lid}/unverify"><button type="submit" class="admin-button admin-button-secondary">Remove Verified stamp</button></form>`
-          : '';
+        let unverify = '';
+        if (started && !t.removed) {
+          unverify = `\n  <form method="POST" action="/admin/listings/${lid}/unverify"><button type="submit" class="admin-button admin-button-secondary">Remove Verified stamp</button></form>`;
+        }
+        if (started && (t.removed || t.idAttemptsLeft === 0)) {
+          unverify += `\n  <form method="POST" action="/admin/listings/${lid}/reverify"><button type="submit" class="admin-button admin-button-secondary">${t.removed ? 'Turn verification back on' : 'Give fresh photo ID tries'}</button></form>`;
+        }
         return `<li class="pending-item">
   <h2>${escapeHtml(l.name ?? l.id)}</h2>
   <p>${escapeHtml(categoryLabel(l.category))} &middot; ${escapeHtml(l.city ?? '')}, ${escapeHtml(l.state ?? '')} &middot; ${escapeHtml(l.phone ?? '')}</p>${founderLine}${trustLine}
@@ -587,15 +592,39 @@ ${preview}
     }
   });
 
-  // Take the Verified stamp off a listing. It stays off until an admin edits the record.
-  router.post('/admin/listings/:id/unverify', async (req, res, next) => {
+  // Take the Verified stamp off a listing (asks first), or put it back.
+  router.post('/admin/listings/:id/unverify', form, async (req, res, next) => {
     try {
       const live = ctx.store.findById(req.params.id);
-      if (!live || ctx.store.isSeed(live.id) || typeof ctx.store.updateTrustRecord !== 'function') {
-        return reply(req, res, { status: 404, json: { error: 'Listing not found' }, note: 'notfound' });
+      const record = live && typeof ctx.store.getTrustRecord === 'function' ? ctx.store.getTrustRecord(live.id) : undefined;
+      if (!live || ctx.store.isSeed(live.id) || !record) {
+        return reply(req, res, { status: 404, json: { error: 'Listing not found, or it never started verification' }, note: 'notfound' });
+      }
+      if (wantsHtml(req) && req.body?.confirm !== 'yes') {
+        return res.type('html').send(confirmPage({
+          title: 'Remove the Verified stamp?',
+          question: `Remove the Verified stamp from ${live.name || 'this listing'}? It comes off right away. You can put it back from this page later.`,
+          action: `/admin/listings/${encodeURIComponent(live.id)}/unverify`,
+          button: 'Yes, remove the stamp',
+        }));
       }
       await ctx.store.updateTrustRecord(live.id, r => { r.removedAt = new Date(ctx.clock ? ctx.clock.now() : Date.now()).toISOString(); });
       reply(req, res, { json: { ok: true }, note: 'unverified', id: live.id });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Undo a removal, and give the owner a fresh set of photo ID tries.
+  router.post('/admin/listings/:id/reverify', async (req, res, next) => {
+    try {
+      const live = ctx.store.findById(req.params.id);
+      const record = live && typeof ctx.store.getTrustRecord === 'function' ? ctx.store.getTrustRecord(live.id) : undefined;
+      if (!live || ctx.store.isSeed(live.id) || !record) {
+        return reply(req, res, { status: 404, json: { error: 'Listing not found, or it never started verification' }, note: 'notfound' });
+      }
+      await ctx.store.updateTrustRecord(live.id, r => { delete r.removedAt; r.idAttempts = 0; delete r.idFailed; });
+      reply(req, res, { json: { ok: true }, note: 'reverified', id: live.id });
     } catch (err) {
       next(err);
     }

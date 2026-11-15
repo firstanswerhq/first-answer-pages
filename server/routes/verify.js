@@ -80,13 +80,16 @@ export function verifyPage({ draftId, listing, status, price, fees, note, testMo
     <p>Your year is almost up. Pay now and the new year starts when this one ends.</p>
     <form method="POST" action="${base}/pay"><button type="submit">Pay ${fee} for another year</button></form>`;
   } else {
+    const refunded = status.refunded
+      ? '<p>Your last payment was refunded or disputed, so the stamp is off your listing. Pay again to put it back.</p>\n    '
+      : '';
     const lapsed = status.expired
       ? `<p>Your year ended on ${escapeHtml(formatDay(status.paidThrough))}. The stamp is off your listing. Pay again to put it back. You will not need to redo the phone or ID steps.</p>\n    `
       : '';
     const priceLine = price.plan === 'founder'
       ? `As a Founding Member you pay ${fee} once. The stamp stays for as long as your listing is up with the same business name and phone number. If either changes, you confirm again at no charge.`
       : `Verification is ${fee} for one year. It does not renew by itself and your card is not charged again. When the year ends, the stamp comes off until you pay for another year.`;
-    payStep = `${lapsed}<p>${escapeHtml(priceLine)}</p>
+    payStep = `${refunded}${lapsed}<p>${escapeHtml(priceLine)}</p>
     <p>You pay on a secure Stripe page. We never see your card number.</p>
     <p class="hint">Wrong phone number on the listing? Please ${contact} to fix it before you pay.</p>
     <form method="POST" action="${base}/pay"><button type="submit">Pay ${fee}</button></form>`;
@@ -220,7 +223,7 @@ export function createVerifyRouter(ctx) {
   const statusOf = listing => trustStatus(store.getTrustRecord(listing.id), listing, now());
 
   /** Record a payment once. A payment already counted is ignored. */
-  async function markPaid(listingId, plan, ref) {
+  async function markPaid(listingId, plan, ref, paymentIntent) {
     await store.updateTrustRecord(listingId, r => {
       const seen = Array.isArray(r.payments) ? r.payments : [];
       if (seen.includes(ref)) return;
@@ -230,6 +233,10 @@ export function createVerifyRouter(ctx) {
       r.paidAt = at.toISOString();
       r.paymentRef = ref;
       r.payments = [...seen, ref].slice(-20);
+      if (typeof paymentIntent === 'string' && paymentIntent !== '') {
+        r.paymentIntents = [...(Array.isArray(r.paymentIntents) ? r.paymentIntents : []), paymentIntent].slice(-20);
+      }
+      delete r.refundedAt;
       r.idAttempts = 0;
       delete r.idFailed;
       if (testMode) r.test = true; else delete r.test;
@@ -241,10 +248,24 @@ export function createVerifyRouter(ctx) {
     const listing = store.findById(listingId);
     if (!listing) return;
     await store.updateTrustRecord(listingId, r => {
+      // Only the check that is waiting counts. A repeated or stale message from
+      // Stripe must never put a stamp back after the business name has changed.
+      if (r.pendingIdCheck !== ref) return;
       r.identity = { ref, at: now().toISOString(), name: listing.name };
       delete r.idFailed;
-      if (r.pendingIdCheck === ref) delete r.pendingIdCheck;
+      delete r.pendingIdCheck;
     });
+  }
+
+  /** A refund or a dispute takes the paid status away. The checks already passed are kept. */
+  async function markRefunded(paymentIntent) {
+    if (typeof paymentIntent !== 'string' || paymentIntent === '') return;
+    const ids = store.findTrustIds(r => Array.isArray(r?.paymentIntents) && r.paymentIntents.at(-1) === paymentIntent);
+    for (const id of ids) {
+      await store.updateTrustRecord(id, r => {
+        if (typeof r.refundedAt !== 'string') r.refundedAt = now().toISOString();
+      });
+    }
   }
 
   /** Count one failed photo ID try. Only the check that is waiting counts, and only once. */
@@ -269,7 +290,7 @@ export function createVerifyRouter(ctx) {
     try {
       if (typeof record.pendingCheckout?.id === 'string' && (!status.paid || status.canRenew)) {
         const s = await payments.getCheckout(record.pendingCheckout.id);
-        if (s.paid && s.listingId === listing.id) await markPaid(listing.id, s.plan, record.pendingCheckout.id);
+        if (s.paid && s.listingId === listing.id) await markPaid(listing.id, s.plan, record.pendingCheckout.id, s.paymentIntent);
       }
       if (!status.idOk && typeof record.pendingIdCheck === 'string') {
         const s = await payments.getIdCheck(record.pendingIdCheck);
@@ -310,29 +331,43 @@ export function createVerifyRouter(ctx) {
     try {
       const listing = await ownerListing(req.params.id);
       if (!listing) return notFound(req, res, next);
-      const status = statusOf(listing);
-      // Never take money for a listing whose phone we cannot check.
-      if ((status.paid && !status.canRenew) || status.removed || !toE164(listing.phone)) return back(res, req.params.id);
-      const limited = ctx.rateLimiter.consume(`verify-pay:${listing.id}`, RULES['verify-pay']);
-      if (!limited.allowed) return back(res, req.params.id, 'slow');
-      const price = planFor(store.getFounder(listing.id), fees);
-      const base = baseUrlFor(req, ctx.config);
-      const page = `${base}/rise/drafts/${encodeURIComponent(req.params.id)}/verify`;
-      let session;
-      try {
-        session = await payments.createCheckout({
-          listingId: listing.id, plan: price.plan, amountCents: price.amountCents,
-          description: price.plan === 'founder'
-            ? `${DEFAULT_SITE_NAME} Verified stamp, Founding Member (one time)`
-            : `${DEFAULT_SITE_NAME} Verified stamp (one year, does not renew by itself)`,
-          successUrl: page, cancelUrl: `${page}?note=canceled`,
-        });
-      } catch (err) {
-        logFail('checkout', err);
-        return back(res, req.params.id, 'paydown');
-      }
-      await store.updateTrustRecord(listing.id, r => { r.pendingCheckout = { id: session.id, plan: price.plan }; });
-      res.redirect(303, session.url);
+      // One at a time per listing, so a double click cannot open two payment pages.
+      const target = await store.withLock(`verify:${listing.id}`, async () => {
+        await catchUp(listing);
+        const status = statusOf(listing);
+        // Never take money for a listing whose phone we cannot check.
+        if ((status.paid && !status.canRenew) || status.removed || !toE164(listing.phone)) return { note: '' };
+        const limited = ctx.rateLimiter.consume(`verify-pay:${listing.id}`, RULES['verify-pay']);
+        if (!limited.allowed) return { note: 'slow' };
+        const price = planFor(store.getFounder(listing.id), fees);
+        const base = baseUrlFor(req, ctx.config);
+        const page = `${base}/rise/drafts/${encodeURIComponent(req.params.id)}/verify`;
+        try {
+          // A payment page that is still open is used again, so there is never
+          // more than one that could be paid.
+          const pending = store.getTrustRecord(listing.id)?.pendingCheckout;
+          if (typeof pending?.id === 'string' && pending.plan === price.plan && pending.amountCents === price.amountCents) {
+            const open = await payments.getCheckout(pending.id);
+            if (open.open && !open.paid && open.listingId === listing.id) return { url: open.url };
+          }
+          const session = await payments.createCheckout({
+            listingId: listing.id, plan: price.plan, amountCents: price.amountCents,
+            description: price.plan === 'founder'
+              ? `${DEFAULT_SITE_NAME} Verified stamp, Founding Member (one time)`
+              : `${DEFAULT_SITE_NAME} Verified stamp (one year, does not renew by itself)`,
+            successUrl: page, cancelUrl: `${page}?note=canceled`,
+          });
+          await store.updateTrustRecord(listing.id, r => {
+            r.pendingCheckout = { id: session.id, plan: price.plan, amountCents: price.amountCents };
+          });
+          return { url: session.url };
+        } catch (err) {
+          logFail('checkout', err);
+          return { note: 'paydown' };
+        }
+      });
+      if (target.url) return res.redirect(303, target.url);
+      back(res, req.params.id, target.note);
     } catch (err) { next(err); }
   });
 
@@ -384,24 +419,28 @@ export function createVerifyRouter(ctx) {
     try {
       const listing = await ownerListing(req.params.id);
       if (!listing) return notFound(req, res, next);
-      // Settle any check already under way before starting another.
-      const { idProcessing } = await catchUp(listing);
-      const status = statusOf(listing);
-      if (!status.paid || status.removed || status.idOk || idProcessing || status.idAttemptsLeft === 0) return back(res, req.params.id);
-      const limited = ctx.rateLimiter.consume(`verify-id:${listing.id}`, RULES['verify-id']);
-      if (!limited.allowed) return back(res, req.params.id, 'slow');
-      const base = baseUrlFor(req, ctx.config);
-      let session;
-      try {
-        session = await payments.createIdCheck({
-          listingId: listing.id, returnUrl: `${base}/rise/drafts/${encodeURIComponent(req.params.id)}/verify`,
-        });
-      } catch (err) {
-        logFail('id-check', err);
-        return back(res, req.params.id, 'down');
-      }
-      await store.updateTrustRecord(listing.id, r => { r.pendingIdCheck = session.id; });
-      res.redirect(303, session.url);
+      // One at a time per listing, so the limit on tries holds under a burst of clicks.
+      const target = await store.withLock(`verify:${listing.id}`, async () => {
+        // Settle any check already under way before starting another.
+        const { idProcessing } = await catchUp(listing);
+        const status = statusOf(listing);
+        if (!status.paid || status.removed || status.idOk || idProcessing || status.idAttemptsLeft === 0) return { note: '' };
+        const limited = ctx.rateLimiter.consume(`verify-id:${listing.id}`, RULES['verify-id']);
+        if (!limited.allowed) return { note: 'slow' };
+        const base = baseUrlFor(req, ctx.config);
+        try {
+          const session = await payments.createIdCheck({
+            listingId: listing.id, returnUrl: `${base}/rise/drafts/${encodeURIComponent(req.params.id)}/verify`,
+          });
+          await store.updateTrustRecord(listing.id, r => { r.pendingIdCheck = session.id; });
+          return { url: session.url };
+        } catch (err) {
+          logFail('id-check', err);
+          return { note: 'down' };
+        }
+      });
+      if (target.url) return res.redirect(303, target.url);
+      back(res, req.params.id, target.note);
     } catch (err) { next(err); }
   });
 
@@ -415,11 +454,14 @@ export function createVerifyRouter(ctx) {
         return res.status(400).json({ error: 'bad signature' });
       }
       const o = event.object;
+      // Money taken back: a full refund, or a customer disputing the charge with their bank.
+      if (event.type === 'charge.refunded' && o.refunded === true) await markRefunded(o.payment_intent);
+      if (event.type === 'charge.dispute.created') await markRefunded(o.payment_intent);
       const listingId = typeof o.metadata?.listing_id === 'string' ? o.metadata.listing_id : '';
       const known = listingId !== '' && Boolean(store.findById(listingId)) && !store.isSeed(listingId);
       if (known && typeof o.id === 'string') {
         if (event.type === 'checkout.session.completed' && o.payment_status === 'paid') {
-          await markPaid(listingId, o.metadata?.plan, o.id);
+          await markPaid(listingId, o.metadata?.plan, o.id, typeof o.payment_intent === 'string' ? o.payment_intent : undefined);
         } else if (event.type === 'identity.verification_session.verified') {
           await markIdPassed(listingId, o.id);
         } else if (event.type === 'identity.verification_session.requires_input' && o.last_error != null) {
