@@ -208,7 +208,7 @@ async function assertHidden(env, i) {
   assert.equal(one.isError, true, 'MCP get_listing must report not found');
 }
 
-/** Asserts the listing is public everywhere and carries the Owner-confirmed stamp. */
+/** Asserts the listing is public everywhere and carries the Details confirmed by the business stamp. */
 async function assertVisible(env, i) {
   const id = listingId(i);
   const name = `Zephyrine Plumbing ${i}`;
@@ -223,7 +223,7 @@ async function assertVisible(env, i) {
   const html = await page.text();
   assert.ok(html.includes(name));
   assert.ok(html.includes('application/ld+json'));
-  assert.ok(html.includes('Owner-confirmed'), 'page shows the Owner-confirmed stamp');
+  assert.ok(html.includes('Details confirmed by the business'), 'page shows the Details confirmed by the business stamp');
   assert.equal((await get(env, `/api/listings/${id}`)).status, 200);
 
   assert.ok((await mcpIds(env)).includes(id));
@@ -282,7 +282,7 @@ test('GET /admin/pending says so when nothing is waiting', async () => {
   assert.match(await res.text(), /Nothing is waiting for review/);
 });
 
-test('approve publishes the listing everywhere and writes the Owner-confirmed stamp', async () => {
+test('approve publishes the listing everywhere and writes the Details confirmed by the business stamp', async () => {
   const env = await makeEnv({ drafts: [draftEntry(1)] });
   assert.equal((await confirm(env, 1)).status, 303);
   await assertHidden(env, 1);

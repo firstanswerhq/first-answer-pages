@@ -32,7 +32,7 @@ export const TOOLS = Object.freeze([
   {
     name: 'get_listing',
     description:
-      'Get one business listing by id, with its owner-confirmed verification status, date, and hash when available.',
+      'Get one business listing by id, with its "details confirmed by the business" status, date, and hash when available.',
     inputSchema: GET_LISTING_SCHEMA,
   },
   {

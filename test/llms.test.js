@@ -137,7 +137,7 @@ test('llms.txt line-break injection', async t => {
 // ---------------------------------------------------------------------------
 
 const HEADER_MULTI = '# A free directory of local businesses';
-const countConfirmed = text => lbLines(text).filter(line => line.startsWith('Owner-confirmed: yes')).length;
+const countConfirmed = text => lbLines(text).filter(line => line.startsWith('Details confirmed by the business: yes')).length;
 
 const quoteSet = () => [
   lbListing({ id: 'alpha-plumbing', name: 'Alpha Plumbing' }),
@@ -154,22 +154,22 @@ test('llms.txt quotes, owner-confirmed and header city', async t => {
     assert.ok(out.includes(`POST ${BASE_URL}/api/quotes`));
   });
 
-  await t.test('confirmed listing shows Owner-confirmed with its date; others show none', () => {
+  await t.test('confirmed listing shows Details confirmed by the business with its date; others show none', () => {
     const out = generateLlmsTxt(quoteSet(), BASE_URL, LB_CATEGORIES, {
       confirmed: new Set(['beta-plumbing']),
       confirmedDates: new Map([['beta-plumbing', '2026-01-15']]),
     });
     const lines = lbLines(out);
-    assert.ok(lines.includes('Owner-confirmed: yes (2026-01-15)'));
+    assert.ok(lines.includes('Details confirmed by the business: yes (2026-01-15)'));
     assert.equal(countConfirmed(out), 1);
     // The mark sits inside the confirmed listing's own entry.
     const start = lines.indexOf('### Beta Plumbing');
     const end = lines.findIndex((line, i) => i > start && line.startsWith('###'));
     const entry = lines.slice(start, end === -1 ? undefined : end);
-    assert.ok(entry.includes('Owner-confirmed: yes (2026-01-15)'));
+    assert.ok(entry.includes('Details confirmed by the business: yes (2026-01-15)'));
   });
 
-  await t.test('no options means no Owner-confirmed lines', () => {
+  await t.test('no options means no Details confirmed by the business lines', () => {
     assert.equal(countConfirmed(generateLlmsTxt(quoteSet(), BASE_URL, LB_CATEGORIES)), 0);
   });
 
@@ -185,7 +185,7 @@ test('llms.txt quotes, owner-confirmed and header city', async t => {
       confirmed: new Set(['alpha-plumbing']),
       confirmedDates: { 'alpha-plumbing': '2025-12-01' },
     });
-    assert.ok(lbLines(withObj).includes('Owner-confirmed: yes (2025-12-01)'));
+    assert.ok(lbLines(withObj).includes('Details confirmed by the business: yes (2025-12-01)'));
   });
 
   await t.test('multi-city set names no city in the header', () => {

@@ -325,7 +325,7 @@ test('the quote thank-you banner has a tap-to-call phone', async () => {
 test('the Séance page shows the confirmed date like "Nov 10, 2026", never an ISO date', () => {
   const html = seanceReportPage({ id: 'x', name: 'X' }, [], '2026-11-10');
   const main = mainOf(html);
-  assert.ok(main.includes('Owner-confirmed Nov 10, 2026.'));
+  assert.ok(main.includes('Details confirmed by the business Nov 10, 2026.'));
   assert.ok(!/\d{4}-\d{2}-\d{2}/.test(main.replace(/datetime="[^"]*"/g, '')), 'no ISO date visible');
 });
 

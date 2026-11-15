@@ -11,7 +11,7 @@ Both parts are built. Part 2 stays off until the site has a Twilio account (text
 
 ### Fit with the existing specs
 
-The existing "Owner-confirmed" stamp (a tamper-check hash from `super-pages`) is unchanged and is a different thing: it says the listing has not changed since the owner confirmed it, and it says plainly that it is not proof of identity. "Verified" is the proof of identity. The two never share wording. Founder numbers and verification results are stored beside the listing, never inside it, so the listing JSON, the JSON-LD and the tamper-check hash do not change.
+The existing tamper-check stamp, now worded "Details confirmed by the business" (it used to read "Owner-confirmed", which sounded like an identity check), (a tamper-check hash from `super-pages`) is unchanged and is a different thing: it says the listing has not changed since the owner confirmed it, and it says plainly that it is not proof of identity. "Verified" is the proof of identity. The two never share wording. Founder numbers and verification results are stored beside the listing, never inside it, so the listing JSON, the JSON-LD and the tamper-check hash do not change.
 
 ### Wording rules
 

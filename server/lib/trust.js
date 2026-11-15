@@ -3,7 +3,7 @@
  *
  * A listing is Verified when its owner has (1) paid the fee, (2) answered a code
  * sent to the phone number on the listing, and (3) passed a photo ID and selfie
- * check. This is separate from the "Owner-confirmed" tamper-check stamp.
+ * check. This is separate from the "Details confirmed by the business" tamper-check stamp.
  *
  * Founding Members pay once and stay verified for life. Everyone else pays per
  * year. Only results are stored: never an ID image, an ID number or a selfie.

@@ -209,7 +209,7 @@ ${hoursRows}
     </fieldset>
     <div class="confirm">
       <h2>Send for review</h2>
-      <p>Confirming saves your changes and sends this listing to us for review. We review every listing before it goes live. Once approved it is marked Owner-confirmed.</p>
+      <p>Confirming saves your changes and sends this listing to us for review. We review every listing before it goes live. Once approved it shows a "Details confirmed by the business" stamp.</p>
       <button type="submit" formaction="${base}">Save changes</button>
       <button type="submit" formaction="${base}/confirm">Confirm and send for review</button>
     </div>

@@ -145,7 +145,7 @@ test('unconfirmed listing shows the small note and the confirm button', async ()
   assert.ok(aside, 'unconfirmed aside is present');
   assert.match(aside, /<p class="unconfirmed-note">Not yet confirmed by the owner\.<\/p>/);
   assert.match(aside, /<a class="button confirm-cta" href="\/rise">Is this your business\? Confirm it free →<\/a>/);
-  assert.doesNotMatch(html, /Owner-confirmed/);
+  assert.doesNotMatch(html, /Details confirmed by the business/);
 });
 
 test('unconfirmed listing has none of the old big-box markup', async () => {
@@ -158,10 +158,10 @@ test('unconfirmed listing has none of the old big-box markup', async () => {
 
 // ---- confirmed listing ---------------------------------------------------------------
 
-test('confirmed listing shows Owner-confirmed and neither the note nor the button', async () => {
+test('confirmed listing shows Details confirmed by the business and neither the note nor the button', async () => {
   const { res, html } = await get(`/listings/${CONFIRMED_ID}`);
   assert.equal(res.status, 200);
-  assert.match(html, /Owner-confirmed/);
+  assert.match(html, /Details confirmed by the business/);
   assert.doesNotMatch(html, /unconfirmed-note/);
   assert.doesNotMatch(html, /Not yet confirmed by the owner/);
   assert.doesNotMatch(html, /Is this your business\?/);

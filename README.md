@@ -106,7 +106,7 @@ Routes:
 - `GET /` directory home page (optional `?category=` and `?city=` filters)
 - `GET /listings/:id` one listing page, with JSON-LD
 - `GET /api/listings/:id` one listing as JSON
-- `GET /llms.txt` plain-text feed of all listings. It explains how to request a quote (MCP tool or `POST /api/quotes`) and marks owner-confirmed listings with the confirmed date.
+- `GET /llms.txt` plain-text feed of all listings. It explains how to request a quote (MCP tool or `POST /api/quotes`) and marks listings whose details were confirmed by the business with the confirmed date.
 - `GET /sitemap.xml` XML sitemap
 - `GET /healthz` liveness check. Returns `{ "ok": true }`.
 
@@ -114,7 +114,7 @@ The owner tools routes are listed in the next section.
 
 ## Owner tools
 
-Four features help a business owner get listed and help AI assistants use the listing: List your business (`/rise`), Agent-ready (MCP and WebMCP), the Owner-confirmed stamp, and the Séance.
+Four features help a business owner get listed and help AI assistants use the listing: List your business (`/rise`), Agent-ready (MCP and WebMCP), the "Details confirmed by the business" stamp, and the Séance.
 
 ### List your business (`/rise`)
 
@@ -147,7 +147,7 @@ Owner confirmation sends a listing to a pending queue. It is public only after a
 `POST /mcp` is a Model Context Protocol endpoint over plain JSON-RPC 2.0. It takes one message per request (no batches). `GET` and `DELETE` return 405. It has three tools:
 
 - `search_listings` finds listings by `category`, `city`, or `query` (up to 25 results).
-- `get_listing` returns one listing by `id`, plus its Owner-confirmed date and hash if it has one.
+- `get_listing` returns one listing by `id`, plus its details-confirmed date and hash if it has one.
 - `request_quote` sends a quote request to a business. Arguments: `id`, `name`, `contact` (email or phone), and `details`.
 
 List the tools:
@@ -186,15 +186,15 @@ Quote requests are also available without MCP: `POST /api/quotes` (JSON) and a p
 
 Each listing page loads `/js/webmcp.js`. In a browser that supports WebMCP, it registers `get_listing` and `request_quote` for that page. `request_quote` always asks the visitor to confirm before anything is sent. In browsers without WebMCP the script does nothing, and the page and its quote form work the same.
 
-### The Owner-confirmed stamp (`/api/verify/:id`)
+### The "Details confirmed by the business" stamp (`/api/verify/:id`)
 
-A listing confirmed by its owner (through `/rise`) shows an "Owner-confirmed" stamp with a date and a SHA-256 hash of the listing. The JSON-LD on the page carries the same hash as `identifier` and the date as `dateModified`.
+A listing confirmed by its owner (through `/rise`) shows a "Details confirmed by the business" stamp with a date and a SHA-256 hash of the listing. The JSON-LD on the page carries the same hash as `identifier` and the date as `dateModified`.
 
 - `GET /api/verify/:id` returns `{ id, verified, verifiedDate, hash, match }`.
 - `GET /api/verify/:id?hash=...` also compares your hash with the current one. `match` is `true` or `false`, or `null` when you send no hash. The comparison ignores letter case and surrounding spaces.
 - If the listing changes after confirmation, the hash changes and an old hash no longer matches.
 
-Important: the stamp is a tamper check. It means the listing is unchanged since the owner confirmed it. It does not prove ownership or identity. Nothing in this app checks who confirmed a draft. Real ownership checks, for example a code sent by phone or email to the listed number, are future work.
+Important: the stamp is a tamper check. It means the listing is unchanged since the owner confirmed it. It does not prove ownership or identity. Nothing in this app checks who confirmed a draft. The separate paid "Verified" stamp is the identity check: a code sent to the listed phone plus a photo ID check.
 
 ### The Séance (`/seance/:id`)
 
@@ -334,7 +334,7 @@ The owner tools are the one place the web layer writes files. It writes only the
 - `drafts.json` owner drafts from `/rise`
 - `pending.json` drafts waiting for review
 - `published.json` owner listings an admin approved
-- `verified.json` the Owner-confirmed date for each confirmed listing
+- `verified.json` the details-confirmed date for each confirmed listing
 - `quotes.json` quote requests
 - `seance.json` Séance run history
 - `grades.json` Grader reports (deleted after 90 days)

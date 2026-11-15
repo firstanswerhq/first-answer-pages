@@ -280,7 +280,7 @@ export function quoteForm(listing, opts = {}) {
 }
 
 /**
- * Renders the owner-confirmed stamp, or the unconfirmed notice.
+ * Renders the "Details confirmed by the business" stamp, or the unconfirmed notice.
  * The hash is a tamper check only; it makes no claim about identity or ownership.
  *
  * @param {{ verifiedDate: string, hash: string }|null|undefined} verification
@@ -295,7 +295,7 @@ function stamp(verification, id) {
   const hash = escapeHtml(verification.hash);
   const href = `/api/verify/${encodeURIComponent(id)}?hash=${encodeURIComponent(verification.hash)}`;
   return `<aside class="stamp">
-      <p class="stamp-title">Owner-confirmed <span class="stamp-date">${date}</span></p>
+      <p class="stamp-title">Details confirmed by the business <span class="stamp-date">${date}</span></p>
       <details class="stamp-details"><summary>Details for AI tools</summary>
       <p class="stamp-note">Tamper check: unchanged since the owner confirmed it. This is not proof of ownership.</p>
       <p class="stamp-hash"><code data-hash="${hash}">${hash}</code></p>

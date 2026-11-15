@@ -177,7 +177,7 @@ test('confirmed listing page shows the stamp and JSON-LD identifier and dateModi
 
   const stamp = stampBlock(html);
   assert.ok(stamp, 'stamp present');
-  assert.ok(stamp.includes('Owner-confirmed <span class="stamp-date">Jan 15, 2025</span>'));
+  assert.ok(stamp.includes('Details confirmed by the business <span class="stamp-date">Jan 15, 2025</span>'));
   assert.ok(!/verified/i.test(stamp), 'no "Verified" wording in the stamp markup');
 
   const hash = stampHash(html);
@@ -236,7 +236,7 @@ test('unconfirmed listing page says so and has no identifier or dateModified', a
   const stamp = stampBlock(html);
   assert.ok(stamp, 'unconfirmed notice present');
   assert.ok(stamp.includes('Not yet confirmed by the owner'));
-  assert.ok(!stamp.includes('Owner-confirmed'));
+  assert.ok(!stamp.includes('Details confirmed by the business'));
   assert.ok(!/verified/i.test(stamp));
   assert.equal(stampHash(html), undefined);
 
