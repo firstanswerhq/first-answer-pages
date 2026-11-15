@@ -19,7 +19,7 @@ import { createRateLimiter } from './lib/rate-limiter.js';
 import { createVisionProvider } from './lib/vision.js';
 import { createAiBudget } from './lib/ai-budget.js';
 import { createNotifier } from './lib/notifier.js';
-import { createAssistantProvider } from './lib/assistant.js';
+import { createAssistantProvider, createExtraAssistants } from './lib/assistant.js';
 import { createIndexNow, indexNowOffReason } from './lib/indexnow.js';
 import { createSafeFetcher } from './lib/safe-fetch.js';
 import { createGrader } from './lib/grader.js';
@@ -123,6 +123,7 @@ export function createApp(deps = {}) {
   ctx.grader = createGrader({
     store,
     assistantProvider: ctx.assistantProvider,
+    extraAssistants: deps.extraAssistants ?? createExtraAssistants(config),
     aiBudget: ctx.aiBudget,
     safeFetcher: ctx.safeFetcher,
     draftStore: createDraftStore({ store, clock, newId: ctx.newId }),

@@ -85,7 +85,7 @@ function fixtureFetcher() {
 
 // ---- environment ---------------------------------------------------------------------
 
-async function startEnv({ assistantProvider, config = {} } = {}) {
+async function startEnv({ assistantProvider, extraAssistants, config = {} } = {}) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'fap-grade-lead-'));
   for (const name of ['listings.json', 'categories.json']) {
     await fs.copyFile(path.join(REPO_DATA, name), path.join(dir, name));
@@ -96,6 +96,7 @@ async function startEnv({ assistantProvider, config = {} } = {}) {
     dataDir: dir,
     clock,
     assistantProvider,
+    extraAssistants,
     safeFetcher: fixtureFetcher(),
     newGradeId: () => `grade${String(++n).padStart(17, '0')}`,
     config: {
@@ -467,4 +468,69 @@ test('the console lead notice has the business, score and link, and never the vi
   for (const secret of ['pat@example.com', '(615) 555-0100', 'Pat Example']) {
     assert.equal(lines[0].includes(secret), false);
   }
+});
+
+// ---- ChatGPT as a second opinion -----------------------------------------------------
+
+function stubChatGpt(answer, { fail = false } = {}) {
+  const stub = {
+    name: 'chatgpt',
+    calls: 0,
+    async ask() {
+      stub.calls += 1;
+      if (fail) throw new Error('boom sk-secret-should-never-be-logged');
+      return { answer, provider: 'chatgpt', model: 'stub-gpt', webSearch: true };
+    },
+  };
+  return stub;
+}
+
+test('ChatGPT is asked the same questions as Claude, and both show in the report', async () => {
+  const assistant = stubAssistant('1. Bluebird Books\n2. Ledger Lane\n3. Tally Ho Tax');
+  const chatgpt = stubChatGpt('1. Ace Accounting\n2. Ledger Lane');
+  const env = await startEnv({ assistantProvider: assistant, extraAssistants: [chatgpt] });
+  const id = await startGrade(env, NO_SITE);
+  let grade = (await readJson(env, 'grades.json', [])).find(x => x.id === id);
+  assert.deepEqual(grade.ai.map(a => a.provider), ['anthropic', 'chatgpt']);
+  assert.equal(grade.ai[0].prompt, grade.ai[1].prompt);
+  assert.equal(grade.ai[0].named, false);
+  assert.equal(grade.ai[1].named, true);
+
+  const page = await (await get(env, `/grade/${id}`)).text();
+  assert.match(page, /We asked Claude once just now\. It named these 3 businesses, not yours\./);
+  assert.match(page, /We asked ChatGPT once just now\. It named your business 1st of 2\./);
+
+  // After the report is opened, each extra question also goes to both.
+  const ok = await post(env, `/grade/${id}/unlock`, LEAD);
+  const cookie = cookieOf(ok);
+  await get(env, `/grade/${id}`, { cookie });
+  grade = await until(async () => {
+    const g = (await readJson(env, 'grades.json', [])).find(x => x.id === id);
+    return g.ai.length === 6 ? g : null;
+  }, 'both assistants on all three questions');
+  assert.equal(assistant.calls, 3);
+  assert.equal(chatgpt.calls, 3);
+  assert.equal(grade.ai.filter(a => a.provider === 'chatgpt').length, 3);
+  const after = await (await get(env, `/grade/${id}`, { cookie })).text();
+  assert.ok(after.includes('Named in 3 of 6 answers.'));
+});
+
+test('a ChatGPT failure never blocks the check: Claude\'s answer still counts', async () => {
+  const assistant = stubAssistant('1. Bluebird Books\n2. Ledger Lane');
+  const chatgpt = stubChatGpt('', { fail: true });
+  const env = await startEnv({ assistantProvider: assistant, extraAssistants: [chatgpt] });
+  const id = await startGrade(env, NO_SITE);
+  const grade = (await readJson(env, 'grades.json', [])).find(x => x.id === id);
+  assert.deepEqual(grade.ai.map(a => a.provider), ['anthropic']);
+  const page = await (await get(env, `/grade/${id}`)).text();
+  assert.match(page, /We asked Claude once just now/);
+  assert.doesNotMatch(page, /ChatGPT/);
+});
+
+test('without a ChatGPT key nothing changes', async () => {
+  const assistant = stubAssistant('1. Bluebird Books');
+  const env = await startEnv({ assistantProvider: assistant });
+  const id = await startGrade(env, NO_SITE);
+  const grade = (await readJson(env, 'grades.json', [])).find(x => x.id === id);
+  assert.equal(grade.ai.length, 1);
 });

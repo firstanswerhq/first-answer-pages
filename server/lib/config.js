@@ -298,6 +298,9 @@ export function configFromEnv(env = process.env, opts = {}) {
     graderSecret: nonEmpty(env.GRADER_SECRET) ?? (processGraderSecret ??= randomBytes(32).toString('hex')),
     graderSecretGenerated: !nonEmpty(env.GRADER_SECRET),
 
+    // ChatGPT as a second opinion in the AI Visibility Check. Off without CHATGPT_API_KEY.
+    chatgpt: { apiKey: nonEmpty(env.CHATGPT_API_KEY), model: nonEmpty(env.CHATGPT_MODEL) },
+
     visionProviderName: vision,
     assistantProviderName: assistant,
     notifierName: notifier,

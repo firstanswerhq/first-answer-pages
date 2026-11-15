@@ -311,6 +311,87 @@ function createAnthropicAssistantProvider({ apiKey, model, timeoutMs }) {
   };
 }
 
+const CHATGPT_URL = 'https://api.openai.com/v1/responses';
+export const DEFAULT_CHATGPT_MODEL = 'gpt-5-mini';
+
+/** Answer text from a Responses API reply: every output_text part of every message item, in order. */
+function joinOutputText(data) {
+  if (!Array.isArray(data?.output)) return '';
+  return data.output
+    .filter(item => item?.type === 'message' && Array.isArray(item.content))
+    .flatMap(item => item.content)
+    .filter(part => part?.type === 'output_text' && typeof part.text === 'string')
+    .map(part => part.text)
+    .join('');
+}
+
+/** url_citation annotations from a Responses API reply, in the shape collectSources() reads. */
+function chatGptCitations(data) {
+  const citations = [];
+  for (const item of Array.isArray(data?.output) ? data.output : []) {
+    if (item?.type !== 'message' || !Array.isArray(item.content)) continue;
+    for (const part of item.content) {
+      for (const a of Array.isArray(part?.annotations) ? part.annotations : []) {
+        if (a?.type === 'url_citation') citations.push({ url: a.url, title: a.title });
+      }
+    }
+  }
+  return collectSources({ content: [{ type: 'text', citations }] });
+}
+
+/**
+ * ChatGPT with live web search (OpenAI Responses API). A second opinion beside
+ * the main assistant: the same question, asked of the AI most people use.
+ */
+export function createChatGptAssistantProvider({ apiKey, model = DEFAULT_CHATGPT_MODEL, timeoutMs = DEFAULT_PROVIDER_TIMEOUT_MS }) {
+  return {
+    name: 'chatgpt',
+    async ask({ prompt, signal } = {}) {
+      const data = await callProvider(
+        'chatgpt',
+        CHATGPT_URL,
+        { authorization: `Bearer ${apiKey}` },
+        {
+          model,
+          input: String(prompt ?? ''),
+          tools: [{ type: 'web_search', search_context_size: 'low' }],
+          max_tool_calls: 3,
+          max_output_tokens: 4096,
+          reasoning: { effort: 'low' },
+        },
+        timeoutMs,
+        signal,
+      );
+      const types = Array.isArray(data?.output) ? data.output.map(i => String(i?.type ?? '').replace(/[^a-z_]/gi, '')).join(',') : 'none';
+      process.stderr.write(`[assistant] provider=chatgpt status=${String(data?.status ?? 'unknown').replace(/[^a-z_]/gi, '')} items=${types || 'none'}\n`);
+      // Cut off before any answer was written (searching and thinking used the allowance).
+      if (data?.status !== 'completed' && joinOutputText(data).trim() === '') throw new AssistantError('unparseable');
+      return {
+        answer: requireText(joinOutputText(data)),
+        provider: 'chatgpt',
+        model,
+        webSearch: Array.isArray(data?.output) && data.output.some(i => i?.type === 'web_search_call'),
+        sources: chatGptCitations(data),
+      };
+    },
+  };
+}
+
+/**
+ * Extra assistants asked beside the main one in the AI Visibility Check.
+ * Empty unless their keys are set; never used in a test run.
+ * @returns {{ name: string, ask: Function }[]}
+ */
+export function createExtraAssistants(config) {
+  const extras = [];
+  const c = config?.chatgpt;
+  if (c?.apiKey && config?.testRun !== true) {
+    const timeoutMs = config?.seanceTimeoutMs ?? config?.providerTimeoutMs ?? DEFAULT_PROVIDER_TIMEOUT_MS;
+    extras.push(createChatGptAssistantProvider({ apiKey: c.apiKey, model: c.model || DEFAULT_CHATGPT_MODEL, timeoutMs }));
+  }
+  return extras;
+}
+
 /** True when there is no budget callback, or it grants one more call. Never throws. */
 function extraAllowed(consumeExtra) {
   if (typeof consumeExtra !== 'function') return true;

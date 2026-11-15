@@ -178,7 +178,10 @@ const withTimeout = (promise, ms, message) => new Promise((resolve, reject) => {
  */
 export function createGrader({
   store, assistantProvider, aiBudget, safeFetcher, draftStore, notifier, clock, newId, config,
+  extraAssistants = [],
 }) {
+  // Second opinions (ChatGPT and so on): asked the same questions as the main assistant.
+  const extras = (Array.isArray(extraAssistants) ? extraAssistants : []).filter(p => p && typeof p.ask === 'function');
   const grades = () => store.collection('grades');
   const nowIso = () => new Date(clock.now()).toISOString();
   const nowMs = () => Number(new Date(clock.now()));
@@ -298,8 +301,8 @@ export function createGrader({
    * Ask the provider one question. Returns { entry } or { reason }.
    * The mock never consumes budget; in production the mock is not allowed to answer.
    */
-  async function askAi(input, prompt) {
-    const isMock = assistantProvider?.name === 'mock';
+  async function askAi(input, prompt, provider = assistantProvider) {
+    const isMock = provider?.name === 'mock';
     if (isMock && config.production === true) return { reason: AI_NOT_CONNECTED };
     if (!isMock) {
       const budget = aiBudget.consume({ kind: 'grade' });
@@ -308,7 +311,7 @@ export function createGrader({
     const t0 = nowMs();
     try {
       const category = mapCategory(input.service, store.getCategories()) || '';
-      const res = await withTimeout(assistantProvider.ask({
+      const res = await withTimeout(provider.ask({
         prompt,
         signal: AbortSignal.timeout(AI_TIMEOUT_MS),
         category,
@@ -321,7 +324,7 @@ export function createGrader({
       return {
         entry: {
           prompt,
-          provider: String(res.provider ?? assistantProvider.name ?? ''),
+          provider: String(res.provider ?? provider.name ?? ''),
           model: String(res.model ?? ''),
           webSearch: res.webSearch === true,
           answer,
@@ -354,10 +357,15 @@ export function createGrader({
     let reason;
     const ai = [];
     await timed(id, name, async () => {
-      const res = await askAi(grade.input, freePrompt(grade.input));
-      if (res.entry) {
-        ai.push(res.entry);
-        const e = res.entry;
+      // The main assistant and any second opinions are asked at the same time.
+      const [res, ...others] = await Promise.all([
+        askAi(grade.input, freePrompt(grade.input)),
+        ...extras.map(p => askAi(grade.input, freePrompt(grade.input), p)),
+      ]);
+      if (res.entry) ai.push(res.entry);
+      for (const o of others) if (o.entry) ai.push(o.entry);
+      if (ai.length > 0) {
+        const e = ai[0];
         if (e.named) return { finding: 'AI named your business.' };
         const n = e.competitors.length;
         if (n === 0) return { finding: 'AI did not name your business.' };
@@ -538,12 +546,18 @@ export function createGrader({
     const have = new Set((grade.ai ?? []).map(a => a.prompt));
     for (const prompt of extraPrompts(grade.input)) {
       if (have.has(prompt)) continue;
-      const res = await askAi(grade.input, prompt);
+      const [res, ...others] = await Promise.all([
+        askAi(grade.input, prompt),
+        ...extras.map(p => askAi(grade.input, prompt, p)),
+      ]);
+      const entries = [res.entry, ...others.map(o => o.entry)].filter(Boolean);
+      if (entries.length > 0) {
+        await updateGrade(id, g => {
+          g.ai.push(...entries);
+          applyAiResults(g);
+        });
+      }
       if (!res.entry) break; // budget used up or the provider failed: keep what we have
-      await updateGrade(id, g => {
-        g.ai.push(res.entry);
-        applyAiResults(g);
-      });
     }
   }
 

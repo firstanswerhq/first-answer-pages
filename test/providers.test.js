@@ -13,6 +13,8 @@ import { configFromEnv, redactConfig, visionProviderName, assistantProviderName 
 import {
   createMockAssistantProvider,
   createAssistantProvider,
+  createChatGptAssistantProvider,
+  createExtraAssistants,
   AssistantError,
 } from '../server/lib/assistant.js';
 import { createMockVisionProvider, createVisionProvider } from '../server/lib/vision.js';
@@ -819,5 +821,76 @@ describe('anthropic web search request', () => {
       }),
       { numRuns: 100 },
     );
+  });
+});
+
+// ---- ChatGPT (OpenAI Responses API with web search) ---------------------------------
+
+const chatGptReply = (text, { status = 'completed', searched = true } = {}) => ({
+  status,
+  output: [
+    ...(searched ? [{ type: 'web_search_call', status: 'completed', action: { type: 'search', query: 'q' } }] : []),
+    ...(text === null ? [] : [{
+      type: 'message', role: 'assistant',
+      content: [{
+        type: 'output_text', text,
+        annotations: [
+          { type: 'url_citation', url: 'https://example.com/best', title: 'Best plumbers' },
+          { type: 'url_citation', url: 'javascript:alert(1)', title: 'bad' },
+          { type: 'url_citation', url: 'https://example.com/best', title: 'dup' },
+        ],
+      }],
+    }]),
+  ],
+});
+
+describe('chatgpt: second-opinion provider', () => {
+  test('asks the Responses API with web search, low effort and a search cap', async () => {
+    await withFetch(async () => jsonResponse(chatGptReply('1. Test Plumbing')), async (calls) => {
+      const provider = createChatGptAssistantProvider({ apiKey: 'sk-test-key', model: 'gpt-5-mini', timeoutMs: 1000 });
+      let res;
+      const out = await captureOutput(async () => { res = await provider.ask({ prompt: 'Who are the best plumbers in Nashville, TN?' }); });
+      assert.equal(calls[0].url, 'https://api.openai.com/v1/responses');
+      assert.equal(calls[0].init.headers.authorization, 'Bearer sk-test-key');
+      const body = JSON.parse(calls[0].init.body);
+      assert.equal(body.model, 'gpt-5-mini');
+      assert.equal(body.input, 'Who are the best plumbers in Nashville, TN?');
+      assert.deepEqual(body.tools, [{ type: 'web_search', search_context_size: 'low' }]);
+      assert.equal(body.max_tool_calls, 3);
+      assert.deepEqual(body.reasoning, { effort: 'low' });
+      assert.deepEqual(res, {
+        answer: '1. Test Plumbing', provider: 'chatgpt', model: 'gpt-5-mini', webSearch: true,
+        sources: [{ url: 'https://example.com/best', title: 'Best plumbers' }],
+      });
+      assert.doesNotMatch(out, /sk-test-key|Test Plumbing|Nashville/);
+      assert.match(out, /provider=chatgpt status=completed items=web_search_call,message/);
+    });
+  });
+
+  test('a reply cut off before any answer is an error, not an empty answer', async () => {
+    await withFetch(async () => jsonResponse(chatGptReply(null, { status: 'incomplete' })), async () => {
+      const provider = createChatGptAssistantProvider({ apiKey: 'k', timeoutMs: 1000 });
+      await captureOutput(async () => {
+        await assert.rejects(() => provider.ask({ prompt: 'q' }), err => err.code === 'unparseable');
+      });
+    });
+  });
+
+  test('a refused call is an error that carries no key or reply text', async () => {
+    await withFetch(async () => jsonResponse({ error: { message: 'Incorrect API key provided: sk-test-key' } }, 401), async () => {
+      const provider = createChatGptAssistantProvider({ apiKey: 'sk-test-key', timeoutMs: 1000 });
+      let out = '';
+      out = await captureOutput(async () => {
+        await assert.rejects(() => provider.ask({ prompt: 'q' }), err => err.code === 'provider_failed' && !/sk-test/.test(String(err.message)));
+      });
+      assert.doesNotMatch(out, /sk-test-key|Incorrect/);
+    });
+  });
+
+  test('on only when CHATGPT_API_KEY is set, and never in a test run', () => {
+    assert.deepEqual(createExtraAssistants(configFromEnv({}, { warn: () => {} })), []);
+    assert.deepEqual(createExtraAssistants({ chatgpt: { apiKey: 'k' }, testRun: true }), []);
+    const on = createExtraAssistants({ chatgpt: { apiKey: 'k' }, testRun: false });
+    assert.deepEqual(on.map(p => p.name), ['chatgpt']);
   });
 });

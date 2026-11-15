@@ -269,6 +269,8 @@ All are optional except in production, where `DATA_DIR` and `BASE_URL` are requi
 | `TWILIO_VERIFY_SERVICE_SID` | none | The id of the Twilio Verify service that sends the codes (starts with `VA`). |
 | `VERIFY_FOUNDER_FEE_CENTS` | `1900` | What a Founding Member pays, once, to be verified for life. In cents: `1900` is $19. |
 | `VERIFY_YEARLY_FEE_CENTS` | `4900` | What everyone else pays per year to be verified. In cents: `4900` is $49. |
+| `CHATGPT_API_KEY` | none | Optional. An OpenAI API key. When set, the AI Visibility Check asks ChatGPT (with live web search) the same questions it asks the main assistant, and the report shows both. Each check then uses about twice as many of the day's AI calls. |
+| `CHATGPT_MODEL` | `gpt-5-mini` | Which OpenAI model answers as ChatGPT. |
 | `GRADER_ENABLED` | `on` | Set to `off` to hide the AI Visibility Grader at `/grade` (every `/grade` address returns 404) and its link on the home page. |
 | `GRADER_LEAD_GATE` | `on` | With `on`, the full Grader report opens after the visitor sends a short form (name, email, phone). Set to `off` to show the full report to everyone, for demos and contest judges. |
 | `GRADE_AI_CALLS_PER_DAY` | `60` | The Grader's share of the daily AI cap (`MAX_AI_CALLS_PER_DAY`). Grader and photo calls together never use the quarter of the day kept for Séance runs. Must be a whole number, 0 or more; anything else logs a warning and uses 60. |

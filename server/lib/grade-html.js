@@ -133,7 +133,7 @@ const ordinal = n => {
   return `${n}${({ 1: 'st', 2: 'nd', 3: 'rd' })[n % 10] ?? 'th'}`;
 };
 
-const providerWho = name => (name === 'anthropic' ? 'Claude' : name === 'openai' ? 'OpenAI' : name === 'mock' ? 'a demo assistant' : 'an AI assistant');
+const providerWho = name => (name === 'anthropic' ? 'Claude' : name === 'chatgpt' ? 'ChatGPT' : name === 'openai' ? 'OpenAI' : name === 'mock' ? 'a demo assistant' : 'an AI assistant');
 
 const resultOf = (grade, id) => (grade.results ?? []).find(r => r.id === id);
 
@@ -179,15 +179,26 @@ function aiSection(grade, now) {
     : '';
   const all = grade.ai ?? [];
   const namedIn = all.filter(a => a.named).length;
-  const more = all.length > 1
-    ? `<p>In all we asked ${all.length} questions. AI named your business in ${namedIn} of them.</p>`
+  // Second opinions on the same question (for example ChatGPT beside Claude).
+  const seconds = all.filter(a => a !== entry && a.prompt === entry.prompt && a.provider !== entry.provider);
+  const secondHtml = seconds.map(a => {
+    const names = a.competitors.length > 0
+      ? `<ol class="grade-competitors">${a.competitors.map(c => `<li>${e(c)}</li>`).join('')}</ol>`
+      : '';
+    return `<p>${e(aiSentence(a, now))}</p>
+    ${names}
+    ${answerBlock(a)}`;
+  }).join('\n    ');
+  const more = all.length > 1 + seconds.length
+    ? `<p>In all we asked AI ${all.length} times. AI named your business in ${namedIn} of them.</p>`
     : '';
   return `<section class="grade-ai">
     <h2>What AI says</h2>
     <p>${e(aiSentence(entry, now))}</p>
     ${list}
-    ${more}
     ${answerBlock(entry)}
+    ${secondHtml}
+    ${more}
   </section>`;
 }
 
