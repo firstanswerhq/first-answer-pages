@@ -30,6 +30,9 @@ export function createLlmsRouter(ctx) {
         siteName: config.siteName,
         confirmed: new Set(confirmedDates.keys()),
         confirmedDates,
+        identityVerified: new Set(listings
+          .filter(l => typeof store.getTrustStatus === 'function' && store.getTrustStatus(l).verified)
+          .map(l => l.id)),
       }),
     );
   });

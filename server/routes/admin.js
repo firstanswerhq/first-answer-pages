@@ -40,6 +40,7 @@ const NOTES = Object.freeze({
   approved: 'Approved.',
   rejected: 'Rejected.',
   unpublished: 'Unpublished.',
+  unverified: 'Verified stamp removed.',
   notfound: 'That entry was not found.',
   notpending: 'That entry is not waiting for review.',
   invalid: 'That listing is missing required fields, so it was not approved.',
@@ -303,12 +304,23 @@ ${preview}
 
       const liveItems = published.map(l => {
         const lid = encodeURIComponent(l.id);
+        const founder = typeof ctx.store.getFounder === 'function' ? ctx.store.getFounder(l.id) : undefined;
+        const t = typeof ctx.store.getTrustStatus === 'function' ? ctx.store.getTrustStatus(l) : undefined;
+        const started = t && (t.paid || t.phoneOk || t.idOk || t.removed);
+        const yesNo = v => (v ? 'yes' : 'no');
+        const trustLine = !started ? '' : t.removed
+          ? '\n  <p class="hint">Verified stamp: turned off by admin.</p>'
+          : `\n  <p class="hint">Verified stamp: ${t.verified ? 'showing' : 'not yet'} &middot; fee paid: ${yesNo(t.paid)} &middot; phone: ${yesNo(t.phoneOk)} &middot; photo ID: ${yesNo(t.idOk)}</p>`;
+        const founderLine = founder ? `\n  <p class="hint">Founding Member No. ${founder.number}</p>` : '';
+        const unverify = started && !t.removed
+          ? `\n  <form method="POST" action="/admin/listings/${lid}/unverify"><button type="submit" class="admin-button admin-button-secondary">Remove Verified stamp</button></form>`
+          : '';
         return `<li class="pending-item">
   <h2>${escapeHtml(l.name ?? l.id)}</h2>
-  <p>${escapeHtml(categoryLabel(l.category))} &middot; ${escapeHtml(l.city ?? '')}, ${escapeHtml(l.state ?? '')} &middot; ${escapeHtml(l.phone ?? '')}</p>
+  <p>${escapeHtml(categoryLabel(l.category))} &middot; ${escapeHtml(l.city ?? '')}, ${escapeHtml(l.state ?? '')} &middot; ${escapeHtml(l.phone ?? '')}</p>${founderLine}${trustLine}
   <p><a href="/listings/${lid}">View listing</a></p>
   <form method="POST" action="/admin/listings/${lid}/seance"><button type="submit" class="admin-button">Run AI check (Séance)</button></form>
-  <form method="POST" action="/admin/listings/${lid}/unpublish"><button type="submit" class="admin-button admin-button-secondary">Unpublish</button></form>
+  <form method="POST" action="/admin/listings/${lid}/unpublish"><button type="submit" class="admin-button admin-button-secondary">Unpublish</button></form>${unverify}
 </li>`;
       }).join('\n');
 
@@ -570,6 +582,20 @@ ${preview}
         notfound: 'notfound', off: 'seanceoff', busy: 'seancebusy', limit: 'seancelimit', failed: 'seancefailed',
       }[result.reason] ?? 'seancefailed';
       return res.redirect(303, `/admin/pending?note=${note}`);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Take the Verified stamp off a listing. It stays off until an admin edits the record.
+  router.post('/admin/listings/:id/unverify', async (req, res, next) => {
+    try {
+      const live = ctx.store.findById(req.params.id);
+      if (!live || ctx.store.isSeed(live.id) || typeof ctx.store.updateTrustRecord !== 'function') {
+        return reply(req, res, { status: 404, json: { error: 'Listing not found' }, note: 'notfound' });
+      }
+      await ctx.store.updateTrustRecord(live.id, r => { r.removedAt = new Date(ctx.clock ? ctx.clock.now() : Date.now()).toISOString(); });
+      reply(req, res, { json: { ok: true }, note: 'unverified', id: live.id });
     } catch (err) {
       next(err);
     }

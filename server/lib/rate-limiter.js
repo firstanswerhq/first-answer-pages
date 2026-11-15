@@ -19,6 +19,10 @@ export const RULES = Object.freeze({
   seance: Object.freeze({ limit: 10, windowMs: 60 * 60 * 1000 }),
   'seance-listing': Object.freeze({ limit: 1, windowMs: 10 * 60 * 1000 }),
   'admin-auth': Object.freeze({ limit: 10, windowMs: 60 * 60 * 1000 }),
+  // Paid Verified stamp, counted per listing. Each code and each ID check costs money.
+  'verify-pay': Object.freeze({ limit: 10, windowMs: 60 * 60 * 1000 }),
+  'verify-send': Object.freeze({ limit: 3, windowMs: 60 * 60 * 1000 }),
+  'verify-check': Object.freeze({ limit: 10, windowMs: 60 * 60 * 1000 }),
   // AI Visibility Grader
   grade: Object.freeze({ limit: 5, windowMs: 60 * 60 * 1000 }),
   // 6 a day per visitor: each check can use 3 AI calls and the whole site shares 60 a day.

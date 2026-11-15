@@ -27,6 +27,7 @@
  *   makeSlug(name, city, takenIds: Set<string>) -> string
  */
 
+import { trustStatus } from './lib/trust.js';
 import { earnsFounderSpot, nextFounderNumber, foundersStatus } from './lib/founders.js';
 import nodeFs from 'node:fs';
 import path from 'node:path';
@@ -133,18 +134,22 @@ export function createDataStore({
     );
     const verified = expectObject(loadSync(fsImpl, file('verified.json'), {}), 'verified.json');
     const founders = expectObject(loadSync(fsImpl, file('founders.json'), {}), 'founders.json');
+    const trust = expectObject(loadSync(fsImpl, file('trust.json'), {}), 'trust.json');
     state = {
       published,
       verified: Object.freeze({ ...verified }),
       founders: Object.freeze({ ...founders }),
+      trust: Object.freeze({ ...trust }),
       listings: mergeListings(seed, published),
     };
   }
   load();
 
   /** Replace the snapshot atomically (readers never see a partial state). */
-  function swap({ published = state.published, verified = state.verified, founders = state.founders } = {}) {
-    state = { published, verified, founders, listings: mergeListings(seed, published) };
+  function swap({
+    published = state.published, verified = state.verified, founders = state.founders, trust = state.trust,
+  } = {}) {
+    state = { published, verified, founders, trust, listings: mergeListings(seed, published) };
   }
 
   // ---- founders ---------------------------------------------------------
@@ -158,6 +163,33 @@ export function createDataStore({
   }
   /** { cap, taken, left, open, deadline } for the Founding Member program. */
   const getFoundersStatus = () => foundersStatus(foundersProgram, state.founders, clock.now());
+
+  // ---- trust (paid Verified stamp) ---------------------------------------
+  /** Copy of the trust record for a listing, or undefined. */
+  function getTrustRecord(id) {
+    return Object.hasOwn(state.trust, id) ? structuredClone(state.trust[id]) : undefined;
+  }
+  /**
+   * Change one listing's trust record under a lock. `mutator(record)` edits in place.
+   * @returns {Promise<object>} the updated record
+   */
+  function updateTrustRecord(id, mutator) {
+    return withLock('trust', async () => {
+      const next = await updateJsonFile(file('trust.json'), map => {
+        const record = Object.hasOwn(map, id) && map[id] && typeof map[id] === 'object' ? map[id] : {};
+        mutator(record);
+        map[id] = record;
+      }, { ...io, fallback: {} });
+      swap({ trust: Object.freeze({ ...next }) });
+      return getTrustRecord(id);
+    });
+  }
+  /** Where a listing stands on the paid Verified stamp ({ verified, verifiedAt, paid, ... }). */
+  const getTrustStatus = listing => trustStatus(listing ? state.trust[listing.id] : undefined, listing, clock.now());
+  /** Listing ids whose record matches `test(record)`: used to find a record by a provider reference. */
+  function findTrustIds(test) {
+    return Object.keys(state.trust).filter(id => test(state.trust[id]));
+  }
 
   // ---- locks --------------------------------------------------------------
   const locks = new Map();
@@ -549,7 +581,7 @@ export function createDataStore({
 
   return {
     getListings, getCategories, findById, searchListings, getVerifiedDate, getVerifiedAt, isSeed,
-    getFounder, getFoundersStatus,
+    getFounder, getFoundersStatus, getTrustRecord, updateTrustRecord, findTrustIds, getTrustStatus,
     publishDraft, submitDraft, rejectDraft, unpublish, updatePublished, reload, withLock, collection,
     pruneExpired,
   };

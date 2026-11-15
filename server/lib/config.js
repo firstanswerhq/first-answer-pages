@@ -7,6 +7,7 @@
 // could be logged or returned.
 
 import { parseFoundersCap, parseFoundersDeadline } from './founders.js';
+import { parseFeeCents, DEFAULT_FOUNDER_FEE_CENTS, DEFAULT_YEARLY_FEE_CENTS } from './trust.js';
 import { fileURLToPath } from 'node:url';
 import { randomBytes } from 'node:crypto';
 import path from 'node:path';
@@ -276,6 +277,17 @@ export function configFromEnv(env = process.env, opts = {}) {
     // Founding Member program: first FOUNDERS_CAP approved listings signed up before FOUNDERS_DEADLINE.
     // FOUNDERS_CAP=0 turns it off.
     founders: { cap: parseFoundersCap(env.FOUNDERS_CAP), deadline: parseFoundersDeadline(env.FOUNDERS_DEADLINE) },
+
+    // Paid Verified stamp. Off unless the Stripe key and all three Twilio values are set.
+    trust: {
+      stripeSecretKey: nonEmpty(env.STRIPE_SECRET_KEY),
+      stripeWebhookSecret: nonEmpty(env.STRIPE_WEBHOOK_SECRET),
+      twilioAccountSid: nonEmpty(env.TWILIO_ACCOUNT_SID),
+      twilioAuthToken: nonEmpty(env.TWILIO_AUTH_TOKEN),
+      twilioVerifyServiceSid: nonEmpty(env.TWILIO_VERIFY_SERVICE_SID),
+      founderCents: parseFeeCents(env.VERIFY_FOUNDER_FEE_CENTS, DEFAULT_FOUNDER_FEE_CENTS),
+      yearlyCents: parseFeeCents(env.VERIFY_YEARLY_FEE_CENTS, DEFAULT_YEARLY_FEE_CENTS),
+    },
 
     // AI Visibility Grader (/grade).
     graderEnabled: parseOnOff(env.GRADER_ENABLED),

@@ -203,8 +203,11 @@ test('badge and invite wording', () => {
   assert.equal(founderBadge({ number: 0 }), '');
   assert.match(founderBadge({ number: 12, cap: 500 }), /Founding Member<\/span> <span class="founder-badge-number">No\. 12 of 500</);
   const invite = foundersInvite({ cap: 500, taken: 3, left: 497, open: true, deadline: DEADLINE });
-  assert.match(invite, /The first 500 businesses that send in their listing by January 31, 2027 \(Central time\) and are approved also get a numbered Founding Member badge for life\. Spots go in the order listings are approved\. <strong>497 spots left\.<\/strong>/);
+  assert.match(invite, /Listing is free for everyone, always\. The first 500 businesses that send in their listing by January 31, 2027 \(Central time\) and are approved become Founding Members and get a numbered badge for life\. Spots go in the order listings are approved\. <strong>497 spots left\.<\/strong>/);
   assert.match(foundersInvite({ cap: 500, left: 1, open: true, deadline: DEADLINE }), /1 spot left\./);
+  assert.doesNotMatch(invite, /\$/, 'no prices while verification is off');
+  assert.match(foundersInvite({ cap: 500, left: 9, open: true, deadline: DEADLINE }, { fees: { founderCents: 1900, yearlyCents: 4900 } }),
+    /Verified stamp for a one-time \$19, good for life\. For everyone else it is \$49 a year\./);
   assert.equal(foundersInvite({ cap: 500, left: 0, open: false, deadline: DEADLINE }), '');
 });
 

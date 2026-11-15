@@ -5,6 +5,7 @@
 import { getCategories } from '../data.js';
 import { DEFAULT_SITE_NAME } from './config.js';
 import { formatFoundersDeadline } from './founders.js';
+import { formatFee } from './trust.js';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -196,6 +197,19 @@ export function founderBadge(founder) {
 }
 
 /**
+ * Paid Verified stamp. Empty string unless the listing is verified.
+ * @param {{ verified?: boolean, verifiedAt?: string }|null|undefined} trust
+ * @param {{ detail?: boolean }} [opts] detail: add what was checked and when
+ * @returns {string}
+ */
+export function verifiedBadge(trust, opts) {
+  if (!trust || trust.verified !== true) return '';
+  if (opts?.detail !== true) return '<p class="verified-badge"><span class="verified-badge-title">Verified</span></p>';
+  const day = formatStampDate({ verifiedAt: trust.verifiedAt });
+  return `<p class="verified-badge"><span class="verified-badge-title">Verified</span> <span class="verified-badge-note">Business phone confirmed and owner's photo ID checked${day ? `, ${escapeHtml(day)}` : ''}</span></p>`;
+}
+
+/**
  * Founding Member invite for owners, shown while spots are open. Empty string otherwise.
  * @param {{ cap: number, left: number, open: boolean, deadline: string }|null|undefined} status
  * @param {{ link?: boolean }} [opts] link: add a "Claim your spot" link to /rise
@@ -206,9 +220,13 @@ export function foundersInvite(status, opts) {
   const day = formatFoundersDeadline(status.deadline);
   const left = status.left === 1 ? '1 spot left' : `${status.left} spots left`;
   const link = opts?.link === true ? '\n  <p class="founders-invite-link"><a href="/rise">Claim your spot &rarr;</a></p>' : '';
+  const fees = opts?.fees;
+  const deal = fees
+    ? `\n  <p>Founding Members can also get the Verified stamp for a one-time ${formatFee(fees.founderCents)}, good for life. For everyone else it is ${formatFee(fees.yearlyCents)} a year.</p>`
+    : '';
   return `<aside class="founders-invite">
   <p class="founders-invite-title">Founding Members</p>
-  <p>Listing is free for everyone. The first ${status.cap} businesses that send in their listing by ${escapeHtml(day)} (Central time) and are approved also get a numbered Founding Member badge for life. Spots go in the order listings are approved. <strong>${left}.</strong></p>${link}
+  <p>Listing is free for everyone, always. The first ${status.cap} businesses that send in their listing by ${escapeHtml(day)} (Central time) and are approved become Founding Members and get a numbered badge for life. Spots go in the order listings are approved. <strong>${left}.</strong></p>${deal}${link}
 </aside>`;
 }
 
@@ -221,7 +239,7 @@ export function foundersInvite(status, opts) {
  * @returns {string}
  */
 export function listingCard(listing, categories, opts) {
-  const badge = founderBadge(opts?.founder);
+  const badge = [verifiedBadge(opts?.trust), founderBadge(opts?.founder)].filter(Boolean).join('\n  ');
   return `<article class="listing-card">
   <h3><strong><a href="/listings/${encodeURIComponent(listing.id)}">${escapeHtml(listing.name)}</a></strong> <span class="phone">${telLink(listing.phone)}</span></h3>
   <p>${escapeHtml(listing.city)}, ${escapeHtml(listing.state)} &middot; ${escapeHtml(categoryLabel(listing.category, categories))}</p>${badge ? `\n  ${badge}` : ''}
@@ -356,7 +374,7 @@ ${days.map(([day, text]) => `      <tr><th scope="row">${day}</th><td>${escapeHt
     ? `\n    <p class="seance-link"><a href="/seance/${encodeURIComponent(listing.id)}">See what AI says about this business</a></p>`
     : '';
 
-  const badge = founderBadge(opts?.founder);
+  const badge = [verifiedBadge(opts?.trust, { detail: true }), founderBadge(opts?.founder)].filter(Boolean).join('\n    ');
   const founderLine = badge ? `\n    ${badge}` : '';
 
   return `${ld}  <article class="listing-detail">

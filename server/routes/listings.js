@@ -114,6 +114,7 @@ export function createListingsRouter(ctx) {
     const detail = listingDetail(listing, undefined, {
       categories: store.getCategories(), verification, hasSeanceRuns: hasSeance,
       founder: typeof store.getFounder === 'function' ? store.getFounder(listing.id) : undefined,
+      trust: typeof store.getTrustStatus === 'function' ? store.getTrustStatus(listing) : undefined,
     });
     const form = quoteForm(listing, { error, values });
     // After a failed submit the error and form come first so a phone shows them without scrolling.

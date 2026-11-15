@@ -2389,3 +2389,51 @@ a.tel,
 }
 
 .founders-invite .founders-invite-link { margin-top: 0.5rem; font-weight: 600; }
+
+/* ---- Verified stamp and the owner's verification page ---------------- */
+.verified-badge {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0 0.5em;
+  margin: 0.35rem 0.4rem 0 0;
+  padding: 0.15rem 0.6rem;
+  border: 2px solid var(--color-primary);
+  border-radius: 3px;
+  background: var(--color-primary);
+  color: #FFFEF9;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.verified-badge-title { font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.verified-badge-title::before { content: "\2713\00a0"; }
+.verified-badge-note { font-weight: 500; }
+.listing-detail .verified-badge { font-size: 0.95rem; margin: 0 0.4rem 0.75rem 0; }
+.verify-steps { padding-left: 1.4rem; }
+.verify-steps > li { margin: 0 0 1.5rem; padding-bottom: 1.25rem; border-bottom: 1px solid var(--color-gold); }
+.verify-steps h2 { margin: 0 0 0.4rem; font-size: 1.25rem; }
+.verify-done {
+  display: inline-block;
+  padding: 0 0.5rem;
+  border: 2px solid var(--color-primary);
+  border-radius: 3px;
+  color: var(--color-primary);
+  font-weight: 700;
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.verify-inline { display: flex; flex-wrap: wrap; gap: 0.6rem; margin: 0.6rem 0; }
+.verify-code { display: flex; flex-wrap: wrap; align-items: end; gap: 0.6rem; margin-top: 0.8rem; }
+.verify-code label { flex-basis: 100%; font-weight: 600; }
+.verify-code input { max-width: 10rem; font-size: 1.2rem; letter-spacing: 0.15em; }
+.verify-inline .button-secondary {
+  padding: 0.6rem 1.1rem;
+  border: 2px solid var(--color-primary);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-primary);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}

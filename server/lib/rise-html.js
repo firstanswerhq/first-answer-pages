@@ -62,8 +62,8 @@ export const DEMO_BANNER_TEXT = 'Demo: no photo reader is connected, so this is 
  * Page for the upload form: GET /rise.
  * @param {{ photoEnabled?: boolean, discarded?: boolean }} [opts]
  */
-export function uploadPage({ photoEnabled = true, discarded = false, founders } = {}) {
-  const inviteHtml = foundersInvite(founders);
+export function uploadPage({ photoEnabled = true, discarded = false, founders, fees } = {}) {
+  const inviteHtml = foundersInvite(founders, { fees });
   const invite = inviteHtml ? `\n  ${inviteHtml}` : '';
   const discardedNote = discarded ? '\n  <p class="notice" role="status">Draft discarded.</p>' : '';
   const typeItIn = `<form class="rise-form type-it-in" method="POST" action="/rise/manual">
@@ -103,12 +103,14 @@ export function uploadPage({ photoEnabled = true, discarded = false, founders } 
  * @param {string} title
  * @param {string} message plain text, escaped here
  * @param {{ href: string, text: string }} [link]
+ * @param {{ href: string, text: string }} [second] optional button under the link
  */
-export function messagePage(title, message, link = { href: '/rise', text: 'Back to the start' }) {
+export function messagePage(title, message, link = { href: '/rise', text: 'Back to the start' }, second) {
+  const more = second ? `\n  <p><a class="button" href="${escapeHtml(second.href)}">${escapeHtml(second.text)}</a></p>` : '';
   const body = `<section class="message">
   <h1>${escapeHtml(title)}</h1>
   <p>${escapeHtml(message)}</p>
-  <p><a href="${escapeHtml(link.href)}">${escapeHtml(link.text)}</a></p>
+  <p><a href="${escapeHtml(link.href)}">${escapeHtml(link.text)}</a></p>${more}
 </section>`;
   return layout({ title, body });
 }

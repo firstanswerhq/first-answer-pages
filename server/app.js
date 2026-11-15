@@ -11,6 +11,8 @@ import { randomUUID, randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
+import { createVerifyRouter } from './routes/verify.js';
+import { createTrustProviders } from './lib/trust-providers.js';
 import { createDataStore, getDefaultStore } from './data.js';
 import { configFromEnv, DEFAULT_SITE_NAME } from './lib/config.js';
 import { createRateLimiter } from './lib/rate-limiter.js';
@@ -113,6 +115,8 @@ export function createApp(deps = {}) {
     warnedGraderSecret = true;
     process.stderr.write('[grader] GRADER_SECRET is not set; using a random key. Opened reports lock again after a restart.\n');
   }
+  // Paid Verified stamp: on only when every provider key is set (tests pass their own).
+  ctx.trust = deps.trust ?? createTrustProviders(config, { clock });
   ctx.safeFetcher = deps.safeFetcher ?? createSafeFetcher({ userAgent: ctx.graderUserAgent });
   // Grade ids are their own: 22 characters of URL-safe base64 from 16 random bytes.
   ctx.newGradeId = deps.newGradeId ?? (() => randomBytes(16).toString('base64url'));
@@ -229,6 +233,7 @@ export function createApp(deps = {}) {
   app.use(createLlmsRouter(ctx));
   app.use(createSitemapRouter(ctx));
   app.use(createRiseRouter(ctx));
+  app.use(createVerifyRouter(ctx));
   app.use(createMcpRouter(ctx));
   app.use(createSeanceRouter(ctx));
   app.use(createAdminRouter(ctx));

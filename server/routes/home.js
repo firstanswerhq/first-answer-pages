@@ -47,6 +47,7 @@ export function createHomeRouter(ctx) {
     const city = normalizeCity(param(req.query.city));
 
     const founderOf = id => (typeof store.getFounder === 'function' ? store.getFounder(id) : undefined);
+    const trustOf = l => (typeof store.getTrustStatus === 'function' ? store.getTrustStatus(l) : undefined);
     const filtered = store.searchListings({ category, city }).map(publicListing);
     const grouped = groupListings(filtered, categories);
 
@@ -86,7 +87,7 @@ export function createHomeRouter(ctx) {
       results = `<div class="directory-single">
 <h2 class="category-title">${escapeHtml(pageHeading)}</h2>
 <div class="category-grid">
-${filtered.map(l => listingCard(l, categories, { founder: founderOf(l.id) })).join('\n')}
+${filtered.map(l => listingCard(l, categories, { founder: founderOf(l.id), trust: trustOf(l) })).join('\n')}
 </div>
 </div>`;
     } else {
@@ -96,7 +97,7 @@ ${filtered.map(l => listingCard(l, categories, { founder: founderOf(l.id) })).jo
         const label = categories.find(c => c.slug === slug)?.label ?? slug;
         sections.push(`<section class="category">
 <${headTag} class="category-head">${escapeHtml(label)}</${headTag}>
-${group.map(l => listingCard(l, categories, { founder: founderOf(l.id) })).join('\n')}
+${group.map(l => listingCard(l, categories, { founder: founderOf(l.id), trust: trustOf(l) })).join('\n')}
 </section>`);
       }
       const title = pageHeading ? `<h2 class="category-title">${escapeHtml(pageHeading)}</h2>\n` : '';
@@ -108,7 +109,7 @@ ${group.map(l => listingCard(l, categories, { founder: founderOf(l.id) })).join(
       : '\n<p class="grade-link"><a href="/grade">Can AI find your business? Get a free check.</a></p>';
     // Owners see the founders invite on the unfiltered home page only.
     const inviteHtml = !category && !city && typeof store.getFoundersStatus === 'function'
-      ? foundersInvite(store.getFoundersStatus(), { link: true })
+      ? foundersInvite(store.getFoundersStatus(), { link: true, fees: ctx.trust ? ctx.config?.trust : undefined })
       : '';
     const invite = inviteHtml ? `\n${inviteHtml}` : '';
     const body = `<header class="home-head">
