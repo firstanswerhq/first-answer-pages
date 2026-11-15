@@ -845,21 +845,23 @@ const chatGptReply = (text, { status = 'completed', searched = true } = {}) => (
 });
 
 describe('chatgpt: second-opinion provider', () => {
-  test('asks the Responses API with web search, low effort and a search cap', async () => {
+  test('asks the Responses API with web search, a search cap, and no storing', async () => {
     await withFetch(async () => jsonResponse(chatGptReply('1. Test Plumbing')), async (calls) => {
-      const provider = createChatGptAssistantProvider({ apiKey: 'sk-test-key', model: 'gpt-5-mini', timeoutMs: 1000 });
+      const provider = createChatGptAssistantProvider({ apiKey: 'sk-test-key', timeoutMs: 1000 });
       let res;
       const out = await captureOutput(async () => { res = await provider.ask({ prompt: 'Who are the best plumbers in Nashville, TN?' }); });
       assert.equal(calls[0].url, 'https://api.openai.com/v1/responses');
       assert.equal(calls[0].init.headers.authorization, 'Bearer sk-test-key');
       const body = JSON.parse(calls[0].init.body);
-      assert.equal(body.model, 'gpt-5-mini');
+      assert.equal(body.model, 'gpt-6.1-terra');
       assert.equal(body.input, 'Who are the best plumbers in Nashville, TN?');
       assert.deepEqual(body.tools, [{ type: 'web_search', search_context_size: 'low' }]);
       assert.equal(body.max_tool_calls, 3);
-      assert.deepEqual(body.reasoning, { effort: 'low' });
+      assert.equal(body.max_output_tokens, 8192);
+      assert.equal(body.store, false);
+      assert.equal('reasoning' in body, false);
       assert.deepEqual(res, {
-        answer: '1. Test Plumbing', provider: 'chatgpt', model: 'gpt-5-mini', webSearch: true,
+        answer: '1. Test Plumbing', provider: 'chatgpt', model: 'gpt-6.1-terra', webSearch: true,
         sources: [{ url: 'https://example.com/best', title: 'Best plumbers' }],
       });
       assert.doesNotMatch(out, /sk-test-key|Test Plumbing|Nashville/);
@@ -874,6 +876,25 @@ describe('chatgpt: second-opinion provider', () => {
         await assert.rejects(() => provider.ask({ prompt: 'q' }), err => err.code === 'unparseable');
       });
     });
+  });
+
+  test('a reply that stopped part-way is an error even when it holds some text', async () => {
+    await withFetch(async () => jsonResponse(chatGptReply('1. Test Plumbing\n2. Half a na', { status: 'incomplete' })), async () => {
+      const provider = createChatGptAssistantProvider({ apiKey: 'k', timeoutMs: 1000 });
+      await captureOutput(async () => {
+        await assert.rejects(() => provider.ask({ prompt: 'q' }), err => err.code === 'unparseable');
+      });
+    });
+  });
+
+  test('redactConfig hides the ChatGPT, Stripe and Twilio secrets', () => {
+    const c = configFromEnv({
+      CHATGPT_API_KEY: 'sk-chatgpt-secret', STRIPE_SECRET_KEY: 'sk_test_secret', STRIPE_WEBHOOK_SECRET: 'whsec_secret',
+      TWILIO_AUTH_TOKEN: 'twilio-secret', TWILIO_ACCOUNT_SID: 'AC1', TWILIO_VERIFY_SERVICE_SID: 'VA1',
+    }, { warn: () => {} });
+    const text = JSON.stringify(redactConfig(c));
+    assert.doesNotMatch(text, /sk-chatgpt-secret|sk_test_secret|whsec_secret|twilio-secret/);
+    assert.equal(redactConfig(c).chatgpt.apiKey, '[set]');
   });
 
   test('a refused call is an error that carries no key or reply text', async () => {

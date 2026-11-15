@@ -404,7 +404,9 @@ function fullReport(grade, contact, rechecking = false, justOpened = false) {
   </section>`;
   }).join('\n');
   const used = (grade.ai ?? []).length;
-  const answersNote = used > 0 ? `<p class="hint">We asked AI ${used} ${used === 1 ? 'question' : 'questions'}. Your score counts ${used === 1 ? 'that answer' : `all ${used} answers`}.</p>` : '';
+  const asked = new Set((grade.ai ?? []).map(a => a.prompt)).size;
+  const who = new Set((grade.ai ?? []).map(a => a.provider)).size;
+  const answersNote = used > 0 ? `<p class="hint">We asked ${who > 1 ? `${who} AI assistants` : 'AI'} ${asked} ${asked === 1 ? 'question' : 'questions'}${who > 1 ? ' each' : ''}. Your score counts ${used === 1 ? 'that answer' : `all ${used} answers`}.</p>` : '';
   return `<section class="grade-full" id="full-report">${openedNote}
     <h2>Every check</h2>
     ${answersNote}
@@ -493,7 +495,7 @@ export function aboutPage({ contactEmail, userAgent = '' } = {}) {
   </ul>
   <p>We read only public pages. We do not log in, fill in forms, or run the page's scripts. We send no cookies. We visit only websites on the public internet.</p>
   ${userAgent ? `<p>Our visits identify themselves as <code>${e(userAgent)}</code>.</p>` : ''}
-  <p>We also ask one AI assistant up to three questions about the best businesses of that kind in that city, and check whether the business is named.</p>
+  <p>We also ask AI assistants up to three questions each about the best businesses of that kind in that city, and check whether the business is named. The questions carry the kind of business and the city, never the business name. They go to Anthropic (Claude) and, when a second opinion is switched on, to OpenAI (ChatGPT).</p>
   <p>Reports are not listed in search engines. We delete them after 90 days.</p>
   <p>Questions, or want a report removed? ${contact ? `Email ${contact}` : 'Use <a href="/about">our contact page</a>'}.</p>
   <p><a href="/grade">Check a business</a></p>

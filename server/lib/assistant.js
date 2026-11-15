@@ -1,6 +1,7 @@
 /**
  * assistant.js — assistant providers for the Seance check: a deterministic
- * mock and two real adapters.
+ * mock, two real adapters for the main assistant, and a ChatGPT adapter
+ * used as a second opinion in the AI Visibility Check.
  *
  * A provider is { name, ask({ prompt, signal, category, businessName, consumeExtra }) }
  * and resolves to { answer, provider, model, webSearch } (the Anthropic adapter
@@ -10,7 +11,9 @@
  * consumeExtra() is called before a pause_turn resend (a second paid call); when
  * it returns anything but true the first reply is used instead.
  * Only the mock reads category and businessName; real adapters send just the
- * prompt and never the business name.
+ * prompt and never the business name. The ChatGPT adapter uses OpenAI's
+ * Responses API with its web_search tool (max 3 uses), asks OpenAI not to
+ * store the exchange, and treats a reply that did not finish as a failure.
  *
  * Keys go only in a request header. Logs carry the provider name, the HTTP
  * status and the shape of a reply (why it stopped, block type names, a token
@@ -312,7 +315,7 @@ function createAnthropicAssistantProvider({ apiKey, model, timeoutMs }) {
 }
 
 const CHATGPT_URL = 'https://api.openai.com/v1/responses';
-export const DEFAULT_CHATGPT_MODEL = 'gpt-5-mini';
+export const DEFAULT_CHATGPT_MODEL = 'gpt-6.1-terra';
 
 /** Answer text from a Responses API reply: every output_text part of every message item, in order. */
 function joinOutputText(data) {
@@ -356,16 +359,16 @@ export function createChatGptAssistantProvider({ apiKey, model = DEFAULT_CHATGPT
           input: String(prompt ?? ''),
           tools: [{ type: 'web_search', search_context_size: 'low' }],
           max_tool_calls: 3,
-          max_output_tokens: 4096,
-          reasoning: { effort: 'low' },
+          max_output_tokens: 8192,
+          store: false,
         },
         timeoutMs,
         signal,
       );
       const types = Array.isArray(data?.output) ? data.output.map(i => String(i?.type ?? '').replace(/[^a-z_]/gi, '')).join(',') : 'none';
       process.stderr.write(`[assistant] provider=chatgpt status=${String(data?.status ?? 'unknown').replace(/[^a-z_]/gi, '')} items=${types || 'none'}\n`);
-      // Cut off before any answer was written (searching and thinking used the allowance).
-      if (data?.status !== 'completed' && joinOutputText(data).trim() === '') throw new AssistantError('unparseable');
+      // A reply that did not finish may stop mid-list, so it is never scored as a full answer.
+      if (data?.status !== 'completed') throw new AssistantError('unparseable');
       return {
         answer: requireText(joinOutputText(data)),
         provider: 'chatgpt',

@@ -149,7 +149,7 @@ export function aiNamedResult(ai, reasonIfNone = AI_FAILED) {
   if (ran === 0) return { id: 'ai-named', result: 'not_checked', detail: reasonIfNone };
   const named = ai.filter(a => a.named).length;
   if (named === 0) {
-    return { id: 'ai-named', result: 'fail', earned: 0, detail: ran === 1 ? 'No. AI did not name your business.' : `No. We asked ${ran} questions and AI did not name your business in any of them.` };
+    return { id: 'ai-named', result: 'fail', earned: 0, detail: ran === 1 ? 'No. AI did not name your business.' : `No. AI did not name your business in any of ${ran} answers.` };
   }
   const points = CHECKS.find(c => c.id === 'ai-named').points;
   return {
@@ -182,6 +182,37 @@ export function createGrader({
 }) {
   // Second opinions (ChatGPT and so on): asked the same questions as the main assistant.
   const extras = (Array.isArray(extraAssistants) ? extraAssistants : []).filter(p => p && typeof p.ask === 'function');
+  // A second opinion never spends the last of the day's AI calls: these are kept for the main assistant.
+  const EXTRA_RESERVE = 12;
+  // After this many failures in a row a second opinion is left out for a while.
+  const EXTRA_MAX_FAILS = 3;
+  const EXTRA_PAUSE_MS = 15 * 60 * 1000;
+  const extraHealth = new Map(); // provider name -> { fails, pausedUntil }
+  const extraUsable = provider => {
+    const h = extraHealth.get(provider.name);
+    if (h && h.pausedUntil > nowMs()) return false;
+    const left = typeof aiBudget?.peek === 'function' ? aiBudget.peek({ kind: 'grade' }).remaining : Infinity;
+    return !(left <= EXTRA_RESERVE);
+  };
+  const noteExtra = (provider, ok) => {
+    if (ok) return void extraHealth.delete(provider.name);
+    const h = extraHealth.get(provider.name) ?? { fails: 0, pausedUntil: 0 };
+    h.fails += 1;
+    if (h.fails >= EXTRA_MAX_FAILS) { h.fails = 0; h.pausedUntil = nowMs() + EXTRA_PAUSE_MS; }
+    extraHealth.set(provider.name, h);
+  };
+  /** Ask a second opinion, unless it is paused or the day's calls are nearly used up. */
+  const askExtra = async (input, prompt, provider) => {
+    if (!extraUsable(provider)) return { reason: AI_LIMIT_REACHED };
+    const res = await askAi(input, prompt, provider);
+    if (res.entry || res.reason === AI_FAILED) noteExtra(provider, Boolean(res.entry));
+    return res;
+  };
+  /** Providers (main first) that have no stored answer to this prompt yet. */
+  const missingFor = (ai, prompt) => {
+    const have = new Set((ai ?? []).filter(a => a.prompt === prompt).map(a => a.provider));
+    return [assistantProvider, ...extras].filter(p => p && !have.has(p.name));
+  };
   const grades = () => store.collection('grades');
   const nowIso = () => new Date(clock.now()).toISOString();
   const nowMs = () => Number(new Date(clock.now()));
@@ -350,29 +381,34 @@ export function createGrader({
 
   async function aiPart(id, grade) {
     const name = stepNames(grade.input)[3];
-    if (grade.ai.length > 0) {
+    const prompt = freePrompt(grade.input);
+    const kept = Array.isArray(grade.ai) ? grade.ai : [];
+    const toAsk = missingFor(kept, prompt);
+    if (toAsk.length === 0) {
       await addStep(id, { name, state: 'done', ms: 0, finding: 'Used the answer AI gave us for this same question earlier this week.' });
-      return { ai: grade.ai, reason: undefined };
+      return { ai: kept, reason: undefined };
     }
     let reason;
-    const ai = [];
+    let ai = kept;
     await timed(id, name, async () => {
       // The main assistant and any second opinions are asked at the same time.
-      const [res, ...others] = await Promise.all([
-        askAi(grade.input, freePrompt(grade.input)),
-        ...extras.map(p => askAi(grade.input, freePrompt(grade.input), p)),
-      ]);
-      if (res.entry) ai.push(res.entry);
-      for (const o of others) if (o.entry) ai.push(o.entry);
-      if (ai.length > 0) {
-        const e = ai[0];
-        if (e.named) return { finding: 'AI named your business.' };
-        const n = e.competitors.length;
+      const results = await Promise.all(toAsk.map(p => (p === assistantProvider
+        ? askAi(grade.input, prompt)
+        : askExtra(grade.input, prompt, p))));
+      const fresh = results.map(r => r.entry).filter(Boolean);
+      // This question's answers first (main assistant first), then anything else carried over.
+      const mine = [...kept.filter(a => a.prompt === prompt), ...fresh];
+      const order = [assistantProvider, ...extras].map(p => p?.name);
+      mine.sort((a, b) => order.indexOf(a.provider) - order.indexOf(b.provider));
+      ai = [...mine, ...kept.filter(a => a.prompt !== prompt)];
+      if (mine.length > 0) {
+        if (mine.some(a => a.named)) return { finding: 'AI named your business.' };
+        const n = Math.max(...mine.map(a => a.competitors.length));
         if (n === 0) return { finding: 'AI did not name your business.' };
         return { finding: `AI named ${n} other ${n === 1 ? 'business' : 'businesses'}, not yours.` };
       }
-      reason = res.reason;
-      return { finding: res.reason, state: 'failed' };
+      reason = results[0]?.reason;
+      return { finding: reason, state: 'failed' };
     });
     return { ai, reason };
   }
@@ -543,21 +579,22 @@ export function createGrader({
     });
     if (!claimed) return;
     const grade = await get(id);
-    const have = new Set((grade.ai ?? []).map(a => a.prompt));
     for (const prompt of extraPrompts(grade.input)) {
-      if (have.has(prompt)) continue;
-      const [res, ...others] = await Promise.all([
-        askAi(grade.input, prompt),
-        ...extras.map(p => askAi(grade.input, prompt, p)),
-      ]);
-      const entries = [res.entry, ...others.map(o => o.entry)].filter(Boolean);
+      const current = await get(id);
+      const toAsk = missingFor(current?.ai, prompt);
+      if (toAsk.length === 0) continue;
+      const results = await Promise.all(toAsk.map(p => (p === assistantProvider
+        ? askAi(grade.input, prompt)
+        : askExtra(grade.input, prompt, p))));
+      const entries = results.map(r => r.entry).filter(Boolean);
       if (entries.length > 0) {
         await updateGrade(id, g => {
           g.ai.push(...entries);
           applyAiResults(g);
         });
       }
-      if (!res.entry) break; // budget used up or the provider failed: keep what we have
+      // Budget used up or the main assistant failed: keep what we have.
+      if (toAsk[0] === assistantProvider && !results[0].entry) break;
     }
   }
 

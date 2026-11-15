@@ -159,6 +159,10 @@ Node.js 22, plain Express, plain JavaScript ES modules, JSON files under `DATA_D
 8. IF the AI_Budget refuses a `grade` call, the provider fails, or the call passes 120 seconds, THEN THE `ai_answers` Group SHALL be `not_checked` with a plain reason, and the report SHALL say the AI check can be run again later.
 9. WHILE the mock Assistant_Provider is in use, THE report SHALL label each AI answer "Demo answer (no AI connected)".
 10. FOR ALL business names and answers, the Name_Matcher SHALL return the same result when case, punctuation and runs of spaces in either string change (property).
+11. WHEN `CHATGPT_API_KEY` is set (and the run is not a test run), THE Grader SHALL also send every AI_Question to ChatGPT (OpenAI's Responses API with web search, at most 3 searches, `store: false`) as a second opinion, at the same time as the main Assistant_Provider; THE report SHALL show each assistant's answer under its own name.
+12. A ChatGPT reply whose status is not `completed` SHALL count as a failure, never as an answer; a ChatGPT failure SHALL never change the main assistant's result.
+13. THE Grader SHALL NOT send a ChatGPT question when 12 or fewer `grade` calls remain for the day, so second opinions never use the main assistant's last calls; after 3 ChatGPT failures in a row it SHALL skip ChatGPT for 15 minutes.
+14. THE Full_Report SHALL count questions and answers separately, for example "We asked 2 AI assistants 3 questions each. Your score counts all 6 answers."
 
 ### Requirement 8: AI Answer Points
 
@@ -246,7 +250,7 @@ Node.js 22, plain Express, plain JavaScript ES modules, JSON files under `DATA_D
 
 1. THE AI_Budget SHALL count Grader calls under a new kind, `grade`, limited by `GRADE_AI_CALLS_PER_DAY` (default 60), and SHALL keep photo and grade calls together at or below the total minus a quarter, so the Seance's reserved quarter is unchanged.
 2. THE Rate_Limiter SHALL allow at most 5 new Grades per client per hour and 20 per client per day, and SHALL answer more with HTTP status 429 and a `Retry-After` header.
-3. WHEN a new Grade has the same normalized name, city, state, service and website as a `done` Grade created in the last 7 days whose AI_Results exist, THE Grader SHALL copy those AI_Results into the new Grade, label them with their original time, and send no new AI_Question.
+3. WHEN a new Grade has the same normalized name, city, state, service and website as a `done` Grade created in the last 7 days whose AI_Results exist, THE Grader SHALL copy those AI_Results into the new Grade, label them with their original time, and send no new AI_Question to an assistant that already has a copied answer to that question; an assistant switched on since (such as ChatGPT) SHALL still be asked.
 4. THE copy in criterion 3 SHALL NOT copy the earlier Grade's unlock state, Lead, or Draft.
 5. THE Server SHALL delete Grades and their Leads 90 days after creation, pruning at startup and whenever a new Grade starts.
 6. THE Grader SHALL never log Grade_Input values, answer text, or Lead fields; logs SHALL hold only the Grade_Id, the step names, the result counts and the timings.

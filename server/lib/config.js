@@ -353,5 +353,14 @@ export function redactConfig(config) {
       ...config.assistant,
       ...(config.assistant.apiKey !== undefined && { apiKey: mark(config.assistant.apiKey) }),
     },
+    ...(config.chatgpt && { chatgpt: { ...config.chatgpt, apiKey: mark(config.chatgpt.apiKey) } }),
+    ...(config.trust && {
+      trust: {
+        ...config.trust,
+        stripeSecretKey: mark(config.trust.stripeSecretKey),
+        stripeWebhookSecret: mark(config.trust.stripeWebhookSecret),
+        twilioAuthToken: mark(config.trust.twilioAuthToken),
+      },
+    }),
   };
 }

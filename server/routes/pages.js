@@ -92,7 +92,7 @@ export function createPagesRouter(ctx) {
 <li><strong>Business listings:</strong> the details an owner gives us, like the business name, phone, address, services, service area and hours. These are public once we approve the listing.</li>
 <li><strong>An owner's email (optional):</strong> kept private and never shown on the site. We use it only to reach the owner about their listing and quote requests.</li>
 <li><strong>Quote requests:</strong> the name, phone or email, and job details a visitor sends to a business. They are not shown on the site.</li>
-<li><strong>AI visibility check:</strong> the business details a visitor types, what we read on that business's public website, and the AI answers we get. If a visitor opens the full report, we also keep the name, email and phone they give us. Reports are not listed in search engines.</li>
+<li><strong>AI visibility check:</strong> the business details a visitor types, what we read on that business's public website, and the AI answers we get. To get those answers we send a question naming the kind of business and the city, never the business name, to Anthropic (Claude) and, when a second opinion is switched on, to OpenAI (ChatGPT). If a visitor opens the full report, we also keep the name, email and phone they give us. Reports are not listed in search engines.</li>
 </ul>
 ${verifiedPrivacy}<h2>Photos</h2>
 <p>If an owner lists their business with a photo, the photo is read by Anthropic's Claude to fill in the listing. We never save the photo.</p>

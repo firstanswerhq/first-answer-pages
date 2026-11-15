@@ -250,7 +250,7 @@ test('gate on: the report shows the Lead_Form; a valid form stores one Lead, set
   }, 'the extra AI answers');
   assert.equal(assistant.calls, 3);
   assert.ok(grade.extraAiStartedAt);
-  assert.match(grade.results.find(r => r.id === 'ai-named').detail, /We asked 3 questions and AI did not name your business in any of them/);
+  assert.match(grade.results.find(r => r.id === 'ai-named').detail, /AI did not name your business in any of 3 answers/);
   const after = await (await get(env, `/grade/${id}`, { cookie })).text();
   assert.ok(after.includes('Named in 0 of 3 answers.'));
 });
@@ -513,6 +513,52 @@ test('ChatGPT is asked the same questions as Claude, and both show in the report
   assert.equal(grade.ai.filter(a => a.provider === 'chatgpt').length, 3);
   const after = await (await get(env, `/grade/${id}`, { cookie })).text();
   assert.ok(after.includes('Named in 3 of 6 answers.'));
+  assert.ok(after.includes('We asked 2 AI assistants 3 questions each. Your score counts all 6 answers.'));
+});
+
+test('turning ChatGPT on later: a repeat check keeps Claude\'s stored answer and asks only ChatGPT', async () => {
+  const assistant = stubAssistant('1. Bluebird Books\n2. Ledger Lane');
+  const first = await startEnv({ assistantProvider: assistant });
+  const id1 = await startGrade(first, NO_SITE);
+  const saved = (await readJson(first, 'grades.json', [])).find(x => x.id === id1);
+  assert.equal(assistant.calls, 1);
+
+  // A new server on the same day, with ChatGPT now switched on and the earlier Grade on file.
+  const chatgpt = stubChatGpt('1. Ace Accounting');
+  const env = await startEnv({ assistantProvider: assistant, extraAssistants: [chatgpt] });
+  await fs.writeFile(path.join(env.dir, 'grades.json'), JSON.stringify([{ ...saved, id: 'earlierGrade0000000001' }]));
+  const id2 = await startGrade(env, NO_SITE);
+  const grade = (await readJson(env, 'grades.json', [])).find(x => x.id === id2);
+  assert.equal(assistant.calls, 1, 'Claude is not asked again');
+  assert.equal(chatgpt.calls, 1);
+  assert.deepEqual(grade.ai.map(a => a.provider), ['anthropic', 'chatgpt']);
+  assert.ok(grade.ai[0].reusedFrom);
+  assert.equal(grade.ai[1].reusedFrom, undefined);
+});
+
+test('ChatGPT never spends the last of the day\'s AI calls', async () => {
+  const assistant = stubAssistant('1. Bluebird Books');
+  const chatgpt = stubChatGpt('1. Ace Accounting');
+  // 12 calls are held back for the main assistant, so a cap of 12 leaves ChatGPT none.
+  const env = await startEnv({ assistantProvider: assistant, extraAssistants: [chatgpt], config: { gradeAiCallsPerDay: 12 } });
+  const id = await startGrade(env, NO_SITE);
+  const grade = (await readJson(env, 'grades.json', [])).find(x => x.id === id);
+  assert.equal(chatgpt.calls, 0);
+  assert.deepEqual(grade.ai.map(a => a.provider), ['anthropic']);
+});
+
+test('after three ChatGPT failures in a row it is left out for a while', async () => {
+  const assistant = stubAssistant('1. Bluebird Books');
+  const chatgpt = stubChatGpt('', { fail: true });
+  const env = await startEnv({ assistantProvider: assistant, extraAssistants: [chatgpt] });
+  const names = ['Ace Accounting', 'Birch Books', 'Cedar Ledgers', 'Dogwood Tax'];
+  for (const name of names) await startGrade(env, { ...NO_SITE, name, service: `${name} services` });
+  assert.equal(assistant.calls, 4);
+  assert.equal(chatgpt.calls, 3, 'the fourth check does not try ChatGPT');
+  // Fifteen minutes later it is tried again.
+  env.clock.t += 16 * 60 * 1000;
+  await startGrade(env, { ...NO_SITE, name: 'Elm Audit', service: 'elm audit services' });
+  assert.equal(chatgpt.calls, 4);
 });
 
 test('a ChatGPT failure never blocks the check: Claude\'s answer still counts', async () => {
