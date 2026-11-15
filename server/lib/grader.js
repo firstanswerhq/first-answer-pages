@@ -419,7 +419,7 @@ export function createGrader({
         return { finding: `AI named ${n} other ${n === 1 ? 'business' : 'businesses'}, not yours.` };
       }
       reason = results[0]?.reason;
-      if (mine.length > 0) return { finding: 'Claude did not answer. ChatGPT did, but its answer is not scored.' };
+      if (mine.length > 0) return { finding: 'Our main AI assistant did not answer. ChatGPT did, but its answer is not scored.' };
       return { finding: reason, state: 'failed' };
     });
     return { ai, reason };

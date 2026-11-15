@@ -175,7 +175,7 @@ function aiSection(grade, now) {
     const first = onlySeconds[0];
     return `<section class="grade-ai">
     <h2>What AI says</h2>
-    <p>Claude did not answer this time, so this check has no AI score. To try again, start a new check later.</p>
+    <p>Our main AI assistant did not answer this time, so this check has no AI score. To try again, start a new check later.</p>
     <p>${e(aiSentence(first, now))} (Shown for comparison, not scored.)</p>
     ${answerBlock(first)}
   </section>`;
@@ -429,7 +429,7 @@ function fullReport(grade, contact, rechecking = false, justOpened = false) {
   const plural = n => `${n} ${n === 1 ? 'question' : 'questions'}`;
   const answersNote = used <= 0 ? ''
     : scoredN === 0
-      ? '<p class="hint">Claude did not answer, so this check has no AI score. ChatGPT\'s answers are shown so you can compare.</p>'
+      ? '<p class="hint">Our main AI assistant did not answer, so this check has no AI score. ChatGPT\'s answers are shown so you can compare.</p>'
       : who > 1
         ? `<p class="hint">${[...per].map(([p, n]) => `${providerWho(p)} answered ${plural(n)}`).join(' and ')}. Your score counts ${mainName}'s ${scoredN === 1 ? 'answer' : `${scoredN} answers`}; ChatGPT's are shown so you can compare.</p>`
         : `<p class="hint">We asked AI ${plural(asked)}. Your score counts ${used === 1 ? 'that answer' : `all ${used} answers`}.</p>`;

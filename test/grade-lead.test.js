@@ -546,7 +546,7 @@ test('when Claude fails and ChatGPT answers, the report says there is no AI scor
   const grade = (await readJson(env, 'grades.json', [])).find(x => x.id === id);
   assert.equal(grade.results.find(r => r.id === 'ai-named').result, 'not_checked');
   const page = await (await get(env, `/grade/${id}`)).text();
-  assert.match(page, /Claude did not answer this time, so this check has no AI score\./);
+  assert.match(page, /Our main AI assistant did not answer this time, so this check has no AI score\./);
   assert.match(page, /Shown for comparison, not scored/);
   assert.doesNotMatch(page, /AI named your business\./);
 });
