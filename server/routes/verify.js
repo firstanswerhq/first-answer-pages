@@ -51,6 +51,7 @@ function contactHtml(email) {
 export const VERIFIED_BENEFITS = `<ul class="verify-benefits">
     <li><strong>Customers see proof.</strong> We confirmed the business phone is answered, and we checked a photo ID for the person who manages the listing.</li>
     <li><strong>AI assistants are told.</strong> The page we publish for AI tools marks the business as verified and says what was checked. We cannot promise an AI will name any business, but it gives the AI a reason to trust this listing.</li>
+    <li><strong>You are listed first.</strong> Verified businesses appear above the others in their category.</li>
     <li><strong>It sets the real business apart.</strong> A fake listing that uses someone else's phone number cannot pass the phone check, so it can never carry the stamp.</li>
   </ul>`;
 
@@ -92,7 +93,8 @@ export function verifyPage({ draftId, listing, status, price, fees, note, testMo
     payStep = `${refunded}${refunded ? '' : lapsed}<p>${escapeHtml(priceLine)}</p>
     <p>You pay on a secure Stripe page. We never see your card number.</p>
     <p class="hint">Wrong phone number on the listing? Please ${contact} to fix it before you pay.</p>
-    <form method="POST" action="${base}/pay"><button type="submit">Pay ${fee}</button></form>`;
+    <form method="POST" action="${base}/pay"><button type="submit">Pay ${fee}</button></form>
+    <p class="hint">If we cannot verify you, ${contact} and we will refund the fee.</p>`;
   }
 
   const four = lastFour(listing.phone);

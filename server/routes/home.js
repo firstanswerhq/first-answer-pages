@@ -48,7 +48,10 @@ export function createHomeRouter(ctx) {
 
     const founderOf = id => (typeof store.getFounder === 'function' ? store.getFounder(id) : undefined);
     const trustOf = l => (typeof store.getTrustStatus === 'function' ? store.getTrustStatus(l) : undefined);
-    const filtered = store.searchListings({ category, city }).map(publicListing);
+    // Verified businesses come first; otherwise the order is unchanged.
+    const isVerified = l => (trustOf(l)?.verified === true ? 1 : 0);
+    const filtered = store.searchListings({ category, city }).map(publicListing)
+      .map((l, i) => [l, i]).sort((a, b) => isVerified(b[0]) - isVerified(a[0]) || a[1] - b[1]).map(([l]) => l);
     const grouped = groupListings(filtered, categories);
 
     const options = categories

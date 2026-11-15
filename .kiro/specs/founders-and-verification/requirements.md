@@ -70,4 +70,5 @@ Listing is free for everyone, always. Verification is the paid step. A Founding 
 15. At most one payment page SHALL be open per listing at a time, and a listing whose phone number cannot be checked SHALL NOT be able to pay.
 16. WHEN a payment is fully refunded or disputed, THE stamp SHALL come off until the owner pays again; checks already passed SHALL be kept.
 17. An identity result SHALL count only for the check the owner most recently started, so a repeated message can never restore a stamp.
-18. A public page (`/verified`) SHALL say what the stamp means and what it does not, and the Privacy page SHALL say who holds the ID photos.
+18. Verified businesses SHALL be listed first within their category, and the payment step SHALL promise a refund when the owner cannot be verified.
+19. A public page (`/verified`) SHALL say what the stamp means and what it does not, and the Privacy page SHALL say who holds the ID photos.

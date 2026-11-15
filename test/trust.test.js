@@ -608,6 +608,32 @@ test('the real signature check guards the webhook address', async () => {
   assert.equal((await post(body, '')).status, 400);
 });
 
+test('verified businesses are listed first in their category', async () => {
+  const s = await site();
+  // A second, unverified business that would normally sort first.
+  const file = path.join(s.dir, 'published.json');
+  const published = JSON.parse(await fs.readFile(file, 'utf8'));
+  published.unshift({ ...published[0], id: 'aaa-roofing', name: 'AAA Roofing', phone: '(615) 555-0177' });
+  await fs.writeFile(file, JSON.stringify(published));
+  s.reload();
+  const order = async () => [...(await s.get('/')).text.matchAll(/<a href="\/listings\/[^"]+">([^<]+)<\/a><\/strong>/g)].map(m => m[1]);
+  assert.deepEqual(await order(), ['AAA Roofing', 'Ridge Roofing']);
+  await s.post(`${s.V}/pay`);
+  s.f.state.checkouts.get('cs_1').paid = true;
+  const page = (await s.get(s.V)).text;
+  assert.match(page, /You are listed first\./);
+  await s.post(`${s.V}/phone/check`, 'code=424242');
+  await s.post(`${s.V}/id`);
+  s.f.state.idChecks.get('vs_2').status = 'verified';
+  await s.get(s.V);
+  assert.deepEqual(await order(), ['Ridge Roofing', 'AAA Roofing']);
+});
+
+test('the payment step promises a refund if we cannot verify the owner', async () => {
+  const s = await site();
+  assert.match((await s.get(s.V)).text, /If we cannot verify you, contact us through the <a href="\/about">About page<\/a> and we will refund the fee\./);
+});
+
 test('a wrong private link gets nothing', async () => {
   const s = await site();
   assert.equal((await s.get('/rise/drafts/not-a-real-link/verify')).status, 404);
