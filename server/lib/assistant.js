@@ -205,6 +205,12 @@ function createOpenAiAssistantProvider({ apiKey, model, baseUrl, timeoutMs }) {
   };
 }
 
+// Current Claude models think before they answer, and that thinking counts
+// toward max_tokens. 1024 was used up by searching and thinking before any
+// answer text was written (stop_reason max_tokens, no text block). 4096 leaves
+// room for both. The stored answer is still capped separately.
+const ANTHROPIC_MAX_TOKENS = 4096;
+
 const ANTHROPIC_WEB_SEARCH_TOOL = Object.freeze({ type: 'web_search_20250305', name: 'web_search', max_uses: 3 });
 
 /** Concatenate, in order, every text block's text. Other block types are ignored. */
@@ -267,7 +273,7 @@ function createAnthropicAssistantProvider({ apiKey, model, timeoutMs }) {
         'anthropic',
         ANTHROPIC_URL,
         headers,
-        { model, max_tokens: 1024, messages: msgs, tools: [ANTHROPIC_WEB_SEARCH_TOOL] },
+        { model, max_tokens: ANTHROPIC_MAX_TOKENS, messages: msgs, tools: [ANTHROPIC_WEB_SEARCH_TOOL] },
         null,
         overall,
       );

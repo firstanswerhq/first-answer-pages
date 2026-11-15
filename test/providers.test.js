@@ -628,13 +628,14 @@ describe('trade-matched mock assistant', () => {
 describe('anthropic web search request', () => {
   const askAnthropic = () => createAssistantProvider(realAssistantConfig('anthropic')).ask({ prompt: PROMPT });
 
-  test('sends exactly the web_search tool with max_uses 3 and max_tokens >= 1024', async () => {
+  test('sends exactly the web_search tool with max_uses 3 and room for thinking plus an answer', async () => {
     await withFetch(() => jsonResponse(anthropicReply('ok')), async (calls) => {
       await askAnthropic();
       assert.equal(calls.length, 1);
       const body = JSON.parse(calls[0].init.body);
       assert.deepEqual(body.tools, [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }]);
-      assert.ok(body.max_tokens >= 1024);
+      // Thinking counts toward max_tokens: 1024 ran out before any answer text on the live site.
+      assert.ok(body.max_tokens >= 4096);
     });
   });
 

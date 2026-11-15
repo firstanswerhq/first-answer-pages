@@ -201,7 +201,8 @@ function createAnthropicVisionProvider({ apiKey, model, timeoutMs }) {
         { 'x-api-key': apiKey, 'anthropic-version': ANTHROPIC_VERSION },
         {
           model,
-          max_tokens: 1024,
+          // Thinking counts toward max_tokens; 1024 can be spent before the answer is written.
+          max_tokens: 4096,
           messages: [{
             role: 'user',
             content: [
