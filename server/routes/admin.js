@@ -603,7 +603,7 @@ ${preview}
       if (wantsHtml(req) && req.body?.confirm !== 'yes') {
         return res.type('html').send(confirmPage({
           title: 'Remove the Verified stamp?',
-          question: `Remove the Verified stamp from ${live.name || 'this listing'}? It comes off right away. You can put it back from this page later.`,
+          question: `Remove the Verified stamp from ${live.name || 'this listing'}? It comes off right away. You can put it back later from the review page.`,
           action: `/admin/listings/${encodeURIComponent(live.id)}/unverify`,
           button: 'Yes, remove the stamp',
         }));

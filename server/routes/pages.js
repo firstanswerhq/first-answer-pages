@@ -81,7 +81,7 @@ export function createPagesRouter(ctx) {
     // Shown only when the paid Verified stamp is switched on.
     const verifiedPrivacy = ctx.trust
       ? `<h2>Verified stamp</h2>
-<p>The fee is paid on Stripe; we never see your card number. Twilio sends a code to the phone number on the listing. Stripe checks a photo ID and a selfie and holds those photos under its own privacy policy. We store only the results: paid or not, phone confirmed, ID passed, and the dates.</p>
+<p>The fee is paid on Stripe; we never see your card number. Twilio sends a code to the phone number on the listing. Stripe checks a photo ID and a selfie and holds those photos under its own privacy policy. We store only the results: paid or not, phone confirmed, ID passed, the dates, and Stripe's reference numbers.</p>
 `
       : '';
     const body = `<section class="message">

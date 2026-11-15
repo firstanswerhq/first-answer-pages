@@ -197,6 +197,8 @@ function fakes({ testMode = false } = {}) {
       name: 'fake', testMode, webhookEnabled: true,
       async createCheckout(o) { const id = `cs_${++state.n}`; state.checkouts.set(id, { ...o, paid: false }); return { id, url: `https://pay.example/${id}` }; },
       async getCheckout(id) { const c = state.checkouts.get(id); return { paid: Boolean(c?.paid), open: Boolean(c) && !c.paid && !c.expired, url: `https://pay.example/${id}`, paymentIntent: c?.paid ? `pi_${id}` : undefined, listingId: c?.listingId, plan: c?.plan }; },
+      async expireCheckout(id) { const c = state.checkouts.get(id); if (!c || c.paid) return false; c.expired = true; return true; },
+      async cancelIdCheck(id) { const c = state.idChecks.get(id); if (!c || c.status !== 'requires_input') return false; c.status = 'canceled'; return true; },
       async createIdCheck(o) { const id = `vs_${++state.n}`; state.idChecks.set(id, { ...o, status: 'requires_input' }); return { id, url: `https://id.example/${id}` }; },
       async getIdCheck(id) { const c = state.idChecks.get(id); return { status: c?.status ?? '', failed: c?.status === 'failed', listingId: c?.listingId }; },
       parseWebhook(raw, header) { if (header !== 'good') throw new Error('bad_signature'); const e = JSON.parse(raw.toString()); return { type: e.type, object: e.data.object }; },
@@ -238,7 +240,7 @@ async function site({ founders = { cap: 500, deadline: '2027-02-01T06:00:00.000Z
   assert.ok(approve.status < 400);
   const home = await get('/');
   const id = /href="\/listings\/([^"]+)"/.exec(home.text)[1];
-  return { base, post, get, f, id, clock, dir, reload: () => app.locals.ctx.store.reload(), V: '/rise/drafts/owner-link-1/verify' };
+  return { app, base, post, get, f, id, clock, dir, reload: () => app.locals.ctx.store.reload(), V: '/rise/drafts/owner-link-1/verify' };
 }
 
 test('off: with no keys every verification address is a 404 and nothing mentions it', async () => {
@@ -416,6 +418,35 @@ test('test mode is a practice run: every step works but no stamp is shown, and i
   assert.doesNotMatch((await s.get(`/listings/${s.id}`)).text, /verified-badge/);
   assert.doesNotMatch((await s.get('/llms.txt')).text, /Verified: yes/);
   assert.equal(JSON.parse(await fs.readFile(path.join(s.dir, 'trust.json'), 'utf8'))[s.id].test, true);
+  // The same data folder on a live key: the practice results are gone and the owner starts fresh.
+  const config = { ...configFromEnv({ ADMIN_TOKEN: 't', BASE_URL: 'http://example.test' }, { warn: () => {} }), demoMode: false };
+  const live = fakes();
+  const app = createApp({ dataDir: s.dir, config, clock: s.clock, trust: { payments: live.payments, phone: live.phone } });
+  const server = app.listen(0);
+  servers.push(server);
+  const page = await (await fetch(`http://127.0.0.1:${server.address().port}${s.V}`)).text();
+  assert.match(page, /<button type="submit">Pay \$19<\/button>/);
+  assert.equal(JSON.parse(await fs.readFile(path.join(s.dir, 'trust.json'), 'utf8'))[s.id].test, undefined);
+});
+
+test('a test key cannot touch results earned on a live key', async () => {
+  const s = await site();
+  await s.post(`${s.V}/pay`);
+  s.f.state.checkouts.get('cs_1').paid = true;
+  await s.get(s.V);
+  const config = { ...configFromEnv({ ADMIN_TOKEN: 't', BASE_URL: 'http://example.test' }, { warn: () => {} }), demoMode: false };
+  const practice = fakes({ testMode: true });
+  const app = createApp({ dataDir: s.dir, config, clock: s.clock, trust: { payments: practice.payments, phone: practice.phone } });
+  const server = app.listen(0);
+  servers.push(server);
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const post = (p, body) => fetch(base + p, { method: 'POST', redirect: 'manual', body, headers: body ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {} });
+  await post(`${s.V}/phone/check`, 'code=424242');
+  await post(`${s.V}/id`);
+  assert.equal(practice.state.idChecks.size, 0);
+  const record = JSON.parse(await fs.readFile(path.join(s.dir, 'trust.json'), 'utf8'))[s.id];
+  assert.equal(record.phone, undefined);
+  assert.equal(record.test, undefined);
 });
 
 test('a listing whose phone cannot be checked is told before paying, and cannot pay', async () => {
@@ -433,7 +464,7 @@ test('the public page says what Verified means, and the privacy page covers it',
   assert.equal(info.status, 200);
   assert.match(info.text, /It is not a license check, a background check, or a promise about the quality/);
   assert.match(info.text, /\$19 once for Founding Members, \$49 a year for everyone else, with no automatic renewal/);
-  assert.match((await s.get('/privacy')).text, /We store only the results: paid or not, phone confirmed, ID passed, and the dates\./);
+  assert.match((await s.get('/privacy')).text, /We store only the results: paid or not, phone confirmed, ID passed, the dates, and Stripe's reference numbers\./);
   const off = await site({ withTrust: false });
   assert.equal((await off.get('/verified')).status, 404);
   assert.doesNotMatch((await off.get('/privacy')).text, /Verified stamp/);
@@ -470,17 +501,63 @@ test('only one payment page is ever open: clicking Pay again goes back to the sa
   assert.equal(s.f.state.checkouts.size, 1);
 });
 
-test('a burst of clicks cannot start more than one photo ID check', async () => {
+test('only one photo ID check is ever live: starting again cancels the unfinished one', async () => {
   const s = await site();
   await s.post(`${s.V}/pay`);
   s.f.state.checkouts.get('cs_1').paid = true;
   await s.get(s.V);
   await Promise.all(Array.from({ length: 8 }, () => s.post(`${s.V}/id`)));
-  for (const c of s.f.state.idChecks.values()) c.status = 'failed';
-  await s.get(s.V);
-  const tries = JSON.parse(await fs.readFile(path.join(s.dir, 'trust.json'), 'utf8'))[s.id].idAttempts;
-  assert.equal(tries, 1, 'only the check that was waiting counts as a try');
+  const live = [...s.f.state.idChecks.values()].filter(c => c.status === 'requires_input');
+  assert.equal(live.length, 1, 'every earlier check was canceled');
   assert.ok(s.f.state.idChecks.size <= 6, 'starts are capped per hour');
+  // A check that is already being looked at cannot be replaced.
+  live[0].status = 'processing';
+  const size = s.f.state.idChecks.size;
+  s.clock.at = '2026-12-01T20:00:00.000Z';
+  await s.post(`${s.V}/id`);
+  assert.equal(s.f.state.idChecks.size, size);
+});
+
+test('yearly refunds: a refunded year ends today, and a refunded renewal leaves the first year running', async () => {
+  const s = await site({ founders: { cap: 0, deadline: '2027-02-01T06:00:00.000Z' } });
+  const send = (type, object) => s.post('/webhooks/stripe', JSON.stringify({ type, data: { object } }), { 'Stripe-Signature': 'good', 'Content-Type': 'application/json' });
+  const record = async () => JSON.parse(await fs.readFile(path.join(s.dir, 'trust.json'), 'utf8'))[s.id];
+  await s.post(`${s.V}/pay`);
+  s.f.state.checkouts.get('cs_1').paid = true;
+  await s.get(s.V);
+  s.clock.at = '2027-02-01T18:00:00.000Z';
+  await send('charge.refunded', { id: 'ch_1', refunded: true, payment_intent: 'pi_cs_1' });
+  const page = (await s.get(s.V)).text;
+  assert.match(page, /Your last payment was refunded or disputed/);
+  assert.doesNotMatch(page, /Your year ended on/);
+  s.clock.at = '2027-03-01T18:00:00.000Z';
+  await s.post(`${s.V}/pay`);
+  s.f.state.checkouts.get('cs_2').paid = true;
+  await s.get(s.V);
+  assert.equal((await record()).paidThrough, '2028-03-01T18:00:00.000Z', 'one year from the new payment, not two');
+  // Renew in the last 30 days, then refund the renewal: the first year still stands.
+  s.clock.at = '2028-02-15T18:00:00.000Z';
+  await s.post(`${s.V}/pay`);
+  s.f.state.checkouts.get('cs_3').paid = true;
+  await s.get(s.V);
+  assert.equal((await record()).paidThrough, '2029-03-01T18:00:00.000Z');
+  await send('charge.refunded', { id: 'ch_3', refunded: true, payment_intent: 'pi_cs_3' });
+  assert.equal((await record()).paidThrough, '2028-03-01T18:00:00.000Z');
+  assert.match((await s.get(s.V)).text, /Paid through March 1, 2028\./);
+});
+
+test('a price change closes the old payment page before a new one opens', async () => {
+  const s = await site({ founders: { cap: 0, deadline: '2027-02-01T06:00:00.000Z' } });
+  await s.post(`${s.V}/pay`);
+  // The router read its fees at start-up, so change the stored price to force a mismatch.
+  const file = path.join(s.dir, 'trust.json');
+  const map = JSON.parse(await fs.readFile(file, 'utf8'));
+  map[s.id].pendingCheckout.amountCents = 5900;
+  await fs.writeFile(file, JSON.stringify(map));
+  s.reload();
+  const second = await s.post(`${s.V}/pay`);
+  assert.equal(second.headers.get('location'), 'https://pay.example/cs_2');
+  assert.equal(s.f.state.checkouts.get('cs_1').expired, true);
 });
 
 test('a refund or a dispute takes the stamp off until the owner pays again', async () => {

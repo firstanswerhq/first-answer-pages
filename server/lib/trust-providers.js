@@ -87,6 +87,28 @@ export function createStripePayments({ secretKey, webhookSecret, fetch: fetchImp
       };
     },
 
+    /** Close a payment page so it can no longer be paid. True when it is closed. */
+    async expireCheckout(id) {
+      try {
+        await call(fetchImpl, `${STRIPE}/checkout/sessions/${encodeURIComponent(id)}/expire`, { method: 'POST', auth, form: {} });
+        return true;
+      } catch (err) {
+        if (err instanceof TrustProviderError && err.code === 'rejected') return false; // already paid or already closed
+        throw err;
+      }
+    },
+
+    /** Cancel a photo ID check that has not finished. True when it is canceled. */
+    async cancelIdCheck(id) {
+      try {
+        await call(fetchImpl, `${STRIPE}/identity/verification_sessions/${encodeURIComponent(id)}/cancel`, { method: 'POST', auth, form: {} });
+        return true;
+      } catch (err) {
+        if (err instanceof TrustProviderError && err.code === 'rejected') return false; // already processing or finished
+        throw err;
+      }
+    },
+
     /** Photo ID plus selfie check, hosted by Stripe. @returns {Promise<{ id: string, url: string }>} */
     async createIdCheck({ listingId, returnUrl }) {
       const s = await call(fetchImpl, `${STRIPE}/identity/verification_sessions`, {

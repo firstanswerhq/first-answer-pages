@@ -90,7 +90,7 @@ export function trustStatus(record, listing, now) {
   const out = {
     paid, phoneOk, idOk, verified, removed, practice,
     practiceDone: practice && paid && phoneOk && idOk && !removed,
-    expired: yearly && typeof r.paidAt === 'string' && !paid,
+    expired: yearly && typeof r.paidAt === 'string' && nowMs >= through && typeof r.refundedAt !== 'string',
     canRenew: yearly && paid && through - nowMs <= RENEW_WINDOW_MS,
     idFailed: r.idFailed === true,
     refunded: typeof r.refundedAt === 'string',
