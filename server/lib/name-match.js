@@ -102,19 +102,16 @@ const LABEL_WORDS = new Set([
 ]);
 
 
-// Words that make a list line a category heading rather than a business.
-const CATEGORY_WORDS = new Set([
-  'emergency', 'budget', 'value', 'overall', 'affordable', 'commercial', 'residential', 'top', 'great',
-  'good', 'cheap', 'fast', 'reliable', 'trusted', 'rated', 'highly', 'for', 'in', 'near', 'me', 'options',
-  'picks', 'choice', 'choices', 'pick', 'small', 'large', 'jobs', 'big', 'other', 'more',
-]);
+// A nested list line with any of these is a detail about a business, not a name.
+const DETAIL_PATTERN = /\b(?:licensed|insured|bonded|family[- ]owned|locally[- ]owned|veteran[- ]owned|woman[- ]owned|years?|since|reviews?|rated|rating|stars?|estimates?|24\/7|available|same[- ]day|warranty|guarantee[ds]?|financing|phone|hours|serves?|serving|known|specializ\w*|offers?|prices?|pricing|experienced)\b|\$|\d{3}/i;
 
-/** "Best value:" or "Emergency plumbers" over a sub-list is a heading, not a business. */
-function looksLikeHeading(raw) {
+/** True when a nested list line reads like a detail ("Licensed and insured"), not a business name. */
+function looksLikeDetail(raw) {
   const text = stripMarkdown(raw);
-  if (text.endsWith(':')) return true;
-  const words = normalizeForMatch(beforeSeparator(text)).split(' ').filter(Boolean);
-  return words.length > 0 && words.every(w => GENERIC_WORDS.has(w) || CATEGORY_WORDS.has(w));
+  if (text === '') return true;
+  if (/^\p{Ll}/u.test(text)) return true;
+  if (text.split(/\s+/).length > 6) return true;
+  return DETAIL_PATTERN.test(text);
 }
 
 function stripMarkdown(text) {
@@ -147,38 +144,29 @@ function listedNames(answer) {
   const seen = new Set();
   const add = raw => {
     const candidate = beforeSeparator(stripMarkdown(raw));
-    if (!acceptable(candidate)) return false;
+    if (!acceptable(candidate)) return;
     const key = normalizeForMatch(candidate);
-    if (key === '' || seen.has(key)) return false;
+    if (key === '' || seen.has(key)) return;
     seen.add(key);
     names.push(candidate);
-    return true;
   };
-  // Indent of the first list line in the current list. Deeper lines under a
-  // business ("1. **Acme Plumbing**" then "   - Licensed and insured") are its
-  // details, never names. Deeper lines under a label or a category ("Best
-  // value:", "Emergency plumbers") are the names, so they still count.
+  // Indent of the first list line in the current list. A deeper line that reads
+  // like a detail ("   - Licensed and insured") is skipped; a deeper line that
+  // reads like a name (businesses grouped under "Best value:" or a neighborhood)
+  // still counts.
   let baseIndent = null;
-  let parentIsBusiness = false;
   const indentOf = line => /^[ \t]*/.exec(line)[0].replace(/\t/g, '    ').length;
   for (const line of String(answer ?? '').split(/\r?\n/)) {
     const list = LIST_LINE.exec(line);
     if (list) {
       const indent = indentOf(line);
       if (baseIndent === null || indent < baseIndent) baseIndent = indent;
-      if (indent > baseIndent) {
-        if (!parentIsBusiness) add(list[1]);
-        continue;
-      }
-      const added = add(list[1]);
-      parentIsBusiness = added && !looksLikeHeading(list[1]);
+      if (indent > baseIndent && looksLikeDetail(list[1])) continue;
+      add(list[1]);
       continue;
     }
     // Prose indented under a list item stays part of that item.
-    if (line.trim() !== '' && (baseIndent === null || indentOf(line) <= baseIndent)) {
-      baseIndent = null;
-      parentIsBusiness = false;
-    }
+    if (line.trim() !== '' && (baseIndent === null || indentOf(line) <= baseIndent)) baseIndent = null;
     // bold spans on other lines (bounded: no lazy scan over long text)
     const spans = line.slice(0, 2000).match(/\*\*[^*\n]{1,120}\*\*/g) ?? [];
     for (const span of spans) add(span);

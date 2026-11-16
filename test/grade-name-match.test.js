@@ -178,3 +178,16 @@ test('a sentence under a business does not turn its details into businesses', ()
   const answer = '1. **Acme Plumbing**\n   Known for fast service.\n   - Licensed and insured\n   - Family owned\n2. **Bob Plumbing**';
   assert.deepEqual(extractCompetitors(answer, { name: 'Nobody Roofing' }), ['Acme Plumbing', 'Bob Plumbing']);
 });
+
+test('businesses nested under a group heading of any kind still count', () => {
+  const shapes = [
+    '1. **Water heater specialists**\n   - Acme Plumbing\n   - Bob Plumbing',
+    '- **East Nashville**\n  - Acme Plumbing\n- **Germantown**\n  - Bob Plumbing',
+    '- **If you need it done today**\n  - Acme Plumbing\n  - Bob Plumbing',
+  ];
+  for (const answer of shapes) {
+    const r = analyzeAnswer(answer, { name: 'Acme Plumbing' });
+    assert.notEqual(r.position, null, answer);
+    assert.ok(r.competitors.includes('Bob Plumbing'), answer);
+  }
+});
