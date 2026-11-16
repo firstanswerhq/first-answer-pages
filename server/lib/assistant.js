@@ -14,6 +14,8 @@
  * prompt and never the business name. The ChatGPT adapter uses OpenAI's
  * Responses API with its web_search tool (max 3 uses), asks OpenAI not to
  * store the exchange, and treats a reply that did not finish as a failure.
+ * The Gemini adapter uses Google's generateContent with Google Search
+ * grounding, the same way.
  *
  * Keys go only in a request header. Logs carry the provider name, the HTTP
  * status and the shape of a reply (why it stopped, block type names, a token
@@ -380,6 +382,64 @@ export function createChatGptAssistantProvider({ apiKey, model = DEFAULT_CHATGPT
   };
 }
 
+const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models/';
+export const DEFAULT_GEMINI_MODEL = 'gemini-3.1-flash-lite';
+
+/** Answer text from a generateContent reply: every text part of the first candidate, in order. */
+function joinGeminiText(data) {
+  const parts = data?.candidates?.[0]?.content?.parts;
+  if (!Array.isArray(parts)) return '';
+  return parts.filter(p => typeof p?.text === 'string' && p.thought !== true).map(p => p.text).join('');
+}
+
+/** Web sources from Google Search grounding, in the shape collectSources() reads. */
+function geminiCitations(data) {
+  const chunks = data?.candidates?.[0]?.groundingMetadata?.groundingChunks;
+  const citations = (Array.isArray(chunks) ? chunks : [])
+    .map(c => c?.web)
+    .filter(w => w && typeof w.uri === 'string')
+    .map(w => ({ url: w.uri, title: w.title }));
+  return collectSources({ content: [{ type: 'text', citations }] });
+}
+
+/**
+ * Gemini as a second opinion: Google's generateContent with Google Search
+ * grounding. The key goes only in the x-goog-api-key header. A reply that did
+ * not finish normally (finishReason other than STOP) is a failure.
+ */
+export function createGeminiAssistantProvider({ apiKey, model = DEFAULT_GEMINI_MODEL, timeoutMs = DEFAULT_PROVIDER_TIMEOUT_MS }) {
+  const safeModel = String(model).replace(/[^A-Za-z0-9._-]/g, '');
+  return {
+    name: 'gemini',
+    async ask({ prompt, signal } = {}) {
+      const data = await callProvider(
+        'gemini',
+        `${GEMINI_BASE}${safeModel}:generateContent`,
+        { 'x-goog-api-key': apiKey },
+        {
+          contents: [{ role: 'user', parts: [{ text: String(prompt ?? '') }] }],
+          tools: [{ google_search: {} }],
+          generationConfig: { maxOutputTokens: 8192 },
+        },
+        timeoutMs,
+        signal,
+      );
+      const finish = String(data?.candidates?.[0]?.finishReason ?? 'none').replace(/[^A-Z_a-z]/g, '');
+      const searched = Array.isArray(data?.candidates?.[0]?.groundingMetadata?.webSearchQueries)
+        && data.candidates[0].groundingMetadata.webSearchQueries.length > 0;
+      process.stderr.write(`[assistant] provider=gemini finish=${finish} searched=${searched ? 'yes' : 'no'}\n`);
+      if (finish !== 'STOP') throw new AssistantError('unparseable');
+      return {
+        answer: requireText(joinGeminiText(data)),
+        provider: 'gemini',
+        model: safeModel,
+        webSearch: searched,
+        sources: geminiCitations(data),
+      };
+    },
+  };
+}
+
 /**
  * Extra assistants asked beside the main one in the AI Visibility Check.
  * Empty unless their keys are set; never used in a test run.
@@ -391,6 +451,11 @@ export function createExtraAssistants(config) {
   if (c?.apiKey && config?.testRun !== true) {
     const timeoutMs = config?.seanceTimeoutMs ?? config?.providerTimeoutMs ?? DEFAULT_PROVIDER_TIMEOUT_MS;
     extras.push(createChatGptAssistantProvider({ apiKey: c.apiKey, model: c.model || DEFAULT_CHATGPT_MODEL, timeoutMs }));
+  }
+  const g = config?.gemini;
+  if (g?.apiKey && config?.testRun !== true) {
+    const timeoutMs = config?.seanceTimeoutMs ?? config?.providerTimeoutMs ?? DEFAULT_PROVIDER_TIMEOUT_MS;
+    extras.push(createGeminiAssistantProvider({ apiKey: g.apiKey, model: g.model || DEFAULT_GEMINI_MODEL, timeoutMs }));
   }
   return extras;
 }

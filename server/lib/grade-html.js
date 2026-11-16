@@ -133,7 +133,7 @@ const ordinal = n => {
   return `${n}${({ 1: 'st', 2: 'nd', 3: 'rd' })[n % 10] ?? 'th'}`;
 };
 
-const providerWho = name => (name === 'anthropic' ? 'Claude' : name === 'chatgpt' ? 'ChatGPT' : name === 'openai' ? 'OpenAI' : name === 'mock' ? 'a demo assistant' : 'an AI assistant');
+const providerWho = name => (name === 'anthropic' ? 'Claude' : name === 'chatgpt' ? 'ChatGPT' : name === 'gemini' ? 'Gemini' : name === 'openai' ? 'OpenAI' : name === 'mock' ? 'a demo assistant' : 'an AI assistant');
 
 const resultOf = (grade, id) => (grade.results ?? []).find(r => r.id === id);
 
@@ -165,7 +165,7 @@ function answerBlock(entry) {
     </details>`;
 }
 
-/** Answers that count toward the score (second opinions like ChatGPT are shown, not scored). */
+/** Answers that count toward the score (second opinions like ChatGPT and Gemini are shown, not scored). */
 const scoredAnswers = grade => (grade.ai ?? []).filter(a => !SECOND_OPINIONS.has(a.provider));
 
 function aiSection(grade, now) {
@@ -425,13 +425,15 @@ function fullReport(grade, contact, rechecking = false, justOpened = false) {
   const per = new Map();
   for (const a of grade.ai ?? []) per.set(a.provider, (per.get(a.provider) ?? 0) + 1);
   const scoredN = scoredAnswers(grade).length;
+  const andList = xs => (xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
+  const secondsWho = andList([...per.keys()].filter(p => SECOND_OPINIONS.has(p)).map(p => `${providerWho(p)}'s`));
   const mainName = providerWho(scoredAnswers(grade)[0]?.provider);
   const plural = n => `${n} ${n === 1 ? 'question' : 'questions'}`;
   const answersNote = used <= 0 ? ''
     : scoredN === 0
-      ? '<p class="hint">Our main AI assistant did not answer, so this check has no AI score. ChatGPT\'s answers are shown so you can compare.</p>'
+      ? `<p class="hint">Our main AI assistant did not answer, so this check has no AI score. ${secondsWho} answers are shown so you can compare.</p>`
       : who > 1
-        ? `<p class="hint">${[...per].map(([p, n]) => `${providerWho(p)} answered ${plural(n)}`).join(' and ')}. Your score counts ${mainName}'s ${scoredN === 1 ? 'answer' : `${scoredN} answers`}; ChatGPT's are shown so you can compare.</p>`
+        ? `<p class="hint">${andList([...per].map(([p, n]) => `${providerWho(p)} answered ${plural(n)}`))}. Your score counts ${mainName}'s ${scoredN === 1 ? 'answer' : `${scoredN} answers`}; ${secondsWho} are shown so you can compare.</p>`
         : `<p class="hint">We asked AI ${plural(asked)}. Your score counts ${used === 1 ? 'that answer' : `all ${used} answers`}.</p>`;
   return `<section class="grade-full" id="full-report">${openedNote}
     <h2>Every check</h2>
@@ -521,7 +523,7 @@ export function aboutPage({ contactEmail, userAgent = '' } = {}) {
   </ul>
   <p>We read only public pages. We do not log in, fill in forms, or run the page's scripts. We send no cookies. We visit only websites on the public internet.</p>
   ${userAgent ? `<p>Our visits identify themselves as <code>${e(userAgent)}</code>.</p>` : ''}
-  <p>We also ask AI assistants up to three questions each about the best businesses of that kind in that city, and check whether the business is named. The questions name the kind of business and the city, never the business name. They go to Claude, and sometimes to ChatGPT too.</p>
+  <p>We also ask AI assistants up to three questions each about the best businesses of that kind in that city, and check whether the business is named. The questions name the kind of business and the city, never the business name. They go to Claude, and sometimes to ChatGPT and Gemini too.</p>
   <p>Reports are not listed in search engines. We delete them after 90 days.</p>
   <p>Questions, or want a report removed? ${contact ? `Email ${contact}` : 'Use <a href="/about">our contact page</a>'}.</p>
   <p><a href="/grade">Check a business</a></p>

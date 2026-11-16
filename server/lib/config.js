@@ -300,6 +300,8 @@ export function configFromEnv(env = process.env, opts = {}) {
 
     // ChatGPT as a second opinion in the AI Visibility Check. Off without CHATGPT_API_KEY.
     chatgpt: { apiKey: nonEmpty(env.CHATGPT_API_KEY), model: nonEmpty(env.CHATGPT_MODEL) },
+    // Gemini as a second opinion. Off without GEMINI_API_KEY.
+    gemini: { apiKey: nonEmpty(env.GEMINI_API_KEY), model: nonEmpty(env.GEMINI_MODEL) },
 
     visionProviderName: vision,
     assistantProviderName: assistant,
@@ -354,6 +356,7 @@ export function redactConfig(config) {
       ...(config.assistant.apiKey !== undefined && { apiKey: mark(config.assistant.apiKey) }),
     },
     ...(config.chatgpt && { chatgpt: { ...config.chatgpt, apiKey: mark(config.chatgpt.apiKey) } }),
+    ...(config.gemini && { gemini: { ...config.gemini, apiKey: mark(config.gemini.apiKey) } }),
     ...(config.trust && {
       trust: {
         ...config.trust,

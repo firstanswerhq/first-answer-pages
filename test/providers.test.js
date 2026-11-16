@@ -14,6 +14,7 @@ import {
   createMockAssistantProvider,
   createAssistantProvider,
   createChatGptAssistantProvider,
+  createGeminiAssistantProvider,
   createExtraAssistants,
   AssistantError,
 } from '../server/lib/assistant.js';
@@ -913,5 +914,69 @@ describe('chatgpt: second-opinion provider', () => {
     assert.deepEqual(createExtraAssistants({ chatgpt: { apiKey: 'k' }, testRun: true }), []);
     const on = createExtraAssistants({ chatgpt: { apiKey: 'k' }, testRun: false });
     assert.deepEqual(on.map(p => p.name), ['chatgpt']);
+  });
+});
+
+const geminiReply = (text, { finish = 'STOP' } = {}) => ({
+  candidates: [{
+    finishReason: finish,
+    content: { role: 'model', parts: text === null ? [] : [{ text }] },
+    groundingMetadata: {
+      webSearchQueries: ['best plumbers nashville'],
+      groundingChunks: [
+        { web: { uri: 'https://example.com/best', title: 'Best plumbers' } },
+        { web: { uri: 'javascript:alert(1)', title: 'bad' } },
+      ],
+    },
+  }],
+});
+
+describe('gemini: second-opinion provider', () => {
+  test('asks generateContent with Google Search, key only in the header', async () => {
+    await withFetch(async () => jsonResponse(geminiReply('1. Test Plumbing')), async (calls) => {
+      const provider = createGeminiAssistantProvider({ apiKey: 'AIza-test-key', timeoutMs: 1000 });
+      let res;
+      const out = await captureOutput(async () => { res = await provider.ask({ prompt: 'Who are the best plumbers in Nashville, TN?' }); });
+      assert.equal(calls[0].url, 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent');
+      assert.equal(calls[0].init.headers['x-goog-api-key'], 'AIza-test-key');
+      assert.doesNotMatch(calls[0].url, /AIza/);
+      const body = JSON.parse(calls[0].init.body);
+      assert.deepEqual(body.contents, [{ role: 'user', parts: [{ text: 'Who are the best plumbers in Nashville, TN?' }] }]);
+      assert.deepEqual(body.tools, [{ google_search: {} }]);
+      assert.equal(body.generationConfig.maxOutputTokens, 8192);
+      assert.deepEqual(res, {
+        answer: '1. Test Plumbing', provider: 'gemini', model: 'gemini-3.1-flash-lite', webSearch: true,
+        sources: [{ url: 'https://example.com/best', title: 'Best plumbers' }],
+      });
+      assert.doesNotMatch(out, /AIza|Test Plumbing|Nashville/);
+      assert.match(out, /provider=gemini finish=STOP searched=yes/);
+    });
+  });
+
+  test('a reply that hit the token limit is an error even with some text', async () => {
+    await withFetch(async () => jsonResponse(geminiReply('1. Half', { finish: 'MAX_TOKENS' })), async () => {
+      const provider = createGeminiAssistantProvider({ apiKey: 'k', timeoutMs: 1000 });
+      await captureOutput(async () => {
+        await assert.rejects(() => provider.ask({ prompt: 'q' }), err => err.code === 'unparseable');
+      });
+    });
+  });
+
+  test('a refused call is an error that carries no key', async () => {
+    await withFetch(async () => jsonResponse({ error: { message: 'API key not valid: AIza-test-key' } }, 400), async () => {
+      const provider = createGeminiAssistantProvider({ apiKey: 'AIza-test-key', timeoutMs: 1000 });
+      const out = await captureOutput(async () => {
+        await assert.rejects(() => provider.ask({ prompt: 'q' }), err => err.code === 'provider_failed' && !/AIza/.test(String(err.message)));
+      });
+      assert.doesNotMatch(out, /AIza|not valid/);
+    });
+  });
+
+  test('on only when GEMINI_API_KEY is set, never in a test run; the key is masked', () => {
+    assert.deepEqual(createExtraAssistants({ gemini: { apiKey: 'k' }, testRun: true }), []);
+    assert.deepEqual(createExtraAssistants({ chatgpt: { apiKey: 'a' }, gemini: { apiKey: 'b' }, testRun: false }).map(p => p.name), ['chatgpt', 'gemini']);
+    const c = configFromEnv({ GEMINI_API_KEY: 'AIza-secret' }, { warn: () => {} });
+    assert.doesNotMatch(JSON.stringify(redactConfig(c)), /AIza-secret/);
+    assert.equal(redactConfig(c).gemini.apiKey, '[set]');
   });
 });

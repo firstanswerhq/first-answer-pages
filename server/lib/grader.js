@@ -145,11 +145,11 @@ function summarizeFacts(facts, input) {
  * @param {string} [reasonIfNone] used when no answer ran
  */
 /** Assistants asked only as second opinions. */
-export const SECOND_OPINIONS = new Set(['chatgpt']);
+export const SECOND_OPINIONS = new Set(['chatgpt', 'gemini']);
 
 export function aiNamedResult(allAi, reasonIfNone = AI_FAILED) {
-  // Second opinions (ChatGPT) are shown beside the main answers but never scored,
-  // so the score does not move with whether ChatGPT happened to be asked.
+  // Second opinions (ChatGPT, Gemini) are shown beside the main answers but never scored,
+  // so the score does not move with whether they happened to be asked.
   const ai = Array.isArray(allAi) ? allAi.filter(a => !SECOND_OPINIONS.has(a?.provider)) : [];
   const ran = ai.length;
   if (ran === 0) return { id: 'ai-named', result: 'not_checked', detail: reasonIfNone };
@@ -419,7 +419,7 @@ export function createGrader({
         return { finding: `AI named ${n} other ${n === 1 ? 'business' : 'businesses'}, not yours.` };
       }
       reason = results[0]?.reason;
-      if (mine.length > 0) return { finding: 'Our main AI assistant did not answer. ChatGPT did, but its answer is not scored.' };
+      if (mine.length > 0) return { finding: 'Our main AI assistant did not answer. A second opinion did, but it is not scored.' };
       return { finding: reason, state: 'failed' };
     });
     return { ai, reason };

@@ -551,6 +551,28 @@ test('when Claude fails and ChatGPT answers, the report says there is no AI scor
   assert.doesNotMatch(page, /AI named your business\./);
 });
 
+test('with ChatGPT and Gemini on, all three answer; only Claude is scored', async () => {
+  const assistant = stubAssistant('1. Bluebird Books');
+  const chatgpt = stubChatGpt('1. Ace Accounting');
+  const gemini = { name: 'gemini', calls: 0, async ask() { gemini.calls += 1; return { answer: '1. Ace Accounting', provider: 'gemini', model: 'stub-gem', webSearch: true }; } };
+  const env = await startEnv({ assistantProvider: assistant, extraAssistants: [chatgpt, gemini] });
+  const id = await startGrade(env, NO_SITE);
+  let grade = (await readJson(env, 'grades.json', [])).find(x => x.id === id);
+  assert.deepEqual(grade.ai.map(a => a.provider), ['anthropic', 'chatgpt', 'gemini']);
+  assert.equal(grade.results.find(r => r.id === 'ai-named').result, 'fail');
+  const ok = await post(env, `/grade/${id}/unlock`, LEAD);
+  const cookie = cookieOf(ok);
+  await get(env, `/grade/${id}`, { cookie });
+  grade = await until(async () => {
+    const g = (await readJson(env, 'grades.json', [])).find(x => x.id === id);
+    return g.ai.length === 9 ? g : null;
+  }, 'three assistants on three questions');
+  const page = await (await get(env, `/grade/${id}`, { cookie })).text();
+  assert.match(page, /We just asked Gemini\./);
+  assert.ok(page.includes("Claude answered 3 questions, ChatGPT answered 3 questions and Gemini answered 3 questions. Your score counts Claude&#39;s 3 answers; ChatGPT&#39;s and Gemini&#39;s are shown so you can compare.")
+    || page.includes("Claude answered 3 questions, ChatGPT answered 3 questions and Gemini answered 3 questions. Your score counts Claude's 3 answers; ChatGPT's and Gemini's are shown so you can compare."));
+});
+
 test('with the demo assistant in charge, ChatGPT is never asked', async () => {
   const chatgpt = stubChatGpt('1. Ace Accounting');
   const env = await startEnv({ extraAssistants: [chatgpt] });
