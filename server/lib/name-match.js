@@ -93,7 +93,20 @@ const LABEL_WORDS = new Set([
   'phone', 'address', 'website', 'hours', 'rating', 'reviews', 'review', 'services', 'why', 'note', 'tip',
   'pros', 'cons', 'location', 'contact', 'email', 'specialty', 'specialties', 'known for', 'summary',
   'tips', 'notes', 'what to look for', 'service area', 'years in business',
+  // Section headings AI answers use (never business names).
+  'caveats', 'caveat', 'also worth a look', 'also worth considering', 'worth considering', 'also consider',
+  'honorable mentions', 'honorable mention', 'other options', 'other good options', 'top picks', 'my top picks',
+  'top recommendations', 'recommendations', 'bottom line', 'final thoughts', 'how to choose', 'before you hire',
+  'things to consider', 'quick tips', 'sources', 'disclaimer', 'a few caveats', 'good to know', 'keep in mind',
+  'top 5', 'top five', 'the list', 'my picks', 'best overall', 'how i picked these', 'methodology',
 ]);
+
+/** A bold span that is the whole line and ends with a colon is a heading ("**Also worth a look:**"). */
+function isHeadingLine(line, span) {
+  const rest = line.replace(span, '').replace(/[\s:]/g, '');
+  const inner = span.replace(/\*/g, '').trim();
+  return rest === '' && (inner.endsWith(':') || /^#{1,6}\s/.test(line.trim()));
+}
 
 function stripMarkdown(text) {
   return text
@@ -139,7 +152,7 @@ function listedNames(answer) {
     }
     // bold spans on other lines (bounded: no lazy scan over long text)
     const spans = line.slice(0, 2000).match(/\*\*[^*\n]{1,120}\*\*/g) ?? [];
-    for (const span of spans) add(span);
+    for (const span of spans) if (!isHeadingLine(line, span)) add(span);
   }
   return names;
 }

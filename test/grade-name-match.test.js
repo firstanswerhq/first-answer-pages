@@ -95,3 +95,27 @@ test('analyzeAnswer reports the place in the list', () => {
   assert.equal(r.total, 3);
   assert.deepEqual(r.competitors, ['One Roofing', 'Two Roofing']);
 });
+
+test('section headings in an AI answer are never read as business names', () => {
+  const answer = [
+    'Here are well-reviewed plumbers in Nashville:',
+    '',
+    '1. **Parthenon Plumbing, Heating & AC** - long-standing local company',
+    '2. **Hiller Plumbing, Heating, Cooling & Electrical** - large regional company',
+    '',
+    '**Also worth a look:**',
+    '- **Eason Plumbing & Drain Cleaning** - drain work',
+    '',
+    '**Caveats**',
+    'Check reviews before you hire.',
+    '## Bottom line',
+    '**Honorable mentions:**',
+  ].join('\n');
+  const found = extractCompetitors(answer, { name: 'Benjamin Franklin Plumbing', city: 'Nashville', state: 'TN', service: 'plumbers' });
+  assert.deepEqual(found, ['Parthenon Plumbing, Heating & AC', 'Hiller Plumbing, Heating, Cooling & Electrical', 'Eason Plumbing & Drain Cleaning']);
+});
+
+test('a bold business name on its own line, with no colon, still counts', () => {
+  const answer = '**Doctor Drips Plumbing**\nFast and friendly.\n\n**Smooth Saling Plumbing**\nGood reviews.';
+  assert.deepEqual(extractCompetitors(answer, { name: 'Nobody Roofing' }), ['Doctor Drips Plumbing', 'Smooth Saling Plumbing']);
+});
