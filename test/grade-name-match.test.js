@@ -128,9 +128,16 @@ test('a bold name with a colon and prose under it is a business, not a heading',
   assert.deepEqual(r.competitors, ['Joe Plumbing']);
 });
 
-test('a markdown heading with a bold title over a list is skipped', () => {
-  const answer = '## **Top Plumbers:**\n- Acme Plumbing\n- Bob Plumbing\n\n**Other things to know**:\n- Call ahead';
-  const r = analyzeAnswer(answer, { name: 'Acme Plumbing' });
-  assert.equal(r.position, 1);
-  assert.deepEqual(r.competitors, ['Bob Plumbing', 'Call ahead']);
+test('a bold business name over its detail bullets keeps its place', () => {
+  const shapes = [
+    '**Bob Plumbing:**\n- Fast\n\n**Acme Plumbing:**\n- Licensed and insured',
+    '### **Bob Plumbing:**\n- Fast\n### **Acme Plumbing:**\n- Good',
+    '**Bob Plumbing**:\n- Fast\n**Acme Plumbing**:\n- Good',
+    '**1. Bob Plumbing:**\n- Fast\n**2. Acme Plumbing:**\n- Good',
+  ];
+  for (const answer of shapes) {
+    const r = analyzeAnswer(answer, { name: 'Acme Plumbing' });
+    assert.equal(r.named, true, answer);
+    assert.ok(r.competitors.some(c => /Bob Plumbing/.test(c)), answer);
+  }
 });

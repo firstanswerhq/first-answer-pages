@@ -101,17 +101,6 @@ const LABEL_WORDS = new Set([
   'top 5', 'top five', 'the list', 'my picks', 'best overall', 'how i picked these', 'methodology',
 ]);
 
-/**
- * A bold span that is the whole line (after any markdown # marks), ends with a
- * colon, and is followed by a list is a heading ("**Also worth a look:**" then
- * "- Bob's Plumbing"). A bold name followed by prose is a business, so it stays.
- */
-function isHeadingLine(line, span, nextLine) {
-  const rest = line.replace(/^\s*#{1,6}\s*/, '').replace(span, '').replace(/\s/g, '');
-  const inner = span.replace(/\*/g, '').trim();
-  const colon = inner.endsWith(':') || rest === ':';
-  return (rest === '' || rest === ':') && colon && LIST_LINE.test(nextLine ?? '');
-}
 
 function stripMarkdown(text) {
   return text
@@ -149,9 +138,7 @@ function listedNames(answer) {
     seen.add(key);
     names.push(candidate);
   };
-  const lines = String(answer ?? '').split(/\r?\n/);
-  for (let i = 0; i < lines.length; i += 1) {
-    const line = lines[i];
+  for (const line of String(answer ?? '').split(/\r?\n/)) {
     const list = LIST_LINE.exec(line);
     if (list) {
       add(list[1]);
@@ -159,11 +146,7 @@ function listedNames(answer) {
     }
     // bold spans on other lines (bounded: no lazy scan over long text)
     const spans = line.slice(0, 2000).match(/\*\*[^*\n]{1,120}\*\*/g) ?? [];
-    let next = '';
-    for (let k = i + 1; k < lines.length && k <= i + 3; k += 1) {
-      if (lines[k].trim() !== '') { next = lines[k]; break; }
-    }
-    for (const span of spans) if (!isHeadingLine(line, span, next)) add(span);
+    for (const span of spans) add(span);
   }
   return names;
 }
