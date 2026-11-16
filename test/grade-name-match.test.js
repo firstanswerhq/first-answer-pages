@@ -297,3 +297,22 @@ test('the core name never matches running text', () => {
   assert.equal(r.named, false);
   assert.equal(analyzeAnswer('1. **Music City** - great service', biz).named, true);
 });
+
+test('the core name never matches a different business with the same first word', () => {
+  const answer = '1. **Johnson Controls**\n2. **Johnson & Sons Roofing**\n3. **Acme Plumbing**';
+  assert.equal(analyzeAnswer(answer, { name: 'Johnson Plumbing', city: 'Nashville', state: 'TN', service: 'plumbers' }).named, false);
+  assert.equal(analyzeAnswer('1. **Benjamin Franklin Electric**', { name: 'Benjamin Franklin Plumbing' }).named, false);
+  assert.equal(analyzeAnswer('1. **Smith Hiller Roofing**', HILLER).named, false);
+  assert.equal(analyzeAnswer('1. **Hiller Plumbing** - great', HILLER).position, 1);
+});
+
+test('names in a markdown table and bold names inside sentences count', () => {
+  const table = '| Company | Rating |\n|---|---|\n| **Acme Plumbing** | 4.8 |\n| Bob Drains | 4.6 |';
+  assert.deepEqual(extractCompetitors(table, { name: 'Nobody Roofing' }), ['Acme Plumbing', 'Bob Drains']);
+  const prose = "I'd start with **Acme Plumbing** and **Bob Drains**. Ask for **written estimates**.";
+  assert.deepEqual(extractCompetitors(prose, { name: 'Nobody Roofing' }), ['Acme Plumbing', 'Bob Drains']);
+});
+
+test('a bold word that is only part of the name keeps the whole name', () => {
+  assert.deepEqual(extractCompetitors('- **Acme** Plumbing & Drain\n- Keep It Clean', { name: 'Nobody Roofing' }), ['Acme Plumbing & Drain', 'Keep It Clean']);
+});

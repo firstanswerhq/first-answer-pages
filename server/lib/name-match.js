@@ -102,10 +102,19 @@ export function isNamed(answer, business, { allowGeneric = false } = {}) {
     shortName(business?.name, business ?? {}) ?? '',
     // The core name ("Hiller") only counts against a single listed name, never running text,
     // so a nickname like "Music City" in a sentence can't match "Music City Plumbing".
-    allowGeneric ? coreName(business?.name, context) : '',
     normalizeForMatch(registeredDomain(business?.website)),
   ];
-  return candidates.some(c => c !== '' && haystack.includes(` ${c} `));
+  if (candidates.some(c => c !== '' && haystack.includes(` ${c} `))) return true;
+  // The core name ("Hiller") only counts against a single listed name, never running
+  // text, and only when the listed name starts with it and every other word comes
+  // from the business's own name ("Hiller Plumbing" yes, "Johnson Controls" no).
+  if (!allowGeneric) return false;
+  const core = coreName(business?.name, context);
+  if (core === '') return false;
+  const listed = normalizeForMatch(answer);
+  if (listed !== core && !listed.startsWith(`${core} `)) return false;
+  const own = new Set([...fullWords, ...context, 'of', 'the', 'and']);
+  return listed.slice(core.length).split(' ').filter(Boolean).every(w => own.has(w) || LEGAL_WORDS.has(w));
 }
 
 // ---- Reading the answer's list ------------------------------------------------
@@ -121,6 +130,7 @@ const LABEL_WORDS = new Set([
   'top recommendations', 'recommendations', 'bottom line', 'final thoughts', 'how to choose', 'before you hire',
   'things to consider', 'quick tips', 'sources', 'disclaimer', 'a few caveats', 'good to know', 'keep in mind',
   'top 5', 'top five', 'the list', 'my picks', 'best overall', 'how i picked these', 'methodology',
+  'company', 'business', 'name', 'provider', 'plumber', 'contractor',
 ]);
 
 
@@ -186,15 +196,16 @@ function acceptable(candidate) {
 /** The name part of a list item: its leading bold span or link text when it has one. */
 function leadingName(raw) {
   const text = String(raw).trim();
-  const bold = /^\*{2,3}([^*\n]{1,120})\*{2,3}/.exec(text);
-  if (bold) return bold[1];
+  const bold = /^\*{2,3}([^*\n]{1,120})\*{2,3}(.*)$/.exec(text);
+  // "**Acme Plumbing** - desc" -> the bold span; "**Acme** Plumbing & Drain" -> the whole line.
+  if (bold && /^(?:$|\s*[-\u2013\u2014:,(.|]|\s+(?:is|has|was|offers|are)\b)/.test(bold[2])) return bold[1];
   const link = /^\[([^\]]{1,120})\]\(/.exec(text);
   if (link) return link[1];
   return text;
 }
 
 // Advice lines that open with a verb ("Check licensing", "Get multiple quotes") are tips, not businesses.
-const TIP_START = /^(?:check|ask|get|read|call|compare|look|verify|make|avoid|confirm|request|choose|consider|search|find|use|keep|be|do|don't|never|always|try|watch|beware|expect|plan|schedule|book)\b/i;
+const TIP_START = /^(?:check|ask|get|read|call|compare|look|verify|make|avoid|confirm|request|choose|consider|search|find|don't|never|always|watch|beware|expect|schedule)\b/i;
 function isTip(candidate) {
   return TIP_START.test(candidate) && !BUSINESS_END.test(candidate) && !STRONG_TRADE.test(candidate.split(/\s+/).slice(-1)[0] ?? '');
 }
@@ -233,8 +244,22 @@ function listedNames(answer) {
     if (line.trim() !== '' && (baseIndent === null || indentOf(line) <= baseIndent)) baseIndent = null;
     // A bold span that opens a line ("**Acme Plumbing** - ...") can be a name;
     // bold words in the middle of a sentence ("Here are my **top five**") are not.
-    const lead = /^\s*(?:#{1,6}\s+)?\*{2,3}([^*\n]{1,120})\*{2,3}/.exec(line);
-    if (lead) add(lead[1]);
+    // Markdown table row: the first cell is the name ("| **Acme Plumbing** | 4.8 |").
+    const row = /^\s*\|(.*)\|\s*$/.exec(line);
+    if (row) {
+      const first = row[1].split('|')[0].trim();
+      if (!/^:?-{2,}:?$/.test(first)) add(first);
+      continue;
+    }
+    // Bold spans: one that opens the line can be a name; one inside a sentence counts
+    // only when it is written like a name ("I'd start with **Acme Plumbing**"), not
+    // when it is ordinary words ("my **top five Nashville plumbers**").
+    const spans = line.slice(0, 2000).match(/\*\*[^*\n]{1,120}\*\*/g) ?? [];
+    spans.forEach((span, k) => {
+      const inner = span.replace(/\*/g, '').trim();
+      const opens = k === 0 && /^\s*(?:#{1,6}\s+)?\*{2,3}/.test(line);
+      if (opens || (/^[\p{Lu}\d]/u.test(inner) && isTitleCase(inner))) add(span);
+    });
   }
   return names;
 }
