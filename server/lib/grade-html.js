@@ -154,7 +154,7 @@ function aiSentence(entry, now) {
   } else {
     tail = n === 1 ? 'It named 1 other business, not yours.' : `It named these ${n} businesses, not yours.`;
   }
-  const noSearch = entry.provider === 'gemini' ? ' (Gemini answered from what it already knows, without a live web search.)' : '';
+  const noSearch = entry.provider === 'gemini' && entry.webSearch !== true ? ' (Gemini answered from what it already knows, without a live web search.)' : '';
   return `${asked} ${tail}${noSearch}`;
 }
 
@@ -436,13 +436,14 @@ function fullReport(grade, contact, rechecking = false, justOpened = false) {
   const mainName = mainWho(scoredAnswers(grade)[0]?.provider ?? grade.mainProvider);
   const plural = n => `${n} ${n === 1 ? 'question' : 'questions'}`;
   const one = seconds.length === 1;
-  const sameCount = new Set(per.values()).size === 1;
+  // "The same N questions" only when every assistant answered every question.
+  const sameCount = [...per.values()].every(n => n === asked);
   const askedLine = sameCount
     ? `We asked ${andList([...per.keys()].map(providerWho))} the same ${asked === 1 ? 'question' : plural(asked)}.`
     : `${andList([...per].map(([p, n]) => `${providerWho(p)} answered ${plural(n)}`))}.`;
   const answersNote = used <= 0 ? ''
     : scoredN === 0
-      ? `<p class="hint">${mainName} did not answer, so this check has no AI score. ${andList(seconds)}${one ? '\'s answer is' : '\'s answers are'} here so you can compare.</p>`
+      ? `<p class="hint">${mainName} did not answer, so this check has no AI score. ${andList(seconds.map(n => `${n}'s`))} ${used - scoredN === 1 ? 'answer is' : 'answers are'} here so you can compare.</p>`
       : seconds.length > 0
         ? `<p class="hint">${askedLine} Only ${mainName}'s answers count toward your score. ${andList(seconds)} ${one ? 'isn\'t' : 'aren\'t'} asked every time, so counting ${one ? 'it' : 'them'} would make your score jump around. ${one ? 'Its' : 'Their'} answers are here so you can compare.</p>`
         : `<p class="hint">We asked AI ${plural(asked)}. Your score counts ${used === 1 ? 'that answer' : `all ${used} answers`}.</p>`;

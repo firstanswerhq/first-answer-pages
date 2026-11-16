@@ -554,7 +554,7 @@ test('when Claude fails and ChatGPT answers, the report says there is no AI scor
 test('with ChatGPT and Gemini on, all three answer; only Claude is scored', async () => {
   const assistant = stubAssistant('1. Bluebird Books');
   const chatgpt = stubChatGpt('1. Ace Accounting');
-  const gemini = { name: 'gemini', calls: 0, async ask() { gemini.calls += 1; return { answer: '1. Ace Accounting', provider: 'gemini', model: 'stub-gem', webSearch: true }; } };
+  const gemini = { name: 'gemini', calls: 0, async ask() { gemini.calls += 1; return { answer: '1. Ace Accounting', provider: 'gemini', model: 'stub-gem', webSearch: false }; } };
   const env = await startEnv({ assistantProvider: assistant, extraAssistants: [chatgpt, gemini] });
   const id = await startGrade(env, NO_SITE);
   let grade = (await readJson(env, 'grades.json', [])).find(x => x.id === id);
@@ -584,6 +584,9 @@ test('when Claude fails, every second opinion is shown and none is scored', asyn
   assert.match(page, /We just asked ChatGPT\./);
   assert.match(page, /We just asked Gemini\./);
   assert.match(page, /Claude did not answer this time/);
+  const ok = await post(env, `/grade/${id}/unlock`, LEAD);
+  const full = await (await get(env, `/grade/${id}`, { cookie: cookieOf(ok) })).text();
+  assert.ok(full.includes("Claude did not answer, so this check has no AI score. ChatGPT's and Gemini's answers are here so you can compare."));
 });
 
 test('with the demo assistant in charge, ChatGPT is never asked', async () => {

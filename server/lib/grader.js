@@ -421,7 +421,7 @@ export function createGrader({
         if (counted.some(a => a.named)) return { finding: `${who} named your business.` };
         const n = Math.max(...counted.map(a => a.competitors.length));
         if (n === 0) return { finding: `${who} did not name your business.` };
-        return { finding: `AI named ${n} other ${n === 1 ? 'business' : 'businesses'}, not yours.` };
+        return { finding: `${who} named ${n} other ${n === 1 ? 'business' : 'businesses'}, not yours.` };
       }
       reason = results[0]?.reason;
       if (mine.length > 0) return { finding: `${mainWho(assistantProvider?.name)} did not answer this time, so there is no AI score.` };
