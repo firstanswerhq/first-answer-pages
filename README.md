@@ -271,7 +271,7 @@ All are optional except in production, where `DATA_DIR` and `BASE_URL` are requi
 | `VERIFY_YEARLY_FEE_CENTS` | `4900` | What everyone else pays per year to be verified. In cents: `4900` is $49. |
 | `CHATGPT_API_KEY` | none | Optional. An OpenAI API key. When set, the AI Visibility Check asks ChatGPT (with live web search) the same questions it asks the main assistant, and the report shows both. Each check then uses about twice as many of the day's AI calls. |
 | `CHATGPT_MODEL` | `gpt-6.1-terra` | Which OpenAI model answers as ChatGPT. |
-| `GEMINI_API_KEY` | none | Optional. A Google AI Studio API key. When set, the AI Visibility Check also asks Gemini (with Google Search) the same questions, and the report shows its answers for comparison. They are not scored. Second opinions are skipped once 12 or fewer of the day's Grader AI calls are left. |
+| `GEMINI_API_KEY` | none | Optional. A Google AI Studio API key. When set, the AI Visibility Check also asks Gemini the same questions (without live web search: Google's grounding terms forbid analyzing, storing or sharing searched answers the way the report does), and the report shows its answers for comparison. They are not scored. Second opinions are skipped once 12 or fewer of the day's Grader AI calls are left. |
 | `GEMINI_MODEL` | `gemini-3.1-flash-lite` | Which Google model answers as Gemini. |
 | `GRADER_ENABLED` | `on` | Set to `off` to hide the AI Visibility Grader at `/grade` (every `/grade` address returns 404) and its link on the home page. |
 | `GRADER_LEAD_GATE` | `on` | With `on`, the full Grader report opens after the visitor sends a short form (name, email, phone). Set to `off` to show the full report to everyone, for demos and contest judges. |

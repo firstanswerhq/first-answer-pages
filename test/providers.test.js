@@ -932,7 +932,7 @@ const geminiReply = (text, { finish = 'STOP' } = {}) => ({
 });
 
 describe('gemini: second-opinion provider', () => {
-  test('asks generateContent with Google Search, key only in the header', async () => {
+  test('asks generateContent without Google Search (its terms forbid how the check uses results), key only in the header', async () => {
     await withFetch(async () => jsonResponse(geminiReply('1. Test Plumbing')), async (calls) => {
       const provider = createGeminiAssistantProvider({ apiKey: 'AIza-test-key', timeoutMs: 1000 });
       let res;
@@ -942,14 +942,13 @@ describe('gemini: second-opinion provider', () => {
       assert.doesNotMatch(calls[0].url, /AIza/);
       const body = JSON.parse(calls[0].init.body);
       assert.deepEqual(body.contents, [{ role: 'user', parts: [{ text: 'Who are the best plumbers in Nashville, TN?' }] }]);
-      assert.deepEqual(body.tools, [{ google_search: {} }]);
+      assert.equal('tools' in body, false);
       assert.equal(body.generationConfig.maxOutputTokens, 8192);
       assert.deepEqual(res, {
-        answer: '1. Test Plumbing', provider: 'gemini', model: 'gemini-3.1-flash-lite', webSearch: true,
-        sources: [{ url: 'https://example.com/best', title: 'Best plumbers' }],
+        answer: '1. Test Plumbing', provider: 'gemini', model: 'gemini-3.1-flash-lite', webSearch: false, sources: [],
       });
       assert.doesNotMatch(out, /AIza|Test Plumbing|Nashville/);
-      assert.match(out, /provider=gemini finish=STOP searched=yes/);
+      assert.match(out, /provider=gemini finish=STOP/);
     });
   });
 

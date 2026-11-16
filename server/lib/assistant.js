@@ -14,8 +14,8 @@
  * prompt and never the business name. The ChatGPT adapter uses OpenAI's
  * Responses API with its web_search tool (max 3 uses), asks OpenAI not to
  * store the exchange, and treats a reply that did not finish as a failure.
- * The Gemini adapter uses Google's generateContent with Google Search
- * grounding, the same way.
+ * The Gemini adapter uses Google's generateContent without web search
+ * (see createGeminiAssistantProvider for why).
  *
  * Keys go only in a request header. Logs carry the provider name, the HTTP
  * status and the shape of a reply (why it stopped, block type names, a token
@@ -392,20 +392,13 @@ function joinGeminiText(data) {
   return parts.filter(p => typeof p?.text === 'string' && p.thought !== true).map(p => p.text).join('');
 }
 
-/** Web sources from Google Search grounding, in the shape collectSources() reads. */
-function geminiCitations(data) {
-  const chunks = data?.candidates?.[0]?.groundingMetadata?.groundingChunks;
-  const citations = (Array.isArray(chunks) ? chunks : [])
-    .map(c => c?.web)
-    .filter(w => w && typeof w.uri === 'string')
-    .map(w => ({ url: w.uri, title: w.title }));
-  return collectSources({ content: [{ type: 'text', citations }] });
-}
-
 /**
- * Gemini as a second opinion: Google's generateContent with Google Search
- * grounding. The key goes only in the x-goog-api-key header. A reply that did
- * not finish normally (finishReason other than STOP) is a failure.
+ * Gemini as a second opinion: Google's generateContent, answering from what
+ * the model already knows. Google Search grounding is deliberately NOT used:
+ * Google's terms forbid analyzing grounded results, storing them for reports,
+ * or showing them to anyone but the person who asked, and this check does all
+ * three. The key goes only in the x-goog-api-key header. A reply that did not
+ * finish normally (finishReason other than STOP) is a failure.
  */
 export function createGeminiAssistantProvider({ apiKey, model = DEFAULT_GEMINI_MODEL, timeoutMs = DEFAULT_PROVIDER_TIMEOUT_MS }) {
   const safeModel = String(model).replace(/[^A-Za-z0-9._-]/g, '');
@@ -418,23 +411,20 @@ export function createGeminiAssistantProvider({ apiKey, model = DEFAULT_GEMINI_M
         { 'x-goog-api-key': apiKey },
         {
           contents: [{ role: 'user', parts: [{ text: String(prompt ?? '') }] }],
-          tools: [{ google_search: {} }],
           generationConfig: { maxOutputTokens: 8192 },
         },
         timeoutMs,
         signal,
       );
       const finish = String(data?.candidates?.[0]?.finishReason ?? 'none').replace(/[^A-Z_a-z]/g, '');
-      const searched = Array.isArray(data?.candidates?.[0]?.groundingMetadata?.webSearchQueries)
-        && data.candidates[0].groundingMetadata.webSearchQueries.length > 0;
-      process.stderr.write(`[assistant] provider=gemini finish=${finish} searched=${searched ? 'yes' : 'no'}\n`);
+      process.stderr.write(`[assistant] provider=gemini finish=${finish}\n`);
       if (finish !== 'STOP') throw new AssistantError('unparseable');
       return {
         answer: requireText(joinGeminiText(data)),
         provider: 'gemini',
         model: safeModel,
-        webSearch: searched,
-        sources: geminiCitations(data),
+        webSearch: false,
+        sources: [],
       };
     },
   };

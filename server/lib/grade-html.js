@@ -12,7 +12,7 @@ import { DEFAULT_SITE_NAME } from './config.js';
 import { STATE_HINT } from './listing-fields.js';
 import { formatRunTime, DEMO_LABEL } from './seance-html.js';
 import { CHECKS, GROUPS } from './grade-checks.js';
-import { stepNames, foundFromGrade, SECOND_OPINIONS } from './grader.js';
+import { stepNames, foundFromGrade, SECOND_OPINIONS, mainWho } from './grader.js';
 import {
   suggestedTitle, suggestedSummary, jsonLdBlock, llmsDraft, robotsLines,
 } from './fix-kit.js';
@@ -154,7 +154,8 @@ function aiSentence(entry, now) {
   } else {
     tail = n === 1 ? 'It named 1 other business, not yours.' : `It named these ${n} businesses, not yours.`;
   }
-  return `${asked} ${tail}`;
+  const noSearch = entry.provider === 'gemini' ? ' (Gemini answered from what it already knows, without a live web search.)' : '';
+  return `${asked} ${tail}${noSearch}`;
 }
 
 function answerBlock(entry) {
@@ -172,12 +173,13 @@ function aiSection(grade, now) {
   const entry = scoredAnswers(grade)[0];
   const onlySeconds = !entry ? (grade.ai ?? []).filter(a => SECOND_OPINIONS.has(a.provider)) : [];
   if (!entry && onlySeconds.length > 0) {
-    const first = onlySeconds[0];
+    const prompt0 = onlySeconds[0].prompt;
+    const shown = onlySeconds.filter(a => a.prompt === prompt0);
     return `<section class="grade-ai">
     <h2>What AI says</h2>
-    <p>Our main AI assistant did not answer this time, so this check has no AI score. To try again, start a new check later.</p>
-    <p>${e(aiSentence(first, now))} (Shown for comparison, not scored.)</p>
-    ${answerBlock(first)}
+    <p>${e(mainWho(grade.mainProvider))} did not answer this time, so this check has no AI score. To try again, start a new check later.</p>
+    ${shown.map(a => `<p>${e(aiSentence(a, now))} For comparison only.</p>
+    ${answerBlock(a)}`).join('\n    ')}
   </section>`;
   }
   if (!entry) {
@@ -199,7 +201,7 @@ function aiSection(grade, now) {
     const names = a.competitors.length > 0
       ? `<ol class="grade-competitors">${a.competitors.map(c => `<li>${e(c)}</li>`).join('')}</ol>`
       : '';
-    return `<p>${e(aiSentence(a, now))}</p>
+    return `<p>${e(aiSentence(a, now))} For comparison only.</p>
     ${names}
     ${answerBlock(a)}`;
   }).join('\n    ');
@@ -371,8 +373,12 @@ function allAnswers(grade) {
   if (ai.length === 0) return '';
   const scored = scoredAnswers(grade);
   const named = scored.filter(a => a.named).length;
-  const items = ai.map(a => `<li><p><strong>${e(a.prompt)}</strong></p>${a.provider === 'mock' ? `<p class="seance-demo">${DEMO_LABEL}</p>` : ''}<p>${e(aiSentence(a, NaN))}</p>${answerBlock(a)}</li>`).join('');
-  return `<div class="grade-all-answers">${scored.length > 0 ? `<p>Named in ${named} of ${scored.length}${scored.length < ai.length ? ' scored' : ''} ${scored.length === 1 ? 'answer' : 'answers'}.</p>` : ''}<ol>${items}</ol></div>`;
+  const items = ai.map(a => `<li><p><strong>${e(a.prompt)}</strong></p>${a.provider === 'mock' ? `<p class="seance-demo">${DEMO_LABEL}</p>` : ''}<p>${e(aiSentence(a, NaN))}${SECOND_OPINIONS.has(a.provider) ? ' For comparison only.' : ''}</p>${answerBlock(a)}</li>`).join('');
+  const count = scored.length === 0 ? ''
+    : scored.length < ai.length
+      ? `<p>${e(mainWho(scored[0].provider))} named you in ${named} of its ${scored.length} ${scored.length === 1 ? 'answer' : 'answers'}.</p>`
+      : `<p>Named in ${named} of ${scored.length} ${scored.length === 1 ? 'answer' : 'answers'}.</p>`;
+  return `<div class="grade-all-answers">${count}<ol>${items}</ol></div>`;
 }
 
 function kitItem(index, title, text) {
@@ -426,14 +432,19 @@ function fullReport(grade, contact, rechecking = false, justOpened = false) {
   for (const a of grade.ai ?? []) per.set(a.provider, (per.get(a.provider) ?? 0) + 1);
   const scoredN = scoredAnswers(grade).length;
   const andList = xs => (xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
-  const secondsWho = andList([...per.keys()].filter(p => SECOND_OPINIONS.has(p)).map(p => `${providerWho(p)}'s`));
-  const mainName = providerWho(scoredAnswers(grade)[0]?.provider);
+  const seconds = [...per.keys()].filter(p => SECOND_OPINIONS.has(p)).map(providerWho);
+  const mainName = mainWho(scoredAnswers(grade)[0]?.provider ?? grade.mainProvider);
   const plural = n => `${n} ${n === 1 ? 'question' : 'questions'}`;
+  const one = seconds.length === 1;
+  const sameCount = new Set(per.values()).size === 1;
+  const askedLine = sameCount
+    ? `We asked ${andList([...per.keys()].map(providerWho))} the same ${asked === 1 ? 'question' : plural(asked)}.`
+    : `${andList([...per].map(([p, n]) => `${providerWho(p)} answered ${plural(n)}`))}.`;
   const answersNote = used <= 0 ? ''
     : scoredN === 0
-      ? `<p class="hint">Our main AI assistant did not answer, so this check has no AI score. ${secondsWho} answers are shown so you can compare.</p>`
-      : who > 1
-        ? `<p class="hint">${andList([...per].map(([p, n]) => `${providerWho(p)} answered ${plural(n)}`))}. Your score counts ${mainName}'s ${scoredN === 1 ? 'answer' : `${scoredN} answers`}; ${secondsWho} are shown so you can compare.</p>`
+      ? `<p class="hint">${mainName} did not answer, so this check has no AI score. ${andList(seconds)}${one ? '\'s answer is' : '\'s answers are'} here so you can compare.</p>`
+      : seconds.length > 0
+        ? `<p class="hint">${askedLine} Only ${mainName}'s answers count toward your score. ${andList(seconds)} ${one ? 'isn\'t' : 'aren\'t'} asked every time, so counting ${one ? 'it' : 'them'} would make your score jump around. ${one ? 'Its' : 'Their'} answers are here so you can compare.</p>`
         : `<p class="hint">We asked AI ${plural(asked)}. Your score counts ${used === 1 ? 'that answer' : `all ${used} answers`}.</p>`;
   return `<section class="grade-full" id="full-report">${openedNote}
     <h2>Every check</h2>
@@ -523,7 +534,7 @@ export function aboutPage({ contactEmail, userAgent = '' } = {}) {
   </ul>
   <p>We read only public pages. We do not log in, fill in forms, or run the page's scripts. We send no cookies. We visit only websites on the public internet.</p>
   ${userAgent ? `<p>Our visits identify themselves as <code>${e(userAgent)}</code>.</p>` : ''}
-  <p>We also ask AI assistants up to three questions each about the best businesses of that kind in that city, and check whether the business is named. The questions name the kind of business and the city, never the business name. They go to Claude, and sometimes to ChatGPT and Gemini too.</p>
+  <p>We also ask Claude up to three questions about the best businesses of that kind in that city, and check whether the business is named. The questions name the kind of business and the city, never the business name. When we can, we also ask ChatGPT and Gemini the same questions so you can compare; only Claude's answers count toward the score.</p>
   <p>Reports are not listed in search engines. We delete them after 90 days.</p>
   <p>Questions, or want a report removed? ${contact ? `Email ${contact}` : 'Use <a href="/about">our contact page</a>'}.</p>
   <p><a href="/grade">Check a business</a></p>

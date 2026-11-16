@@ -147,6 +147,9 @@ function summarizeFacts(facts, input) {
 /** Assistants asked only as second opinions. */
 export const SECOND_OPINIONS = new Set(['chatgpt', 'gemini']);
 
+/** Display name of a main assistant, for the score lines. */
+export const mainWho = name => (name === 'anthropic' ? 'Claude' : name === 'openai' ? 'OpenAI' : 'AI');
+
 export function aiNamedResult(allAi, reasonIfNone = AI_FAILED) {
   // Second opinions (ChatGPT, Gemini) are shown beside the main answers but never scored,
   // so the score does not move with whether they happened to be asked.
@@ -155,16 +158,17 @@ export function aiNamedResult(allAi, reasonIfNone = AI_FAILED) {
   if (ran === 0) return { id: 'ai-named', result: 'not_checked', detail: reasonIfNone };
   const named = ai.filter(a => a.named).length;
   if (named === 0) {
-    return { id: 'ai-named', result: 'fail', earned: 0, detail: ran === 1 ? 'No. AI did not name your business.' : `No. AI did not name your business in any of ${ran} answers.` };
+    const who = mainWho(ai[0]?.provider);
+    return { id: 'ai-named', result: 'fail', earned: 0, detail: ran === 1 ? `No. ${who} did not name your business.` : `No. ${who} did not name your business in any of ${ran} answers.` };
   }
   const points = CHECKS.find(c => c.id === 'ai-named').points;
   return {
     id: 'ai-named',
     result: 'pass',
     earned: Math.round((points * named) / ran),
-    detail: ran === 1 ? 'Yes. AI named your business.'
-      : named === ran ? `Yes. AI named your business in all ${ran} answers.`
-        : `Partly. AI named your business in ${named} of ${ran} answers.`,
+    detail: ran === 1 ? `Yes. ${mainWho(ai[0]?.provider)} named your business.`
+      : named === ran ? `Yes. ${mainWho(ai[0]?.provider)} named your business in all ${ran} answers.`
+        : `Partly. ${mainWho(ai[0]?.provider)} named your business in ${named} of ${ran} answers.`,
   };
 }
 
@@ -413,13 +417,14 @@ export function createGrader({
       ai = [...mine, ...kept.filter(a => a.prompt !== prompt)];
       const counted = mine.filter(a => !SECOND_OPINIONS.has(a.provider));
       if (counted.length > 0) {
-        if (counted.some(a => a.named)) return { finding: 'AI named your business.' };
+        const who = mainWho(counted[0].provider);
+        if (counted.some(a => a.named)) return { finding: `${who} named your business.` };
         const n = Math.max(...counted.map(a => a.competitors.length));
-        if (n === 0) return { finding: 'AI did not name your business.' };
+        if (n === 0) return { finding: `${who} did not name your business.` };
         return { finding: `AI named ${n} other ${n === 1 ? 'business' : 'businesses'}, not yours.` };
       }
       reason = results[0]?.reason;
-      if (mine.length > 0) return { finding: 'Our main AI assistant did not answer. A second opinion did, but it is not scored.' };
+      if (mine.length > 0) return { finding: `${mainWho(assistantProvider?.name)} did not answer this time, so there is no AI score.` };
       return { finding: reason, state: 'failed' };
     });
     return { ai, reason };
@@ -515,6 +520,7 @@ export function createGrader({
     const ai = await findReusableAi(key);
     const grade = {
       id,
+      mainProvider: String(assistantProvider?.name ?? ''),
       status: 'running',
       input,
       key,
