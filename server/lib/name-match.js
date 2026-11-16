@@ -100,8 +100,6 @@ export function isNamed(answer, business, { allowGeneric = false } = {}) {
   const candidates = [
     fullIsGeneric && !allowGeneric ? '' : full,
     shortName(business?.name, business ?? {}) ?? '',
-    // The core name ("Hiller") only counts against a single listed name, never running text,
-    // so a nickname like "Music City" in a sentence can't match "Music City Plumbing".
     normalizeForMatch(registeredDomain(business?.website)),
   ];
   if (candidates.some(c => c !== '' && haystack.includes(` ${c} `))) return true;
@@ -131,6 +129,12 @@ const LABEL_WORDS = new Set([
   'things to consider', 'quick tips', 'sources', 'disclaimer', 'a few caveats', 'good to know', 'keep in mind',
   'top 5', 'top five', 'the list', 'my picks', 'best overall', 'how i picked these', 'methodology',
   'company', 'business', 'name', 'provider', 'plumber', 'contractor',
+  'best for', 'good for', 'ideal for', 'price range', 'price', 'cost', 'pricing', 'availability',
+  'why we like it', 'why it stands out', 'feature', 'category', 'criteria',
+  // Review sites and big-box stores are sources, not competitors.
+  'google', 'google reviews', 'google maps', 'yelp', 'bbb', 'better business bureau', 'angi', 'angie s list',
+  'nextdoor', 'thumbtack', 'homeadvisor', 'home advisor', 'home depot', 'lowe s', 'facebook', 'consumeraffairs',
+  'consumer affairs', 'expertise com', 'reddit', 'yahoo', 'cityvetted', 'threebestrated', 'three best rated',
 ]);
 
 
@@ -176,9 +180,13 @@ function stripMarkdown(text) {
     .trim();
 }
 
-function beforeSeparator(text) {
+function beforeSeparator(text, { words = false } = {}) {
   let cut = text.length;
-  for (const sep of [' - ', ' \u2013 ', ' \u2014 ', ':', '(', ' | ', ' is ', ' has ', ' was ', ' offers ']) {
+  // " is ", " has " ... end a name only in plain text ("Honest Plumbing is a good pick");
+  // inside a bold span or link the whole span is the name ("**Time is Money Plumbing**").
+  const seps = [' - ', ' \u2013 ', ' \u2014 ', ':', '(', ' | '];
+  if (words) seps.push(' is ', ' has ', ' was ', ' offers ');
+  for (const sep of seps) {
     const i = text.indexOf(sep);
     if (i !== -1 && i < cut) cut = i;
   }
@@ -210,12 +218,42 @@ function isTip(candidate) {
   return TIP_START.test(candidate) && !BUSINESS_END.test(candidate) && !STRONG_TRADE.test(candidate.split(/\s+/).slice(-1)[0] ?? '');
 }
 
+const TABLE_ROW = /^\s*\|.*\|\s*$/;
+const TABLE_RULE = /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/;
+const NAME_HEADER = /\b(?:name|company|companies|business(?:es)?|plumbers?|roofers?|electricians?|contractors?|providers?|pick|shop)\b/i;
+
+/** Business names from a markdown table: the column headed like a name, else the first non-number column. */
+function tableNames(rows) {
+  const cells = r => r.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim());
+  let body = rows;
+  let header = null;
+  if (rows.length >= 2 && TABLE_RULE.test(rows[1])) {
+    header = cells(rows[0]);
+    body = rows.slice(2);
+  }
+  body = body.filter(r => !TABLE_RULE.test(r)).map(cells);
+  if (body.length === 0) return [];
+  const width = Math.max(...body.map(r => r.length));
+  let col = header ? header.findIndex(h => NAME_HEADER.test(stripMarkdown(h))) : -1;
+  if (col === -1) {
+    const isNumberish = c => /^[#\d.)\s$%/*:-]*$/.test(stripMarkdown(c));
+    for (let k = 0; k < width && col === -1; k += 1) {
+      if (body.filter(r => r[k] !== undefined && !isNumberish(r[k])).length >= Math.ceil(body.length / 2)) col = k;
+    }
+  }
+  if (col === -1) return [];
+  return body.map(r => r[col]).filter(c => c !== undefined && c !== '');
+}
+
 /** Every name in the answer's list lines and bold spans, in order, without duplicates. */
 function listedNames(answer) {
   const names = [];
   const seen = new Set();
   const add = raw => {
-    const candidate = beforeSeparator(stripMarkdown(leadingName(raw)));
+    const lead = leadingName(raw);
+    const marked = lead !== String(raw).trim();
+    const candidate = beforeSeparator(stripMarkdown(lead), { words: !marked && !/^\*|^\[/.test(String(raw).trim()) })
+      .replace(/^\d{1,3}[.)]\s+/, '');
     if (isTip(candidate)) return;
     if (!acceptable(candidate)) return;
     const key = normalizeForMatch(candidate);
@@ -229,7 +267,18 @@ function listedNames(answer) {
   // still counts.
   let baseIndent = null;
   const indentOf = line => /^[ \t]*/.exec(line)[0].replace(/\t/g, '    ').length;
-  for (const line of String(answer ?? '').split(/\r?\n/)) {
+  const lines = String(answer ?? '').split(/\r?\n/);
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    // Markdown table: read the whole block and take names from its name column.
+    if (TABLE_ROW.test(line)) {
+      let j = i;
+      while (j < lines.length && TABLE_ROW.test(lines[j])) j += 1;
+      for (const name of tableNames(lines.slice(i, j))) add(name);
+      i = j - 1;
+      baseIndent = null;
+      continue;
+    }
     // "### 1. Frog Heating, Air & Plumbing": a numbered markdown heading is a list item.
     const heading = /^\s*#{1,6}\s+(\d{1,3}[.)]\s+.*)$/.exec(line);
     const list = LIST_LINE.exec(heading ? heading[1] : line);
@@ -242,15 +291,6 @@ function listedNames(answer) {
     }
     // Prose indented under a list item stays part of that item.
     if (line.trim() !== '' && (baseIndent === null || indentOf(line) <= baseIndent)) baseIndent = null;
-    // A bold span that opens a line ("**Acme Plumbing** - ...") can be a name;
-    // bold words in the middle of a sentence ("Here are my **top five**") are not.
-    // Markdown table row: the first cell is the name ("| **Acme Plumbing** | 4.8 |").
-    const row = /^\s*\|(.*)\|\s*$/.exec(line);
-    if (row) {
-      const first = row[1].split('|')[0].trim();
-      if (!/^:?-{2,}:?$/.test(first)) add(first);
-      continue;
-    }
     // Bold spans: one that opens the line can be a name; one inside a sentence counts
     // only when it is written like a name ("I'd start with **Acme Plumbing**"), not
     // when it is ordinary words ("my **top five Nashville plumbers**").
@@ -258,7 +298,9 @@ function listedNames(answer) {
     spans.forEach((span, k) => {
       const inner = span.replace(/\*/g, '').trim();
       const opens = k === 0 && /^\s*(?:#{1,6}\s+)?\*{2,3}/.test(line);
-      if (opens || (/^[\p{Lu}\d]/u.test(inner) && isTitleCase(inner))) add(span);
+      const nameLike = /^[\p{Lu}\d]/u.test(inner) && isTitleCase(inner)
+        && (STRONG_TRADE.test(inner) || BUSINESS_END.test(inner.replace(/[.,]+$/, '')));
+      if (opens || nameLike) add(span);
     });
   }
   return names;

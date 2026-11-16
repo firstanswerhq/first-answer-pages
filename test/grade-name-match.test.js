@@ -316,3 +316,19 @@ test('names in a markdown table and bold names inside sentences count', () => {
 test('a bold word that is only part of the name keeps the whole name', () => {
   assert.deepEqual(extractCompetitors('- **Acme** Plumbing & Drain\n- Keep It Clean', { name: 'Nobody Roofing' }), ['Acme Plumbing & Drain', 'Keep It Clean']);
 });
+
+test('tables: header rows and number columns are handled', () => {
+  const t1 = '| Business Name | Phone | Why |\n|---|---|---|\n| Acme Plumbing | 555 | fast |\n| Bob Drains | 556 | cheap |';
+  assert.deepEqual(extractCompetitors(t1, { name: 'Nobody Roofing' }), ['Acme Plumbing', 'Bob Drains']);
+  const t2 = '| # | Name | Rating |\n|---|---|---|\n| 1 | Acme Plumbing | 4.8 |\n| 2 | Bob Drains | 4.6 |';
+  assert.deepEqual(extractCompetitors(t2, { name: 'Nobody Roofing' }), ['Acme Plumbing', 'Bob Drains']);
+  const t3 = '| 1 | **Acme Plumbing** | 4.8 |\n| 2 | Bob Drains | 4.6 |';
+  assert.deepEqual(extractCompetitors(t3, { name: 'Nobody Roofing' }), ['Acme Plumbing', 'Bob Drains']);
+});
+
+test('bold names with "is" inside, numbered bold, review sites and labels', () => {
+  assert.deepEqual(extractCompetitors('1. **Time is Money Plumbing** - quick', { name: 'Nobody Roofing' }), ['Time is Money Plumbing']);
+  assert.deepEqual(extractCompetitors('**1. Acme Plumbing**\nGreat.', { name: 'Nobody Roofing' }), ['Acme Plumbing']);
+  const prose = 'Check **Google Reviews** and the **Better Business Bureau**, or try **Acme Plumbing**.\n**Best for:** emergencies';
+  assert.deepEqual(extractCompetitors(prose, { name: 'Nobody Roofing' }), ['Acme Plumbing']);
+});
