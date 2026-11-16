@@ -235,6 +235,8 @@ function tableNames(rows) {
   if (body.length === 0) return [];
   const width = Math.max(...body.map(r => r.length));
   let col = header ? header.findIndex(h => NAME_HEADER.test(stripMarkdown(h))) : -1;
+  // A headed table with no name column is a cost or comparison table ("| Service | Typical cost |").
+  if (col === -1 && header) return [];
   if (col === -1) {
     const isNumberish = c => /^[#\d.)\s$%/*:-]*$/.test(stripMarkdown(c));
     for (let k = 0; k < width && col === -1; k += 1) {

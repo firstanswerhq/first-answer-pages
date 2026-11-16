@@ -332,3 +332,10 @@ test('bold names with "is" inside, numbered bold, review sites and labels', () =
   const prose = 'Check **Google Reviews** and the **Better Business Bureau**, or try **Acme Plumbing**.\n**Best for:** emergencies';
   assert.deepEqual(extractCompetitors(prose, { name: 'Nobody Roofing' }), ['Acme Plumbing']);
 });
+
+test('cost and comparison tables give no competitors', () => {
+  const cost = '| Service | Typical cost |\n|---|---|\n| Drain cleaning | $150 |\n| Water heater install | $1,500 |';
+  assert.deepEqual(extractCompetitors(cost, { name: 'Nobody Roofing' }), []);
+  const feat = '| Feature | Acme | Bob |\n|---|---|---|\n| 24/7 | yes | no |';
+  assert.deepEqual(extractCompetitors(feat, { name: 'Nobody Roofing' }), []);
+});
