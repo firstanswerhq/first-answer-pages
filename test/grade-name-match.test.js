@@ -141,3 +141,23 @@ test('a bold business name over its detail bullets keeps its place', () => {
     assert.ok(r.competitors.some(c => /Bob Plumbing/.test(c)), answer);
   }
 });
+
+test('indented detail bullets under a business are not counted as businesses', () => {
+  const answer = [
+    '1. **Acme Plumbing** - family owned',
+    '   - Licensed and insured',
+    '   - Phone: (615) 555-0100',
+    '2. **Bob Plumbing**',
+    '    - Same-day service',
+    '3. Cedar Drains',
+  ].join('\n');
+  const r = analyzeAnswer(answer, { name: 'Bob Plumbing' });
+  assert.equal(r.total, 3);
+  assert.equal(r.position, 2);
+  assert.deepEqual(r.competitors, ['Acme Plumbing', 'Cedar Drains']);
+});
+
+test('a new list after prose starts fresh, even if it is indented', () => {
+  const answer = 'Top picks below.\n  - Acme Plumbing\n  - Bob Plumbing\n\nAlso:\n    - Cedar Drains';
+  assert.deepEqual(extractCompetitors(answer, { name: 'Nobody Roofing' }), ['Acme Plumbing', 'Bob Plumbing', 'Cedar Drains']);
+});

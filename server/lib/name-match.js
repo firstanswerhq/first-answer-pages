@@ -138,12 +138,19 @@ function listedNames(answer) {
     seen.add(key);
     names.push(candidate);
   };
+  // Indent of the first list line in the current list; deeper lines are details
+  // under a business ("   - Licensed and insured"), never names.
+  let baseIndent = null;
   for (const line of String(answer ?? '').split(/\r?\n/)) {
     const list = LIST_LINE.exec(line);
     if (list) {
+      const indent = /^[ \t]*/.exec(line)[0].replace(/\t/g, '    ').length;
+      if (baseIndent === null || indent < baseIndent) baseIndent = indent;
+      if (indent > baseIndent) continue;
       add(list[1]);
       continue;
     }
+    if (line.trim() !== '') baseIndent = null;
     // bold spans on other lines (bounded: no lazy scan over long text)
     const spans = line.slice(0, 2000).match(/\*\*[^*\n]{1,120}\*\*/g) ?? [];
     for (const span of spans) add(span);
