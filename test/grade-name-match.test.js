@@ -119,3 +119,18 @@ test('a bold business name on its own line, with no colon, still counts', () => 
   const answer = '**Doctor Drips Plumbing**\nFast and friendly.\n\n**Smooth Saling Plumbing**\nGood reviews.';
   assert.deepEqual(extractCompetitors(answer, { name: 'Nobody Roofing' }), ['Doctor Drips Plumbing', 'Smooth Saling Plumbing']);
 });
+
+test('a bold name with a colon and prose under it is a business, not a heading', () => {
+  const answer = '**Joe Plumbing:**\nFamily owned.\n\n**Acme Plumbing:**\nGood.';
+  const r = analyzeAnswer(answer, { name: 'Acme Plumbing' });
+  assert.equal(r.total, 2);
+  assert.equal(r.position, 2);
+  assert.deepEqual(r.competitors, ['Joe Plumbing']);
+});
+
+test('a markdown heading with a bold title over a list is skipped', () => {
+  const answer = '## **Top Plumbers:**\n- Acme Plumbing\n- Bob Plumbing\n\n**Other things to know**:\n- Call ahead';
+  const r = analyzeAnswer(answer, { name: 'Acme Plumbing' });
+  assert.equal(r.position, 1);
+  assert.deepEqual(r.competitors, ['Bob Plumbing', 'Call ahead']);
+});
