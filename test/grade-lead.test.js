@@ -710,9 +710,12 @@ test("Google's live answer: only the browser that ran the check sees it, and it 
   assert.match(page, /href="https:\/\/vertexaisearch\.cloud\.google\.com\/grounding-api-redirect\/abc"/);
 
   // Nothing of it is stored anywhere in the data folder.
-  const files = await fs.readdir(env.dir);
+  await env.ctx.aiBudget?.flush?.();
+  const files = await fs.readdir(env.dir, { recursive: true });
   for (const f of files) {
-    const text = await fs.readFile(path.join(env.dir, f), 'utf8').catch(() => '');
+    const full = path.join(env.dir, f);
+    if (!(await fs.stat(full)).isFile()) continue;
+    const text = await fs.readFile(full, 'utf8');
     assert.doesNotMatch(text, /Frog Heating|plumbers nashville|grounding-api-redirect/, f);
   }
 });

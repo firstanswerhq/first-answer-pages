@@ -124,7 +124,7 @@ a:hover:not(.google-search-suggestions *) {
   color: var(--color-primary-hover);
 }
 
-a:focus-visible:not(.google-search-suggestions *),
+a:focus-visible,
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,
