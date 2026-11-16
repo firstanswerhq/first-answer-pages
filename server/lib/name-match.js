@@ -105,13 +105,25 @@ const LABEL_WORDS = new Set([
 // A nested list line with any of these is a detail about a business, not a name.
 const DETAIL_PATTERN = /\b(?:licensed|insured|bonded|family[- ]owned|locally[- ]owned|veteran[- ]owned|woman[- ]owned|years?|since|reviews?|rated|rating|stars?|estimates?|24\/7|available|same[- ]day|warranty|guarantee[ds]?|financing|phone|hours|serves?|serving|known|specializ\w*|offers?|prices?|pricing|experienced)\b|\$|\d{3}/i;
 
-/** True when a nested list line reads like a detail ("Licensed and insured"), not a business name. */
+// A name ending in one of these is a business ("5 Star Plumbing", "24/7 Plumbing Pros").
+const BUSINESS_END = /\b(?:plumbing|plumbers?|roofing|roofers?|electric(?:al)?|electricians?|hvac|heating|cooling|air|drains?|rooter|sewer|pros?|services?|solutions|company|co|inc|llc|ltd|corp|group|contractors?|construction|cleaning|cleaners|landscaping|lawn|repairs?|restoration|remodeling|builders|painting|pest|control|movers|moving|salon|spa|auto|garage)\.?$/i;
+
+/**
+ * True when a nested list line reads like a detail ("Licensed and insured"),
+ * not a business name. Only the name part (before " - ", ":" or "(") is judged;
+ * a line that starts with a bold name or a link is always a name.
+ */
 function looksLikeDetail(raw) {
-  const text = stripMarkdown(raw);
-  if (text === '') return true;
-  if (/^\p{Ll}/u.test(text)) return true;
-  if (text.split(/\s+/).length > 6) return true;
-  return DETAIL_PATTERN.test(text);
+  const trimmed = String(raw).trim();
+  if (/^\*\*[^*]+\*\*/.test(trimmed) || /^\[[^\]]+\]\(/.test(trimmed)) return false;
+  const name = beforeSeparator(stripMarkdown(trimmed));
+  if (name === '') return true;
+  // Phrases that open a detail even when they end in "service" ("Same-day service").
+  if (/^(?:same[- ]day|free|licensed|insured|bonded|over|family|locally|veteran|woman|fully|offers?|serves?|serving|available|specializ\w*)\b/i.test(name)) return true;
+  if (BUSINESS_END.test(name)) return false;
+  if (/^\p{Ll}/u.test(name)) return true;
+  if (name.split(/\s+/).length > 6) return true;
+  return DETAIL_PATTERN.test(name);
 }
 
 function stripMarkdown(text) {

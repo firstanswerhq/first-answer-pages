@@ -191,3 +191,22 @@ test('businesses nested under a group heading of any kind still count', () => {
     assert.ok(r.competitors.includes('Bob Plumbing'), answer);
   }
 });
+
+test('nested businesses with a short description keep counting', () => {
+  const shapes = [
+    '- **East Nashville**\n  - **Acme Plumbing** - 4.8 stars on Google\n  - **Bob Plumbing** - family owned',
+    '1. Best overall:\n   - **Acme Plumbing**: highly rated, 500+ reviews\n   - Bob Plumbing - licensed, insured',
+    '- Nashville\n  - Acme Plumbing (serves Nashville)\n  - [Bob Plumbing](https://bob.example) - 4.7 rating',
+    '- Top picks\n  - 5 Star Plumbing\n  - 24/7 Plumbing Pros\n  - Acme Plumbing',
+  ];
+  for (const answer of shapes) {
+    const r = analyzeAnswer(answer, { name: 'Acme Plumbing' });
+    assert.notEqual(r.position, null, answer);
+    assert.ok(r.competitors.length >= 1, answer);
+  }
+});
+
+test('plain detail bullets under a business are still skipped', () => {
+  const answer = '1. **Acme Plumbing**\n   - Licensed and insured\n   - Over 20 years in business\n   - Free estimates\n2. **Bob Plumbing**';
+  assert.deepEqual(extractCompetitors(answer, { name: 'Nobody Roofing' }), ['Acme Plumbing', 'Bob Plumbing']);
+});
