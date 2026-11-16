@@ -210,3 +210,18 @@ test('plain detail bullets under a business are still skipped', () => {
   const answer = '1. **Acme Plumbing**\n   - Licensed and insured\n   - Over 20 years in business\n   - Free estimates\n2. **Bob Plumbing**';
   assert.deepEqual(extractCompetitors(answer, { name: 'Nobody Roofing' }), ['Acme Plumbing', 'Bob Plumbing']);
 });
+
+test('trade names that open with a detail word still count when nested', () => {
+  const names = ['Family Plumbing Co', 'Free Flow Plumbing', 'Over the Top Roofing', 'Same Day Plumbing',
+    'Veteran Plumbing Services', '24/7 Locksmith Nashville', 'One Hour Heating & Air Conditioning of Nashville'];
+  for (const n of names) {
+    const answer = `- Picks\n  - ${n}\n  - Acme Plumbing`;
+    const found = extractCompetitors(answer, { name: 'Nobody Roofing' });
+    assert.ok(found.includes(n), `${n} -> ${found}`);
+  }
+});
+
+test('detail bullets in sentence case are still skipped', () => {
+  const answer = '1. **Acme Plumbing**\n   - Same-day service\n   - Free estimates\n   - Licensed and insured plumbing\n2. **Bob Plumbing**';
+  assert.deepEqual(extractCompetitors(answer, { name: 'Nobody Roofing' }), ['Acme Plumbing', 'Bob Plumbing']);
+});

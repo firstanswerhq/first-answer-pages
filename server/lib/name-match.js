@@ -108,6 +108,14 @@ const DETAIL_PATTERN = /\b(?:licensed|insured|bonded|family[- ]owned|locally[- ]
 // A name ending in one of these is a business ("5 Star Plumbing", "24/7 Plumbing Pros").
 const BUSINESS_END = /\b(?:plumbing|plumbers?|roofing|roofers?|electric(?:al)?|electricians?|hvac|heating|cooling|air|drains?|rooter|sewer|pros?|services?|solutions|company|co|inc|llc|ltd|corp|group|contractors?|construction|cleaning|cleaners|landscaping|lawn|repairs?|restoration|remodeling|builders|painting|pest|control|movers|moving|salon|spa|auto|garage)\.?$/i;
 
+const STRONG_TRADE = /\b(?:plumbing|plumbers?|roofing|roofers?|electric(?:al)?|electricians?|hvac|heating|cooling|conditioning|air|drains?|rooter|sewer|locksmiths?|handyman|garage|windows?|doors?|landscaping|lawn|pest|painting|remodeling|restoration|construction|contractors?|cleaning|cleaners|movers|moving|salon|auto)\b/i;
+const SMALL_WORDS = new Set(['of', 'and', 'the', 'a', 'an', 'in', 'on', 'at', 'for', 'to', '&']);
+
+/** Every word of 3+ letters starts with a capital or a digit ("Same Day Plumbing", "24/7 Locksmith"). */
+function isTitleCase(name) {
+  return name.split(/\s+/).every(w => SMALL_WORDS.has(w.toLowerCase()) || !/^\p{L}{3}/u.test(w) || /^\p{Lu}/u.test(w));
+}
+
 /**
  * True when a nested list line reads like a detail ("Licensed and insured"),
  * not a business name. Only the name part (before " - ", ":" or "(") is judged;
@@ -118,6 +126,9 @@ function looksLikeDetail(raw) {
   if (/^\*\*[^*]+\*\*/.test(trimmed) || /^\[[^\]]+\]\(/.test(trimmed)) return false;
   const name = beforeSeparator(stripMarkdown(trimmed));
   if (name === '') return true;
+  // A Title Case name with a trade word anywhere is a business ("Same Day Plumbing",
+  // "One Hour Heating & Air Conditioning of Nashville", "24/7 Locksmith Nashville").
+  if (STRONG_TRADE.test(name) && isTitleCase(name)) return false;
   // Phrases that open a detail even when they end in "service" ("Same-day service").
   if (/^(?:same[- ]day|free|licensed|insured|bonded|over|family|locally|veteran|woman|fully|offers?|serves?|serving|available|specializ\w*)\b/i.test(name)) return true;
   if (BUSINESS_END.test(name)) return false;
