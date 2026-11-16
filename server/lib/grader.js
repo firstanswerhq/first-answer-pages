@@ -144,6 +144,9 @@ function summarizeFacts(facts, input) {
  * @param {object[]} ai
  * @param {string} [reasonIfNone] used when no answer ran
  */
+/** The free-part AI question (also the question for Google's live answer). */
+export const freePromptFor = input => `Who are the best ${input.service} in ${input.city}, ${input.state}? Name your top 5.`;
+
 /** Assistants asked only as second opinions. */
 export const SECOND_OPINIONS = new Set(['chatgpt', 'gemini']);
 
@@ -390,7 +393,7 @@ export function createGrader({
     }
   }
 
-  const freePrompt = input => `Who are the best ${input.service} in ${input.city}, ${input.state}? Name your top 5.`;
+  const freePrompt = freePromptFor;
 
   async function aiPart(id, grade) {
     const name = stepNames(grade.input)[3];

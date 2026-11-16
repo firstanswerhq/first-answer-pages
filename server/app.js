@@ -19,7 +19,7 @@ import { createRateLimiter } from './lib/rate-limiter.js';
 import { createVisionProvider } from './lib/vision.js';
 import { createAiBudget } from './lib/ai-budget.js';
 import { createNotifier } from './lib/notifier.js';
-import { createAssistantProvider, createExtraAssistants } from './lib/assistant.js';
+import { createAssistantProvider, createExtraAssistants, createGeminiLive } from './lib/assistant.js';
 import { createIndexNow, indexNowOffReason } from './lib/indexnow.js';
 import { createSafeFetcher } from './lib/safe-fetch.js';
 import { createGrader } from './lib/grader.js';
@@ -120,6 +120,8 @@ export function createApp(deps = {}) {
   ctx.safeFetcher = deps.safeFetcher ?? createSafeFetcher({ userAgent: ctx.graderUserAgent });
   // Grade ids are their own: 22 characters of URL-safe base64 from 16 random bytes.
   ctx.newGradeId = deps.newGradeId ?? (() => randomBytes(16).toString('base64url'));
+  // "Google's live answer" panel: null when off.
+  ctx.googleLive = deps.googleLive !== undefined ? deps.googleLive : createGeminiLive(config);
   ctx.grader = createGrader({
     store,
     assistantProvider: ctx.assistantProvider,

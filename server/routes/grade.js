@@ -9,6 +9,7 @@
  *   POST /grade/:id/unlock       the Lead_Form: opens the full report for this browser
  *   POST /grade/:id/claim        make a Draft from what the scan found
  *   POST /grade/:id/recheck      read the website again (no AI question)
+ *   POST /grade/:id/google-live  Google's live answer, only for the browser that ran the check; never saved
  *
  * Every /grade response is not indexed and sends no referrer. With
  * GRADER_ENABLED=off every /grade path is a 404. Grade_Ids are 22-character
@@ -17,14 +18,15 @@
 
 import express, { Router } from 'express';
 import { RULES } from '../lib/rate-limiter.js';
+import { freePromptFor } from '../lib/grader.js';
 import {
   normalizeState, normalizeEmail, normalizePhone, STATE_ERROR, US_STATE_CODES,
 } from '../lib/listing-fields.js';
 import {
-  makeStamp, checkStamp, unlockToken, hasToken, claimCookieValue, readClaim,
+  makeStamp, checkStamp, unlockToken, hasToken, claimCookieValue, readClaim, requesterToken,
 } from '../lib/grade-stamp.js';
 import {
-  gradeFormPage, scanPage, reportPage, failedPage, aboutPage, gradeMessagePage,
+  gradeFormPage, scanPage, reportPage, failedPage, aboutPage, gradeMessagePage, googleLivePage,
 } from '../lib/grade-html.js';
 
 const ID_PATTERN = /^[A-Za-z0-9_-]{22}$/;
@@ -90,6 +92,8 @@ export function createGradeRouter(ctx) {
   const notFound = res => send(res, 404, gradeMessagePage('Page not found', "We can't find that report. The link may be old: reports are deleted after 90 days.", { href: '/grade', text: 'Grade a business' }));
   const newStamp = () => makeStamp(secret, ctx.clock.now());
   const isUnlocked = (req, id) => hasToken(req, `g_${id}`, unlockToken(secret, id));
+  const isRequester = (req, id) => hasToken(req, `gr_${id}`, requesterToken(secret, id));
+  const googleLiveFor = (req, id) => (ctx.googleLive ? (isRequester(req, id) ? 'requester' : 'other') : null);
   const tooMany = (res, seconds) => {
     res.set('Retry-After', String(seconds));
     return send(res, 429, gradeMessagePage('Please wait', `Please try again in ${seconds} seconds.`));
@@ -153,6 +157,8 @@ export function createGradeRouter(ctx) {
       }
 
       const id = await grader.start(input);
+      // Marks this browser as the one that ran the check (Google's live answer is shown only here).
+      setCookie(res, `gr_${id}`, requesterToken(secret, id), id);
       return res.redirect(303, `/grade/${encodeURIComponent(id)}`);
     } catch (err) {
       return next(err);
@@ -185,7 +191,7 @@ export function createGradeRouter(ctx) {
       const unlocked = isUnlocked(req, grade.id);
       // With the gate off (or once unlocked) the extra AI questions start on the first view.
       if ((unlocked || config.graderLeadGate === false) && !grade.extraAiStartedAt) grader.startExtraQuestions(grade.id);
-      return send(res, 200, renderReport(grade, unlocked, { justOpened: req.query.opened === '1' }));
+      return send(res, 200, renderReport(grade, unlocked, { justOpened: req.query.opened === '1', googleLive: googleLiveFor(req, grade.id) }));
     } catch (err) {
       return next(err);
     }
@@ -258,6 +264,40 @@ export function createGradeRouter(ctx) {
   });
 
   // ---- check again ----------------------------------------------------------------------
+
+  // ---- Google's live answer -------------------------------------------------------------
+  // Google's grounding terms: show it only to the person who asked, with Google's
+  // Search Suggestions unchanged; never analyze, store or share it. So it is fetched
+  // fresh for the browser that ran the check, sent once, and not saved or logged.
+  router.post('/grade/:id/google-live', async (req, res, next) => {
+    try {
+      const id = req.params.id;
+      if (!ID_PATTERN.test(id) || !ctx.googleLive) return notFound(res);
+      const grade = await grader.get(id);
+      if (!grade || grade.status !== 'done') return notFound(res);
+      const back = { href: `/grade/${id}`, text: 'Back to the report' };
+      if (!isRequester(req, id)) {
+        return send(res, 403, gradeMessagePage('Only for the person who ran the check', "Google's rules let us show its live answer only to the person who ran the check. Run your own check to see it.", { href: '/grade', text: 'Run your own check' }));
+      }
+      const limited = ctx.rateLimiter.consumeAll([
+        { key: `grade-google:${req.ip}`, ...RULES['grade-google'] },
+        { key: `grade-google-grade:${id}`, ...RULES['grade-google-grade'] },
+      ]);
+      if (!limited.allowed) return tooMany(res, limited.retryAfterSeconds);
+      if (!ctx.aiBudget.consume({ kind: 'grade' }).allowed) {
+        return send(res, 429, gradeMessagePage('Try again tomorrow', "We've asked AI as many times as we can today. Please try again tomorrow.", back));
+      }
+      let result;
+      try {
+        result = await ctx.googleLive.ask({ prompt: freePromptFor(grade.input), signal: AbortSignal.timeout(120000) });
+      } catch {
+        return send(res, 502, gradeMessagePage("Google's AI didn't answer", "Google's AI didn't answer this time. Please try again in a minute.", back));
+      }
+      return send(res, 200, googleLivePage(grade, result));
+    } catch (err) {
+      return next(err);
+    }
+  });
 
   router.post('/grade/:id/recheck', async (req, res, next) => {
     try {

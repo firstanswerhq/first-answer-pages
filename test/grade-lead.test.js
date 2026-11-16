@@ -85,7 +85,7 @@ function fixtureFetcher() {
 
 // ---- environment ---------------------------------------------------------------------
 
-async function startEnv({ assistantProvider, extraAssistants, config = {} } = {}) {
+async function startEnv({ assistantProvider, extraAssistants, googleLive, config = {} } = {}) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'fap-grade-lead-'));
   for (const name of ['listings.json', 'categories.json']) {
     await fs.copyFile(path.join(REPO_DATA, name), path.join(dir, name));
@@ -97,6 +97,7 @@ async function startEnv({ assistantProvider, extraAssistants, config = {} } = {}
     clock,
     assistantProvider,
     extraAssistants,
+    ...(googleLive !== undefined && { googleLive }),
     safeFetcher: fixtureFetcher(),
     newGradeId: () => `grade${String(++n).padStart(17, '0')}`,
     config: {
@@ -122,6 +123,24 @@ const get = (env, p, headers = {}) => fetch(env.base + p, { redirect: 'manual', 
 const post = (env, p, fields = {}, headers = {}) => fetch(env.base + p, {
   method: 'POST', redirect: 'manual', headers, body: new URLSearchParams(fields),
 });
+
+/** Start a Grade and also return the cookie the requesting browser got. */
+async function startGradeWithCookie(env, input) {
+  const html = await (await get(env, '/grade')).text();
+  const t = /name="t" value="([^"]+)"/.exec(html)[1];
+  env.clock.t += 5000;
+  const res = await post(env, '/grade', {
+    nickname: '', t, name: input.name, city: input.city, state: input.state, service: input.service, website: input.website ?? '',
+  });
+  const id = /^\/grade\/([A-Za-z0-9_-]{22})$/.exec(res.headers.get('location'))[1];
+  const cookie = cookieOf(res);
+  for (let i = 0; i < 300; i += 1) {
+    const status = await (await get(env, `/grade/${id}/status.json`)).json();
+    if (status.done) return { id, cookie };
+    await new Promise(resolve => setTimeout(resolve, 20));
+  }
+  throw new Error('grade did not finish');
+}
 
 async function startGrade(env, input) {
   const html = await (await get(env, '/grade')).text();
@@ -641,4 +660,83 @@ test('without a ChatGPT key nothing changes', async () => {
   const id = await startGrade(env, NO_SITE);
   const grade = (await readJson(env, 'grades.json', [])).find(x => x.id === id);
   assert.equal(grade.ai.length, 1);
+});
+
+// ---- Google's live answer (Gemini with Google Search) ------------------------------------
+
+function stubGoogleLive() {
+  const stub = {
+    name: 'gemini-live',
+    calls: [],
+    async ask({ prompt }) {
+      stub.calls.push(prompt);
+      return {
+        text: '1. Frog Heating & Plumbing <b>bold?</b>',
+        sources: [{ url: 'https://vertexaisearch.cloud.google.com/grounding-api-redirect/abc', title: 'example.com' }],
+        suggestionsHtml: '<div class="container"><a class="chip" href="https://www.google.com/search?q=plumbers">plumbers nashville</a></div>',
+      };
+    },
+  };
+  return stub;
+}
+
+test("Google's live answer: only the browser that ran the check sees it, and it is never saved", async () => {
+  const assistant = stubAssistant('1. Bluebird Books');
+  const live = stubGoogleLive();
+  const env = await startEnv({ assistantProvider: assistant, googleLive: live });
+  const { id, cookie } = await startGradeWithCookie(env, NO_SITE);
+  assert.match(cookie, new RegExp(`^gr_${id}=`));
+
+  // The requester sees the button; anyone else sees why not.
+  const mine = await (await get(env, `/grade/${id}`, { cookie })).text();
+  assert.match(mine, /Show Google&#39;s live answer|Show Google's live answer/);
+  const shared = await (await get(env, `/grade/${id}`)).text();
+  assert.doesNotMatch(shared, /<form method="post" action="\/grade\/[^"]+\/google-live">/);
+  assert.match(shared, /only to the person who ran the check/);
+
+  // A shared link (no requester cookie) can't fetch it.
+  const denied = await post(env, `/grade/${id}/google-live`, {});
+  assert.equal(denied.status, 403);
+  assert.equal(live.calls.length, 0);
+
+  // The requester gets it: answer escaped, Google's suggestions unchanged, sources linked.
+  const ok = await post(env, `/grade/${id}/google-live`, {}, { cookie });
+  assert.equal(ok.status, 200);
+  assert.equal(ok.headers.get('cache-control'), 'no-store');
+  const page = await ok.text();
+  assert.equal(live.calls[0], 'Who are the best accountants in Nashville, TN? Name your top 5.');
+  assert.match(page, /&lt;b&gt;bold\?&lt;\/b&gt;/);
+  assert.ok(page.includes('<div class="container"><a class="chip" href="https://www.google.com/search?q=plumbers">plumbers nashville</a></div>'));
+  assert.match(page, /href="https:\/\/vertexaisearch\.cloud\.google\.com\/grounding-api-redirect\/abc"/);
+
+  // Nothing of it is stored anywhere in the data folder.
+  const files = await fs.readdir(env.dir);
+  for (const f of files) {
+    const text = await fs.readFile(path.join(env.dir, f), 'utf8').catch(() => '');
+    assert.doesNotMatch(text, /Frog Heating|plumbers nashville|grounding-api-redirect/, f);
+  }
+});
+
+test("Google's live answer: limited per report, and off without a provider", async () => {
+  const live = stubGoogleLive();
+  const env = await startEnv({ assistantProvider: stubAssistant('1. Bluebird Books'), googleLive: live });
+  const { id, cookie } = await startGradeWithCookie(env, NO_SITE);
+  for (let i = 0; i < 3; i += 1) assert.equal((await post(env, `/grade/${id}/google-live`, {}, { cookie })).status, 200);
+  assert.equal((await post(env, `/grade/${id}/google-live`, {}, { cookie })).status, 429);
+
+  const off = await startEnv({ assistantProvider: stubAssistant('1. Bluebird Books'), googleLive: null });
+  const g = await startGradeWithCookie(off, NO_SITE);
+  assert.doesNotMatch(await (await get(off, `/grade/${g.id}`, { cookie: g.cookie })).text(), /What Google&#39;s AI says|What Google's AI says/);
+  assert.equal((await post(off, `/grade/${g.id}/google-live`, {}, { cookie: g.cookie })).status, 404);
+});
+
+test("Google's live answer: a provider failure shows a plain message, not an error page", async () => {
+  const live = { name: 'gemini-live', async ask() { throw new Error('boom AIza-secret'); } };
+  const env = await startEnv({ assistantProvider: stubAssistant('1. Bluebird Books'), googleLive: live });
+  const { id, cookie } = await startGradeWithCookie(env, NO_SITE);
+  const res = await post(env, `/grade/${id}/google-live`, {}, { cookie });
+  assert.equal(res.status, 502);
+  const text = await res.text();
+  assert.match(text, /didn&#39;t answer this time|didn't answer this time/);
+  assert.doesNotMatch(text, /AIza/);
 });

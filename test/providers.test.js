@@ -15,6 +15,8 @@ import {
   createAssistantProvider,
   createChatGptAssistantProvider,
   createGeminiAssistantProvider,
+  createGeminiLiveSearch,
+  createGeminiLive,
   createExtraAssistants,
   AssistantError,
 } from '../server/lib/assistant.js';
@@ -977,5 +979,40 @@ describe('gemini: second-opinion provider', () => {
     const c = configFromEnv({ GEMINI_API_KEY: 'AIza-secret' }, { warn: () => {} });
     assert.doesNotMatch(JSON.stringify(redactConfig(c)), /AIza-secret/);
     assert.equal(redactConfig(c).gemini.apiKey, '[set]');
+  });
+});
+
+describe("gemini live search: Google's live answer", () => {
+  const reply = (finish = 'STOP') => ({
+    candidates: [{
+      finishReason: finish,
+      content: { parts: [{ text: '1. Frog Plumbing' }] },
+      groundingMetadata: {
+        searchEntryPoint: { renderedContent: '<div class="chips">x</div>' },
+        groundingChunks: [{ web: { uri: 'https://vertexaisearch.cloud.google.com/r/1', title: 'a.com' } }, { web: { uri: 'javascript:x', title: 'bad' } }],
+      },
+    }],
+  });
+  test('uses google_search, keeps suggestions as sent, logs nothing of the answer', async () => {
+    await withFetch(async () => jsonResponse(reply()), async (calls) => {
+      const p = createGeminiLiveSearch({ apiKey: 'AIza-key', timeoutMs: 1000 });
+      let res;
+      const out = await captureOutput(async () => { res = await p.ask({ prompt: 'q' }); });
+      const body = JSON.parse(calls[0].init.body);
+      assert.deepEqual(body.tools, [{ google_search: {} }]);
+      assert.equal(calls[0].init.headers['x-goog-api-key'], 'AIza-key');
+      assert.deepEqual(res, { text: '1. Frog Plumbing', sources: [{ url: 'https://vertexaisearch.cloud.google.com/r/1', title: 'a.com' }], suggestionsHtml: '<div class="chips">x</div>' });
+      assert.doesNotMatch(out, /Frog|chips|AIza/);
+    });
+  });
+  test('an unfinished reply is an error; off without a key, when switched off, or in a test run', async () => {
+    await withFetch(async () => jsonResponse(reply('MAX_TOKENS')), async () => {
+      const p = createGeminiLiveSearch({ apiKey: 'k', timeoutMs: 1000 });
+      await captureOutput(async () => { await assert.rejects(() => p.ask({ prompt: 'q' }), e => e.code === 'unparseable'); });
+    });
+    assert.equal(createGeminiLive({ gemini: {} }), null);
+    assert.equal(createGeminiLive({ gemini: { apiKey: 'k' }, geminiLive: false }), null);
+    assert.equal(createGeminiLive({ gemini: { apiKey: 'k' }, testRun: true }), null);
+    assert.equal(createGeminiLive({ gemini: { apiKey: 'k' } }).name, 'gemini-live');
   });
 });

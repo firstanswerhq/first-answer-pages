@@ -431,6 +431,59 @@ export function createGeminiAssistantProvider({ apiKey, model = DEFAULT_GEMINI_M
 }
 
 /**
+ * Gemini WITH Google Search grounding, for the "Google's live answer" panel only.
+ * Google's grounding terms allow showing the answer only to the person who asked,
+ * with Google's Search Suggestions unchanged, and forbid analyzing, storing or
+ * sharing it. So this result is never name-matched, scored, logged or saved:
+ * the route shows it once to the browser that ran the check.
+ * Returns { text, sources: [{ url, title }], suggestionsHtml }.
+ */
+export function createGeminiLiveSearch({ apiKey, model = DEFAULT_GEMINI_MODEL, timeoutMs = DEFAULT_PROVIDER_TIMEOUT_MS }) {
+  const safeModel = String(model).replace(/[^A-Za-z0-9._-]/g, '');
+  return {
+    name: 'gemini-live',
+    async ask({ prompt, signal } = {}) {
+      const data = await callProvider(
+        'gemini-live',
+        `${GEMINI_BASE}${safeModel}:generateContent`,
+        { 'x-goog-api-key': apiKey },
+        {
+          contents: [{ role: 'user', parts: [{ text: String(prompt ?? '') }] }],
+          tools: [{ google_search: {} }],
+          generationConfig: { maxOutputTokens: 8192 },
+        },
+        timeoutMs,
+        signal,
+      );
+      const cand = data?.candidates?.[0];
+      const finish = String(cand?.finishReason ?? 'none').replace(/[^A-Z_a-z]/g, '');
+      process.stderr.write(`[assistant] provider=gemini-live finish=${finish}\n`);
+      if (finish !== 'STOP') throw new AssistantError('unparseable');
+      const meta = cand?.groundingMetadata ?? {};
+      const sources = (Array.isArray(meta.groundingChunks) ? meta.groundingChunks : [])
+        .map(c => c?.web)
+        .filter(w => w && typeof w.uri === 'string' && /^https:\/\//i.test(w.uri))
+        .slice(0, 10)
+        .map(w => ({ url: w.uri, title: typeof w.title === 'string' ? w.title : '' }));
+      const html = meta.searchEntryPoint?.renderedContent;
+      return {
+        text: requireText(joinGeminiText(data)),
+        sources,
+        suggestionsHtml: typeof html === 'string' && html.length <= 100_000 ? html : '',
+      };
+    },
+  };
+}
+
+/** The live Google panel's provider, or null when it is off (no key, switched off, or a test run). */
+export function createGeminiLive(config) {
+  const g = config?.gemini;
+  if (!g?.apiKey || config?.geminiLive === false || config?.testRun === true) return null;
+  const timeoutMs = config?.seanceTimeoutMs ?? config?.providerTimeoutMs ?? DEFAULT_PROVIDER_TIMEOUT_MS;
+  return createGeminiLiveSearch({ apiKey: g.apiKey, model: g.model || DEFAULT_GEMINI_MODEL, timeoutMs });
+}
+
+/**
  * Extra assistants asked beside the main one in the AI Visibility Check.
  * Empty unless their keys are set; never used in a test run.
  * @returns {{ name: string, ask: Function }[]}

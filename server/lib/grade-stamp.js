@@ -36,6 +36,9 @@ export function checkStamp(secret, value, nowMs) {
 /** Cookie value that unlocks the Full_Report of one Grade. */
 export const unlockToken = (secret, gradeId) => sign(secret, `unlock:${gradeId}`);
 
+/** Cookie value that marks the browser that ran a Grade (the only one shown Google's live answer). */
+export const requesterToken = (secret, gradeId) => sign(secret, `requester:${gradeId}`);
+
 /** Cookie value that shows this browser claimed one Draft of the Grade: "<draftId>.<hmac>". */
 export const claimCookieValue = (secret, gradeId, draftId) => `${draftId}.${sign(secret, `claim:${gradeId}:${draftId}`)}`;
 

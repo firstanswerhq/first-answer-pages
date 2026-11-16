@@ -302,6 +302,8 @@ export function configFromEnv(env = process.env, opts = {}) {
     chatgpt: { apiKey: nonEmpty(env.CHATGPT_API_KEY), model: nonEmpty(env.CHATGPT_MODEL) },
     // Gemini as a second opinion. Off without GEMINI_API_KEY.
     gemini: { apiKey: nonEmpty(env.GEMINI_API_KEY), model: nonEmpty(env.GEMINI_MODEL) },
+    // "Google's live answer" panel (Gemini with Google Search), shown only to the person who ran a check.
+    geminiLive: parseOnOff(env.GEMINI_LIVE_SEARCH),
 
     visionProviderName: vision,
     assistantProviderName: assistant,

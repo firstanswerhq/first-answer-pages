@@ -31,6 +31,9 @@ export const RULES = Object.freeze({
   'grade-unlock': Object.freeze({ limit: 5, windowMs: 60 * 60 * 1000 }),
   'grade-recheck': Object.freeze({ limit: 10, windowMs: 60 * 60 * 1000 }),
   'grade-recheck-grade': Object.freeze({ limit: 1, windowMs: 2 * 60 * 1000 }),
+  // Google's live answer: a paid search call each time, so a few per visitor and per report.
+  'grade-google': Object.freeze({ limit: 6, windowMs: 60 * 60 * 1000 }),
+  'grade-google-grade': Object.freeze({ limit: 3, windowMs: 60 * 60 * 1000 }),
 });
 
 const systemClock = { now: () => Date.now() };
