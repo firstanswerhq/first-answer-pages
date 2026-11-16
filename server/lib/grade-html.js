@@ -481,13 +481,13 @@ function googleLiveSection(grade, googleLive) {
   if (googleLive !== 'requester') {
     return `<section class="grade-google-live">
     <h2>What Google's AI says</h2>
-    <p>Google's rules let us show its live answer only to the person who ran the check, so it is not part of this shared report. <a href="/grade">Run your own check</a> to see it.</p>
+    <p>Google's live answer is private to the person who ran the check, so it isn't in shared reports. <a href="/grade">Run your own free check</a> to see it.</p>
   </section>`;
   }
   return `<section class="grade-google-live">
     <h2>What Google's AI says</h2>
     <p>See what Google's Gemini says right now, with a live Google search, when asked: "${e(freePromptFor(grade.input))}"</p>
-    <p class="hint">Only you can see it. We don't save it, and it is not part of your score.</p>
+    <p class="hint">From Google's Gemini. Google doesn't review or endorse this report. Only you can see the answer. We don't save it. Your score comes from Claude's answers only.</p>
     <form method="post" action="/grade/${e(grade.id)}/google-live">
       <button type="submit" class="button">Show Google's live answer</button>
     </form>
@@ -506,7 +506,7 @@ export function googleLivePage(grade, { text, sources = [], suggestionsHtml = ''
   return page(`${grade.input.name}: Google's live answer`, `<article class="rise grade-report grade-google-live">
   <h1>Google's live answer</h1>
   <p>We just asked Google's Gemini, with a live Google search: "${e(freePromptFor(grade.input))}"</p>
-  <p class="hint">Only you can see this. We don't save it, and it is not part of your score. Reload this page or come back later and it will be gone.</p>
+  <p class="hint">From Google's Gemini. Google doesn't review or endorse this report. Only you can see this, and we don't keep a copy. Your score comes from Claude's answers only. To see it again, go back to your report and press the button; that asks Google again.</p>
   <div class="google-live-answer">
     <blockquote class="seance-answer grade-answer">${e(text)}</blockquote>
     ${suggestionsHtml ? `<div class="google-search-suggestions">${suggestionsHtml}</div>` : ''}
@@ -580,7 +580,7 @@ export function aboutPage({ contactEmail, userAgent = '' } = {}) {
   </ul>
   <p>We read only public pages. We do not log in, fill in forms, or run the page's scripts. We send no cookies. We visit only websites on the public internet.</p>
   ${userAgent ? `<p>Our visits identify themselves as <code>${e(userAgent)}</code>.</p>` : ''}
-  <p>We also ask Claude up to three questions about the best businesses of that kind in that city, and check whether the business is named. The questions name the kind of business and the city, never the business name. When we can, we also ask ChatGPT and Gemini the same questions so you can compare; only Claude's answers count toward the score. The person who ran a check can also see Google's live answer (Gemini with Google Search); Google's rules let us show it only to them, so we never save, score or share it.</p>
+  <p>We also ask Claude up to three questions about the best businesses of that kind in that city, and check whether the business is named. The questions name the kind of business and the city, never the business name. When we can, we also ask ChatGPT and Gemini the same questions so you can compare; only Claude's answers count toward the score. The person who ran a check can also see Google's live answer (Gemini with Google Search). It is private to them: we never save, score or share it.</p>
   <p>Reports are not listed in search engines. We delete them after 90 days.</p>
   <p>Questions, or want a report removed? ${contact ? `Email ${contact}` : 'Use <a href="/about">our contact page</a>'}.</p>
   <p><a href="/grade">Check a business</a></p>

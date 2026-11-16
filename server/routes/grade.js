@@ -30,6 +30,8 @@ import {
 } from '../lib/grade-html.js';
 
 const ID_PATTERN = /^[A-Za-z0-9_-]{22}$/;
+// Same reserve the second opinions keep: the day's last Grader AI calls are for new checks.
+const GOOGLE_LIVE_RESERVE = 12;
 // Control characters, plus the invisible marks that flip text direction.
 const CONTROL = /[\p{Cc}\u2028\u2029\u202A-\u202E\u2066-\u2069\u200E\u200F]/gu;
 
@@ -220,7 +222,7 @@ export function createGradeRouter(ctx) {
       if (lead.email === '') errors.email = 'Type a real email address, like you@example.com.';
       if (lead.phone === '') errors.phone = 'Type a 10-digit phone number, like (615) 555-0100.';
       if (Object.keys(errors).length > 0) {
-        return send(res, 422, renderReport(grade, false, { leadValues: values, leadErrors: errors }));
+        return send(res, 422, renderReport(grade, false, { leadValues: values, leadErrors: errors, googleLive: googleLiveFor(req, grade.id) }));
       }
 
       const limited = ctx.rateLimiter.consume(`grade-unlock:${req.ip}`, RULES['grade-unlock']);
@@ -277,22 +279,30 @@ export function createGradeRouter(ctx) {
       if (!grade || grade.status !== 'done') return notFound(res);
       const back = { href: `/grade/${id}`, text: 'Back to the report' };
       if (!isRequester(req, id)) {
-        return send(res, 403, gradeMessagePage('Only for the person who ran the check', "Google's rules let us show its live answer only to the person who ran the check. Run your own check to see it.", { href: '/grade', text: 'Run your own check' }));
+        return send(res, 403, gradeMessagePage('Private to the person who ran the check', "Google's live answer is private to the person who ran the check, so it isn't in shared reports. Run your own free check to see it.", { href: '/grade', text: 'Run your own free check' }));
       }
       const limited = ctx.rateLimiter.consumeAll([
         { key: `grade-google:${req.ip}`, ...RULES['grade-google'] },
         { key: `grade-google-grade:${id}`, ...RULES['grade-google-grade'] },
       ]);
-      if (!limited.allowed) return tooMany(res, limited.retryAfterSeconds);
-      if (!ctx.aiBudget.consume({ kind: 'grade' }).allowed) {
-        return send(res, 429, gradeMessagePage('Try again tomorrow', "We've asked AI as many times as we can today. Please try again tomorrow.", back));
+      if (!limited.allowed) {
+        const s = limited.retryAfterSeconds;
+        res.set('Retry-After', String(s));
+        const wait = s > 60 ? `${Math.ceil(s / 60)} minutes` : `${s} seconds`;
+        return send(res, 429, gradeMessagePage('Please wait', `You can ask Google again in ${wait}.`, back));
       }
+      // Never use the last calls of the day, which are kept for new checks.
+      const tomorrow = () => send(res, 429, gradeMessagePage('Try again tomorrow', "We've hit today's limit for asking Google. Please try again tomorrow.", back));
+      if (ctx.aiBudget.peek({ kind: 'grade' }).remaining <= GOOGLE_LIVE_RESERVE) return tomorrow();
+      if (!ctx.aiBudget.consume({ kind: 'grade' }).allowed) return tomorrow();
       let result;
       try {
         result = await ctx.googleLive.ask({ prompt: freePromptFor(grade.input), signal: AbortSignal.timeout(120000) });
       } catch {
-        return send(res, 502, gradeMessagePage("Google's AI didn't answer", "Google's AI didn't answer this time. Please try again in a minute.", back));
+        return send(res, 502, gradeMessagePage("Google's AI didn't answer", "Google's AI didn't answer this time. Your report is unchanged. Please try again in a minute.", back));
       }
+      // Google's HTML may carry its own styles but must not run scripts on our page.
+      res.set('Content-Security-Policy', "frame-ancestors 'none'; script-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'");
       return send(res, 200, googleLivePage(grade, result));
     } catch (err) {
       return next(err);

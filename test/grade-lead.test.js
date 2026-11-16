@@ -692,7 +692,7 @@ test("Google's live answer: only the browser that ran the check sees it, and it 
   assert.match(mine, /Show Google&#39;s live answer|Show Google's live answer/);
   const shared = await (await get(env, `/grade/${id}`)).text();
   assert.doesNotMatch(shared, /<form method="post" action="\/grade\/[^"]+\/google-live">/);
-  assert.match(shared, /only to the person who ran the check/);
+  assert.match(shared, /private to the person who ran the check/);
 
   // A shared link (no requester cookie) can't fetch it.
   const denied = await post(env, `/grade/${id}/google-live`, {});
@@ -739,4 +739,21 @@ test("Google's live answer: a provider failure shows a plain message, not an err
   const text = await res.text();
   assert.match(text, /didn&#39;t answer this time|didn't answer this time/);
   assert.doesNotMatch(text, /AIza/);
+});
+
+test("Google's live answer never uses the day's last calls, which are kept for new checks", async () => {
+  const live = stubGoogleLive();
+  const env = await startEnv({ assistantProvider: stubAssistant('1. Bluebird Books'), googleLive: live, config: { gradeAiCallsPerDay: 13 } });
+  const { id, cookie } = await startGradeWithCookie(env, NO_SITE);
+  // One call used by the check: 12 left, all kept back.
+  const res = await post(env, `/grade/${id}/google-live`, {}, { cookie });
+  assert.equal(res.status, 429);
+  assert.equal(live.calls.length, 0);
+});
+
+test("Google's live answer page blocks scripts in Google's HTML", async () => {
+  const env = await startEnv({ assistantProvider: stubAssistant('1. Bluebird Books'), googleLive: stubGoogleLive() });
+  const { id, cookie } = await startGradeWithCookie(env, NO_SITE);
+  const res = await post(env, `/grade/${id}/google-live`, {}, { cookie });
+  assert.match(res.headers.get('content-security-policy'), /script-src 'self'/);
 });
