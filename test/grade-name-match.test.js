@@ -161,3 +161,20 @@ test('a new list after prose starts fresh, even if it is indented', () => {
   const answer = 'Top picks below.\n  - Acme Plumbing\n  - Bob Plumbing\n\nAlso:\n    - Cedar Drains';
   assert.deepEqual(extractCompetitors(answer, { name: 'Nobody Roofing' }), ['Acme Plumbing', 'Bob Plumbing', 'Cedar Drains']);
 });
+
+test('businesses listed under a label or a category heading still count', () => {
+  const shapes = [
+    ['- Plumbers:\n  - Acme Plumbing\n  - Bob Plumbing', ['Acme Plumbing', 'Bob Plumbing']],
+    ['1. Best overall:\n   - **Acme Plumbing**\n2. Best value:\n   - **Bob Plumbing**', ['Acme Plumbing', 'Bob Plumbing']],
+    ['- **Emergency plumbers**\n  - Acme Plumbing\n  - Bob Plumbing', ['Acme Plumbing', 'Bob Plumbing']],
+  ];
+  for (const [answer, want] of shapes) {
+    const found = extractCompetitors(answer, { name: 'Nobody Roofing' });
+    for (const name of want) assert.ok(found.includes(name), `${answer} -> ${found}`);
+  }
+});
+
+test('a sentence under a business does not turn its details into businesses', () => {
+  const answer = '1. **Acme Plumbing**\n   Known for fast service.\n   - Licensed and insured\n   - Family owned\n2. **Bob Plumbing**';
+  assert.deepEqual(extractCompetitors(answer, { name: 'Nobody Roofing' }), ['Acme Plumbing', 'Bob Plumbing']);
+});
