@@ -47,6 +47,25 @@ export function shortName(name, { service = '', city = '', state = '' } = {}) {
   return text;
 }
 
+/**
+ * The distinctive words before the trade words: "Hiller Plumbing, Heating, Cooling &
+ * Electrical" -> "hiller", "Benjamin Franklin Plumbing" -> "benjamin franklin".
+ * Only used when it is at least 2 words or 6 letters, so short words never match.
+ */
+export function coreName(name, context = new Set()) {
+  let words = normalizeForMatch(name).split(' ').filter(Boolean);
+  if (words[0] === 'the') words = words.slice(1);
+  const core = [];
+  for (const w of words) {
+    if (GENERIC_WORDS.has(w) || LEGAL_WORDS.has(w) || context.has(w)) break;
+    core.push(w);
+  }
+  if (core.length === 0 || core.length === words.length) return '';
+  const text = core.join(' ');
+  if (core.length < 2 && text.length < 6) return '';
+  return text;
+}
+
 /** Host without "www.", cut to the registered domain ("example.co.uk" stays three labels). */
 export function registeredDomain(website) {
   if (typeof website !== 'string' || website.trim() === '') return '';
@@ -81,6 +100,9 @@ export function isNamed(answer, business, { allowGeneric = false } = {}) {
   const candidates = [
     fullIsGeneric && !allowGeneric ? '' : full,
     shortName(business?.name, business ?? {}) ?? '',
+    // The core name ("Hiller") only counts against a single listed name, never running text,
+    // so a nickname like "Music City" in a sentence can't match "Music City Plumbing".
+    allowGeneric ? coreName(business?.name, context) : '',
     normalizeForMatch(registeredDomain(business?.website)),
   ];
   return candidates.some(c => c !== '' && haystack.includes(` ${c} `));
@@ -146,7 +168,7 @@ function stripMarkdown(text) {
 
 function beforeSeparator(text) {
   let cut = text.length;
-  for (const sep of [' - ', ' \u2013 ', ' \u2014 ', ':', '(', ' | ']) {
+  for (const sep of [' - ', ' \u2013 ', ' \u2014 ', ':', '(', ' | ', ' is ', ' has ', ' was ', ' offers ']) {
     const i = text.indexOf(sep);
     if (i !== -1 && i < cut) cut = i;
   }
@@ -161,12 +183,29 @@ function acceptable(candidate) {
   return !LABEL_WORDS.has(normalizeForMatch(candidate));
 }
 
+/** The name part of a list item: its leading bold span or link text when it has one. */
+function leadingName(raw) {
+  const text = String(raw).trim();
+  const bold = /^\*{2,3}([^*\n]{1,120})\*{2,3}/.exec(text);
+  if (bold) return bold[1];
+  const link = /^\[([^\]]{1,120})\]\(/.exec(text);
+  if (link) return link[1];
+  return text;
+}
+
+// Advice lines that open with a verb ("Check licensing", "Get multiple quotes") are tips, not businesses.
+const TIP_START = /^(?:check|ask|get|read|call|compare|look|verify|make|avoid|confirm|request|choose|consider|search|find|use|keep|be|do|don't|never|always|try|watch|beware|expect|plan|schedule|book)\b/i;
+function isTip(candidate) {
+  return TIP_START.test(candidate) && !BUSINESS_END.test(candidate) && !STRONG_TRADE.test(candidate.split(/\s+/).slice(-1)[0] ?? '');
+}
+
 /** Every name in the answer's list lines and bold spans, in order, without duplicates. */
 function listedNames(answer) {
   const names = [];
   const seen = new Set();
   const add = raw => {
-    const candidate = beforeSeparator(stripMarkdown(raw));
+    const candidate = beforeSeparator(stripMarkdown(leadingName(raw)));
+    if (isTip(candidate)) return;
     if (!acceptable(candidate)) return;
     const key = normalizeForMatch(candidate);
     if (key === '' || seen.has(key)) return;
@@ -180,7 +219,9 @@ function listedNames(answer) {
   let baseIndent = null;
   const indentOf = line => /^[ \t]*/.exec(line)[0].replace(/\t/g, '    ').length;
   for (const line of String(answer ?? '').split(/\r?\n/)) {
-    const list = LIST_LINE.exec(line);
+    // "### 1. Frog Heating, Air & Plumbing": a numbered markdown heading is a list item.
+    const heading = /^\s*#{1,6}\s+(\d{1,3}[.)]\s+.*)$/.exec(line);
+    const list = LIST_LINE.exec(heading ? heading[1] : line);
     if (list) {
       const indent = indentOf(line);
       if (baseIndent === null || indent < baseIndent) baseIndent = indent;
@@ -190,9 +231,10 @@ function listedNames(answer) {
     }
     // Prose indented under a list item stays part of that item.
     if (line.trim() !== '' && (baseIndent === null || indentOf(line) <= baseIndent)) baseIndent = null;
-    // bold spans on other lines (bounded: no lazy scan over long text)
-    const spans = line.slice(0, 2000).match(/\*\*[^*\n]{1,120}\*\*/g) ?? [];
-    for (const span of spans) add(span);
+    // A bold span that opens a line ("**Acme Plumbing** - ...") can be a name;
+    // bold words in the middle of a sentence ("Here are my **top five**") are not.
+    const lead = /^\s*(?:#{1,6}\s+)?\*{2,3}([^*\n]{1,120})\*{2,3}/.exec(line);
+    if (lead) add(lead[1]);
   }
   return names;
 }

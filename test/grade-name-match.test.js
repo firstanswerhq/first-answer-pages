@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fc from 'fast-check';
 import {
-  isNamed, shortName, registeredDomain, extractCompetitors, analyzeAnswer,
+  isNamed, shortName, coreName, registeredDomain, extractCompetitors, analyzeAnswer,
 } from '../server/lib/name-match.js';
 import { normalizeForMatch } from '../server/lib/seance.js';
 
@@ -224,4 +224,76 @@ test('trade names that open with a detail word still count when nested', () => {
 test('detail bullets in sentence case are still skipped', () => {
   const answer = '1. **Acme Plumbing**\n   - Same-day service\n   - Free estimates\n   - Licensed and insured plumbing\n2. **Bob Plumbing**';
   assert.deepEqual(extractCompetitors(answer, { name: 'Nobody Roofing' }), ['Acme Plumbing', 'Bob Plumbing']);
+});
+
+// ---- Shapes from real answers in the live check (Nov 16, 2026) ----
+
+const HILLER = { name: 'Hiller Plumbing, Heating, Cooling & Electrical', city: 'Nashville', state: 'TN', service: 'plumbers' };
+
+test('real Claude answer: bold names with sentences, honorable mentions, and tips', () => {
+  const answer = [
+    "I can't vouch for any of these plumbers from personal experience.",
+    '',
+    '1. **Doctor Drips Plumbing** is the most consistent name across the sources. It has a 4.9 rating.',
+    '2. **100 Percent Plumbing** is the top pick on CityVetted, which recommends it for most homes.',
+    '3. **Hoffmann Brothers** has by far the most reviews of the group.',
+    '',
+    '**Honorable mentions:**',
+    '- **Honest Plumbing** is Yahoo\'s pick for small jobs.',
+    '- **Hiller** is Yahoo\'s pick as the best full-service plumber.',
+    '',
+    '**Before you hire:**',
+    '- Check that the plumber holds a valid Tennessee license and insurance.',
+    '- Read recent Google and BBB reviews.',
+  ].join('\n');
+  const r = analyzeAnswer(answer, HILLER);
+  assert.equal(r.named, true);
+  assert.equal(r.position, 5);
+  assert.deepEqual(r.competitors, ['Doctor Drips Plumbing', '100 Percent Plumbing', 'Hoffmann Brothers', 'Honest Plumbing']);
+});
+
+test('real ChatGPT answer: bold words inside a sentence are not names', () => {
+  const answer = [
+    'Here are my **top five Nashville plumbers**, based on local review coverage.',
+    '',
+    '1. **Doctor Drips Plumbing** — My overall pick. **(615) 970-0047**.',
+    '2. **100 Percent Plumbing** — A strong local choice. **(615) 431-1100**.',
+    '',
+    'For a non-emergency job, compare **written estimates** before booking.',
+  ].join('\n');
+  assert.deepEqual(extractCompetitors(answer, HILLER), ['Doctor Drips Plumbing', '100 Percent Plumbing']);
+});
+
+test('real Gemini answer: numbered markdown headings are names, tips are not', () => {
+  const answer = [
+    'Here are five of the top-rated plumbing companies in Nashville:',
+    '',
+    '### 1. Frog Heating, Air, & Plumbing',
+    'Frog is arguably the most recognizable name.',
+    '### 2. Greenway Home Services',
+    '### 3. Mr. Rooter Plumbing of Nashville',
+    '',
+    '### Tips for choosing a plumber in Nashville:',
+    '* **Check Licensing:** Always ensure the company is licensed.',
+    '* **Ask about "Trip Fees":** Some companies charge a dispatch fee.',
+    '* **Get Multiple Quotes for Large Jobs:** It is standard practice.',
+    '',
+    '***Disclaimer:** I am an AI, not a local resident.*',
+  ].join('\n');
+  assert.deepEqual(extractCompetitors(answer, HILLER), ['Frog Heating, Air, & Plumbing', 'Greenway Home Services', 'Mr. Rooter Plumbing of Nashville']);
+});
+
+test('coreName takes the distinctive words before the trade words', () => {
+  assert.equal(coreName('Hiller Plumbing, Heating, Cooling & Electrical'), 'hiller');
+  assert.equal(coreName('Benjamin Franklin Plumbing'), 'benjamin franklin');
+  assert.equal(coreName('Ace Plumbing'), '');
+  assert.equal(coreName('Plumbing Pros'), '');
+  assert.equal(coreName('Acme'), '');
+});
+
+test('the core name never matches running text', () => {
+  const biz = { name: 'Music City Plumbing', city: 'Nashville', state: 'TN', service: 'plumbers' };
+  const r = analyzeAnswer('Plumbers in Music City stay busy.\n\n1. **Acme Plumbing**\n2. **Bob Drains**', biz);
+  assert.equal(r.named, false);
+  assert.equal(analyzeAnswer('1. **Music City** - great service', biz).named, true);
 });
