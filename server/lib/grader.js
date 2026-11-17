@@ -17,7 +17,7 @@ import { SafeFetchError } from './safe-fetch.js';
 import { readPageFacts, STREET_PATTERN } from './page-facts.js';
 import { runWebsiteChecks, CHECKS } from './grade-checks.js';
 import { scoreGrade } from './grade-score.js';
-import { analyzeAnswer, isNamed, listedNames, registeredDomain } from './name-match.js';
+import { analyzeAnswer, isNamed, listedNames, looksLikeSameName, registeredDomain } from './name-match.js';
 import { DROP_BELOW, NAMED_ABOVE } from './name-check.js';
 import { normalizeForMatch } from './seance.js';
 import { AssistantError } from './assistant.js';
@@ -421,7 +421,8 @@ export function createGrader({
     let addedNamed = false;
     if (!checked.named) {
       const kept = all.filter(keep);
-      const i = kept.findIndex(n => !ours(n) && (verdict.sameAs?.get(n) ?? 0) >= NAMED_ABOVE);
+      // Gemini's yes counts only for a name that starts like the business's own (a typo apart).
+      const i = kept.findIndex(n => !ours(n) && looksLikeSameName(n, input) && (verdict.sameAs?.get(n) ?? 0) >= NAMED_ABOVE);
       if (i !== -1) {
         addedNamed = true;
         checked.named = true;

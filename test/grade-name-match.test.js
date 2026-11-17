@@ -339,3 +339,14 @@ test('cost and comparison tables give no competitors', () => {
   const feat = '| Feature | Acme | Bob |\n|---|---|---|\n| 24/7 | yes | no |';
   assert.deepEqual(extractCompetitors(feat, { name: 'Nobody Roofing' }), []);
 });
+
+test('looksLikeSameName: same first identifying word, give or take a typo', async () => {
+  const { looksLikeSameName } = await import('../server/lib/name-match.js');
+  const biz = { name: 'Ace Accounting', city: 'Nashville', state: 'TN' };
+  assert.equal(looksLikeSameName('Acee Acounting Group', biz), true);
+  assert.equal(looksLikeSameName('The Ace Accounting LLC', biz), true);
+  assert.equal(looksLikeSameName('Bluebird Books', biz), false);
+  assert.equal(looksLikeSameName('Nashville Accounting', biz), false);
+  assert.equal(looksLikeSameName('Benjamen Franklin Plumbing', { name: 'Benjamin Franklin Plumbing' }), true);
+  assert.equal(looksLikeSameName('Acme Roofing', { name: 'Best Roofers' }), false);
+});

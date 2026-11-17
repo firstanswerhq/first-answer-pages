@@ -66,6 +66,40 @@ export function coreName(name, context = new Set()) {
   return text;
 }
 
+/** Edit distance between two short words (insert, delete, change one letter). */
+function editDistance(a, b) {
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) {
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+    prev = cur;
+  }
+  return prev[b.length];
+}
+
+/** The first word that identifies the business (not "the", a trade word, a legal ending or the city). */
+function firstDistinctive(name, context) {
+  return normalizeForMatch(name).split(' ').filter(Boolean)
+    .find(w => !GENERIC_WORDS.has(w) && !LEGAL_WORDS.has(w) && !context.has(w) && w.length >= 2) ?? '';
+}
+
+/**
+ * A sanity limit for "same business" answers from outside: the two names must start with
+ * the same identifying word, give or take a typo ("Acee Acounting" and "Ace Accounting").
+ */
+export function looksLikeSameName(candidate, business) {
+  const context = new Set([business?.city, business?.state].flatMap(v => normalizeForMatch(v ?? '').split(' ')).filter(Boolean));
+  const a = firstDistinctive(candidate, context);
+  const b = firstDistinctive(business?.name ?? '', context);
+  if (!a || !b) return false;
+  if (a === b) return true;
+  const longest = Math.max(a.length, b.length);
+  if (longest > 40) return false;
+  return editDistance(a, b) <= (longest >= 7 ? 2 : 1);
+}
+
 /** Host without "www.", cut to the registered domain ("example.co.uk" stays three labels). */
 export function registeredDomain(website) {
   if (typeof website !== 'string' || website.trim() === '') return '';

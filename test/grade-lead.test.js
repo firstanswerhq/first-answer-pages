@@ -788,7 +788,7 @@ test('name check: a very sure "not a business" drops a name, and a very sure "sa
   assert.equal(a.total, 2);
   assert.deepEqual(a.nameCheck, { by: 'gemini-decisions', dropped: 1, addedNamed: true });
   const page = await (await get(env, `/grade/${id}`)).text();
-  assert.match(page, /yours was 2nd, but spelled a little differently from how you wrote it\. We still counted it\./);
+  assert.match(page, /yours was 2nd, but it was spelled a little differently from how you wrote it\. We still counted it\./);
 });
 
 test('name check: a name our own reader matched is never sent or dropped (trade-word names)', async () => {
@@ -824,3 +824,14 @@ for (const [label, fn] of [['returns nothing', () => null], ['throws', () => { t
     assert.equal('nameCheck' in a, false);
   });
 }
+
+test('name check: Gemini cannot count a different business as yours (names must start alike)', async () => {
+  const assistant = stubAssistant('1. Bluebird Books\n2. Ledger Lane');
+  const checker = stubChecker(({ names }) => ({ isBusiness: new Map(names.map(n => [n, 0.99])), sameAs: new Map(names.map(n => [n, 0.99])) }));
+  const env = await startEnv({ assistantProvider: assistant, nameChecker: checker });
+  const id = await startGrade(env, NO_SITE);
+  const a = (await readJson(env, 'grades.json', [])).find(x => x.id === id).ai[0];
+  assert.equal(a.named, false);
+  assert.deepEqual(a.competitors, ['Bluebird Books', 'Ledger Lane']);
+  assert.equal(a.nameCheck.addedNamed, false);
+});

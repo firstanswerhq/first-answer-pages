@@ -147,7 +147,7 @@ function aiSentence(entry, now, { also = false, brief = false } = {}) {
   let tail;
   if (entry.named && entry.nameCheck?.addedNamed) {
     const where = entry.position && entry.total > 1 ? `It listed ${entry.total} businesses, and yours was ${ordinal(entry.position)}, ` : 'It named your business, ';
-    tail = `${where}but spelled a little differently from how you wrote it. We still counted it. Using the exact same name everywhere online makes you easier for AI to match.`;
+    tail = `${where}but it was spelled a little differently from how you wrote it. We still counted it. Using the exact same name everywhere online makes you easier for AI to match.`;
   } else if (entry.named) {
     tail = entry.position && entry.total > 1
       ? `It listed ${entry.total} businesses, and yours was ${ordinal(entry.position)}.`
@@ -395,7 +395,7 @@ function allAnswers(grade) {
     const answers = ai.filter(a => a.prompt === prompt)
       .sort((x, y) => Number(SECOND_OPINIONS.has(x.provider)) - Number(SECOND_OPINIONS.has(y.provider)));
     const lines = answers.map(a => {
-      const label = SECOND_OPINIONS.has(a.provider) ? providerWho(a.provider) : `${providerWho(a.provider)} (counts toward your score)`;
+      const label = a.provider === 'mock' ? 'Demo assistant' : SECOND_OPINIONS.has(a.provider) ? providerWho(a.provider) : `${providerWho(a.provider)} (counts toward your score)`;
       const demo = a.provider === 'mock' ? `<p class="seance-demo">${DEMO_LABEL}</p>` : '';
       return `${demo}<p><strong>${e(label)}:</strong> ${e(aiSentence(a, NaN, { brief: true }))}</p>${answerBlock(a)}`;
     }).join('');
