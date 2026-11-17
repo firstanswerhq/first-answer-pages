@@ -1143,3 +1143,20 @@ describe('perplexity: second-opinion provider', () => {
     assert.equal(redactConfig(c).perplexity.apiKey, '[set]');
   });
 });
+
+describe('inline source markers are removed from second-opinion answers', () => {
+  test('Grok [[n]](url) links and Perplexity grouped [web:n] markers', async () => {
+    await withFetch(async () => jsonResponse(chatGptReply('1. Test Plumbing [[1]](https://example.com/a)\n2. Other Co[[2]](https://example.com/b)')), async () => {
+      const provider = createGrokAssistantProvider({ apiKey: 'k', timeoutMs: 1000 });
+      let res;
+      await captureOutput(async () => { res = await provider.ask({ prompt: 'q' }); });
+      assert.equal(res.answer, '1. Test Plumbing\n2. Other Co');
+    });
+    await withFetch(async () => jsonResponse(perplexityReply('1. Test Plumbing [web:1, web:3]\n2. Other Co [web:2-4]\n3. Third [web:5][web:6]')), async () => {
+      const provider = createPerplexityAssistantProvider({ apiKey: 'k', timeoutMs: 1000 });
+      let res;
+      await captureOutput(async () => { res = await provider.ask({ prompt: 'q' }); });
+      assert.equal(res.answer, '1. Test Plumbing\n2. Other Co\n3. Third');
+    });
+  });
+});

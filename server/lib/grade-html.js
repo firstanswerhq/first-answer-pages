@@ -166,7 +166,7 @@ function answerBlock(entry) {
     </details>`;
 }
 
-/** Answers that count toward the score (second opinions like ChatGPT and Gemini are shown, not scored). */
+/** Answers that count toward the score (second opinions like ChatGPT, Gemini, Grok and Perplexity are shown, not scored). */
 const scoredAnswers = grade => (grade.ai ?? []).filter(a => !SECOND_OPINIONS.has(a.provider));
 
 function aiSection(grade, now) {

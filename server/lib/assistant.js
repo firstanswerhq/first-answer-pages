@@ -517,8 +517,10 @@ export function createGrokAssistantProvider({ apiKey, model = DEFAULT_GROK_MODEL
       // A reply that did not finish may stop mid-list, so it is never shown as a full answer.
       if (data?.status !== undefined && data.status !== 'completed') throw new AssistantError('unparseable');
       const sources = grokCitations(data);
+      // Grok may write its sources into the text as links like [[1]](https://...); the list is kept separately.
+      const answer = requireText(joinOutputText(data)).replace(/\s?\[\[\d+\]\]\([^)\s]*\)/g, '');
       return {
-        answer: requireText(joinOutputText(data)),
+        answer: requireText(answer),
         provider: 'grok',
         model,
         webSearch: (Array.isArray(data?.output) && data.output.some(i => /search/i.test(String(i?.type ?? '')))) || sources.length > 0,
@@ -566,7 +568,7 @@ export function createPerplexityAssistantProvider({ apiKey, model = DEFAULT_PERP
       process.stderr.write(`[assistant] provider=perplexity status=${status}\n`);
       if (data?.status !== undefined && data.status !== 'completed') throw new AssistantError('unparseable');
       // Perplexity marks its sources inline like [web:1]; the source list is shown separately.
-      const answer = requireText(joinOutputText(data)).replace(/\s?\[web:\d+\]/g, '');
+      const answer = requireText(joinOutputText(data)).replace(/\s?\[(?:web:\d+(?:\s*[-,]\s*(?:web:)?\d+)*[,\s]*)+\]/g, '');
       const sources = perplexitySources(data);
       return {
         answer: requireText(answer),

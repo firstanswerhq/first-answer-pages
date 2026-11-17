@@ -154,7 +154,7 @@ export const SECOND_OPINIONS = new Set(['chatgpt', 'gemini', 'grok', 'perplexity
 export const mainWho = name => (name === 'anthropic' ? 'Claude' : name === 'openai' ? 'OpenAI' : 'AI');
 
 export function aiNamedResult(allAi, reasonIfNone = AI_FAILED) {
-  // Second opinions (ChatGPT, Gemini) are shown beside the main answers but never scored,
+  // Second opinions (ChatGPT, Gemini, Grok, Perplexity) are shown beside the main answers but never scored,
   // so the score does not move with whether they happened to be asked.
   const ai = Array.isArray(allAi) ? allAi.filter(a => !SECOND_OPINIONS.has(a?.provider)) : [];
   const ran = ai.length;
