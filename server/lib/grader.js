@@ -441,11 +441,15 @@ export function createGrader({
    * check existed: read them again (no new AI question is asked, only the check).
    */
   async function rereadCarried(input, entries) {
-    if (!nameChecker) return entries;
+    if (!nameChecker || assistantProvider?.name === 'mock') return entries;
     return Promise.all(entries.map(async (a) => {
       if (!a?.reusedFrom || a.nameCheck || a.provider === 'mock' || typeof a.answer !== 'string' || !a.answer) return a;
+      // The stored answer is cut short; the first read saw more. A cut answer is never re-read.
+      if (Array.from(a.answer).length >= MAX_ANSWER_CODE_POINTS) return a;
       const analysis = await readAnswer(a.answer, input, false);
       if (!analysis.nameCheck) return a;
+      // A re-read never takes away a mention the earlier read found.
+      if (a.named && !analysis.named) return a;
       return { ...a, named: analysis.named, position: analysis.position, total: analysis.total, competitors: analysis.competitors, nameCheck: analysis.nameCheck };
     }));
   }

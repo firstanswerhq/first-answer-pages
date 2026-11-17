@@ -856,3 +856,18 @@ test('name check: answers carried over from earlier this week are read again (no
   assert.equal(checker.calls.length, 1);
   assert.equal(assistant.calls, before);
 });
+
+test('name check: a carried answer that was cut short is not re-read, so a late mention is never lost', async () => {
+  const filler = Array.from({ length: 300 }, (_, i) => `Tip ${i}: call around and compare quotes before you hire.`).join('\n');
+  const assistant = stubAssistant(`1. Bluebird Books\n${filler}\nAlso consider Ace Accounting.`);
+  const first = await startEnv({ assistantProvider: assistant });
+  const id1 = await startGrade(first, NO_SITE);
+  const a1 = (await readJson(first, 'grades.json', [])).find(x => x.id === id1).ai[0];
+  assert.equal(a1.named, true);
+  const checker = stubChecker(({ names }) => ({ isBusiness: new Map(names.map(n => [n, 0.9])), sameAs: new Map() }));
+  const second = await startEnv({ assistantProvider: assistant, nameChecker: checker, dataDir: first.dir, idStart: 100 });
+  const id2 = await startGrade(second, NO_SITE);
+  const a2 = (await readJson(second, 'grades.json', [])).find(x => x.id === id2).ai[0];
+  assert.equal(a2.named, true);
+  assert.equal(checker.calls.length, 0);
+});
