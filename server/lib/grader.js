@@ -17,7 +17,7 @@ import { SafeFetchError } from './safe-fetch.js';
 import { readPageFacts, STREET_PATTERN } from './page-facts.js';
 import { runWebsiteChecks, CHECKS } from './grade-checks.js';
 import { scoreGrade } from './grade-score.js';
-import { analyzeAnswer, listedNames, registeredDomain } from './name-match.js';
+import { analyzeAnswer, isNamed, listedNames, registeredDomain } from './name-match.js';
 import { DROP_BELOW, NAMED_ABOVE } from './name-check.js';
 import { normalizeForMatch } from './seance.js';
 import { AssistantError } from './assistant.js';
@@ -405,19 +405,31 @@ export function createGrader({
   async function readAnswer(text, input, isMock) {
     const own = analyzeAnswer(text, input);
     if (!nameChecker || isMock) return own;
+    const all = listedNames(text);
+    // Names our own reader already matched to the business are never sent or dropped.
+    const ours = n => isNamed(n, input, { allowGeneric: true });
     let verdict = null;
     try {
-      verdict = await nameChecker.check({ answer: text, business: input, names: listedNames(text) });
+      verdict = await nameChecker.check({ answer: text, business: input, names: all.filter(n => !ours(n)) });
     } catch {
       verdict = null;
     }
     if (!verdict) return own;
-    const notBusiness = n => (verdict.isBusiness?.get(n) ?? 1) < DROP_BELOW;
-    const checked = analyzeAnswer(text, input, { keep: n => !notBusiness(n) });
+    const keep = n => ours(n) || (verdict.isBusiness?.get(n) ?? 1) >= DROP_BELOW;
+    const checked = analyzeAnswer(text, input, { keep });
     const dropped = own.total - checked.total;
-    const addNamed = !checked.named && typeof verdict.named === 'number' && verdict.named >= NAMED_ABOVE;
-    if (addNamed) checked.named = true;
-    checked.nameCheck = { by: 'gemini-decisions', dropped, addedNamed: addNamed };
+    let addedNamed = false;
+    if (!checked.named) {
+      const kept = all.filter(keep);
+      const i = kept.findIndex(n => !ours(n) && (verdict.sameAs?.get(n) ?? 0) >= NAMED_ABOVE);
+      if (i !== -1) {
+        addedNamed = true;
+        checked.named = true;
+        checked.position = i + 1;
+        checked.competitors = checked.competitors.filter(c => c !== kept[i]);
+      }
+    }
+    checked.nameCheck = { by: 'gemini-decisions', dropped, addedNamed };
     return checked;
   }
 

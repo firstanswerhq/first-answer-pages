@@ -138,14 +138,17 @@ const providerWho = name => (name === 'anthropic' ? 'Claude' : name === 'chatgpt
 const resultOf = (grade, id) => (grade.results ?? []).find(r => r.id === id);
 
 /** One plain sentence about the first AI answer. */
-function aiSentence(entry, now, { also = false } = {}) {
+function aiSentence(entry, now, { also = false, brief = false } = {}) {
   const justNow = !entry.reusedFrom && Number.isFinite(now) && now - Date.parse(entry.at) < 10 * 60 * 1000;
-  const asked = also ? `${providerWho(entry.provider)} also answered.` : justNow
+  const asked = also ? `${providerWho(entry.provider)}, asked the same question:` : justNow
     ? `We just asked ${providerWho(entry.provider)}.`
     : `We asked ${providerWho(entry.provider)} on ${formatRunTime(entry.at)}.`;
   const n = entry.competitors.length;
   let tail;
-  if (entry.named) {
+  if (entry.named && entry.nameCheck?.addedNamed) {
+    const where = entry.position && entry.total > 1 ? `It listed ${entry.total} businesses, and yours was ${ordinal(entry.position)}, ` : 'It named your business, ';
+    tail = `${where}but spelled a little differently from how you wrote it. We still counted it. Using the exact same name everywhere online makes you easier for AI to match.`;
+  } else if (entry.named) {
     tail = entry.position && entry.total > 1
       ? `It listed ${entry.total} businesses, and yours was ${ordinal(entry.position)}.`
       : 'It named your business.';
@@ -155,6 +158,7 @@ function aiSentence(entry, now, { also = false } = {}) {
     tail = n === 1 ? 'It named 1 other business, not yours.' : `It named these ${n} businesses, not yours.`;
   }
   const noSearch = entry.provider === 'gemini' && entry.webSearch !== true ? ' (Gemini answered without a live web search.)' : '';
+  if (brief) return `${tail}${noSearch}`;
   return `${asked} ${tail}${noSearch}`;
 }
 
@@ -208,9 +212,7 @@ function aiSection(grade, now) {
   }).join('\n    ');
   const secondsIntro = seconds.length > 0 ? '<p class="hint">Other AI assistants, for comparison only (not scored):</p>' : '';
   const more = scored.length > 1
-    ? (seconds.length > 0
-      ? `<p>Across all ${scored.length} questions, ${e(providerWho(entry.provider))} named your business in ${namedIn}.</p>`
-      : `<p>In all, ${e(providerWho(entry.provider))} named your business in ${namedIn} of ${scored.length} answers.</p>`)
+    ? `<p>${e(providerWho(entry.provider))} named your business in ${namedIn} of its ${scored.length} answers.</p>`
     : '';
   return `<section class="grade-ai">
     <h2>What AI says</h2>
@@ -387,10 +389,22 @@ function allAnswers(grade) {
   if (ai.length === 0) return '';
   const scored = scoredAnswers(grade);
   const named = scored.filter(a => a.named).length;
-  const items = ai.map(a => `<li><p><strong>${e(a.prompt)}</strong></p>${a.provider === 'mock' ? `<p class="seance-demo">${DEMO_LABEL}</p>` : ''}<p>${e(aiSentence(a, NaN))}${SECOND_OPINIONS.has(a.provider) ? ' For comparison only.' : ''}</p>${answerBlock(a)}</li>`).join('');
+  // One item per question: the question once, then one line per assistant.
+  const prompts = [...new Set(ai.map(a => a.prompt))];
+  const items = prompts.map(prompt => {
+    const answers = ai.filter(a => a.prompt === prompt)
+      .sort((x, y) => Number(SECOND_OPINIONS.has(x.provider)) - Number(SECOND_OPINIONS.has(y.provider)));
+    const lines = answers.map(a => {
+      const label = SECOND_OPINIONS.has(a.provider) ? providerWho(a.provider) : `${providerWho(a.provider)} (counts toward your score)`;
+      const demo = a.provider === 'mock' ? `<p class="seance-demo">${DEMO_LABEL}</p>` : '';
+      return `${demo}<p><strong>${e(label)}:</strong> ${e(aiSentence(a, NaN, { brief: true }))}</p>${answerBlock(a)}`;
+    }).join('');
+    const at = answers[0]?.at ? `<p class="hint">Asked ${e(formatRunTime(answers[0].at))}.</p>` : '';
+    return `<li><p><strong>${e(prompt)}</strong></p>${at}${lines}</li>`;
+  }).join('');
   const count = scored.length === 0 ? ''
     : scored.length < ai.length
-      ? `<p>${e(mainWho(scored[0].provider))} named you in ${named} of its ${scored.length} ${scored.length === 1 ? 'answer' : 'answers'}.</p>`
+      ? `<p>${e(mainWho(scored[0].provider))} named your business in ${named} of its ${scored.length} ${scored.length === 1 ? 'answer' : 'answers'}.</p>`
       : `<p>Named in ${named} of ${scored.length} ${scored.length === 1 ? 'answer' : 'answers'}.</p>`;
   return `<div class="grade-all-answers">${count}<ol>${items}</ol></div>`;
 }
@@ -459,7 +473,7 @@ function fullReport(grade, contact, rechecking = false, justOpened = false) {
     : scoredN === 0
       ? `<p class="hint">${mainName} did not answer, so this check has no AI score. The ${used - scoredN === 1 ? 'answer' : 'answers'} from ${andList(seconds)} ${used - scoredN === 1 ? 'is' : 'are'} here so you can compare.</p>`
       : seconds.length > 0
-        ? `<p class="hint">${askedLine} Only ${mainName}'s answers count toward your score, so it stays steady from check to check. ${one ? `${seconds[0]}'s answers are` : 'The others are'} here so you can compare.</p>`
+        ? `<p class="hint">${askedLine} Only ${mainName}'s answers count toward your score, so your score stays steady from check to check. ${one ? `${seconds[0]}'s ${used - scoredN === 1 ? 'answer is' : 'answers are'}` : "The other assistants' answers are"} below so you can compare.</p>`
         : `<p class="hint">We asked AI ${plural(asked)}. Your score counts ${used === 1 ? 'that answer' : `all ${used} answers`}.</p>`;
   return `<section class="grade-full" id="full-report">${openedNote}
     <h2>Every check</h2>
@@ -594,7 +608,7 @@ export function aboutPage({ contactEmail, userAgent = '' } = {}) {
   </ul>
   <p>We read only public pages. We do not log in, fill in forms, or run the page's scripts. We send no cookies. We visit only websites on the public internet.</p>
   ${userAgent ? `<p>Our visits identify themselves as <code>${e(userAgent)}</code>.</p>` : ''}
-  <p>We also ask Claude up to three questions about the best businesses of that kind in that city, and check whether the business is named. The questions name the kind of business and the city, never the business name. When we can, we also ask ChatGPT, Gemini, Grok and Perplexity the same questions so you can compare; only Claude's answers count toward the score. The person who ran a check can also see Google's live answer (Gemini with Google Search). It is private to them: we never save, score or share it.</p>
+  <p>We also ask Claude up to three questions about the best businesses of that kind in that city, and check whether the business is named. The questions name the kind of business and the city, never the business name. To read the answers, we also send each answer, with the business name, city and state, to Google's Gemini, which helps us check whether the business is named. When we can, we also ask ChatGPT, Gemini, Grok and Perplexity the same questions so you can compare; only Claude's answers count toward the score. The person who ran a check can also see Google's live answer (Gemini with Google Search). It is private to them: we never save, score or share it.</p>
   <p>Reports are not listed in search engines. We delete them after 90 days.</p>
   <p>Questions, or want a report removed? ${contact ? `Email ${contact}` : 'Use <a href="/about">our contact page</a>'}.</p>
   <p><a href="/grade">Check a business</a></p>
