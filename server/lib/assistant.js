@@ -475,6 +475,110 @@ export function createGeminiLiveSearch({ apiKey, model = DEFAULT_GEMINI_MODEL, t
   };
 }
 
+const GROK_URL = 'https://api.x.ai/v1/responses';
+export const DEFAULT_GROK_MODEL = 'grok-4.7';
+
+/** Bare https URLs from xAI's top-level citations list, in the shape collectSources() reads. */
+function grokCitations(data) {
+  const fromAnnotations = chatGptCitations(data);
+  if (fromAnnotations.length > 0) return fromAnnotations;
+  const list = Array.isArray(data?.citations) ? data.citations : [];
+  const citations = list
+    .map(c => (typeof c === 'string' ? { url: c, title: '' } : { url: c?.url, title: c?.title }))
+    .filter(c => typeof c.url === 'string');
+  return collectSources({ content: [{ type: 'text', citations }] });
+}
+
+/**
+ * Grok (xAI) with live web search, through xAI's Responses API (same shape as
+ * OpenAI's). A second opinion: shown beside the main answers, never scored.
+ * xAI's terms give us the output; we never present it as written by a person.
+ */
+export function createGrokAssistantProvider({ apiKey, model = DEFAULT_GROK_MODEL, timeoutMs = DEFAULT_PROVIDER_TIMEOUT_MS }) {
+  return {
+    name: 'grok',
+    async ask({ prompt, signal } = {}) {
+      const data = await callProvider(
+        'grok',
+        GROK_URL,
+        { authorization: `Bearer ${apiKey}` },
+        {
+          model,
+          input: [{ role: 'user', content: String(prompt ?? '') }],
+          tools: [{ type: 'web_search' }],
+          max_output_tokens: 8192,
+          store: false,
+        },
+        timeoutMs,
+        signal,
+      );
+      const status = String(data?.status ?? 'unknown').replace(/[^a-z_]/gi, '');
+      process.stderr.write(`[assistant] provider=grok status=${status}\n`);
+      // A reply that did not finish may stop mid-list, so it is never shown as a full answer.
+      if (data?.status !== undefined && data.status !== 'completed') throw new AssistantError('unparseable');
+      const sources = grokCitations(data);
+      return {
+        answer: requireText(joinOutputText(data)),
+        provider: 'grok',
+        model,
+        webSearch: (Array.isArray(data?.output) && data.output.some(i => /search/i.test(String(i?.type ?? '')))) || sources.length > 0,
+        sources,
+      };
+    },
+  };
+}
+
+const PERPLEXITY_URL = 'https://api.perplexity.ai/v1/agent';
+export const DEFAULT_PERPLEXITY_MODEL = 'perplexity/sonar';
+
+/** Search results Perplexity read, in the shape collectSources() reads. */
+function perplexitySources(data) {
+  const citations = [];
+  for (const item of Array.isArray(data?.output) ? data.output : []) {
+    if (item?.type !== 'search_results') continue;
+    for (const r of Array.isArray(item.results) ? item.results : []) citations.push({ url: r?.url, title: r?.title });
+  }
+  return collectSources({ content: [{ type: 'text', citations }] });
+}
+
+/**
+ * Perplexity (Sonar) with live web search, through Perplexity's Agent API.
+ * A second opinion: shown beside the main answers, never scored.
+ */
+export function createPerplexityAssistantProvider({ apiKey, model = DEFAULT_PERPLEXITY_MODEL, timeoutMs = DEFAULT_PROVIDER_TIMEOUT_MS }) {
+  return {
+    name: 'perplexity',
+    async ask({ prompt, signal } = {}) {
+      const data = await callProvider(
+        'perplexity',
+        PERPLEXITY_URL,
+        { authorization: `Bearer ${apiKey}` },
+        {
+          model,
+          input: String(prompt ?? ''),
+          tools: [{ type: 'web_search', search_type: 'fast', max_results: 8 }],
+          max_output_tokens: 8192,
+        },
+        timeoutMs,
+        signal,
+      );
+      const status = String(data?.status ?? 'unknown').replace(/[^a-z_]/gi, '');
+      process.stderr.write(`[assistant] provider=perplexity status=${status}\n`);
+      if (data?.status !== undefined && data.status !== 'completed') throw new AssistantError('unparseable');
+      // Perplexity marks its sources inline like [web:1]; the source list is shown separately.
+      const answer = requireText(joinOutputText(data)).replace(/\s?\[web:\d+\]/g, '');
+      const sources = perplexitySources(data);
+      return {
+        answer: requireText(answer),
+        provider: 'perplexity',
+        model,
+        webSearch: sources.length > 0,
+        sources,
+      };
+    },
+  };
+}
+
 /** The live Google panel's provider, or null when it is off (no key, switched off, or a test run). */
 export function createGeminiLive(config) {
   const g = config?.gemini;
@@ -499,6 +603,16 @@ export function createExtraAssistants(config) {
   if (g?.apiKey && config?.testRun !== true) {
     const timeoutMs = config?.seanceTimeoutMs ?? config?.providerTimeoutMs ?? DEFAULT_PROVIDER_TIMEOUT_MS;
     extras.push(createGeminiAssistantProvider({ apiKey: g.apiKey, model: g.model || DEFAULT_GEMINI_MODEL, timeoutMs }));
+  }
+  const x = config?.grok;
+  if (x?.apiKey && config?.testRun !== true) {
+    const timeoutMs = config?.seanceTimeoutMs ?? config?.providerTimeoutMs ?? DEFAULT_PROVIDER_TIMEOUT_MS;
+    extras.push(createGrokAssistantProvider({ apiKey: x.apiKey, model: x.model || DEFAULT_GROK_MODEL, timeoutMs }));
+  }
+  const p = config?.perplexity;
+  if (p?.apiKey && config?.testRun !== true) {
+    const timeoutMs = config?.seanceTimeoutMs ?? config?.providerTimeoutMs ?? DEFAULT_PROVIDER_TIMEOUT_MS;
+    extras.push(createPerplexityAssistantProvider({ apiKey: p.apiKey, model: p.model || DEFAULT_PERPLEXITY_MODEL, timeoutMs }));
   }
   return extras;
 }

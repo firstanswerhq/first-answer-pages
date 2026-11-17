@@ -273,6 +273,10 @@ All are optional except in production, where `DATA_DIR` and `BASE_URL` are requi
 | `CHATGPT_MODEL` | `gpt-6.1-terra` | Which OpenAI model answers as ChatGPT. |
 | `GEMINI_API_KEY` | none | Optional. A Google AI Studio API key. When set, the AI Visibility Check also asks Gemini the same questions (without live web search: Google's grounding terms forbid analyzing, storing or sharing searched answers the way the report does), and the report shows its answers for comparison. They are not scored. Second opinions are skipped once 12 or fewer of the day's Grader AI calls are left. |
 | `GEMINI_MODEL` | `gemini-3.1-flash-lite` | Which Google model answers as Gemini. |
+| `XAI_API_KEY` | none | Optional. An xAI API key. When set, the AI Visibility Check also asks Grok (with live web search) the same questions; its answers are shown for comparison and not scored. |
+| `XAI_MODEL` | `grok-4.7` | Which xAI model answers as Grok. |
+| `PERPLEXITY_API_KEY` | none | Optional. A Perplexity API key. When set, the AI Visibility Check also asks Perplexity (with live web search) the same questions; its answers are shown for comparison and not scored. |
+| `PERPLEXITY_MODEL` | `perplexity/sonar` | Which Perplexity model answers. |
 | `GEMINI_LIVE_SEARCH` | `on` | With a `GEMINI_API_KEY`, the report offers "Show Google's live answer": Gemini with live Google Search, shown only to the browser that ran the check (Google's grounding terms), never saved, scored or logged. Each click is one paid call against the day's Grader AI calls. Set to `off` to hide it. |
 | `GRADER_ENABLED` | `on` | Set to `off` to hide the AI Visibility Grader at `/grade` (every `/grade` address returns 404) and its link on the home page. |
 | `GRADER_LEAD_GATE` | `on` | With `on`, the full Grader report opens after the visitor sends a short form (name, email, phone). Set to `off` to show the full report to everyone, for demos and contest judges. |

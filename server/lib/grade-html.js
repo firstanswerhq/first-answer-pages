@@ -133,7 +133,7 @@ const ordinal = n => {
   return `${n}${({ 1: 'st', 2: 'nd', 3: 'rd' })[n % 10] ?? 'th'}`;
 };
 
-const providerWho = name => (name === 'anthropic' ? 'Claude' : name === 'chatgpt' ? 'ChatGPT' : name === 'gemini' ? 'Gemini' : name === 'openai' ? 'OpenAI' : name === 'mock' ? 'a demo assistant' : 'an AI assistant');
+const providerWho = name => (name === 'anthropic' ? 'Claude' : name === 'chatgpt' ? 'ChatGPT' : name === 'gemini' ? 'Gemini' : name === 'grok' ? 'Grok' : name === 'perplexity' ? 'Perplexity' : name === 'openai' ? 'OpenAI' : name === 'mock' ? 'a demo assistant' : 'an AI assistant');
 
 const resultOf = (grade, id) => (grade.results ?? []).find(r => r.id === id);
 
@@ -580,7 +580,7 @@ export function aboutPage({ contactEmail, userAgent = '' } = {}) {
   </ul>
   <p>We read only public pages. We do not log in, fill in forms, or run the page's scripts. We send no cookies. We visit only websites on the public internet.</p>
   ${userAgent ? `<p>Our visits identify themselves as <code>${e(userAgent)}</code>.</p>` : ''}
-  <p>We also ask Claude up to three questions about the best businesses of that kind in that city, and check whether the business is named. The questions name the kind of business and the city, never the business name. When we can, we also ask ChatGPT and Gemini the same questions so you can compare; only Claude's answers count toward the score. The person who ran a check can also see Google's live answer (Gemini with Google Search). It is private to them: we never save, score or share it.</p>
+  <p>We also ask Claude up to three questions about the best businesses of that kind in that city, and check whether the business is named. The questions name the kind of business and the city, never the business name. When we can, we also ask ChatGPT, Gemini, Grok and Perplexity the same questions so you can compare; only Claude's answers count toward the score. The person who ran a check can also see Google's live answer (Gemini with Google Search). It is private to them: we never save, score or share it.</p>
   <p>Reports are not listed in search engines. We delete them after 90 days.</p>
   <p>Questions, or want a report removed? ${contact ? `Email ${contact}` : 'Use <a href="/about">our contact page</a>'}.</p>
   <p><a href="/grade">Check a business</a></p>

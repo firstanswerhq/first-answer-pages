@@ -15,6 +15,8 @@ import {
   createAssistantProvider,
   createChatGptAssistantProvider,
   createGeminiAssistantProvider,
+  createGrokAssistantProvider,
+  createPerplexityAssistantProvider,
   createGeminiLiveSearch,
   createGeminiLive,
   createExtraAssistants,
@@ -1014,5 +1016,130 @@ describe("gemini live search: Google's live answer", () => {
     assert.equal(createGeminiLive({ gemini: { apiKey: 'k' }, geminiLive: false }), null);
     assert.equal(createGeminiLive({ gemini: { apiKey: 'k' }, testRun: true }), null);
     assert.equal(createGeminiLive({ gemini: { apiKey: 'k' } }).name, 'gemini-live');
+  });
+});
+
+// ---- Grok (xAI Responses API) and Perplexity (Agent API) -----------------------------
+
+describe('grok: second-opinion provider', () => {
+  test('asks xAI with web search and no storing; key only in the header', async () => {
+    await withFetch(async () => jsonResponse(chatGptReply('1. Test Plumbing')), async (calls) => {
+      const provider = createGrokAssistantProvider({ apiKey: 'xai-test-key', timeoutMs: 1000 });
+      let res;
+      const out = await captureOutput(async () => { res = await provider.ask({ prompt: 'Who are the best plumbers in Nashville, TN?' }); });
+      assert.equal(calls[0].url, 'https://api.x.ai/v1/responses');
+      assert.equal(calls[0].init.headers.authorization, 'Bearer xai-test-key');
+      const body = JSON.parse(calls[0].init.body);
+      assert.equal(body.model, 'grok-4.7');
+      assert.deepEqual(body.input, [{ role: 'user', content: 'Who are the best plumbers in Nashville, TN?' }]);
+      assert.deepEqual(body.tools, [{ type: 'web_search' }]);
+      assert.equal(body.store, false);
+      assert.deepEqual(res, {
+        answer: '1. Test Plumbing', provider: 'grok', model: 'grok-4.7', webSearch: true,
+        sources: [{ url: 'https://example.com/best', title: 'Best plumbers' }],
+      });
+      assert.doesNotMatch(out, /xai-test-key|Test Plumbing|Nashville/);
+      assert.match(out, /provider=grok status=completed/);
+    });
+  });
+
+  test('reads a top-level citations list of plain URLs', async () => {
+    const reply = {
+      status: 'completed',
+      output: [{ type: 'message', content: [{ type: 'output_text', text: '1. Test Plumbing', annotations: [] }] }],
+      citations: ['https://example.com/a', 'ftp://bad', 'https://example.com/a'],
+    };
+    await withFetch(async () => jsonResponse(reply), async () => {
+      const provider = createGrokAssistantProvider({ apiKey: 'k', timeoutMs: 1000 });
+      let res;
+      await captureOutput(async () => { res = await provider.ask({ prompt: 'q' }); });
+      assert.deepEqual(res.sources, [{ url: 'https://example.com/a', title: 'example.com' }]);
+      assert.equal(res.webSearch, true);
+    });
+  });
+
+  test('a reply that stopped part-way is an error', async () => {
+    await withFetch(async () => jsonResponse(chatGptReply('1. Half', { status: 'incomplete' })), async () => {
+      const provider = createGrokAssistantProvider({ apiKey: 'k', timeoutMs: 1000 });
+      await captureOutput(async () => {
+        await assert.rejects(() => provider.ask({ prompt: 'q' }), err => err.code === 'unparseable');
+      });
+    });
+  });
+
+  test('a refused call is an error that carries no key', async () => {
+    await withFetch(async () => jsonResponse({ error: 'Incorrect API key xai-test-key' }, 401), async () => {
+      const provider = createGrokAssistantProvider({ apiKey: 'xai-test-key', timeoutMs: 1000 });
+      const out = await captureOutput(async () => {
+        await assert.rejects(() => provider.ask({ prompt: 'q' }), err => err.code === 'provider_failed' && !/xai-test/.test(String(err.message)));
+      });
+      assert.doesNotMatch(out, /xai-test-key|Incorrect/);
+    });
+  });
+});
+
+const perplexityReply = (text, { status = 'completed' } = {}) => ({
+  object: 'response',
+  status,
+  output: [
+    { type: 'search_results', queries: ['best plumbers'], results: [
+      { id: 1, url: 'https://example.com/best', title: 'Best plumbers', snippet: 's' },
+      { id: 2, url: 'javascript:alert(1)', title: 'bad' },
+    ] },
+    ...(text === null ? [] : [{ type: 'message', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text, annotations: [] }] }]),
+  ],
+});
+
+describe('perplexity: second-opinion provider', () => {
+  test('asks the Agent API with fast web search; key only in the header; drops [web:N] markers', async () => {
+    await withFetch(async () => jsonResponse(perplexityReply('1. Test Plumbing [web:1]\n2. Other Co[web:2]')), async (calls) => {
+      const provider = createPerplexityAssistantProvider({ apiKey: 'pplx-test-key', timeoutMs: 1000 });
+      let res;
+      const out = await captureOutput(async () => { res = await provider.ask({ prompt: 'Who are the best plumbers in Nashville, TN?' }); });
+      assert.equal(calls[0].url, 'https://api.perplexity.ai/v1/agent');
+      assert.equal(calls[0].init.headers.authorization, 'Bearer pplx-test-key');
+      const body = JSON.parse(calls[0].init.body);
+      assert.equal(body.model, 'perplexity/sonar');
+      assert.equal(body.input, 'Who are the best plumbers in Nashville, TN?');
+      assert.deepEqual(body.tools, [{ type: 'web_search', search_type: 'fast', max_results: 8 }]);
+      assert.deepEqual(res, {
+        answer: '1. Test Plumbing\n2. Other Co', provider: 'perplexity', model: 'perplexity/sonar', webSearch: true,
+        sources: [{ url: 'https://example.com/best', title: 'Best plumbers' }],
+      });
+      assert.doesNotMatch(out, /pplx-test-key|Test Plumbing|Nashville/);
+      assert.match(out, /provider=perplexity status=completed/);
+    });
+  });
+
+  test('no answer text is an error, not an empty answer', async () => {
+    await withFetch(async () => jsonResponse(perplexityReply(null)), async () => {
+      const provider = createPerplexityAssistantProvider({ apiKey: 'k', timeoutMs: 1000 });
+      await captureOutput(async () => {
+        await assert.rejects(() => provider.ask({ prompt: 'q' }), err => err.code === 'unparseable');
+      });
+    });
+  });
+
+  test('a reply that stopped part-way is an error', async () => {
+    await withFetch(async () => jsonResponse(perplexityReply('1. Half', { status: 'incomplete' })), async () => {
+      const provider = createPerplexityAssistantProvider({ apiKey: 'k', timeoutMs: 1000 });
+      await captureOutput(async () => {
+        await assert.rejects(() => provider.ask({ prompt: 'q' }), err => err.code === 'unparseable');
+      });
+    });
+  });
+
+  test('on only with their keys, never in a test run, in a fixed order; keys are masked', () => {
+    assert.deepEqual(createExtraAssistants({ grok: { apiKey: 'k' }, perplexity: { apiKey: 'p' }, testRun: true }), []);
+    assert.deepEqual(
+      createExtraAssistants({ chatgpt: { apiKey: 'a' }, gemini: { apiKey: 'b' }, grok: { apiKey: 'c' }, perplexity: { apiKey: 'd' }, testRun: false }).map(p => p.name),
+      ['chatgpt', 'gemini', 'grok', 'perplexity'],
+    );
+    const c = configFromEnv({ XAI_API_KEY: 'xai-secret', PERPLEXITY_API_KEY: 'pplx-secret', XAI_MODEL: 'grok-4.3' }, { warn: () => {} });
+    assert.equal(c.grok.model, 'grok-4.3');
+    const text = JSON.stringify(redactConfig(c));
+    assert.doesNotMatch(text, /xai-secret|pplx-secret/);
+    assert.equal(redactConfig(c).grok.apiKey, '[set]');
+    assert.equal(redactConfig(c).perplexity.apiKey, '[set]');
   });
 });

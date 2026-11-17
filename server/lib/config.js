@@ -302,6 +302,10 @@ export function configFromEnv(env = process.env, opts = {}) {
     chatgpt: { apiKey: nonEmpty(env.CHATGPT_API_KEY), model: nonEmpty(env.CHATGPT_MODEL) },
     // Gemini as a second opinion. Off without GEMINI_API_KEY.
     gemini: { apiKey: nonEmpty(env.GEMINI_API_KEY), model: nonEmpty(env.GEMINI_MODEL) },
+    // Grok (xAI) as a second opinion. Off without XAI_API_KEY.
+    grok: { apiKey: nonEmpty(env.XAI_API_KEY), model: nonEmpty(env.XAI_MODEL) },
+    // Perplexity as a second opinion. Off without PERPLEXITY_API_KEY.
+    perplexity: { apiKey: nonEmpty(env.PERPLEXITY_API_KEY), model: nonEmpty(env.PERPLEXITY_MODEL) },
     // "Google's live answer" panel (Gemini with Google Search), shown only to the person who ran a check.
     geminiLive: parseOnOff(env.GEMINI_LIVE_SEARCH),
 
@@ -359,6 +363,8 @@ export function redactConfig(config) {
     },
     ...(config.chatgpt && { chatgpt: { ...config.chatgpt, apiKey: mark(config.chatgpt.apiKey) } }),
     ...(config.gemini && { gemini: { ...config.gemini, apiKey: mark(config.gemini.apiKey) } }),
+    ...(config.grok && { grok: { ...config.grok, apiKey: mark(config.grok.apiKey) } }),
+    ...(config.perplexity && { perplexity: { ...config.perplexity, apiKey: mark(config.perplexity.apiKey) } }),
     ...(config.trust && {
       trust: {
         ...config.trust,

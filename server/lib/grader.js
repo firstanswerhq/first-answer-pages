@@ -148,7 +148,7 @@ function summarizeFacts(facts, input) {
 export const freePromptFor = input => `Who are the best ${input.service} in ${input.city}, ${input.state}? Name your top 5.`;
 
 /** Assistants asked only as second opinions. */
-export const SECOND_OPINIONS = new Set(['chatgpt', 'gemini']);
+export const SECOND_OPINIONS = new Set(['chatgpt', 'gemini', 'grok', 'perplexity']);
 
 /** Display name of a main assistant, for the score lines. */
 export const mainWho = name => (name === 'anthropic' ? 'Claude' : name === 'openai' ? 'OpenAI' : 'AI');
