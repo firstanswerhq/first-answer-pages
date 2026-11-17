@@ -85,13 +85,15 @@ function fixtureFetcher() {
 
 // ---- environment ---------------------------------------------------------------------
 
-async function startEnv({ assistantProvider, extraAssistants, googleLive, nameChecker, config = {} } = {}) {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'fap-grade-lead-'));
-  for (const name of ['listings.json', 'categories.json']) {
-    await fs.copyFile(path.join(REPO_DATA, name), path.join(dir, name));
+async function startEnv({ assistantProvider, extraAssistants, googleLive, nameChecker, dataDir, idStart = 0, config = {} } = {}) {
+  const dir = dataDir ?? await fs.mkdtemp(path.join(os.tmpdir(), 'fap-grade-lead-'));
+  if (!dataDir) {
+    for (const name of ['listings.json', 'categories.json']) {
+      await fs.copyFile(path.join(REPO_DATA, name), path.join(dir, name));
+    }
   }
   const clock = { t: START, now() { return this.t; } };
-  let n = 0;
+  let n = idStart;
   const app = createApp({
     dataDir: dir,
     clock,
@@ -834,4 +836,23 @@ test('name check: Gemini cannot count a different business as yours (names must 
   assert.equal(a.named, false);
   assert.deepEqual(a.competitors, ['Bluebird Books', 'Ledger Lane']);
   assert.equal(a.nameCheck.addedNamed, false);
+});
+
+test('name check: answers carried over from earlier this week are read again (no new AI question)', async () => {
+  const assistant = stubAssistant('1. Bluebird Books\n2. Before booking');
+  const first = await startEnv({ assistantProvider: assistant });
+  const id1 = await startGrade(first, NO_SITE);
+  const a1 = (await readJson(first, 'grades.json', [])).find(x => x.id === id1).ai[0];
+  assert.equal(a1.competitors.length, 2);
+  // Same data folder, now with the name check on.
+  const checker = stubChecker(({ names }) => ({ isBusiness: new Map(names.map(n => [n, n === 'Before booking' ? 0.02 : 0.9])), sameAs: new Map() }));
+  const before = assistant.calls;
+  const second = await startEnv({ assistantProvider: assistant, nameChecker: checker, dataDir: first.dir, idStart: 100 });
+  const id2 = await startGrade(second, NO_SITE);
+  const a2 = (await readJson(second, 'grades.json', [])).find(x => x.id === id2).ai[0];
+  assert.ok(a2.reusedFrom);
+  assert.deepEqual(a2.competitors, ['Bluebird Books']);
+  assert.equal(a2.nameCheck.dropped, 1);
+  assert.equal(checker.calls.length, 1);
+  assert.equal(assistant.calls, before);
 });

@@ -87,6 +87,7 @@ export function createNameChecker({ apiKey, model = DEFAULT_DECISION_MODEL, time
           const q = prob(answers[`s${i}`]);
           if (q !== null) sameAs.set(n, q);
         });
+        process.stderr.write(`[name-check] ok names=${list.length} read=${isBusiness.size}\n`);
         return { isBusiness, sameAs };
       } catch {
         process.stderr.write('[name-check] failed\n');

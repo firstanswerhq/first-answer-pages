@@ -436,10 +436,24 @@ export function createGrader({
 
   const freePrompt = freePromptFor;
 
+  /**
+   * Answers carried over from a check earlier this week were read before the name
+   * check existed: read them again (no new AI question is asked, only the check).
+   */
+  async function rereadCarried(input, entries) {
+    if (!nameChecker) return entries;
+    return Promise.all(entries.map(async (a) => {
+      if (!a?.reusedFrom || a.nameCheck || a.provider === 'mock' || typeof a.answer !== 'string' || !a.answer) return a;
+      const analysis = await readAnswer(a.answer, input, false);
+      if (!analysis.nameCheck) return a;
+      return { ...a, named: analysis.named, position: analysis.position, total: analysis.total, competitors: analysis.competitors, nameCheck: analysis.nameCheck };
+    }));
+  }
+
   async function aiPart(id, grade) {
     const name = stepNames(grade.input)[3];
     const prompt = freePrompt(grade.input);
-    const kept = Array.isArray(grade.ai) ? grade.ai : [];
+    const kept = await rereadCarried(grade.input, Array.isArray(grade.ai) ? grade.ai : []);
     const toAsk = missingFor(kept, prompt);
     if (toAsk.length === 0) {
       await addStep(id, { name, state: 'done', ms: 0, finding: 'Used the answer AI gave us for this same question earlier this week.' });
