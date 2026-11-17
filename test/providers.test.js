@@ -22,6 +22,7 @@ import {
   createExtraAssistants,
   AssistantError,
 } from '../server/lib/assistant.js';
+import { createNameChecker, createNameCheck } from '../server/lib/name-check.js';
 import { createMockVisionProvider, createVisionProvider } from '../server/lib/vision.js';
 import { extractDraft, ExtractionError } from '../server/lib/extractor.js';
 
@@ -1157,6 +1158,65 @@ describe('inline source markers are removed from second-opinion answers', () => 
       let res;
       await captureOutput(async () => { res = await provider.ask({ prompt: 'q' }); });
       assert.equal(res.answer, '1. Test Plumbing\n2. Other Co\n3. Third');
+    });
+  });
+});
+
+describe('name check: Gemini Decisions request and reply', () => {
+  test('sends the answer and yes/no questions; key only in the header; reads probabilities', async () => {
+    const reply = { answers: { named: { type: 'noul', noul: 0.97, confidence: 0.97 }, n0: { type: 'noul', noul: 0.92 }, n1: { type: 'noul', noul: 0.03 } } };
+    await withFetch(async () => jsonResponse(reply), async (calls) => {
+      const checker = createNameChecker({ apiKey: 'AIza-dec-key', timeoutMs: 1000 });
+      let res;
+      const out = await captureOutput(async () => {
+        res = await checker.check({ answer: '1. Joe Plumbing\n2. Before booking', business: { name: 'Joe\'s "Best" Plumbing', city: 'Nashville', state: 'TN' }, names: ['Joe Plumbing', 'Before booking'] });
+      });
+      assert.equal(calls[0].url, 'https://generativelanguage.googleapis.com/v1beta/decisions');
+      assert.equal(calls[0].init.headers['x-goog-api-key'], 'AIza-dec-key');
+      const body = JSON.parse(calls[0].init.body);
+      assert.equal(body.model, 'gemini-decision-1');
+      assert.deepEqual(body.input, [{ type: 'text', text: '1. Joe Plumbing\n2. Before booking' }]);
+      assert.deepEqual(Object.keys(body.questions), ['named', 'n0', 'n1']);
+      assert.ok(Object.values(body.questions).every(q => q.type === 'noul'));
+      assert.match(body.questions.named.instructions, /"Joe's Best Plumbing" \(in Nashville, TN\)/);
+      assert.equal(res.named, 0.97);
+      assert.equal(res.isBusiness.get('Joe Plumbing'), 0.92);
+      assert.equal(res.isBusiness.get('Before booking'), 0.03);
+      assert.doesNotMatch(out, /AIza|Joe|Nashville/);
+    });
+  });
+
+  test('a refused call, a bad reply or a network error gives null, never an exception', async () => {
+    for (const impl of [
+      async () => jsonResponse({ error: { message: 'bad key AIza-dec-key' } }, 400),
+      async () => jsonResponse({ nope: true }),
+      async () => { throw new Error('down'); },
+    ]) {
+      await withFetch(impl, async () => {
+        const checker = createNameChecker({ apiKey: 'AIza-dec-key', timeoutMs: 1000 });
+        let res;
+        const out = await captureOutput(async () => { res = await checker.check({ answer: 'x', business: { name: 'Joe' }, names: [] }); });
+        assert.equal(res, null);
+        assert.doesNotMatch(out, /AIza/);
+      });
+    }
+  });
+
+  test('on only with a Gemini key, not when switched off, never in a test run', () => {
+    assert.equal(createNameCheck({}), null);
+    assert.equal(createNameCheck({ gemini: { apiKey: 'k' }, testRun: true }), null);
+    assert.equal(createNameCheck({ gemini: { apiKey: 'k' }, geminiNameCheck: false }), null);
+    assert.equal(createNameCheck({ gemini: { apiKey: 'k' } }).name, 'gemini-decisions');
+    assert.equal(configFromEnv({ GEMINI_NAME_CHECK: 'off' }, { warn: () => {} }).geminiNameCheck, false);
+  });
+
+  test('the Perplexity marker strip stays fast on an unclosed run of markers', async () => {
+    const long = `1. Joe [${Array.from({ length: 40 }, (_, i) => `web:${i + 1}`).join(', ')} x`;
+    await withFetch(async () => jsonResponse(perplexityReply(long)), async () => {
+      const provider = createPerplexityAssistantProvider({ apiKey: 'k', timeoutMs: 1000 });
+      const t0 = Date.now();
+      await captureOutput(async () => { await provider.ask({ prompt: 'q' }); });
+      assert.ok(Date.now() - t0 < 200);
     });
   });
 });

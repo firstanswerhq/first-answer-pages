@@ -17,7 +17,8 @@ import { SafeFetchError } from './safe-fetch.js';
 import { readPageFacts, STREET_PATTERN } from './page-facts.js';
 import { runWebsiteChecks, CHECKS } from './grade-checks.js';
 import { scoreGrade } from './grade-score.js';
-import { analyzeAnswer, registeredDomain } from './name-match.js';
+import { analyzeAnswer, listedNames, registeredDomain } from './name-match.js';
+import { DROP_BELOW, NAMED_ABOVE } from './name-check.js';
 import { normalizeForMatch } from './seance.js';
 import { AssistantError } from './assistant.js';
 import { mapCategory, normalizePhone, validateFields } from './listing-fields.js';
@@ -194,6 +195,7 @@ const withTimeout = (promise, ms, message) => new Promise((resolve, reject) => {
 export function createGrader({
   store, assistantProvider, aiBudget, safeFetcher, draftStore, notifier, clock, newId, config,
   extraAssistants = [],
+  nameChecker = null,
 }) {
   // Second opinions (ChatGPT and so on): asked the same questions as the main assistant.
   const extras = (Array.isArray(extraAssistants) ? extraAssistants : []).filter(p => p && typeof p.ask === 'function');
@@ -367,7 +369,8 @@ export function createGrader({
       }), AI_TIMEOUT_MS, 'ai timeout');
       const answer = cutCodePoints(res.answer, MAX_ANSWER_CODE_POINTS);
       // Read the whole answer for names (bounded), so a business named late is not missed; store the capped one.
-      const analysis = analyzeAnswer(cutCodePoints(res.answer, MAX_ANALYZED_CODE_POINTS), input);
+      const analyzed = cutCodePoints(res.answer, MAX_ANALYZED_CODE_POINTS);
+      const analysis = await readAnswer(analyzed, input, isMock);
       return {
         entry: {
           prompt,
@@ -379,6 +382,7 @@ export function createGrader({
           position: analysis.position,
           total: analysis.total,
           competitors: analysis.competitors,
+          ...(analysis.nameCheck && { nameCheck: analysis.nameCheck }),
           ms: nowMs() - t0,
           at: nowIso(),
         },
@@ -391,6 +395,30 @@ export function createGrader({
       process.stderr.write(`[grader] ai-failed code=${code}\n`);
       return { reason: AI_FAILED };
     }
+  }
+
+  /**
+   * Read an answer for names: our own reader, plus (when on) Gemini Decisions as
+   * a second check. Only a very sure Gemini reply changes our reader's result;
+   * any failure keeps our reader's result unchanged.
+   */
+  async function readAnswer(text, input, isMock) {
+    const own = analyzeAnswer(text, input);
+    if (!nameChecker || isMock) return own;
+    let verdict = null;
+    try {
+      verdict = await nameChecker.check({ answer: text, business: input, names: listedNames(text) });
+    } catch {
+      verdict = null;
+    }
+    if (!verdict) return own;
+    const notBusiness = n => (verdict.isBusiness?.get(n) ?? 1) < DROP_BELOW;
+    const checked = analyzeAnswer(text, input, { keep: n => !notBusiness(n) });
+    const dropped = own.total - checked.total;
+    const addNamed = !checked.named && typeof verdict.named === 'number' && verdict.named >= NAMED_ABOVE;
+    if (addNamed) checked.named = true;
+    checked.nameCheck = { by: 'gemini-decisions', dropped, addedNamed: addNamed };
+    return checked;
   }
 
   const freePrompt = freePromptFor;

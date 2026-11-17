@@ -138,9 +138,9 @@ const providerWho = name => (name === 'anthropic' ? 'Claude' : name === 'chatgpt
 const resultOf = (grade, id) => (grade.results ?? []).find(r => r.id === id);
 
 /** One plain sentence about the first AI answer. */
-function aiSentence(entry, now) {
+function aiSentence(entry, now, { also = false } = {}) {
   const justNow = !entry.reusedFrom && Number.isFinite(now) && now - Date.parse(entry.at) < 10 * 60 * 1000;
-  const asked = justNow
+  const asked = also ? `${providerWho(entry.provider)} also answered.` : justNow
     ? `We just asked ${providerWho(entry.provider)}.`
     : `We asked ${providerWho(entry.provider)} on ${formatRunTime(entry.at)}.`;
   const n = entry.competitors.length;
@@ -154,7 +154,7 @@ function aiSentence(entry, now) {
   } else {
     tail = n === 1 ? 'It named 1 other business, not yours.' : `It named these ${n} businesses, not yours.`;
   }
-  const noSearch = entry.provider === 'gemini' && entry.webSearch !== true ? ' (Gemini answered from what it already knows, without a live web search.)' : '';
+  const noSearch = entry.provider === 'gemini' && entry.webSearch !== true ? ' (Gemini answered without a live web search.)' : '';
   return `${asked} ${tail}${noSearch}`;
 }
 
@@ -178,7 +178,8 @@ function aiSection(grade, now) {
     return `<section class="grade-ai">
     <h2>What AI says</h2>
     <p>${e(mainWho(grade.mainProvider))} did not answer this time, so this check has no AI score. To try again, start a new check later.</p>
-    ${shown.map(a => `<p>${e(aiSentence(a, now))} For comparison only.</p>
+    <p class="hint">Other AI assistants, for comparison only (not scored):</p>
+    ${shown.map(a => `<p>${e(aiSentence(a, now))}</p>
     ${answerBlock(a)}`).join('\n    ')}
   </section>`;
   }
@@ -201,21 +202,34 @@ function aiSection(grade, now) {
     const names = a.competitors.length > 0
       ? `<ol class="grade-competitors">${a.competitors.map(c => `<li>${e(c)}</li>`).join('')}</ol>`
       : '';
-    return `<p>${e(aiSentence(a, now))} For comparison only.</p>
+    return `<p>${e(aiSentence(a, now, { also: true }))}</p>
     ${names}
     ${answerBlock(a)}`;
   }).join('\n    ');
+  const secondsIntro = seconds.length > 0 ? '<p class="hint">Other AI assistants, for comparison only (not scored):</p>' : '';
   const more = scored.length > 1
-    ? `<p>In all, ${e(providerWho(entry.provider))} named your business in ${namedIn} of ${scored.length} answers.</p>`
+    ? (seconds.length > 0
+      ? `<p>Across all ${scored.length} questions, ${e(providerWho(entry.provider))} named your business in ${namedIn}.</p>`
+      : `<p>In all, ${e(providerWho(entry.provider))} named your business in ${namedIn} of ${scored.length} answers.</p>`)
     : '';
   return `<section class="grade-ai">
     <h2>What AI says</h2>
     <p>${e(aiSentence(entry, now))}</p>
     ${list}
     ${answerBlock(entry)}
+    ${secondsIntro}
     ${secondHtml}
     ${more}
   </section>`;
+}
+
+/** "Claude, ChatGPT and Gemini each answered 3 questions. Grok answered 1 question." */
+function groupedCounts(per, plural, andList) {
+  const groups = new Map();
+  for (const [p, n] of per) groups.set(n, [...(groups.get(n) ?? []), providerWho(p)]);
+  return [...groups].sort((a, b) => b[0] - a[0])
+    .map(([n, names]) => `${andList(names)}${names.length > 1 ? ' each' : ''} answered ${plural(n)}.`)
+    .join(' ');
 }
 
 function scoreSection(grade) {
@@ -440,12 +454,12 @@ function fullReport(grade, contact, rechecking = false, justOpened = false) {
   const sameCount = [...per.values()].every(n => n === asked);
   const askedLine = sameCount
     ? `We asked ${andList([...per.keys()].map(providerWho))} the same ${asked === 1 ? 'question' : plural(asked)}.`
-    : `${andList([...per].map(([p, n]) => `${providerWho(p)} answered ${plural(n)}`))}.`;
+    : groupedCounts(per, plural, andList);
   const answersNote = used <= 0 ? ''
     : scoredN === 0
-      ? `<p class="hint">${mainName} did not answer, so this check has no AI score. ${andList(seconds.map(n => `${n}'s`))} ${used - scoredN === 1 ? 'answer is' : 'answers are'} here so you can compare.</p>`
+      ? `<p class="hint">${mainName} did not answer, so this check has no AI score. The ${used - scoredN === 1 ? 'answer' : 'answers'} from ${andList(seconds)} ${used - scoredN === 1 ? 'is' : 'are'} here so you can compare.</p>`
       : seconds.length > 0
-        ? `<p class="hint">${askedLine} Only ${mainName}'s answers count toward your score. ${andList(seconds)} ${one ? 'isn\'t' : 'aren\'t'} asked every time, so counting ${one ? 'it' : 'them'} would make your score jump around. ${one ? 'Its' : 'Their'} answers are here so you can compare.</p>`
+        ? `<p class="hint">${askedLine} Only ${mainName}'s answers count toward your score, so it stays steady from check to check. ${one ? `${seconds[0]}'s answers are` : 'The others are'} here so you can compare.</p>`
         : `<p class="hint">We asked AI ${plural(asked)}. Your score counts ${used === 1 ? 'that answer' : `all ${used} answers`}.</p>`;
   return `<section class="grade-full" id="full-report">${openedNote}
     <h2>Every check</h2>

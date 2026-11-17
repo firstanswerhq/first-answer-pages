@@ -248,7 +248,7 @@ function tableNames(rows) {
 }
 
 /** Every name in the answer's list lines and bold spans, in order, without duplicates. */
-function listedNames(answer) {
+export function listedNames(answer) {
   const names = [];
   const seen = new Set();
   const add = raw => {
@@ -320,8 +320,10 @@ export function extractCompetitors(answer, business) {
  * @returns {{ named: boolean, position: number|null, total: number, competitors: string[] }}
  *   position is the business's 1-based place in the answer's list, or null
  */
-export function analyzeAnswer(answer, business) {
-  const listed = listedNames(answer);
+export function analyzeAnswer(answer, business, { keep } = {}) {
+  // keep: an optional second opinion on which pulled-out names are really businesses.
+  const all = listedNames(answer);
+  const listed = typeof keep === 'function' ? all.filter(n => keep(n)) : all;
   const inList = n => isNamed(n, business, { allowGeneric: true });
   const index = listed.findIndex(inList);
   return {

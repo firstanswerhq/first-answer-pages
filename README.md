@@ -273,6 +273,8 @@ All are optional except in production, where `DATA_DIR` and `BASE_URL` are requi
 | `CHATGPT_MODEL` | `gpt-6.1-terra` | Which OpenAI model answers as ChatGPT. |
 | `GEMINI_API_KEY` | none | Optional. A Google AI Studio API key. When set, the AI Visibility Check also asks Gemini the same questions (without live web search: Google's grounding terms forbid analyzing, storing or sharing searched answers the way the report does), and the report shows its answers for comparison. They are not scored. Second opinions are skipped once 12 or fewer of the day's Grader AI calls are left. |
 | `GEMINI_MODEL` | `gemini-3.1-flash-lite` | Which Google model answers as Gemini. |
+| `GEMINI_NAME_CHECK` | `on` | With a `GEMINI_API_KEY`, each AI answer is also read by Google's Gemini Decisions API as a second check: names it is very sure are not businesses (headings, tips, review sites) are dropped from the competitor list, and the checked business counts as named when it is very sure the answer names it under a slightly different spelling. Any failure keeps our own reading. Set to `off` to turn it off. |
+| `GEMINI_DECISION_MODEL` | `gemini-decision-1` | Which Gemini Decisions model does that check. |
 | `XAI_API_KEY` | none | Optional. An xAI API key. When set, the AI Visibility Check also asks Grok (with live web search) the same questions; its answers are shown for comparison and not scored. |
 | `XAI_MODEL` | `grok-4.7` | Which xAI model answers as Grok. |
 | `PERPLEXITY_API_KEY` | none | Optional. A Perplexity API key. When set, the AI Visibility Check also asks Perplexity (with live web search) the same questions; its answers are shown for comparison and not scored. |

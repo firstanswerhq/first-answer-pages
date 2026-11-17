@@ -308,6 +308,9 @@ export function configFromEnv(env = process.env, opts = {}) {
     perplexity: { apiKey: nonEmpty(env.PERPLEXITY_API_KEY), model: nonEmpty(env.PERPLEXITY_MODEL) },
     // "Google's live answer" panel (Gemini with Google Search), shown only to the person who ran a check.
     geminiLive: parseOnOff(env.GEMINI_LIVE_SEARCH),
+    // Gemini Decisions as a second check on reading AI answers for names. On with GEMINI_API_KEY unless 'off'.
+    geminiNameCheck: parseOnOff(env.GEMINI_NAME_CHECK),
+    decisionModel: nonEmpty(env.GEMINI_DECISION_MODEL),
 
     visionProviderName: vision,
     assistantProviderName: assistant,

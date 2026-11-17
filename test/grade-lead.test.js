@@ -85,7 +85,7 @@ function fixtureFetcher() {
 
 // ---- environment ---------------------------------------------------------------------
 
-async function startEnv({ assistantProvider, extraAssistants, googleLive, config = {} } = {}) {
+async function startEnv({ assistantProvider, extraAssistants, googleLive, nameChecker, config = {} } = {}) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'fap-grade-lead-'));
   for (const name of ['listings.json', 'categories.json']) {
     await fs.copyFile(path.join(REPO_DATA, name), path.join(dir, name));
@@ -98,6 +98,7 @@ async function startEnv({ assistantProvider, extraAssistants, googleLive, config
     assistantProvider,
     extraAssistants,
     ...(googleLive !== undefined && { googleLive }),
+    ...(nameChecker !== undefined && { nameChecker }),
     safeFetcher: fixtureFetcher(),
     newGradeId: () => `grade${String(++n).padStart(17, '0')}`,
     config: {
@@ -517,7 +518,8 @@ test('ChatGPT is asked the same questions as Claude, and both show in the report
 
   const page = await (await get(env, `/grade/${id}`)).text();
   assert.match(page, /We just asked Claude\. It named these 3 businesses, not yours\./);
-  assert.match(page, /We just asked ChatGPT\. It listed 2 businesses, and yours was 1st\./);
+  assert.match(page, /ChatGPT also answered\. It listed 2 businesses, and yours was 1st\./);
+  assert.match(page, /Other AI assistants, for comparison only \(not scored\):/);
 
   // After the report is opened, each extra question also goes to both.
   const ok = await post(env, `/grade/${id}/unlock`, LEAD);
@@ -532,7 +534,7 @@ test('ChatGPT is asked the same questions as Claude, and both show in the report
   assert.equal(grade.ai.filter(a => a.provider === 'chatgpt').length, 3);
   const after = await (await get(env, `/grade/${id}`, { cookie })).text();
   assert.ok(after.includes('Claude named you in 0 of its 3 answers.'));
-  assert.ok(after.includes("We asked Claude and ChatGPT the same 3 questions. Only Claude's answers count toward your score. ChatGPT isn't asked every time, so counting it would make your score jump around. Its answers are here so you can compare."));
+  assert.ok(after.includes("We asked Claude and ChatGPT the same 3 questions. Only Claude's answers count toward your score, so it stays steady from check to check. ChatGPT's answers are here so you can compare."));
   // Only Claude's answers are scored, so ChatGPT naming the business does not change the score.
   assert.equal(grade.results.find(r => r.id === 'ai-named').detail, 'No. Claude did not name your business in any of 3 answers.');
 });
@@ -566,7 +568,7 @@ test('when Claude fails and ChatGPT answers, the report says there is no AI scor
   assert.equal(grade.results.find(r => r.id === 'ai-named').result, 'not_checked');
   const page = await (await get(env, `/grade/${id}`)).text();
   assert.match(page, /Claude did not answer this time, so this check has no AI score\./);
-  assert.match(page, /For comparison only\./);
+  assert.match(page, /for comparison only \(not scored\)/);
   assert.doesNotMatch(page, /AI named your business\./);
 });
 
@@ -587,10 +589,10 @@ test('with ChatGPT and Gemini on, all three answer; only Claude is scored', asyn
     return g.ai.length === 9 ? g : null;
   }, 'three assistants on three questions');
   const page = await (await get(env, `/grade/${id}`, { cookie })).text();
-  assert.match(page, /We just asked Gemini\./);
-  assert.ok(page.includes("We asked Claude, ChatGPT and Gemini the same 3 questions. Only Claude's answers count toward your score. ChatGPT and Gemini aren't asked every time, so counting them would make your score jump around. Their answers are here so you can compare."));
-  assert.match(page, /Gemini answered from what it already knows, without a live web search\./);
-  assert.match(page, /For comparison only\./);
+  assert.match(page, /Gemini also answered\./);
+  assert.ok(page.includes("We asked Claude, ChatGPT and Gemini the same 3 questions. Only Claude's answers count toward your score, so it stays steady from check to check. The others are here so you can compare."));
+  assert.match(page, /Gemini answered without a live web search\./);
+  assert.match(page, /for comparison only \(not scored\)/);
 });
 
 test('when Claude fails, every second opinion is shown and none is scored', async () => {
@@ -605,7 +607,7 @@ test('when Claude fails, every second opinion is shown and none is scored', asyn
   assert.match(page, /Claude did not answer this time/);
   const ok = await post(env, `/grade/${id}/unlock`, LEAD);
   const full = await (await get(env, `/grade/${id}`, { cookie: cookieOf(ok) })).text();
-  assert.ok(full.includes("Claude did not answer, so this check has no AI score. ChatGPT's and Gemini's answers are here so you can compare."));
+  assert.ok(full.includes("Claude did not answer, so this check has no AI score. The answers from ChatGPT and Gemini are here so you can compare."));
 });
 
 test('with the demo assistant in charge, ChatGPT is never asked', async () => {
@@ -760,3 +762,50 @@ test("Google's live answer page blocks scripts in Google's HTML", async () => {
   const res = await post(env, `/grade/${id}/google-live`, {}, { cookie });
   assert.match(res.headers.get('content-security-policy'), /script-src 'self'/);
 });
+
+// ---- Gemini Decisions as a second check on reading answers --------------------------
+
+function stubChecker(fn) {
+  const stub = { name: 'gemini-decisions', calls: [], async check(args) { stub.calls.push(args); return fn(args); } };
+  return stub;
+}
+
+test('name check: a very sure "not a business" drops a name, and a very sure "named" counts a near-miss spelling', async () => {
+  const assistant = stubAssistant('1. Bluebird Books\n2. Before booking\n3. Acee Acounting Group');
+  const checker = stubChecker(({ names }) => ({
+    named: 0.98,
+    isBusiness: new Map(names.map(n => [n, n === 'Before booking' ? 0.04 : 0.97])),
+  }));
+  const env = await startEnv({ assistantProvider: assistant, nameChecker: checker });
+  const id = await startGrade(env, NO_SITE);
+  const grade = (await readJson(env, 'grades.json', [])).find(x => x.id === id);
+  const a = grade.ai[0];
+  assert.equal(checker.calls.length, 1);
+  assert.equal(checker.calls[0].business.name, 'Ace Accounting');
+  assert.ok(!a.competitors.includes('Before booking'));
+  assert.equal(a.named, true);
+  assert.deepEqual(a.nameCheck, { by: 'gemini-decisions', dropped: 1, addedNamed: true });
+});
+
+test('name check: unsure replies change nothing', async () => {
+  const assistant = stubAssistant('1. Bluebird Books\n2. Ledger Lane');
+  const checker = stubChecker(({ names }) => ({ named: 0.8, isBusiness: new Map(names.map(n => [n, 0.3])) }));
+  const env = await startEnv({ assistantProvider: assistant, nameChecker: checker });
+  const id = await startGrade(env, NO_SITE);
+  const a = (await readJson(env, 'grades.json', [])).find(x => x.id === id).ai[0];
+  assert.deepEqual(a.competitors, ['Bluebird Books', 'Ledger Lane']);
+  assert.equal(a.named, false);
+  assert.deepEqual(a.nameCheck, { by: 'gemini-decisions', dropped: 0, addedNamed: false });
+});
+
+for (const [label, fn] of [['returns nothing', () => null], ['throws', () => { throw new Error('boom'); }]]) {
+  test(`name check: when the checker ${label}, our own reading stands`, async () => {
+    const assistant = stubAssistant('1. Bluebird Books\n2. Before booking');
+    const env = await startEnv({ assistantProvider: assistant, nameChecker: stubChecker(fn) });
+    const id = await startGrade(env, NO_SITE);
+    const a = (await readJson(env, 'grades.json', [])).find(x => x.id === id).ai[0];
+    assert.equal(a.named, false);
+    assert.equal(a.competitors.length, 2);
+    assert.equal('nameCheck' in a, false);
+  });
+}

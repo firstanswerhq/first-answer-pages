@@ -20,6 +20,7 @@ import { createVisionProvider } from './lib/vision.js';
 import { createAiBudget } from './lib/ai-budget.js';
 import { createNotifier } from './lib/notifier.js';
 import { createAssistantProvider, createExtraAssistants, createGeminiLive } from './lib/assistant.js';
+import { createNameCheck } from './lib/name-check.js';
 import { createIndexNow, indexNowOffReason } from './lib/indexnow.js';
 import { createSafeFetcher } from './lib/safe-fetch.js';
 import { createGrader } from './lib/grader.js';
@@ -126,6 +127,7 @@ export function createApp(deps = {}) {
     store,
     assistantProvider: ctx.assistantProvider,
     extraAssistants: deps.extraAssistants ?? createExtraAssistants(config),
+    nameChecker: deps.nameChecker !== undefined ? deps.nameChecker : createNameCheck(config),
     aiBudget: ctx.aiBudget,
     safeFetcher: ctx.safeFetcher,
     draftStore: createDraftStore({ store, clock, newId: ctx.newId }),
