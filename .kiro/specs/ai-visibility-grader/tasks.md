@@ -22,7 +22,7 @@ This feature was first built outside Kiro. It is being rebuilt here, task by tas
 
 Every task also follows the design's "Implementation notes from the code review" section.
 
-- [~] 1. Safe fetching
+- [x] 1. Safe fetching
   - [x] 1.1 Create `server/lib/ip-guard.js`
     - Export `isPublicAddress(ip)` using `net.isIP`, a 32-bit IPv4 parser and an eight-group IPv6 expander that handles `::` and a dotted IPv4 tail
     - Follow the design's IPv6 rule (public only inside `2000::/3` minus the listed blocks) and refuse every IPv4 range listed in the design, judging IPv4-mapped, IPv4-compatible and NAT64 IPv6 forms by their embedded IPv4
@@ -32,7 +32,7 @@ Every task also follows the design's "Implementation notes from the code review"
     - **Property 1: Public-address test matches the range table**
     - Build an independent bit-mask oracle in the test from the same range table
     - **Validates: Requirements 3.2, 3.10**
-  - [-] 1.3 Create `server/lib/safe-fetch.js`
+  - [x] 1.3 Create `server/lib/safe-fetch.js`
     - Export `createSafeFetcher({ request, lookup, timeoutMs, maxBytes, maxRedirects, userAgent })` and `SafeFetchError` with codes `bad_url`, `blocked_address`, `timeout`, `too_large`, `too_many_redirects`, `connect_failed`
     - URL checks: `http`/`https` only, ports 80 and 443 only, no user name or password; IP literal hosts must pass `isPublicAddress`
     - Strip brackets from `url.hostname` before the IP check; resolve and check in `fetchText`, then call `node:http`/`node:https` `request()` with `agent: false` and a `pinnedLookup` that answers with the checked list when `opts.all` is set and a single address otherwise
