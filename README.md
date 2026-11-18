@@ -315,7 +315,7 @@ Limits are per client address unless noted. A refused request gets a 429 and a `
 | Quote requests for one listing | 3 per hour per client per listing |
 | `POST /seance/run` | 10 per hour per client |
 | `POST /seance/run` for one listing | 1 per 10 minutes per listing |
-| `POST /grade` (new grades) | 5 per hour and 20 per day per client |
+| `POST /grade` (new grades) | 5 per hour and 6 per day per client (each check can use 3 AI calls, and the whole site shares 60 AI calls a day) |
 | `POST /grade/:id/unlock` | 5 per hour per client |
 | `POST /grade/:id/recheck` | 10 per hour per client, and 1 per 2 minutes per grade |
 | `POST /grade/:id/claim` | the same limit as `POST /rise` (10 per 10 minutes) |
