@@ -3398,7 +3398,7 @@ main h2, .grade-section h2, .grade-report h2 { text-transform: none; letter-spac
 }
 
 /* Main page titles on inner pages get the slanted headline too */
-.rise > h1, .grade-start > h1, .about > h1, main > article > h1:first-child, .listing-detail h1 {
+.rise > h1, .grade-start > h1, .about > h1, .message > h1, .verify-info > h1, main > article > h1:first-child, .listing-detail h1 {
   font-family: "Headline Serif", "Book Serif", Georgia, serif;
   font-style: italic;
   font-weight: 700;
@@ -3483,4 +3483,8 @@ input, select, textarea { background-image: none; }
 @media (max-width: 420px) { .ai-answer-scored { position: static; display: inline-block; margin: .2rem 0 0; } .ai-answer-who { max-width: calc(100% - 6.2rem); } }
 
 /* Very small phones: the category box keeps its words */
-@media (max-width: 340px) { .filters label { padding-left: .6rem; padding-right: .6rem; gap: .4rem; } }
+@media (max-width: 340px) { .filters label { padding-left: 2.6rem; padding-right: .5rem; gap: .4rem; background-position: .6rem center; background-size: 1.35rem; } }
+
+.grade-lead .button { text-transform: none; letter-spacing: .01em; }
+.listing-detail .listing-actions { gap: 1rem; }
+.ai-answer-scored { right: 7.4rem; }

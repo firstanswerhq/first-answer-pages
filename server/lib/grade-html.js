@@ -30,6 +30,9 @@ const page = (title, body, head = '') => layout({
 const e = escapeHtml;
 
 /** A short page for 404s, limits and other messages (always not indexed). */
+/** "a demo assistant" -> "A demo assistant" at the start of a sentence. */
+const capFirst = s => String(s).charAt(0).toUpperCase() + String(s).slice(1);
+
 export function gradeMessagePage(title, message, link = { href: '/grade', text: 'Check a business' }) {
   return page(title, `<section class="message">
   <h1>${e(title)}</h1>
@@ -220,7 +223,7 @@ function aiSection(grade, now) {
   }).join('\n    ');
   const secondsIntro = seconds.length > 0 ? `<p class="hint">We score ${e(providerWho(entry.provider))}'s answer. Other AI assistants, for comparison only (not scored):</p>` : '';
   const more = scored.length > 1
-    ? `<p>${e(providerWho(entry.provider))} named your business in ${namedIn} of its ${scored.length} answers.</p>`
+    ? `<p>${e(capFirst(providerWho(entry.provider)))} named your business in ${namedIn} of its ${scored.length} answers.</p>`
     : '';
   return `<section class="grade-ai">
     <h2>What AI says</h2>
