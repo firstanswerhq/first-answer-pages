@@ -124,7 +124,7 @@ Every task also follows the design's "Implementation notes from the code review"
 
 The rebuild also removed `server/lib/assistant.js`, `server/lib/name-check.js` and `server/lib/grade-stamp.js`. No task above covers them, but `server/app.js`, the grader and the existing tests import them. Build them before task 6 so the grader, routes and tests have what they import. Read every test named in a task before writing the file, so exports, names and messages match exactly. Do not write this code until the task is started.
 
-- [ ] R1. Create `server/lib/assistant.js`
+- [x] R1. Create `server/lib/assistant.js`
   - Tests that import it: `test/providers.test.js`, `test/seance.test.js`, `test/seance-sources.test.js`, `test/seance-production.test.js`, `test/polish.test.js`; `server/app.js` imports `createAssistantProvider`, `createExtraAssistants` and `createGeminiLive`
   - Exports: `AssistantError`, `createMockAssistantProvider`, `createAssistantProvider`, `createChatGptAssistantProvider`, `createGeminiAssistantProvider`, `createGrokAssistantProvider`, `createPerplexityAssistantProvider`, `createGeminiLiveSearch`, `createGeminiLive`, `createExtraAssistants`, `collectSources`
   - Providers expose `ask({ prompt, category, businessName })` and resolve to `{ answer, provider, model, webSearch }`
@@ -140,9 +140,10 @@ The rebuild also removed `server/lib/assistant.js`, `server/lib/name-check.js` a
     - `createGeminiLiveSearch` asks Gemini with Google Search grounding and keeps the Search Suggestions unchanged; `createGeminiLive(config)` returns `null` when `GEMINI_API_KEY` is unset or `GEMINI_LIVE_SEARCH` is `off`
     - Nothing it returns is stored, logged, name-matched or scored
     - _Requirements: 11b_
-  - [ ] R1.4 Run `test/providers.test.js`, `test/seance*.test.js` and `test/polish.test.js` in the cloud and fix what they report
+  - [x] R1.4 Run `test/providers.test.js`, `test/seance*.test.js` and `test/polish.test.js` in the cloud and fix what they report
+    - Cloud run: Kiro's `assistant.js` in the original code passed 207 of 207 in those files and the full suite 1014 of 1014.
 
-- [ ] R2. Create `server/lib/name-check.js`
+- [x] R2. Create `server/lib/name-check.js`
   - Tests that import it: `test/providers.test.js` (describe "name check: Gemini Decisions request and reply"); `server/app.js` imports `createNameCheck`
   - Exports: `createNameChecker` and `createNameCheck(config)`; `createNameCheck` returns `null` unless `GEMINI_API_KEY` is set and `GEMINI_NAME_CHECK` is not `off`, and never runs in a test run or with the mock
   - Send each AI answer, the business name (at most 8 words, letters, numbers and simple punctuation only), city, state and up to 30 extracted names (leaving out names the Name_Matcher already matched) to Gemini Decisions (`GEMINI_DECISION_MODEL`), two yes/no questions per name (`n<i>` is a specific business, `s<i>` is the same business); key only in a header; read the probabilities
@@ -151,7 +152,7 @@ The rebuild also removed `server/lib/assistant.js`, `server/lib/name-check.js` a
   - Run `test/providers.test.js` in the cloud and fix what it reports
   - _Requirements: 11d_
 
-- [ ] R3. Create `server/lib/grade-stamp.js`
+- [x] R3. Create `server/lib/grade-stamp.js`
   - No test imports it directly; `server/routes/grade.js` (task 7.2) and the flow tests in `test/grade-flow.test.js`, `test/grade-lead.test.js` and `test/grade-review-fixes.test.js` depend on its behavior
   - Form stamp: hidden field `t = <ms>.<hex hmac(secret, 'form:' + ms)>`; accepted when the HMAC matches, the age is at least 3 seconds and at most 2 hours; a forged or malformed value is refused
   - Cookies, all signed with `GRADER_SECRET` and checked with `timingSafeEqual`: unlock `g_<id>` (value `hmac(secret, 'unlock:' + id)`), browser-that-ran-the-check `gr_<id>` (for the Google live answer) and claim `gc_<id>`; each `HttpOnly`, `SameSite=Lax`, `Secure` in production, `Path=/grade/<id>`, `Max-Age` 90 days
