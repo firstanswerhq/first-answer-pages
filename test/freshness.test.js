@@ -215,6 +215,14 @@ test('copyright years and "updated" dates are read from page text', () => {
   assert.equal(copyrightYear('Hero image \u00a9 2015 Jane Doe', 2026), null);
   assert.equal(copyrightYear('\u00a9 2016 Map data', 2026), null);
   assert.equal(copyrightYear('\u00a9 2014 Photo: Jane Doe. \u00a9 2026 Acme Roofing', 2026), 2026);
+  // A credit later in the footer never hides the site's own year, and a recent year with a credit word still counts.
+  assert.equal(copyrightYear('\u00a9 2014 Old Name Inc. \u00a9 2026 Acme | Photos by Unsplash', 2026), 2026);
+  assert.equal(copyrightYear('\u00a9 2026 Acme | Photos by Unsplash', 2026), 2026);
+  assert.equal(copyrightYear('\u00a9 2026 Acme Maps & Surveying', 2026), 2026);
+  assert.equal(copyrightYear('\u00a9 2026 Acme Images', 2026), 2026);
+  assert.equal(copyrightYear('\u00a9 2020 Acme Maps & Surveying', 2026), null, 'an old year with a credit word still never fails');
+  assert.equal(judgeFreshness(page({ text: '\u00a9 2014 Old Name Inc. \u00a9 2026 Acme | Photos by Unsplash' }), { now: NOW }).result, 'pass');
+  assert.equal(judgeFreshness(page({ text: '\u00a9 2026 Acme | Photos by Unsplash' }), { now: NOW }).result, 'pass');
   assert.equal(judgeFreshness(page({ text: 'Photo \u00a9 2014 Jane Doe' }), { now: NOW }).result, 'not_checked', 'never a false fail');
   assert.deepEqual(updatedDates('Last updated: March 3, 2026. Updated on 2025-12-01. Updated 2/30/2026'),
     [Date.UTC(2026, 2, 3), Date.UTC(2025, 11, 1)]);

@@ -33,12 +33,17 @@ export function copyrightYear(text, nowYear) {
   const TAIL = `(?:${YEAR}|\\d{2}\\b|present\\b|today\\b|now\\b|current\\b)`;
   const re = new RegExp(`(?:\u00a9|\\(c\\)|\\bcopyright\\b)\\s*(?:\u00a9\\s*)?(${YEAR}\\b(?:${JOIN}${TAIL}){0,5})`, 'gi');
   let best = null;
+  // Years that may be a picture credit. They can never cause a fail, but a
+  // recent one still counts ("\u00a9 2026 Acme Maps & Surveying" is current).
+  let creditBest = null;
   let m;
   while ((m = re.exec(s)) !== null) {
     // "\u00a9 2014 Photo: Jane Doe" is a picture credit, not the site's own year.
+    // Only the words up to the next separator count, so "\u00a9 2026 Acme | Photos by\u2026" is the site's year.
     const credit = /\b(?:photos?|photograph(?:y|s)?|images?|maps?|illustrations?)\b/i;
-    if (credit.test(s.slice(m.index + m[0].length, m.index + m[0].length + 20))
-      || credit.test(s.slice(Math.max(0, m.index - 20), m.index).split(/[.!?|\n]/).pop())) continue;
+    const end = m.index + m[0].length;
+    const isCredit = credit.test(s.slice(end, end + 20).split(/[.!?|\n]/)[0])
+      || credit.test(s.slice(Math.max(0, m.index - 20), m.index).split(/[.!?|\n]/).pop());
     const years = [];
     let last = null;
     for (const part of m[1].split(new RegExp(JOIN, 'i')).map(p => p.trim().toLowerCase()).filter(Boolean)) {
@@ -53,8 +58,12 @@ export function copyrightYear(text, nowYear) {
       last = y;
       if (y <= nowYear + 1) years.push(y);
     }
-    for (const y of years) if (best === null || y > best) best = y;
+    for (const y of years) {
+      if (isCredit) { if (creditBest === null || y > creditBest) creditBest = y; }
+      else if (best === null || y > best) best = y;
+    }
   }
+  if (creditBest !== null && creditBest >= nowYear - 1 && (best === null || creditBest > best)) return creditBest;
   return best;
 }
 
