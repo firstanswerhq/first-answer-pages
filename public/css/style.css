@@ -104,7 +104,7 @@ html {
 
 body {
   margin: 0;
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  font-family: "Book Serif", Georgia, "Times New Roman", serif;
   font-size: 1rem;
   line-height: 1.5;
   color: var(--color-text);
@@ -142,7 +142,7 @@ img {
 /* ---------- Typography ---------- */
 
 h1, h2, h3, h4 {
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  font-family: "Book Serif", Georgia, "Times New Roman", serif;
   font-weight: 700;
   line-height: 1.2;
   color: var(--color-text);
@@ -166,7 +166,7 @@ h3 {
 
 .tagline {
   margin: 0.25rem 0 1rem;
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  font-family: "Book Serif", Georgia, "Times New Roman", serif;
   font-style: italic;
   font-weight: 400;
   font-size: 1.05rem;
@@ -184,7 +184,7 @@ h3 {
   padding: 0.85rem 1.25rem;
   border-bottom: 3px double var(--color-divider);
   background: var(--color-surface);
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  font-family: "Book Serif", Georgia, "Times New Roman", serif;
   font-size: 1.15rem;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -200,7 +200,7 @@ h3 {
 }
 
 .site-nav a.nav-cta {
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  font-family: "Book Serif", Georgia, "Times New Roman", serif;
   font-size: 0.9rem;
   font-weight: 600;
   padding: 0.45rem 0.9rem;
@@ -265,7 +265,7 @@ button.button {
   border-radius: var(--radius);
   background: var(--color-primary);
   color: var(--color-button-text);
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  font-family: "Book Serif", Georgia, "Times New Roman", serif;
   font-size: 1rem;
   font-weight: 600;
   line-height: 1.25;
@@ -401,7 +401,7 @@ a.button:focus-visible {
   border-radius: var(--radius);
   background: var(--color-primary);
   color: var(--color-button-text);
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  font-family: "Book Serif", Georgia, "Times New Roman", serif;
   font-size: 1.25rem;
   font-weight: 700;
   text-align: center;
@@ -514,7 +514,7 @@ details.advanced summary {
 .category-title {
   margin: 0 0 0.85rem;
   padding-bottom: 0.35rem;
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  font-family: "Book Serif", Georgia, "Times New Roman", serif;
   font-size: 1.35rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -535,7 +535,7 @@ details.advanced summary {
 
 .listing-card h3 {
   margin: 0;
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  font-family: "Book Serif", Georgia, "Times New Roman", serif;
   font-size: 1.1rem;
   font-weight: 700;
 }
@@ -605,7 +605,7 @@ details.advanced summary {
 
 .stamp-title {
   margin: 0;
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  font-family: "Book Serif", Georgia, "Times New Roman", serif;
   font-size: 1.15rem;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -1071,7 +1071,7 @@ details.advanced summary {
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--color-text-muted);
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  font-family: "Book Serif", Georgia, "Times New Roman", serif;
 }
 
 .grade-where {
@@ -1087,7 +1087,7 @@ details.advanced summary {
 
 .grade-score-number .num {
   display: inline-block;
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  font-family: "Book Serif", Georgia, "Times New Roman", serif;
   font-size: clamp(3.5rem, 14vw, 5rem);
   font-weight: 700;
   line-height: 1;
@@ -1098,14 +1098,14 @@ details.advanced summary {
 .grade-score-number .of {
   display: block;
   margin-top: 0.15rem;
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  font-family: "Book Serif", Georgia, "Times New Roman", serif;
   font-size: 1rem;
   font-weight: 500;
   color: var(--color-text-muted);
 }
 
 .grade-score-number .num-text {
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  font-family: "Book Serif", Georgia, "Times New Roman", serif;
   font-size: 1.5rem;
   font-weight: 700;
 }
@@ -1269,7 +1269,7 @@ details.advanced summary {
 
 .serp h3 {
   margin: 0 0 0.3rem;
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  font-family: "Book Serif", Georgia, "Times New Roman", serif;
   font-size: 0.8rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -1576,7 +1576,7 @@ summary {
 }
 
 .site-footer {
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  font-family: "Book Serif", Georgia, "Times New Roman", serif;
   font-size: 1rem;
   color: var(--color-text);
 }
@@ -1615,7 +1615,7 @@ summary {
 
 .home-head .grade-link {
   margin: 1.1rem 0 0;
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  font-family: "Book Serif", Georgia, "Times New Roman", serif;
   font-size: 1.1rem;
 }
 
@@ -1641,7 +1641,7 @@ summary {
   border: 1.5px solid var(--color-ink);
   border-radius: var(--radius);
   background: var(--color-surface) no-repeat 0.85rem center / 1.6rem;
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  font-family: "Book Serif", Georgia, "Times New Roman", serif;
   font-size: 1.2rem;
   font-weight: 700;
 }
@@ -1668,7 +1668,7 @@ summary {
   padding: 0.5rem 0.25rem;
   border: 0;
   background: transparent;
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  font-family: "Book Serif", Georgia, "Times New Roman", serif;
   color: var(--color-text-muted);
 }
 
@@ -1691,7 +1691,7 @@ summary {
   border: 1.5px solid var(--color-gold);
   border-radius: 10px;
   background: var(--color-tan);
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  font-family: "Book Serif", Georgia, "Times New Roman", serif;
   font-size: clamp(1.4rem, 6vw, 1.9rem);
   font-weight: 700;
   line-height: 1.25;
@@ -1773,7 +1773,7 @@ summary {
   display: flex;
   flex: 1 1 auto;
   align-items: baseline;
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  font-family: "Book Serif", Georgia, "Times New Roman", serif;
   font-size: 1rem;
 }
 
@@ -1838,7 +1838,7 @@ summary {
 
 .grade-eyebrow-title {
   display: block;
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  font-family: "Book Serif", Georgia, "Times New Roman", serif;
   font-size: clamp(1.25rem, 5.5vw, 1.7rem);
   font-weight: 700;
   text-transform: uppercase;
@@ -1881,7 +1881,7 @@ summary {
 .grade-score-number .of::after {
   content: "/ 100";
   margin-left: 0.18em;
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  font-family: "Book Serif", Georgia, "Times New Roman", serif;
   font-size: clamp(3rem, 15vw, 5rem);
   font-weight: 700;
   line-height: 1;
@@ -1891,7 +1891,7 @@ summary {
 .grade-score h1 {
   order: 2;
   margin: 0.4rem 0 0;
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  font-family: "Book Serif", Georgia, "Times New Roman", serif;
   font-size: clamp(1.5rem, 6.5vw, 2rem);
   font-style: italic;
   font-weight: 400;
@@ -2006,7 +2006,7 @@ summary {
 }
 
 .grade-lead .field label {
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  font-family: "Book Serif", Georgia, "Times New Roman", serif;
 }
 
 .grade-lead .field input {
@@ -2115,7 +2115,7 @@ summary {
 input,
 select,
 textarea {
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif !important;
+  font-family: "Book Serif", Georgia, "Times New Roman", serif;
 }
 
 /* Old lettering on every heading and title */
@@ -2134,7 +2134,7 @@ h4,
 .listing-card h3,
 .listing-card h3 a,
 .grade-preview h3 {
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  font-family: "Book Serif", Georgia, "Times New Roman", serif;
   font-style: normal;
   font-weight: 700;
 }
@@ -2329,7 +2329,7 @@ a.tel,
 .phone,
 .grade-competitors > li::marker,
 .grade-all-answers ol > li::marker {
-  font-family: "Old Numbers", "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  font-family: "Old Numbers", "Book Serif", Georgia, "Times New Roman", serif;
 }
 
 /* ---------- Utility / print ---------- */
@@ -2719,7 +2719,7 @@ a { color: var(--ink); text-decoration-thickness: 1px; text-underline-offset: 3p
   box-shadow: inset 0 0 0 1px rgba(142, 101, 38, .55), 0 1px 0 rgba(43, 38, 32, .2);
 }
 .founder-badge-title { color: #4A3410; letter-spacing: .12em; }
-.founder-badge-number { font-family: "Old Numbers", "Fira Sans Condensed", sans-serif; color: #4A3410; }
+.founder-badge-number { font-family: "Old Numbers", "Book Serif", Georgia, "Times New Roman", serif; color: #4A3410; }
 
 /* On the listing page the Verified note is long: keep it crisp, only the border looks stamped */
 .listing-detail .verified-badge { -webkit-mask-image: none; mask-image: none; transform: none; border-style: double; border-width: 3px; }
@@ -2738,7 +2738,7 @@ a { color: var(--ink); text-decoration-thickness: 1px; text-underline-offset: 3p
 }
 .stamp-title { letter-spacing: .1em; font-weight: 700; text-transform: uppercase; }
 .stamp-title:has(+ .stamp-what) .stamp-date { display: none; }
-.stamp-date { font-family: "Old Numbers", "Fira Sans Condensed", sans-serif; }
+.stamp-date { font-family: "Old Numbers", "Book Serif", Georgia, "Times New Roman", serif; }
 .stamp-what { margin: .2rem 0 .25rem; font-size: .92rem; font-weight: 600; color: var(--rubber); text-transform: none; letter-spacing: 0; }
 .stamp.stamp-unconfirmed {
   border: 2px dashed #6B5530;
@@ -2782,7 +2782,7 @@ a { color: var(--ink); text-decoration-thickness: 1px; text-underline-offset: 3p
   border-bottom: 1px dotted rgba(43, 38, 32, .5);
 }
 .listing-detail a[href^="tel:"] {
-  font-family: "Old Numbers", "Fira Sans Condensed", sans-serif;
+  font-family: "Old Numbers", "Book Serif", Georgia, "Times New Roman", serif;
   font-size: 1.6rem;
   color: var(--ink);
 }
@@ -2806,7 +2806,7 @@ a { color: var(--ink); text-decoration-thickness: 1px; text-underline-offset: 3p
 /* ---------- AI check report ---------- */
 .grade-report h2::after { background: var(--gold); }
 .grade-score-number .num {
-  font-family: "Old Numbers", "Fira Sans Condensed", sans-serif;
+  font-family: "Old Numbers", "Book Serif", Georgia, "Times New Roman", serif;
   color: var(--ink-dark);
   text-shadow: 0 0 1px rgba(12, 44, 115, .4);
 }
@@ -2882,7 +2882,7 @@ a { color: var(--ink); text-decoration-thickness: 1px; text-underline-offset: 3p
 .ai-answer .grade-competitors { margin: .4rem 0; padding-left: 1.4rem; }
 .ai-answer .grade-competitors li { font-size: .95rem; }
 .ai-answer details summary { font-size: .9rem; }
-.grade-competitors li::marker { font-family: "Old Numbers", "Fira Sans Condensed", sans-serif; color: var(--ink); }
+.grade-competitors li::marker { font-family: "Old Numbers", "Book Serif", Georgia, "Times New Roman", serif; color: var(--ink); }
 
 /* Fixes list and search preview: worn cards */
 .grade-top-fails li,
@@ -2953,7 +2953,7 @@ a { color: var(--ink); text-decoration-thickness: 1px; text-underline-offset: 3p
   place-items: center;
   border: 2px solid var(--ink);
   border-radius: 50%;
-  font-family: "Old Numbers", "Fira Sans Condensed", sans-serif;
+  font-family: "Old Numbers", "Book Serif", Georgia, "Times New Roman", serif;
   font-size: 1.25rem;
   color: var(--ink);
   -webkit-mask-image: var(--worn);
@@ -3019,7 +3019,7 @@ h1 { color: var(--ink-dark); }
 /* Cover line: an edition, like the spine of a real directory */
 .home-head::before {
   content: "\2605  2026\2013 27 Edition  \2605";
-  font-family: "Old Numbers", "Fira Sans Condensed", sans-serif;
+  font-family: "Old Numbers", "Book Serif", Georgia, "Times New Roman", serif;
   letter-spacing: .2em;
 }
 .home-head::after {
@@ -3123,7 +3123,7 @@ main:has(.directory-single) .home-head .grade-link { margin: .5rem 0 0; }
   color: #FFFDF6;
   font-size: 1.1rem;
   text-decoration: none;
-  font-family: "Old Numbers", "Fira Sans Condensed", sans-serif;
+  font-family: "Old Numbers", "Book Serif", Georgia, "Times New Roman", serif;
   box-shadow: 0 2px 0 var(--ink-dark);
 }
 .listing-actions .quote-jump {
@@ -3313,3 +3313,55 @@ input, select, textarea, button, .site-nav a.nav-cta { font-family: "Old Numbers
 .filters label { border: 2px solid var(--ink-black); border-radius: 6px; background-color: rgba(255, 252, 243, .75); }
 .filters button { font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif; font-weight: 600; text-transform: none; letter-spacing: .01em; font-size: 1.15rem; border-radius: 4px; }
 .listing-detail h1, .listing-detail h2, main h1 { color: var(--ink-black); }
+
+/* Listing: a "Tap to call" box with the number big in old-style digits */
+.listing-detail .listing-actions a.call-button {
+  flex-direction: column;
+  gap: .1rem;
+  padding: .55rem 1.1rem .7rem;
+  border-radius: 10px;
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+.call-button .call-label {
+  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  font-size: .78rem;
+  font-weight: 600;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  opacity: .92;
+}
+.call-button .call-number {
+  font-family: "Old Numbers", "Book Serif", Georgia, serif;
+  font-size: clamp(1.7rem, 7.5vw, 2.2rem);
+  font-weight: 700;
+  line-height: 1.05;
+  white-space: nowrap;
+}
+
+/* Hours: a neat printed table with a dotted line under each day */
+.listing-detail table.hours {
+  width: 100%;
+  max-width: 26rem;
+  border-collapse: collapse;
+  border-top: 3px double var(--ink-black);
+  border-bottom: 3px double var(--ink-black);
+  font-family: "Old Numbers", "Book Serif", Georgia, serif;
+}
+.listing-detail table.hours th,
+.listing-detail table.hours td { padding: .32rem .2rem; border-bottom: 1px dotted rgba(43, 38, 32, .35); }
+.listing-detail table.hours tr:last-child th,
+.listing-detail table.hours tr:last-child td { border-bottom: 0; }
+.listing-detail table.hours th { text-align: left; font-weight: 600; }
+.listing-detail table.hours td { text-align: right; }
+
+/* Everything reads in the book serif; buttons, form fields and small caps labels keep the clean sans */
+.rise h1, .rise h2, .grade-start h1, main h1, main h2 { color: var(--ink-black); }
+.tagline { font-family: "Book Serif", Georgia, serif; font-style: italic; }
+button, input, select, textarea, .button, a.button, .site-nav a.nav-cta,
+.listing-actions .quote-jump, .confirm-cta {
+  font-family: "Old Numbers", "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
+}
+.listing-detail .listing-actions a.call-button .call-number { font-family: "Old Numbers", "Book Serif", Georgia, serif; }
+/* Report section heads: mixed case like the rest of the book */
+main h2, .grade-section h2, .grade-report h2 { text-transform: none; letter-spacing: .01em; }
