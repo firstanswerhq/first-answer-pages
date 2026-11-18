@@ -12,5 +12,11 @@
   - _Requirements: 5.1, 5.2_
 - [ ] 6. Run the full test suite and the width sweep in Kiro, and fix anything that fails
   - _Requirements: 5.1, 5.2, 5.3_
+  - [ ] 6.1 Property test (fast-check): the listing call button's visible text always contains the listing's phone number, for any valid phone
+    - _Requirements: 4.2_
+  - [ ] 6.2 Property test (fast-check): the report's check-count sentence says "check needs" when the count is 1 and "checks need" otherwise, for any counts
+    - _Requirements: 6.1_
+  - [ ] 6.3 Test: `public/css/style.css` loads no font or stylesheet from another host, and every `@font-face` file exists in `public/fonts` with a license file
+    - _Requirements: 5.3_
 - [ ] 7. Fixes from the technical review
 - [ ] 8. Second review pass, then the owner's yes before merging to main
