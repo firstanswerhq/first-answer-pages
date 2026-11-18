@@ -157,6 +157,24 @@ function logShape(provider, data) {
 }
 
 /** One fetch call; returns parsed response JSON. Logs name and status only. */
+const USER_AGENT = 'FirstAnswerPages/1.0 (+https://firstanswerpages.com)';
+
+/**
+ * A short, safe label for a refused call: the provider's error type or code
+ * (letters, digits and _ only, never its message), or "html" for a web page
+ * (such as a firewall block). Never the key, never the reply text.
+ */
+async function errorKind(res) {
+  let text = '';
+  try { text = (await res.text()).slice(0, 4000); } catch { return 'unreadable'; }
+  if (/^\s*</.test(text)) return /cloudflare/i.test(text) ? 'html-cloudflare' : 'html';
+  let data;
+  try { data = JSON.parse(text); } catch { return 'not-json'; }
+  const err = data?.error ?? data;
+  const kind = [err?.type, err?.code, err?.status].find(v => typeof v === 'string' || typeof v === 'number');
+  return kind === undefined ? 'unknown' : String(kind).replace(/[^A-Za-z0-9_]/g, '').slice(0, 40) || 'unknown';
+}
+
 async function callProvider(name, url, headers, body, timeoutMs, outerSignal) {
   const ctrl = new AbortController();
   // timeoutMs null: the caller owns the deadline and passes it in outerSignal.
@@ -167,7 +185,7 @@ async function callProvider(name, url, headers, body, timeoutMs, outerSignal) {
     try {
       res = await fetch(url, {
         method: 'POST',
-        headers: { 'content-type': 'application/json', ...headers },
+        headers: { 'content-type': 'application/json', 'user-agent': USER_AGENT, ...headers },
         body: JSON.stringify(body),
         signal,
       });
@@ -176,7 +194,10 @@ async function callProvider(name, url, headers, body, timeoutMs, outerSignal) {
       throw new AssistantError(signal.aborted ? 'timeout' : 'provider_failed');
     }
     logStatus(name, res.status);
-    if (!res.ok) throw new AssistantError('provider_failed');
+    if (!res.ok) {
+      process.stderr.write(`[assistant] provider=${name} error=${await errorKind(res)}\n`);
+      throw new AssistantError('provider_failed');
+    }
     try {
       return await res.json();
     } catch {

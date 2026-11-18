@@ -1229,3 +1229,26 @@ describe('name check: Gemini Decisions request and reply', () => {
     });
   });
 });
+
+describe('refused calls log a safe error label only', () => {
+  test('the error type is logged; the message and key never are', async () => {
+    await withFetch(async () => jsonResponse({ error: { type: 'insufficient_quota', message: 'secret pplx-abc key detail' } }, 403), async (calls) => {
+      const provider = createPerplexityAssistantProvider({ apiKey: 'pplx-abc', timeoutMs: 1000 });
+      const out = await captureOutput(async () => {
+        await assert.rejects(() => provider.ask({ prompt: 'q' }), err => err.code === 'provider_failed');
+      });
+      assert.match(out, /provider=perplexity error=insufficient_quota/);
+      assert.doesNotMatch(out, /pplx-abc|secret|detail/);
+      assert.match(calls[0].init.headers['user-agent'], /^FirstAnswerPages\//);
+    });
+  });
+  test('a firewall page is labeled html', async () => {
+    await withFetch(async () => new Response('<html>Cloudflare Attention Required</html>', { status: 403 }), async () => {
+      const provider = createGrokAssistantProvider({ apiKey: 'k', timeoutMs: 1000 });
+      const out = await captureOutput(async () => {
+        await assert.rejects(() => provider.ask({ prompt: 'q' }));
+      });
+      assert.match(out, /provider=grok error=html-cloudflare/);
+    });
+  });
+});
