@@ -249,7 +249,9 @@ export function stillCorrectBlock(draftId, view, { done = false, contactEmail } 
     ? `<a href="mailto:${escapeHtml(contactEmail)}">email us</a>`
     : '<a href="/about">contact us</a>';
   return `${note}<p>${escapeHtml(when)}</p>
-  <p>Your listing shows these details as current for 90 days. Save this page. Come back and press "Yes, still correct" whenever your details are still right. If something changed, ${email}.</p>
+  <p>${escapeHtml(view.current
+    ? `Your listing shows ${one ? 'it' : 'these details'} as current for 90 days. Save this page. Come back and press "Yes, still correct" whenever ${one ? 'it is' : 'your details are'} still right.`
+    : `Press "Yes, still correct" if ${one ? 'it is' : 'they are'} still right, and your listing will show ${one ? 'it' : 'them'} as current again for 90 days.`)} If something changed, ${email}.</p>
   <form method="POST" action="/rise/drafts/${encodeURIComponent(draftId)}/still-correct">
     <button type="submit" class="button">Yes, still correct</button>
   </form>`;

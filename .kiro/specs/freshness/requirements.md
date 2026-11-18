@@ -30,7 +30,8 @@ Plain words, short sentences, American spelling. Never promise or imply that a f
 2. THE listing SHALL be used only WHEN the website's phone (business label or tap-to-call link) matches exactly one owner listing by its 10 digits AND that listing has the same city and state as the check AND its name looks like the checked name (or its website has the same domain). Sample listings SHALL never be used. Otherwise the listing SHALL be left out.
 2a. WHEN the page writes hours or "closed" before the days ("9am-5pm Mon-Fri", "Closed Sun, Mon-Sat 9am-6pm"), THE page text SHALL NOT be used.
 2b. Hours within about 60 characters of holiday, season, month, special, temporary or appointment words SHALL be skipped.
-2c. "00:00-00:00" in an `openingHours` string SHALL mean closed, the same as in `openingHoursSpecification`.
+2c. "00:00-00:00" in an `openingHours` string SHALL be unclear (the label is left out). In an `openingHoursSpecification` row, opens = closes = 00:00 SHALL mean closed.
+2d. WHEN hours for one part of the business come right before the days (happy hour, kitchen, lunch, service, phones, emergency calls, a branch or location, and similar), OR other words sit between two stretches of hours (they may belong to different places), THE page text SHALL NOT be used. One block such as "Mon-Fri: 8am-5pm / Sat: 9am-1pm / Sun: Closed" still reads.
 3. Business-label rows with `validFrom` or `validThrough` (holiday or seasonal hours) SHALL be left out.
 4. A time SHALL be read only WHEN it is clear: am/pm on both ends, "noon", "midnight", or 24-hour `HH:MM`. Anything else SHALL be left out, never guessed.
 5. WHEN one place gives two different values for the same day, THAT place SHALL be left out.
@@ -49,7 +50,7 @@ Plain words, short sentences, American spelling. Never promise or imply that a f
 2. THE check SHALL pass WHEN the page shows a copyright year of this year or last year, OR an "updated" date, a `dateModified` or a `Last-Modified` header within the last 365 days.
 3. THE check SHALL fail WHEN the newest copyright year is older than last year and no visible or business-label date is recent. A `Last-Modified` header alone SHALL NOT outweigh an old year people can see.
 4. WHEN no date is found, THE result SHALL be "Not checked" with a short note, never a fail.
-5. Copyright years more than one year in the future SHALL be ignored. "Present", "today" and "now" SHALL count as this year, a 2-digit end year ("2019-26") SHALL share the start year's century, and a list ("2015, 2026") SHALL count as its newest year. Text built by page scripts SHALL be skipped, with the reason "Your page loads its words in a way this check can't read yet."
+5. Copyright years more than one year in the future SHALL be ignored. "Present", "today" and "now" SHALL count as this year, a 2-digit end year ("2019-26") SHALL share the start year's century, and a list ("2015, 2026") SHALL count as its newest year. A © year within about 20 characters of photo, image, map or illustration SHALL be ignored as a picture credit. WHEN only an old date is found, THE note SHALL name it ("The newest date we found for your home page is …"), never say no date was found. Text built by page scripts SHALL be skipped, with the reason "Your page loads its words in a way this check can't read yet."
 6. THE check is worth 2 points.
 
 ### Requirement 3: Monthly standing fix
@@ -71,7 +72,7 @@ Plain words, short sentences, American spelling. Never promise or imply that a f
 1. WHEN an admin approves a listing, `verified.json` SHALL store `confirmedAt` and `confirmedFields` (phone, plus address and hours when the listing has them) beside `verifiedDate` and `verifiedAt`.
 2. THE stamp SHALL read "<Fields> confirmed by the business on <date>.", for example "Phone, address and hours confirmed by the business on Nov 18, 2026."
 3. Older entries without `confirmedFields` SHALL read "Details confirmed by the business on <date>." Nothing misleading SHALL be shown for them.
-3a. THE Séance page SHALL use the same line and the same 90-day rule.
+3a. THE Séance page SHALL use the same line and the same 90-day rule. WHEN the latest confirmation date differs from the first, it SHALL add "First confirmed on <date>. Runs are marked before or after that date."
 3b. `/api/verify/:id`, `/api/listings/:id` and the MCP `get_listing` tool SHALL add `current` and `confirmedFields` for a confirmed listing.
 4. THE JSON-LD `dateModified` SHALL be the confirmation date.
 5. `/llms.txt` SHALL add "Confirmed details: phone, address and hours" under a current confirmation.

@@ -35,6 +35,10 @@ export function copyrightYear(text, nowYear) {
   let best = null;
   let m;
   while ((m = re.exec(s)) !== null) {
+    // "\u00a9 2014 Photo: Jane Doe" is a picture credit, not the site's own year.
+    const credit = /\b(?:photos?|photograph(?:y|s)?|images?|maps?|illustrations?)\b/i;
+    if (credit.test(s.slice(m.index + m[0].length, m.index + m[0].length + 20))
+      || credit.test(s.slice(Math.max(0, m.index - 20), m.index).split(/[.!?|\n]/).pop())) continue;
     const years = [];
     let last = null;
     for (const part of m[1].split(new RegExp(JOIN, 'i')).map(p => p.trim().toLowerCase()).filter(Boolean)) {
@@ -104,6 +108,14 @@ export function judgeFreshness(facts, { now, lastModified } = {}) {
   if (recent(headerMs)) return { result: 'pass', detail: `Your website's settings say the home page changed on ${dayText(headerMs)}.` };
   if (facts?.scriptBuilt) {
     return { result: 'not_checked', detail: "Your page loads its words in a way this check can't read yet." };
+  }
+  // An old date was found: say so, never "no date". Still only a note, not a fail.
+  const newest = [updated, modifiedMs, headerMs].filter(ms => Number.isFinite(ms) && ms <= nowMs + DAY_MS).sort((a, b) => b - a)[0];
+  if (newest !== undefined) {
+    return {
+      result: 'not_checked',
+      detail: `The newest date we found for your home page is ${dayText(newest)}. Showing the current year in your footer tells people the site is kept up.`,
+    };
   }
   return {
     result: 'not_checked',

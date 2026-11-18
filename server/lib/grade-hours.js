@@ -132,6 +132,8 @@ const VALUE_FIRST = new RegExp(`(?:\\bclosed\\b|${TIME_RANGE})\\s*[:,]?\\s*(?:on
  */
 const NOT_REGULAR = /\b(?:holidays?|thanksgiving|christmas|xmas|new year|easter|memorial|labor day|independence|summer|winter|fall|autumn|spring|seasons?|seasonal|temporar(?:y|ily)|special|appointments?|january|february|march|april|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sept?|oct|nov|dec|may(?=\s*(?:-|\u2013|\u2014|\d)))\b/i;
 const CONTEXT = 60; // characters looked at before and after a stretch of hours
+/** Hours for one part of the business, said just before the days ("Kitchen hours:", "Happy Hour", "Service"). */
+const SUB_HOURS_END = /\b(?:happy\s+hours?|kitchen|lunch|dinner|brunch|breakfast|specials?|service|parts|sales|showroom|emergenc(?:y|ies)|phones?|phone\s+lines?|calls?|support|deliver(?:y|ies)|pick-?ups?|drive[- ]?thru|lobby|pharmacy|bar|patio|location|branch|clinic|walk-?ins?)(?:\s+(?:hours?|lines?|desk|dept\.?|department|only|answered))?\s*[:\-\u2013]?\s*$/i;
 
 /** The days named in "Mon-Fri", "Sat & Sun", "Monday through Wednesday, Friday". */
 function daysOf(spec, short = false) {
@@ -167,6 +169,12 @@ export function hoursFromText(text) {
   let n = 0;
   while ((m = SEGMENT.exec(s)) !== null && n < MAX_SEGMENTS) {
     n += 1;
+    // Hours for one part of the business (happy hour, kitchen, service, phones, a second location...) are not the regular hours.
+    const before = s.slice(Math.max(0, m.index - 40), m.index).split(/[.!?\n]/).pop();
+    if (SUB_HOURS_END.test(before)) return null;
+    // All hours must sit together in one block; hours spread over the page may belong to different places.
+    const prevEnd = values.length ? values[values.length - 1][1] : null;
+    if (prevEnd !== null && /[a-z]{3,}/i.test(s.slice(prevEnd, m.index).replace(/\b(?:and|hours?|open)\b/gi, ''))) return null;
     values.push(m.indices[2]);
     // Holiday, seasonal or appointment hours are not the regular hours: skip them.
     const around = s.slice(Math.max(0, m.index - CONTEXT), m.index + m[0].length + CONTEXT);
@@ -209,8 +217,9 @@ export function hoursFromStructured(parts) {
     while ((m = rule.exec(s)) !== null) {
       used += m[0];
       const days = daysOf(m[1], true);
-      // "Su 00:00-00:00" is how schema.org writes "closed", the same as in openingHoursSpecification.
-      const value = /^0?0:00\s*[-\u2013]\s*0?0:00$/.test(m[2].trim()) ? 'closed' : readDayValue(m[2]);
+      // "Su 00:00-00:00" could mean closed or open all day in this form, so it is unclear (left out).
+      // Only openingHoursSpecification rows use opens = closes = 00:00 for "closed".
+      const value = readDayValue(m[2]);
       if (days.length === 0 || value === null) return null;
       if (!put(map, days, value)) return null;
     }

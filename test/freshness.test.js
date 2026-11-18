@@ -83,12 +83,31 @@ test('holiday, seasonal and appointment hours are not read as regular hours', ()
   assert.notEqual(r['hours-match'].result, 'fail');
 });
 
-test('"Su 00:00-00:00" in openingHours means closed, the same as in openingHoursSpecification', () => {
-  const ld = hoursFromStructured({ text: ['Mo-Sa 09:00-17:00, Su 00:00-00:00'], spec: [] });
-  assert.equal(ld.get(6), 'closed');
-  const r = check(page({ text: 'Mon-Sat 9am-5pm, Sunday closed', ld: label({ openingHours: 'Mo-Sa 09:00-17:00, Su 00:00-00:00' }) }));
-  assert.equal(r['hours-match'].result, 'pass');
+test('"00:00-00:00" is unclear in an openingHours string, and closed only in openingHoursSpecification', () => {
+  // Closed or open all day? The text form doesn't say, so the label is left out.
+  assert.equal(hoursFromStructured({ text: ['Mo-Sa 09:00-17:00, Su 00:00-00:00'], spec: [] }), null);
+  const r = check(page({ text: 'Mon-Sat 9am-5pm, Sunday 9am-5pm', ld: label({ openingHours: 'Mo-Sa 09:00-17:00, Su 00:00-00:00' }) }));
+  assert.equal(r['hours-match'].result, 'not_checked', 'never a false alarm');
+  const spec = hoursFromStructured({ text: [], spec: [{ days: ['Sunday'], opens: '00:00', closes: '00:00' }] });
+  assert.equal(spec.get(6), 'closed');
   assert.equal(readDayValue('12am-12am'), null, 'unclear in page text');
+});
+
+test('hours for one part of the business, or a second place, are not read as regular hours', () => {
+  for (const t of [
+    'Mon-Fri 8am-5pm. Happy Hour Mon-Fri 3pm-6pm', 'Happy Hour Mon-Fri 3pm-6pm', 'Kitchen hours: Mon-Sun 11am-9pm',
+    'Service Mon-Fri 7:30am-6pm', 'Lunch specials Mon-Fri 11am-2pm', 'Emergency calls Sat-Sun 9am-1pm',
+    'Phones answered Sat-Sun 8am-8pm',
+    'Main office Mon-Fri 8am-5pm. Visit our Franklin store on Main Street too. Sat 9am-1pm',
+  ]) assert.equal(hoursFromText(t), null, t);
+  // Normal blocks still read.
+  assert.equal(hoursFromText('Mon-Fri: 8am-5pm\nSat: 9am-1pm\nSun: Closed').size, 7);
+  const store = hoursFromText('Store Hours: Mon-Sat 10am-9pm | Sun 12pm-6pm');
+  assert.equal(store.get(6), '720-1080');
+  assert.equal(store.get(0), '600-1260');
+  assert.equal(hoursFromText('Call now Open Mon-Fri 8am-5pm').get(4), '480-1020');
+  const r = check(page({ text: 'Kitchen hours: Mon-Sun 11am-9pm', ld: label({ openingHours: 'Mo-Su 08:00-22:00' }) }));
+  assert.equal(r['hours-match'].result, 'not_checked');
 });
 
 test('unclear hours are left out instead of guessed', () => {
@@ -191,6 +210,12 @@ test('copyright years and "updated" dates are read from page text', () => {
   assert.equal(copyrightYear('\u00a9 2019-26 Acme', 2026), 2026);
   assert.equal(copyrightYear('\u00a9 2015, 2026 Acme', 2026), 2026);
   assert.equal(copyrightYear('\u00a9 2015, 2018 Acme', 2026), 2018);
+  // Picture and map credits are not the site's own year.
+  assert.equal(copyrightYear('\u00a9 2014 Photo: Jane Doe', 2026), null);
+  assert.equal(copyrightYear('Hero image \u00a9 2015 Jane Doe', 2026), null);
+  assert.equal(copyrightYear('\u00a9 2016 Map data', 2026), null);
+  assert.equal(copyrightYear('\u00a9 2014 Photo: Jane Doe. \u00a9 2026 Acme Roofing', 2026), 2026);
+  assert.equal(judgeFreshness(page({ text: 'Photo \u00a9 2014 Jane Doe' }), { now: NOW }).result, 'not_checked', 'never a false fail');
   assert.deepEqual(updatedDates('Last updated: March 3, 2026. Updated on 2025-12-01. Updated 2/30/2026'),
     [Date.UTC(2026, 2, 3), Date.UTC(2025, 11, 1)]);
 });
@@ -213,9 +238,18 @@ test('site-fresh uses dateModified, "updated" dates and Last-Modified; no date i
   assert.equal(header.result, 'pass');
   // A server date never hides an old year people can see.
   assert.equal(judgeFreshness(page({ text: '© 2020' }), { now: NOW, lastModified: 'Mon, 16 Nov 2026 10:00:00 GMT' }).result, 'fail');
-  const none = judgeFreshness(page(), { now: NOW, lastModified: 'Mon, 01 Jan 2018 10:00:00 GMT' });
+  const none = judgeFreshness(page(), { now: NOW });
   assert.equal(none.result, 'not_checked');
   assert.match(none.detail, /^We found no date on your home page\./);
+  // An old date with no copyright year: say which date, and only as a note.
+  for (const [facts, extra] of [
+    [page({ text: 'Last updated: March 3, 2023' }), {}],
+    [page(), { lastModified: 'Mon, 01 Jan 2018 10:00:00 GMT' }],
+  ]) {
+    const old = judgeFreshness(facts, { now: NOW, ...extra });
+    assert.equal(old.result, 'not_checked');
+    assert.match(old.detail, /^The newest date we found for your home page is (Mar 3, 2023|Jan 1, 2018)\./);
+  }
   const built = judgeFreshness({ text: '', scriptBuilt: true, jsonLd: {} }, { now: NOW });
   assert.deepEqual(built, { result: 'not_checked', detail: "Your page loads its words in a way this check can't read yet." });
   assert.equal(header.detail, "Your website's settings say the home page changed on Nov 16, 2026.");
@@ -294,6 +328,19 @@ test('the owner review page says the stamp will name the details and the date', 
   const { reviewPage } = await import('../server/lib/rise-html.js');
   const html = reviewPage({ id: 'd1', status: 'draft', fields: {}, missingFields: [] }, []);
   assert.match(html, /Once approved, it shows a stamp saying which details you confirmed and when\./);
+});
+
+test('the "Still correct" text says "it" for one detail and "them" for several', async () => {
+  const { stillCorrectBlock } = await import('../server/lib/rise-html.js');
+  const one = stillCorrectBlock('d1', { current: true, fields: 'Phone', date: 'Nov 18, 2026' });
+  assert.match(one, /Your phone was confirmed on Nov 18, 2026\./);
+  assert.match(one, /Your listing shows it as current for 90 days\. Save this page\. Come back and press &quot;Yes, still correct&quot; whenever it is still right\./);
+  const oneOld = stillCorrectBlock('d1', { current: false, fields: 'Phone', date: 'Aug 1, 2026' });
+  assert.match(oneOld, /so your listing no longer shows it as current\.<\/p>\s*<p>Press &quot;Yes, still correct&quot; if it is still right, and your listing will show it as current again for 90 days\./);
+  const many = stillCorrectBlock('d1', { current: true, fields: 'Phone and hours', date: 'Nov 18, 2026' });
+  assert.match(many, /Your listing shows these details as current for 90 days\./);
+  assert.match(stillCorrectBlock('d1', { current: true, fields: '', date: 'Nov 18, 2026' }, { contactEmail: 'hi@example.test' }),
+    /If something changed, <a href="mailto:hi@example\.test">email us<\/a>\./);
 });
 
 test('confirmed fields are named in plain words', () => {
@@ -427,7 +474,8 @@ test('the owner presses "Still correct" and the listing shows the new date every
   const live = await (await get(env, draftPath)).text();
   assert.match(live, /more than 90 days ago, so your listing no longer shows them as current\./);
   assert.ok(live.includes(`action="${draftPath}/still-correct"`));
-  assert.match(live, /Your listing shows these details as current for 90 days\. Save this page\./);
+  assert.match(live, /Press &quot;Yes, still correct&quot; if they are still right, and your listing will show them as current again for 90 days\./);
+  assert.doesNotMatch(live, /as current for 90 days\. Save this page/, 'no repeated sentence');
   assert.match(live, /If something changed, <a href="\/about">contact us<\/a>\./, 'no CONTACT_EMAIL set: the contact page');
   assert.match(live, /<button type="submit" class="button">Yes, still correct<\/button>/);
   assert.ok(live.indexOf('See your listing') < live.indexOf('Yes, still correct'), '"See your listing" comes first');
@@ -468,7 +516,10 @@ test('the owner presses "Still correct" and the listing shows the new date every
   // The Séance keeps its before/after split at the FIRST confirmation date.
   const afterTag = (await (await get(env, `/api/seance/${listingId}`)).json()).runs[0].ownerConfirmation;
   assert.equal(afterTag, tagBefore);
-  assert.match(await (await get(env, `/seance/${listingId}`)).text(), /Phone, address and hours confirmed by the business on Nov 9, 2026\./);
+  const seanceNew = await (await get(env, `/seance/${listingId}`)).text();
+  assert.match(seanceNew, /Phone, address and hours confirmed by the business on Nov 9, 2026\./);
+  assert.match(seanceNew, /First confirmed on Aug 1, 2026\. Runs are marked before or after that date\./);
+  assert.doesNotMatch(seanceOld, /First confirmed on/, 'only once the dates differ');
   const api = await (await get(env, `/api/listings/${listingId}`)).json();
   assert.equal(api.current, true);
 

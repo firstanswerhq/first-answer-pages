@@ -229,8 +229,12 @@ export function seanceReportPage(listing, runs, confirmedDate, verifiedAt, opts 
   // Same wording, date and 90-day rule as the listing page's stamp.
   const latest = opts.confirmation ?? (confirmedDate ? { verifiedDate: confirmedDate, verifiedAt } : null);
   const view = latest ? confirmationView(latest, opts.now) : null;
+  // After "Still correct", the latest date differs from the first one, which is where runs are split.
+  const first = confirmedDate && latest?.verifiedDate && latest.verifiedDate !== confirmedDate
+    ? `\n  <p>${escapeHtml(`First confirmed on ${formatStampDate({ verifiedDate: confirmedDate })}. Runs are marked before or after that date.`)}</p>`
+    : '';
   const confirmed = view
-    ? `<p>${escapeHtml(`${confirmationLead(view)} ${formatStampDate(view.stampDate)}.`)}</p>`
+    ? `<p>${escapeHtml(`${confirmationLead(view)} ${formatStampDate(view.stampDate)}.`)}</p>${first}`
     : '<p>Not yet confirmed by the owner.</p>';
   let content;
   if (tagged.length === 0) {
