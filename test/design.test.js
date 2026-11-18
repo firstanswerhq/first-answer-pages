@@ -60,10 +60,19 @@ test('property: the check-count sentence uses "check needs" for 1 and "checks ne
       ([counted, failed]) => {
         const grade = {
           id: 'g1',
-          input: { name: 'Test Plumbing', city: 'Nashville', state: 'TN', service: 'plumber', website: 'https://example.test' },
-          score: { score: 50, counted, failed },
-          results: {},
+          input: { name: 'Test Plumbing', city: 'Nashville', state: 'TN', service: 'plumber', website: null },
+          key: 'k',
+          status: 'done',
           createdAt: '2026-11-01T00:00:00.000Z',
+          finishedAt: '2026-11-01T00:01:00.000Z',
+          steps: [],
+          facts: null,
+          results: [], // an array of { id, result, detail }, as in test/grade-flow.test.js
+          ai: [],
+          score: { score: 50, counted, failed },
+          previousScore: null,
+          draftId: null,
+          recheckedAt: null,
         };
         const html = reportPage(grade, { leadGate: false });
         const m = /<p class="grade-failed">([^<]*)<\/p>/.exec(html);
