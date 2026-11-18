@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Design rules check",
+      "trigger": "PostFileSave",
+      "description": "Checks stylesheet and page changes against the design steering rules",
+      "matcher": "(public/css/style\\.css|server/lib/(html|grade-html|rise-html)\\.js)$",
+      "action": {
+        "type": "agent",
+        "prompt": "The file just saved changes how the site looks. Check it against .kiro/steering/design.md: no fonts loaded from another host (no fonts.googleapis.com or @import url(http...)); no headings set to all capitals; buttons use the book serif; the Old Numbers font only where a number is the point. Report anything that breaks a rule and fix it. Do not touch anything else."
+      }
+    }
+  ]
+}
