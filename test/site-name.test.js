@@ -129,7 +129,7 @@ describe('SITE_NAME in pages', () => {
     await withApp({ siteName: 'Music City Pages' }, async ({ base }) => {
       const home = await getText(base, '/');
       assert.ok(home.text.includes('<a class="brand" href="/">Music City Pages</a>'));
-      assert.ok(home.text.includes('<p>Music City Pages. A free local business directory.</p>'));
+      assert.ok(home.text.includes('<p>Music City Pages: a phone book for local businesses that AI can read. Free to list.</p>'));
 
       const health = await getText(base, '/healthz');
       assert.deepEqual(JSON.parse(health.text), { ok: true });

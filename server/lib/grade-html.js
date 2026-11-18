@@ -44,7 +44,7 @@ const FIELD_DEFS = Object.freeze([
   { key: 'name', label: 'Business name', max: 120, autocomplete: 'organization' },
   { key: 'city', label: 'City', max: 80, autocomplete: 'address-level2' },
   { key: 'state', label: 'State', max: 30, hint: STATE_HINT, autocomplete: 'address-level1' },
-  { key: 'service', label: 'What you do', max: 60, hint: 'For example: roofers, plumbers, hair salon.', list: 'service-suggestions' },
+  { key: 'service', label: 'What you do', max: 60, hint: 'For example: roofer, plumber, hair salon.', list: 'service-suggestions' },
   { key: 'website', label: 'Your website (optional)', max: 200, type: 'text', hint: 'Leave it blank if you do not have one.', autocomplete: 'url' },
 ]);
 
@@ -74,7 +74,7 @@ export function gradeFormPage({ values = {}, errors = {}, stamp = '', categories
   const body = `<section class="rise grade-start">
   <h1>Can AI find your business?</h1>
   <p class="tagline">Free check. About two minutes. No account needed.</p>
-  <p>Ask an AI assistant for the best business like yours in your city. See if it names you, who it names instead, and what to fix.</p>
+  <p>We ask an AI assistant for the best business like yours in your city. You see if it names you, who it names instead, and what to fix.</p>
   ${problems}
   <form class="rise-form" method="POST" action="/grade">
 ${formFields(values, errors)}
@@ -256,7 +256,7 @@ function scoreSection(grade) {
   if (!grade.input.website && !Number.isInteger(s.score)) {
     failed = '<p class="grade-failed">We could only run the AI check. Add a website to get a score.</p>';
   } else if (s.counted > 0) {
-    failed = `<p class="grade-failed">${s.failed} of ${s.counted} checks need work</p>`;
+    failed = `<p class="grade-failed">${s.failed} of ${s.counted} ${s.counted === 1 ? 'check needs' : 'checks need'} work</p>`;
   } else {
     failed = '<p class="grade-failed">No checks could be run yet</p>';
   }
@@ -267,7 +267,7 @@ function scoreSection(grade) {
     ? `<p class="grade-prev">Before: ${grade.previousScore}. Now: ${s.score}.</p>`
     : '';
   return `<section class="grade-score">
-    <p class="grade-eyebrow"><span class="grade-eyebrow-title">AI Visibility Check</span> <span class="grade-eyebrow-sub">Report &middot; ${e(DEFAULT_SITE_NAME)}</span></p>
+    <p class="grade-eyebrow"><span class="grade-eyebrow-title">AI Visibility Check</span> <span class="grade-eyebrow-sub">A report from ${e(DEFAULT_SITE_NAME)}</span></p>
     <h1>${e(grade.input.name)}</h1>
     <p class="grade-where">${e(grade.input.service)} in ${e(grade.input.city)}, ${e(grade.input.state)}</p>
     ${big}
@@ -311,7 +311,7 @@ function fixSection(grade) {
       <form method="POST" action="/grade/${e(grade.id)}/claim">
         <button type="submit" class="button">Claim my free listing</button>
       </form>
-      <p class="hint">A free listing for your business in our directory, ${e(DEFAULT_SITE_NAME)}. Next you check the details and send it to us for approval. Nothing goes live until you do.</p>
+      <p class="hint">A free listing for your business in our directory, ${e(DEFAULT_SITE_NAME)}. Next you check the details and send it to us for approval. Nothing goes live until you send it and we approve it.</p>
       ${grade.input.website ? '' : '<p>You did not give a website. A free listing gives AI something to read about the business.</p>'}
     </section>
     ${failed ? `<section class="grade-top-fails"><h2>Fix these first</h2><ul>${failed}</ul><p class="hint">Not a computer person? Send this page to whoever built your website.</p></section>` : ''}
@@ -375,7 +375,7 @@ function leadForm(grade, { values = {}, errors = {} } = {}) {
   return `<section class="grade-lead" id="lead">
     <h2>See every check and the fixes</h2>
     <p>Enter your name, email and phone to open the full report right away, on this page. It has every check, the fix for each one, and text you can copy and paste.</p>
-    <p class="hint">Why the phone number? It is the fastest way to help if you want a hand with your report. We only call, text or email you if you check the box below. We never sell it.</p>
+    <p class="hint">Why your phone number? If you want help with your report, a call is the fastest way. We only call, text or email you if you check the box below. We never sell it.</p>
 ${errorNote}
     <form class="rise-form" method="POST" action="/grade/${e(grade.id)}/unlock">
 ${field('name', 'Your name', 'text', 'name')}

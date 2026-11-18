@@ -2515,7 +2515,7 @@ body::after {
 @media (max-width: 640px) {
   body::after {
     background:
-      linear-gradient(90deg, rgba(110, 70, 25, .18), transparent 5%, transparent 95%, rgba(110, 70, 25, .18)),
+      linear-gradient(90deg, rgba(110, 70, 25, .24), transparent 5%, transparent 95%, rgba(110, 70, 25, .24)),
       linear-gradient(180deg, rgba(110, 70, 25, .10), transparent 3%, transparent 97%, rgba(110, 70, 25, .14));
   }
 }
@@ -3311,7 +3311,7 @@ input, select, textarea, button, .site-nav a.nav-cta { font-family: "Old Numbers
 /* Search: separate boxes like the original, no outer frame; mixed-case button */
 .filters { border: 0; background: transparent; box-shadow: none; border-radius: 0; }
 .filters label { border: 2px solid var(--ink-black); border-radius: 6px; background-color: rgba(255, 252, 243, .75); }
-.filters button { font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif; font-weight: 600; text-transform: none; letter-spacing: .01em; font-size: 1.15rem; border-radius: 4px; }
+.filters button { text-transform: none; letter-spacing: .01em; font-size: 1.15rem; border-radius: 4px; }
 .listing-detail h1, .listing-detail h2, main h1 { color: var(--ink-black); }
 
 /* Listing: a "Tap to call" box with the number big in old-style digits */
@@ -3358,10 +3358,99 @@ input, select, textarea, button, .site-nav a.nav-cta { font-family: "Old Numbers
 /* Everything reads in the book serif; buttons, form fields and small caps labels keep the clean sans */
 .rise h1, .rise h2, .grade-start h1, main h1, main h2 { color: var(--ink-black); }
 .tagline { font-family: "Book Serif", Georgia, serif; font-style: italic; }
-button, input, select, textarea, .button, a.button, .site-nav a.nav-cta,
-.listing-actions .quote-jump, .confirm-cta {
-  font-family: "Old Numbers", "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
+input, select, textarea { font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif; }
+/* Every button in the same book serif as "Search Directory" */
+button, .button, a.button, .site-nav a.nav-cta, .filters button,
+.listing-actions .quote-jump, .confirm-cta, .home-head .grade-link a {
+  font-family: "Book Serif", Georgia, "Times New Roman", serif;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: .01em;
 }
 .listing-detail .listing-actions a.call-button .call-number { font-family: "Old Numbers", "Book Serif", Georgia, serif; }
 /* Report section heads: mixed case like the rest of the book */
 main h2, .grade-section h2, .grade-report h2 { text-transform: none; letter-spacing: .01em; }
+
+/* Report header: the home page's slanted serif title, not spaced capitals */
+.grade-eyebrow { text-transform: none; letter-spacing: 0; }
+.grade-eyebrow-title {
+  display: block;
+  font-family: "Headline Serif", "Book Serif", Georgia, serif;
+  font-style: italic;
+  font-weight: 700;
+  font-size: clamp(2rem, 8.5vw, 3rem);
+  line-height: 1.05;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-black);
+}
+.grade-eyebrow-sub {
+  display: block;
+  font-family: "Book Serif", Georgia, serif;
+  font-style: italic;
+  font-size: 1.05rem;
+  letter-spacing: 0;
+  text-transform: none;
+  color: #3A332B;
+}
+
+/* Main page titles on inner pages get the slanted headline too */
+.rise > h1, .grade-start > h1, .about > h1, main > article > h1:first-child, .listing-detail h1 {
+  font-family: "Headline Serif", "Book Serif", Georgia, serif;
+  font-style: italic;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+/* The free-check link on the cover: a quiet line, with room around it */
+.home-head .grade-link { margin: 1.4rem 0 .2rem; }
+.home-head .grade-link a {
+  display: inline-block;
+  border: 0;
+  border-bottom: 2px solid var(--ink);
+  border-radius: 0;
+  background: transparent;
+  padding: .15rem .1rem;
+  font-size: 1.1rem;
+}
+
+/* Small notes: easier to read on the paper */
+.hint, .rise-form .hint, .grade-start .hint, .quote-form .hint, p.hint { font-size: max(.95rem, 15px); color: #4A4238; }
+
+/* Header button: matching side room on phones */
+@media (max-width: 420px) {
+  .site-nav { padding-left: max(14px, env(safe-area-inset-left, 0px)); padding-right: max(14px, env(safe-area-inset-right, 0px)); gap: .5rem; }
+  .site-nav a.nav-cta { font-size: .9rem; padding: .45rem .6rem; }
+}
+
+/* Form fields: a plain fill so paper light never glows through */
+input, select, textarea { background-image: none; }
+.rise-form input, .rise-form select, .rise-form textarea, .quote-form input, .quote-form textarea { background-color: #FFFCF3; }
+
+/* Hours: plain book digits, so letters and numbers match */
+.listing-detail table.hours { font-family: "Book Serif", Georgia, serif; }
+
+/* Desktop and mouse users can't tap: say "Call" there */
+@media (hover: hover) and (pointer: fine) {
+  .call-button .call-label { font-size: 0; letter-spacing: 0; }
+  .call-button .call-label::before { content: "Call"; font-size: .78rem; letter-spacing: .22em; }
+}
+
+/* Long names in the 3 columns: the number stays with the end of the name */
+.listing-card h3 { flex-wrap: wrap; }
+.listing-detail .listing-actions a.call-button { display: flex; flex-direction: column; align-items: center; }
+.call-button .call-label, .call-button .call-number { display: block; }
+@media (max-width: 420px) {
+  .site-nav a.brand { font-size: 1.02rem; gap: .35rem; }
+  .site-nav a.brand::before { width: 32px; height: 24px; }
+  .site-nav a.nav-cta { font-size: .84rem; padding: .42rem .55rem; white-space: nowrap; }
+}
+@media (max-width: 350px) {
+  .site-nav a.brand { font-size: .95rem; }
+  .site-nav a.brand::before { display: none; }
+}
+@media (max-width: 380px) {
+  .site-nav { flex-wrap: nowrap; }
+  .site-nav a.brand { min-width: 0; }
+  .site-nav a.nav-cta { white-space: normal; max-width: 7.6rem; text-align: center; line-height: 1.15; flex: none; }
+}

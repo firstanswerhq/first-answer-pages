@@ -176,7 +176,7 @@ function renderLayout({ title, body, jsonLd, scripts, siteName, canonical, descr
 ${body}
   </main>
   <footer class="site-footer">
-    <p>${name}. A free local business directory.</p>
+    <p>${name}: a phone book for local businesses that AI can read. Free to list.</p>
     <p><a href="/about">About</a> &middot; <a href="/privacy">Privacy</a>${CONTACT_MARKER}</p>
   </footer>
 </body>
@@ -265,7 +265,7 @@ export function quoteForm(listing, opts = {}) {
     ? `\n  <div id="quote-error" role="alert" tabindex="-1" autofocus><p class="form-error" role="alert">${escapeHtml(opts.error)}</p></div>`
     : '';
   return `<section class="quote-request">
-  <h2>Ask for a quote</h2>
+  <h2>Request a quote</h2>
   <p class="hint">Tell ${name} what you need. Leave a phone number or email so they can reach you.</p>${errorHtml}
   <form class="quote-form" method="post" action="/listings/${encodeURIComponent(listing.id)}/quote" id="quote-form" data-listing-id="${id}" data-listing-name="${name}">
     <label for="quote-name">Your name</label>
@@ -274,7 +274,7 @@ export function quoteForm(listing, opts = {}) {
     <input id="quote-contact" name="contact" type="text" required maxlength="254" autocomplete="off" value="${keptContact}">
     <label for="quote-details">What do you need done?</label>
     <textarea id="quote-details" name="details" rows="5" required maxlength="2000">${keptDetails}</textarea>
-    <button type="submit">Send request</button>
+    <button type="submit">Send quote request</button>
   </form>
 </section>`;
 }

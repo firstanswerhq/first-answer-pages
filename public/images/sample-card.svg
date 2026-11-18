@@ -3,7 +3,7 @@
     <rect x="16" y="18" width="188" height="100" rx="4" fill="#3A2A16" opacity=".18" transform="translate(4 5)"/>
     <rect x="16" y="18" width="188" height="100" rx="4" fill="#FFFDF6" stroke="#B8A27A" stroke-width="1.2"/>
     <rect x="16" y="18" width="188" height="9" fill="#0C2C73"/>
-    <g font-family="'Fira Sans Condensed','Arial Narrow',Arial,sans-serif" fill="#1A1612">
+    <g font-family="Georgia,'Times New Roman',serif" fill="#1A1612">
       <text x="30" y="52" font-size="15" font-weight="700" fill="#0C2C73">Gray Oak Lawn Care</text>
       <text x="30" y="68" font-size="9.5" fill="#5A4A33">Mowing · Leaves · Hedges</text>
       <text x="30" y="92" font-size="12" font-weight="700">(555) 555-0199</text>

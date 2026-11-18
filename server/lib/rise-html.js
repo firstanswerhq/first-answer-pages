@@ -82,7 +82,7 @@ export function uploadPage({ photoEnabled = true, discarded = false, founders, f
   }
   const body = `<section class="rise">
   <h1>List your business free</h1>${discardedNote}
-  <p class="tagline">Send a photo of a business card, flyer, sign or storefront. We will read it into a draft listing.</p>
+  <p class="tagline">Send a photo of a business card, flyer, sign or storefront. We'll turn it into a draft listing for you.</p>
   <p>You get to look over and fix every field before anything is published. The photo is read once and is not saved.</p>
   <form id="rise-form" class="rise-form" method="POST" action="/rise" enctype="application/x-www-form-urlencoded">
     <label for="imageFile" class="big-button">Take or choose a photo</label>
@@ -174,7 +174,7 @@ export function reviewPage(draft, categories, opts = {}) {
   const savedNote = opts.saved === true ? '<p class="notice saved-note" role="status">Saved.</p>' : '';
   const heading = fresh ? 'Type in your listing' : 'Check your listing';
   const tagline = fresh
-    ? 'Fill in your business details, then press Confirm. Nobody can see it until we review it.'
+    ? 'Fill in your business details, then press Confirm and send for review. Nobody can see it until we review it.'
     : 'This is a draft. Nobody can see it until you send it for review and we approve it.';
 
   const banner = draft.provider === 'mock'
