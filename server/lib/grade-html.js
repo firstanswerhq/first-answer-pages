@@ -183,8 +183,13 @@ function aiSection(grade, now) {
     <h2>What AI says</h2>
     <p>${e(mainWho(grade.mainProvider))} did not answer this time, so this check has no AI score. To try again, start a new check later.</p>
     <p class="hint">Other AI assistants, for comparison only (not scored):</p>
-    ${shown.map(a => `<p>${e(aiSentence(a, now))}</p>
-    ${answerBlock(a)}`).join('\n    ')}
+    <div class="ai-answers${shown.length >= 4 ? ' four' : ''}">
+    ${shown.map(a => `<div class="ai-answer ${a.named ? 'named' : 'not-named'}">
+    <span class="ai-answer-who">${e(providerWho(a.provider))}</span>
+    <p>${e(aiSentence(a, now))}</p>
+    ${answerBlock(a)}
+    </div>`).join('\n    ')}
+    </div>
   </section>`;
   }
   if (!entry) {
@@ -206,21 +211,29 @@ function aiSection(grade, now) {
     const names = a.competitors.length > 0
       ? `<ol class="grade-competitors">${a.competitors.map(c => `<li>${e(c)}</li>`).join('')}</ol>`
       : '';
-    return `<p>${e(aiSentence(a, now, { also: true }))}</p>
+    return `<div class="ai-answer ${a.named ? 'named' : 'not-named'}">
+    <span class="ai-answer-who">${e(providerWho(a.provider))}</span>
+    <p>${e(aiSentence(a, now, { also: true }))}</p>
     ${names}
-    ${answerBlock(a)}`;
+    ${answerBlock(a)}
+    </div>`;
   }).join('\n    ');
-  const secondsIntro = seconds.length > 0 ? '<p class="hint">Other AI assistants, for comparison only (not scored):</p>' : '';
+  const secondsIntro = seconds.length > 0 ? `<p class="hint">We score ${e(providerWho(entry.provider))}'s answer. Other AI assistants, for comparison only (not scored):</p>` : '';
   const more = scored.length > 1
     ? `<p>${e(providerWho(entry.provider))} named your business in ${namedIn} of its ${scored.length} answers.</p>`
     : '';
   return `<section class="grade-ai">
     <h2>What AI says</h2>
+    ${secondsIntro}
+    <div class="ai-answers${seconds.length + 1 >= 4 ? ' four' : ''}">
+    <div class="ai-answer ${entry.named ? 'named' : 'not-named'}">
+    <span class="ai-answer-who">${e(providerWho(entry.provider))}</span>${seconds.length > 0 ? '<span class="ai-answer-scored">Scored</span>' : ''}
     <p>${e(aiSentence(entry, now))}</p>
     ${list}
     ${answerBlock(entry)}
-    ${secondsIntro}
+    </div>
     ${secondHtml}
+    </div>
     ${more}
   </section>`;
 }

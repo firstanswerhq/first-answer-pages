@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 130" width="220" height="130" role="img" aria-label="A business card">
+  <g transform="rotate(-6 110 65)">
+    <rect x="16" y="18" width="188" height="100" rx="4" fill="#3A2A16" opacity=".18" transform="translate(4 5)"/>
+    <rect x="16" y="18" width="188" height="100" rx="4" fill="#FFFDF6" stroke="#B8A27A" stroke-width="1.2"/>
+    <rect x="16" y="18" width="188" height="9" fill="#0C2C73"/>
+    <g font-family="'Fira Sans Condensed','Arial Narrow',Arial,sans-serif" fill="#1A1612">
+      <text x="30" y="52" font-size="15" font-weight="700" fill="#0C2C73">Gray Oak Lawn Care</text>
+      <text x="30" y="68" font-size="9.5" fill="#5A4A33">Mowing · Leaves · Hedges</text>
+      <text x="30" y="92" font-size="12" font-weight="700">(555) 555-0199</text>
+      <text x="30" y="106" font-size="9" fill="#5A4A33">Nashville, TN</text>
+    </g>
+    <g fill="none" stroke="#0C2C73" stroke-width="2.2" stroke-linecap="round">
+      <path d="M160 97 c 6 -13 24 -13 30 0 c -6 13 -24 13 -30 0 z" fill="#E9F0E1" stroke="#5E7F45"/>
+      <path d="M175 90 v 14" stroke="#5E7F45"/>
+    </g>
+  </g>
+  <!-- camera corner brackets: "snap this" -->
+  <g fill="none" stroke="#9B2C2C" stroke-width="3" stroke-linecap="round">
+    <path d="M6 22 V 6 H 22"/><path d="M198 6 H 214 V 22"/><path d="M214 108 V 124 H 198"/><path d="M22 124 H 6 V 108"/>
+  </g>
+</svg>

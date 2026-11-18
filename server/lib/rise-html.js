@@ -83,7 +83,7 @@ export function uploadPage({ photoEnabled = true, discarded = false, founders, f
   const body = `<section class="rise">
   <h1>List your business free</h1>${discardedNote}
   <p class="tagline">Send a photo of a business card, flyer, sign or storefront. We will read it into a draft listing.</p>
-  <p>You get to look over and fix every field before anything is published. The photo is read once and is not saved.</p>${invite}
+  <p>You get to look over and fix every field before anything is published. The photo is read once and is not saved.</p>
   <form id="rise-form" class="rise-form" method="POST" action="/rise" enctype="application/x-www-form-urlencoded">
     <label for="imageFile" class="big-button">Take or choose a photo</label>
     <input type="file" id="imageFile" class="visually-hidden-file" accept="image/jpeg,image/png,image/webp" capture="environment">
@@ -93,7 +93,7 @@ export function uploadPage({ photoEnabled = true, discarded = false, founders, f
   <noscript>
     <p class="hint">Photo upload needs JavaScript. You can still type your listing in below.</p>
   </noscript>
-  ${typeItIn}
+  ${typeItIn}${invite}
 </section>`;
   return layout({ title: 'List your business free: First Answer Pages', body, scripts: ['/js/rise.js'] });
 }

@@ -17,7 +17,7 @@
 import express, { Router } from 'express';
 import { RULES } from '../lib/rate-limiter.js';
 import { createDraftStore } from '../lib/drafts.js';
-import { layout, escapeHtml } from '../lib/html.js';
+import { layout, escapeHtml, foundersInvite } from '../lib/html.js';
 import { baseUrlFor } from '../lib/base-url.js';
 import { DEFAULT_SITE_NAME } from '../lib/config.js';
 import {
@@ -171,7 +171,7 @@ export function verifyPage({ draftId, listing, status, price, fees, note, testMo
 }
 
 /** Public page linked from the stamp. */
-export function verifiedInfoPage({ fees, canonical }) {
+export function verifiedInfoPage({ fees, canonical, founders }) {
   const body = `<section class="message verify-info">
   <h1>What "Verified" means</h1>
   <p>A Verified stamp on a ${DEFAULT_SITE_NAME} listing means two things were checked:</p>
@@ -183,6 +183,13 @@ export function verifiedInfoPage({ fees, canonical }) {
   <h2>For business owners</h2>
   ${VERIFIED_BENEFITS}
   <p>Listing is free for everyone, always. The Verified stamp is optional: ${formatFee(fees.founderCents)} once for Founding Members, ${formatFee(fees.yearlyCents)} a year for everyone else, with no automatic renewal. You start from the private link you got when your listing was approved.</p>
+  <h2>The two badges</h2>
+  <p>Two badges can sit under a business name. Here is what each one looks like:</p>
+  <div class="badge-samples">
+    <p class="verified-badge"><span class="verified-badge-title">Verified</span></p>
+    <p class="founder-badge"><span class="founder-badge-title">Founding Member</span> <span class="founder-badge-number">No. 12 of 500</span></p>
+  </div>
+  ${founders ? (foundersInvite(founders, { link: true }) || '<p>Founding Member spots are closed. Every business can still list free.</p>') : ''}
   <p><a href="/rise">List your business free &rarr;</a></p>
 </section>`;
   return layout({
@@ -336,7 +343,7 @@ export function createVerifyRouter(ctx) {
   const notFound = (req, res, next) => next(); // falls through to the site's 404 page
 
   router.get('/verified', (req, res) => {
-    res.status(200).type('html').send(verifiedInfoPage({ fees, canonical: `${baseUrlFor(req, ctx.config)}/verified` }));
+    res.status(200).type('html').send(verifiedInfoPage({ fees, canonical: `${baseUrlFor(req, ctx.config)}/verified`, founders: typeof ctx.store.getFoundersStatus === 'function' ? ctx.store.getFoundersStatus() : undefined }));
   });
 
   router.get('/rise/drafts/:id/verify', async (req, res, next) => {

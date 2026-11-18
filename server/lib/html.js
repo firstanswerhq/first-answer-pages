@@ -287,7 +287,7 @@ export function quoteForm(listing, opts = {}) {
  * @param {string} id  listing id (for the verify link)
  * @returns {string}
  */
-function stamp(verification, id) {
+function stamp(verification, id, listing) {
   if (!verification || !verification.verifiedDate || !verification.hash) {
     return '<aside class="stamp stamp-unconfirmed"><p class="unconfirmed-note">Not yet confirmed by the owner.</p> <a class="button confirm-cta" href="/rise">Is this your business? Confirm it free →</a></aside>';
   }
@@ -296,12 +296,25 @@ function stamp(verification, id) {
   const href = `/api/verify/${encodeURIComponent(id)}?hash=${encodeURIComponent(verification.hash)}`;
   return `<aside class="stamp">
       <p class="stamp-title">Details confirmed by the business <span class="stamp-date">${date}</span></p>
+      ${stampWhat(listing, date)}
       <details class="stamp-details"><summary>Details for AI tools</summary>
       <p class="stamp-note">Tamper check: unchanged since the owner confirmed it. This is not proof of ownership.</p>
       <p class="stamp-hash"><code data-hash="${hash}">${hash}</code></p>
       <p class="stamp-note"><a href="${escapeHtml(href)}">Check this hash</a></p>
       </details>
     </aside>`;
+}
+
+/** "Phone, address and hours confirmed by the business on Nov 18, 2026." Names only the details this listing has. */
+function stampWhat(listing, date) {
+  if (!listing) return '';
+  const has = [];
+  if (String(listing.phone ?? '').replace(/\D/g, '') !== '') has.push('Phone');
+  if (typeof listing.address === 'string' && listing.address.trim() !== '') has.push(has.length ? 'address' : 'Address');
+  if (filledHours(listing.hours).length > 0) has.push(has.length ? 'hours' : 'Hours');
+  if (has.length === 0) return '';
+  const list = has.length === 1 ? has[0] : `${has.slice(0, -1).join(', ')} and ${has[has.length - 1]}`;
+  return `<p class="stamp-what">${list} confirmed by the business on ${date}.</p>`;
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -342,6 +355,16 @@ export function formatStampDate(verification) {
  *   The Séance link is rendered only when `hasSeanceRuns` is true.
  * @returns {string}
  */
+/** Call and Request a quote buttons right under the business name. */
+function actionRow(listing, withQuote) {
+  const digits = String(listing.phone ?? '').trim();
+  const num = digits.replace(/\D/g, '');
+  const call = num ? `<a class="button call-button" href="tel:${digits.startsWith('+') ? '+' : ''}${num}">Call ${escapeHtml(listing.phone)}</a>` : '';
+  const quote = withQuote ? '<a class="button button-secondary quote-jump" href="#quote-form">Request a quote</a>' : '';
+  if (!call && !quote) return '';
+  return `\n    <p class="listing-actions">${[call, quote].filter(Boolean).join(' ')}</p>`;
+}
+
 export function listingDetail(listing, jsonLd, opts = {}) {
   const categories = opts?.categories;
   // Every day once any is filled; a skipped day reads "Call for hours", never a guessed "Closed".
@@ -366,7 +389,7 @@ ${days.map(([day, text]) => `      <tr><th scope="row">${day}</th><td>${escapeHt
 
   // Stamp only when the caller passes a `verification` key (null = unconfirmed).
   const stampBlock = opts && typeof opts === 'object' && 'verification' in opts
-    ? '\n    ' + stamp(opts.verification, listing.id)
+    ? '\n    ' + stamp(opts.verification, listing.id, listing)
     : '';
 
   // The Séance link shows only when the caller says this listing has at least one run.
@@ -379,7 +402,7 @@ ${days.map(([day, text]) => `      <tr><th scope="row">${day}</th><td>${escapeHt
 
   return `${ld}  <article class="listing-detail">
     <p><a href="/">← Back to directory</a></p>
-    <h1>${escapeHtml(listing.name)}</h1>${founderLine}
+    <h1>${escapeHtml(listing.name)}</h1>${founderLine}${actionRow(listing, opts?.quote !== false)}
     <p>${escapeHtml(listing.description)}</p>${seanceLink}${stampBlock}
     <dl>
     <dt>Category</dt>

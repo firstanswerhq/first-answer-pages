@@ -2457,3 +2457,859 @@ a.tel,
 }
 .verified-badge a { color: inherit; text-decoration: underline; }
 .founders-invite .founders-invite-deal { margin-top: 0.5rem; }
+/* =====================================================================
+   AGED PHONE BOOK (final, Nov 2026)
+   Replaces the "Aged paper (preview)" block from the aged-paper branch.
+   Drop-in: same class names, no layout changes the server depends on.
+   Old paper, browned edges, worn corners, rubber stamps, a clip-out coupon.
+   Readable first: all text keeps strong contrast on the paper.
+   ===================================================================== */
+
+:root {
+  --paper:        #F3E6CA;   /* aged page */
+  --paper-light:  #FAF2DF;   /* card stock */
+  --paper-deep:   #E7D3AC;   /* browned edge */
+  --ink:          #0C2C73;   /* phone-book blue */
+  --ink-dark:     #0A1F4F;
+  --rubber:       #9B2C2C;   /* rubber-stamp red */
+  --gold:         #B8893B;
+  --brown:        rgba(110, 70, 25, 0.32);
+  --brown-soft:   rgba(110, 70, 25, 0.14);
+  --color-page-bg: var(--paper);
+  --color-surface: var(--paper-light);
+
+  /* Paper fibers (tiny, tiled) */
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .42 0 0 0 0 .30 0 0 0 0 .14 0 0 0 .085 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  /* Worn rubber: punches tiny gaps into stamps */
+  --worn: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='w'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.55' numOctaves='2' seed='3'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -2.6 2.45'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23w)'/%3E%3C/svg%3E");
+}
+
+/* ---------- The page ---------- */
+html { background: var(--paper-deep); }
+body {
+  background-color: var(--paper);
+  background-image:
+    var(--grain),
+    radial-gradient(ellipse 60% 40% at 18% 22%, rgba(196, 150, 80, .10), transparent 70%),
+    radial-gradient(ellipse 50% 35% at 82% 68%, rgba(196, 150, 80, .09), transparent 70%),
+    radial-gradient(ellipse 120% 90% at 50% 40%, rgba(255, 249, 232, .55), transparent 70%);
+  background-size: 240px 240px, 100% 100%, 100% 100%, 100% 100%;
+  color: #1A1612;
+}
+/* Browned page edges, like an old phone book left in a kitchen drawer */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 50;
+  background:
+    linear-gradient(90deg, rgba(110, 70, 25, .22), transparent 3.5%, transparent 96.5%, rgba(110, 70, 25, .22)),
+    linear-gradient(180deg, rgba(110, 70, 25, .14), transparent 4%, transparent 96%, rgba(110, 70, 25, .18)),
+    radial-gradient(ellipse at 0% 0%, rgba(140, 90, 35, .16), transparent 26%),
+    radial-gradient(ellipse at 100% 100%, rgba(140, 90, 35, .14), transparent 24%),
+    radial-gradient(circle at 88% 14%, rgba(150, 100, 40, .06) 0 2px, transparent 3px),
+    radial-gradient(circle at 12% 71%, rgba(150, 100, 40, .07) 0 3px, transparent 4px),
+    radial-gradient(circle at 76% 63%, rgba(150, 100, 40, .05) 0 2px, transparent 3px);
+}
+@media (max-width: 640px) {
+  body::after {
+    background:
+      linear-gradient(90deg, rgba(110, 70, 25, .18), transparent 5%, transparent 95%, rgba(110, 70, 25, .18)),
+      linear-gradient(180deg, rgba(110, 70, 25, .10), transparent 3%, transparent 97%, rgba(110, 70, 25, .14));
+  }
+}
+
+/* Slight ink spread on printed headings (very subtle, never blurs body text) */
+h1, h2, .category-title, .grade-eyebrow-title {
+  text-shadow: 0 0 .6px rgba(12, 44, 115, .35);
+}
+
+a { color: var(--ink); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+
+/* ---------- Top bar with the open-book logo ---------- */
+.site-nav {
+  background: transparent;
+  border-bottom: 0;
+  box-shadow: 0 1px 0 #2B2620, 0 4px 0 -1px var(--paper), 0 5px 0 -1px #2B2620;
+  padding: .7rem 1.25rem;
+}
+.site-nav a.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: .6rem;
+  color: var(--ink-dark);
+  text-decoration: none;
+  font-size: 1.3rem;
+  font-weight: 700;
+  letter-spacing: .01em;
+}
+.site-nav a.brand::before {
+  content: "";
+  flex: none;
+  width: 46px;
+  height: 34px;
+  background: url("/images/logo-mark.svg") center / contain no-repeat;
+}
+.site-nav a.nav-cta {
+  background: var(--ink);
+  color: #FFFDF6;
+  border-radius: 3px 5px 3px 6px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .12), 0 2px 0 var(--ink-dark);
+}
+.site-nav a.nav-cta:hover { background: var(--ink-dark); }
+@media (max-width: 480px) {
+  .site-nav { padding: .6rem .9rem; }
+  .site-nav a.brand { font-size: 1.12rem; gap: .45rem; }
+  .site-nav a.brand::before { width: 38px; height: 28px; }
+  .site-nav a.nav-cta { font-size: .95rem; padding: .45rem .7rem; }
+}
+
+/* ---------- Home: the cover ---------- */
+.home-head {
+  position: relative;
+  padding: 1.6rem 1rem 1.4rem;
+  margin: .5rem auto 1.25rem;
+  border: 3px double #2B2620;
+  outline: 1px solid rgba(43, 38, 32, .35);
+  outline-offset: 5px;
+  background: rgba(250, 242, 223, .55);
+  box-shadow: inset 0 0 40px var(--brown-soft);
+  border-radius: 2px;
+}
+.home-head::before {
+  content: "\2605  Free for every local business  \2605";
+  display: block;
+  margin-bottom: .5rem;
+  font-size: .78rem;
+  font-weight: 600;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: var(--rubber);
+}
+.home-head h1 {
+  font-style: normal;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .01em;
+  color: var(--ink-dark);
+  font-size: clamp(2.3rem, 10.5vw, 4.6rem);
+  line-height: .98;
+}
+.home-head .tagline { font-size: 1.15rem; color: #3A332B; }
+.home-head .tagline::after { background: var(--gold); height: 2px; }
+.home-head .grade-link a {
+  display: inline-block;
+  padding: .7rem 1.1rem;
+  border: 2px dashed var(--rubber);
+  border-radius: 3px;
+  background: #FFF8E8;
+  color: var(--rubber);
+  font-weight: 700;
+  text-decoration: none;
+  transform: rotate(-.6deg);
+  box-shadow: 2px 3px 0 rgba(155, 44, 44, .15);
+}
+.home-head .grade-link a:hover { background: #FFF1D8; }
+
+/* ---------- Search box ---------- */
+.filters {
+  background: var(--paper-light);
+  border: 2px solid #2B2620;
+  border-radius: 3px 6px 4px 7px / 6px 3px 7px 4px;
+  box-shadow: inset 0 0 26px var(--brown-soft), 3px 4px 0 rgba(43, 38, 32, .10);
+}
+.filters label { background-color: #FFFBF0; border-color: rgba(43, 38, 32, .55); }
+.filters button {
+  background: var(--ink);
+  border-radius: 3px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  box-shadow: 0 2px 0 var(--ink-dark);
+}
+.filters button:hover { background: var(--ink-dark); }
+
+/* ---------- Founding Members: a clip-out coupon ---------- */
+.founders-invite {
+  position: relative;
+  padding: 1.15rem 1.25rem 1.1rem;
+  border: 2px dashed #6B5530;
+  border-radius: 2px;
+  background:
+    var(--grain),
+    linear-gradient(180deg, #F6E9C9, #EFDDB4);
+  box-shadow: inset 0 0 28px rgba(110, 70, 25, .18);
+  color: #1F1A14;
+}
+.founders-invite::before {
+  content: "\2702\FE0E";
+  position: absolute;
+  top: -.85rem;
+  left: 1rem;
+  padding: 0 .3rem;
+  font-size: 1.15rem;
+  line-height: 1.4;
+  color: #6B5530;
+  background: transparent;
+  text-shadow: 0 0 3px var(--paper), 0 0 6px var(--paper);
+}
+.founders-invite .founders-invite-title {
+  display: inline-block;
+  margin-bottom: .35rem;
+  padding: .1rem .55rem;
+  border: 2px solid var(--rubber);
+  color: var(--rubber);
+  font-size: .95rem;
+  letter-spacing: .16em;
+  transform: rotate(-1.2deg);
+  -webkit-mask-image: var(--worn);
+  mask-image: var(--worn);
+}
+.founders-invite strong { color: var(--rubber); }
+.founders-invite .founders-invite-link a { font-weight: 700; }
+
+/* ---------- Directory: phone-book columns ---------- */
+.category-title {
+  display: flex;
+  align-items: center;
+  gap: .8rem;
+  border-bottom: 0;
+  color: var(--ink-dark);
+  letter-spacing: .14em;
+}
+.category-title::before,
+.category-title::after {
+  content: "";
+  flex: 1;
+  height: 4px;
+  border-top: 1px solid #2B2620;
+  border-bottom: 1px solid #2B2620;
+}
+.listing-card {
+  padding: .55rem 0 .7rem;
+  border-bottom: 1px solid rgba(43, 38, 32, .18);
+  margin-bottom: 0;
+}
+.listing-card h3 a { color: var(--ink-dark); }
+.listing-card .verified-badge,
+.listing-card .founder-badge { margin-top: .3rem; font-size: .78rem; }
+
+/* ---------- Stamps and badges ---------- */
+.verified-badge {
+  border: 2px solid var(--ink);
+  background: transparent;
+  color: var(--ink);
+  border-radius: 4px;
+  transform: rotate(-1.5deg);
+  -webkit-mask-image: var(--worn);
+  mask-image: var(--worn);
+}
+.verified-badge-title { color: var(--ink); letter-spacing: .14em; font-weight: 700; }
+.verified-badge-note { color: #1F2A44; }
+.verified-badge a { color: var(--ink); }
+
+.founder-badge {
+  border: 0;
+  border-radius: 2px;
+  padding: .2rem .7rem .2rem 1.55rem;
+  background:
+    radial-gradient(circle at .75rem 50%, #D9B460 0 .42rem, #8E6526 .43rem .5rem, transparent .52rem),
+    linear-gradient(180deg, #F5E3B5, #E9CF8E);
+  color: #4A3410;
+  box-shadow: inset 0 0 0 1px rgba(142, 101, 38, .55), 0 1px 0 rgba(43, 38, 32, .2);
+}
+.founder-badge-title { color: #4A3410; letter-spacing: .12em; }
+.founder-badge-number { font-family: "Old Numbers", "Fira Sans Condensed", sans-serif; color: #4A3410; }
+
+/* On the listing page the Verified note is long: keep it crisp, only the border looks stamped */
+.listing-detail .verified-badge { -webkit-mask-image: none; mask-image: none; transform: none; border-style: double; border-width: 3px; }
+
+/* "Details confirmed by the business": a red rubber stamp */
+.stamp {
+  padding: .7rem 1.1rem .6rem;
+  border: 3px solid var(--rubber);
+  border-radius: 3px;
+  background: transparent;
+  box-shadow: inset 0 0 0 3px var(--paper-light), inset 0 0 0 4px var(--rubber);
+  color: var(--rubber);
+  transform: rotate(-2deg);
+  -webkit-mask-image: var(--worn);
+  mask-image: var(--worn);
+}
+.stamp-title { letter-spacing: .1em; font-weight: 700; text-transform: uppercase; }
+.stamp-title:has(+ .stamp-what) .stamp-date { display: none; }
+.stamp-date { font-family: "Old Numbers", "Fira Sans Condensed", sans-serif; }
+.stamp-what { margin: .2rem 0 .25rem; font-size: .92rem; font-weight: 600; color: var(--rubber); text-transform: none; letter-spacing: 0; }
+.stamp.stamp-unconfirmed {
+  border: 2px dashed #6B5530;
+  box-shadow: none;
+  color: #4A3D2C;
+  transform: none;
+  -webkit-mask-image: none;
+  mask-image: none;
+  background: rgba(250, 242, 223, .7);
+}
+
+/* ---------- One listing: a worn index card ---------- */
+.listing-detail {
+  position: relative;
+  padding: 1.4rem 1.25rem 1.5rem;
+  background:
+    var(--grain),
+    linear-gradient(180deg, var(--paper-light), #F4E8CC);
+  border: 1px solid rgba(110, 70, 25, .35);
+  border-radius: 3px 8px 4px 10px / 8px 3px 10px 4px;
+  box-shadow:
+    inset 0 0 34px rgba(110, 70, 25, .16),
+    4px 5px 0 rgba(43, 38, 32, .08);
+  clip-path: polygon(0 0, calc(100% - 34px) 0, 100% 34px, calc(100% + 12px) 34px, calc(100% + 12px) calc(100% + 12px), 0 calc(100% + 12px));
+}
+/* Dog-eared corner: the folded-down flap */
+.listing-detail::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 34px;
+  height: 34px;
+  background: linear-gradient(225deg, transparent 0 50%, #DCC291 50% 100%);
+  filter: drop-shadow(-2px 2px 2px rgba(43, 38, 32, .2));
+}
+.listing-detail h1 { color: var(--ink-dark); padding-right: 2.2rem; }
+.listing-detail dt {
+  color: #5A4A33;
+  letter-spacing: .14em;
+  border-bottom: 1px dotted rgba(43, 38, 32, .5);
+}
+.listing-detail a[href^="tel:"] {
+  font-family: "Old Numbers", "Fira Sans Condensed", sans-serif;
+  font-size: 1.6rem;
+  color: var(--ink);
+}
+.hours th, .hours td { border-bottom: 1px dotted rgba(43, 38, 32, .25); padding: .2rem 0; }
+
+/* Quote form: ruled card */
+.quote-request h2 { color: var(--ink-dark); }
+.quote-form {
+  background: var(--grain), var(--paper-light);
+  border: 2px solid #2B2620;
+  border-radius: 3px 6px 4px 7px / 6px 3px 7px 4px;
+  box-shadow: inset 0 0 26px var(--brown-soft), 3px 4px 0 rgba(43, 38, 32, .1);
+}
+.quote-form input, .quote-form textarea { background: #FFFCF3; }
+.quote-form button, button.button, a.button, .grade-lead .button {
+  background: var(--ink);
+  border-radius: 3px;
+  box-shadow: 0 2px 0 var(--ink-dark);
+}
+
+/* ---------- AI check report ---------- */
+.grade-report h2::after { background: var(--gold); }
+.grade-score-number .num {
+  font-family: "Old Numbers", "Fira Sans Condensed", sans-serif;
+  color: var(--ink-dark);
+  text-shadow: 0 0 1px rgba(12, 44, 115, .4);
+}
+.grade-failed { color: var(--rubber); }
+
+/* Several AI answers side by side (needs the small .ai-answers wrapper; stacks without it) */
+.ai-answers {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: .9rem;
+  margin: .6rem 0 1rem;
+}
+@media (min-width: 720px) {
+  .ai-answers { grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); }
+  .ai-answers.four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.ai-answer {
+  position: relative;
+  min-width: 0;
+  padding: .85rem .9rem .7rem;
+  background:
+    repeating-linear-gradient(180deg, transparent 0 25px, rgba(12, 44, 115, .07) 25px 26px),
+    var(--paper-light);
+  border: 1px solid rgba(110, 70, 25, .4);
+  border-top: 3px solid var(--ink);
+  border-radius: 2px 5px 3px 6px / 5px 2px 6px 3px;
+  box-shadow: inset 0 0 22px var(--brown-soft), 2px 3px 0 rgba(43, 38, 32, .08);
+}
+.ai-answer > p:first-child { margin-top: 0; font-size: .95rem; }
+.ai-answer-who {
+  display: block;
+  max-width: calc(100% - 6.2rem);
+  margin-bottom: .25rem;
+  font-size: .8rem;
+  font-weight: 700;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.ai-answer.named { border-top-color: #2D6A4F; }
+.ai-answer.named::after {
+  content: "Named you";
+  position: absolute;
+  top: .55rem;
+  right: .6rem;
+  padding: 0 .4rem;
+  border: 2px solid #2D6A4F;
+  color: #2D6A4F;
+  font-size: .72rem;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  transform: rotate(4deg);
+  -webkit-mask-image: var(--worn);
+  mask-image: var(--worn);
+}
+.ai-answer.not-named::after {
+  content: "Not named";
+  position: absolute;
+  top: .55rem;
+  right: .6rem;
+  padding: 0 .4rem;
+  border: 2px solid var(--rubber);
+  color: var(--rubber);
+  font-size: .72rem;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  transform: rotate(4deg);
+  -webkit-mask-image: var(--worn);
+  mask-image: var(--worn);
+}
+.ai-answer .grade-competitors { margin: .4rem 0; padding-left: 1.4rem; }
+.ai-answer .grade-competitors li { font-size: .95rem; }
+.ai-answer details summary { font-size: .9rem; }
+.grade-competitors li::marker { font-family: "Old Numbers", "Fira Sans Condensed", sans-serif; color: var(--ink); }
+
+/* Fixes list and search preview: worn cards */
+.grade-top-fails li,
+.grade-check,
+.grade-preview,
+.serp {
+  background-color: var(--paper-light);
+  box-shadow: inset 0 0 22px var(--brown-soft);
+  border-radius: 3px 6px 4px 7px / 6px 3px 7px 4px;
+}
+
+/* ---------- List your business ---------- */
+.rise h1 { color: var(--ink-dark); }
+.rise-form label.big-button {
+  position: relative;
+  padding-left: 3.4rem;
+  background: var(--ink);
+  border-radius: 4px;
+  box-shadow: 0 3px 0 var(--ink-dark), inset 0 0 0 1px rgba(255, 255, 255, .12);
+  text-transform: none;
+}
+/* A little camera drawn in CSS */
+.rise-form label.big-button::before {
+  content: "";
+  position: absolute;
+  left: 1.2rem;
+  top: 50%;
+  width: 1.5rem;
+  height: 1.05rem;
+  margin-top: -.5rem;
+  border: 2px solid #FFFDF6;
+  border-radius: 3px;
+  background: radial-gradient(circle at 50% 55%, transparent 0 .22rem, #FFFDF6 .23rem .32rem, transparent .33rem);
+}
+#rise-form.rise-form {
+  background:
+    var(--grain),
+    linear-gradient(180deg, var(--paper-light), #F4E8CC);
+  border: 2px dashed #6B5530;
+  box-shadow: inset 0 0 26px var(--brown-soft);
+}
+
+/* ---------- What "Verified" means ---------- */
+.verify-info h1 { color: var(--ink-dark); }
+.verify-info > ol {
+  counter-reset: step;
+  list-style: none;
+  padding: 0;
+}
+.verify-info > ol > li {
+  counter-increment: step;
+  position: relative;
+  margin: .7rem 0;
+  padding: .8rem .9rem .8rem 3.6rem;
+  background: var(--paper-light);
+  border: 1px solid rgba(110, 70, 25, .35);
+  border-radius: 3px 6px 4px 7px / 6px 3px 7px 4px;
+  box-shadow: inset 0 0 22px var(--brown-soft);
+}
+.verify-info > ol > li::before {
+  content: counter(step);
+  position: absolute;
+  left: .8rem;
+  top: .7rem;
+  width: 2.1rem;
+  height: 2.1rem;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  font-family: "Old Numbers", "Fira Sans Condensed", sans-serif;
+  font-size: 1.25rem;
+  color: var(--ink);
+  -webkit-mask-image: var(--worn);
+  mask-image: var(--worn);
+}
+.verify-benefits li::marker { content: "\2713  "; color: #2D6A4F; font-weight: 700; }
+
+/* ---------- Footer ---------- */
+.site-footer {
+  background: transparent;
+  border-top: 0;
+  box-shadow: 0 -1px 0 #2B2620, 0 -4px 0 -1px var(--paper), 0 -5px 0 -1px #2B2620;
+}
+
+/* ---------- Comfort and print ---------- */
+@media (prefers-contrast: more) {
+  body { background-image: none; }
+  body::after { display: none; }
+  .verified-badge, .stamp, .founders-invite .founders-invite-title, .ai-answer::after { -webkit-mask-image: none; mask-image: none; }
+}
+@media print {
+  body::after { display: none; }
+  body { background: #fff; }
+}
+
+/* Verified page: the stamp itself, shown big */
+.verify-info { position: relative; }
+.verify-info > h1 { padding-right: 9rem; min-height: 6.5rem; }
+.verify-info::before {
+  content: "";
+  position: absolute;
+  top: -.4rem;
+  right: 0;
+  width: 8.5rem;
+  height: 8.5rem;
+  background: url("/images/verified-seal.svg") center / contain no-repeat;
+  opacity: .92;
+}
+@media (max-width: 480px) {
+  .verify-info > h1 { padding-right: 6.4rem; min-height: 5.6rem; }
+  .verify-info::before { width: 6rem; height: 6rem; top: .2rem; }
+}
+
+/* =====================================================================
+   PHONE-BOOK DETAILS (round 2)
+   ===================================================================== */
+
+/* Every page heading in the same ink */
+h1 { color: var(--ink-dark); }
+
+/* Small phones: keep the top bar on one line (no sideways scroll at 320-414px) */
+@media (max-width: 420px) {
+  .site-nav { padding: .55rem .7rem; gap: .4rem; }
+  .site-nav a.brand { font-size: 1rem; gap: .35rem; }
+  .site-nav a.brand::before { width: 30px; height: 22px; }
+  .site-nav a.nav-cta { font-size: .85rem; padding: .4rem .55rem; }
+}
+@media (max-width: 340px) {
+  .site-nav a.brand { font-size: .92rem; }
+  .site-nav a.nav-cta { font-size: .8rem; padding: .35rem .45rem; }
+}
+
+/* Cover line: an edition, like the spine of a real directory */
+.home-head::before {
+  content: "\2605  2026\2013 27 Edition  \2605";
+  font-family: "Old Numbers", "Fira Sans Condensed", sans-serif;
+  letter-spacing: .2em;
+}
+.home-head::after {
+  content: "Free for every local business \00B7  Read by people and AI";
+  display: block;
+  margin-top: .9rem;
+  padding-top: .6rem;
+  border-top: 1px solid rgba(43, 38, 32, .35);
+  font-size: .78rem;
+  font-weight: 600;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: #5A4A33;
+}
+.home-head .tagline { text-wrap: balance; }
+
+/* Same width for the cover, the search box and the coupon */
+.home-head, .filters, .directory > .founders-invite, main > .founders-invite {
+  max-width: 46rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+/* Search fields side by side on wide screens */
+@media (min-width: 760px) {
+  .filters { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) auto; gap: .6rem; align-items: stretch; }
+  .filters button { white-space: nowrap; }
+  .filters label { margin: 0; }
+  .filters button { margin: 0; padding-left: 1.4rem; padding-right: 1.4rem; }
+}
+
+/* Category pages: shrink the cover so the listings show on the first screen */
+main:has(.directory-single) .home-head { padding: .9rem 1rem .8rem; margin-bottom: .9rem; }
+main:has(.directory-single) .home-head h1 { font-size: clamp(1.6rem, 6vw, 2.4rem); }
+main:has(.directory-single) .home-head::before,
+main:has(.directory-single) .home-head::after,
+main:has(.directory-single) .home-head .tagline { display: none; }
+main:has(.directory-single) .home-head .grade-link { margin: .5rem 0 0; }
+
+/* Section heads in the directory: bold caps between double rules */
+.category-head,
+.category-title {
+  display: flex;
+  align-items: center;
+  gap: .8rem;
+  border-bottom: 0;
+  color: var(--ink-dark);
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+.category-head::before, .category-head::after,
+.category-title::before, .category-title::after {
+  content: "";
+  flex: 1;
+  min-width: 1.5rem;
+  height: 4px;
+  background: none;
+  border-top: 1px solid #2B2620;
+  border-bottom: 1px solid #2B2620;
+}
+
+/* Dense phone-book columns on big screens */
+@media (min-width: 1100px) {
+  main:has(.category, .category-grid) { max-width: 76rem; }
+  .directory, .directory-single { max-width: 76rem; }
+  .category, .category-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .category > .listing-card, .category-grid > .listing-card { padding-left: 1.4rem; padding-right: 1.4rem; border-left: 1px solid rgba(43, 38, 32, .5); }
+  .category > .listing-card:nth-of-type(n), .category-grid > .listing-card:nth-of-type(n) { padding-left: 1.4rem; padding-right: 1.4rem; }
+  .category > .listing-card:nth-of-type(3n + 1), .category-grid > .listing-card:nth-of-type(3n + 1) { padding-left: 0; border-left: 0; }
+  .category > .listing-card:has(.verified-badge):nth-of-type(3n + 1),
+  .category-grid > .listing-card:has(.verified-badge):nth-of-type(3n + 1) { padding-left: .85rem; }
+}
+
+/* Verified listings print like a boxed display ad */
+.listing-card:has(.verified-badge):not(.grade-preview) {
+  padding: .7rem .85rem .75rem;
+  margin: .45rem 0 .6rem;
+  border: 3px double var(--ink);
+  border-radius: 2px;
+  background: var(--grain), #FBF4E3;
+  box-shadow: 3px 3px 0 rgba(12, 44, 115, .12);
+}
+.listing-card:has(.verified-badge):not(.grade-preview) h3 { font-size: 1.12rem; }
+
+/* Services read like a printed list: capital first letter */
+.listing-detail dd li::first-letter { text-transform: uppercase; }
+
+/* Call and Request a quote, right under the business name */
+.listing-actions { display: flex; flex-wrap: wrap; gap: .6rem; margin: .9rem 0 .4rem; }
+.listing-actions .button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
+  padding: .55rem 1.1rem;
+  font-weight: 700;
+  text-decoration: none;
+  font-size: 1.05rem;
+}
+.listing-detail .listing-actions a.call-button {
+  background: var(--ink);
+  color: #FFFDF6;
+  font-size: 1.1rem;
+  text-decoration: none;
+  font-family: "Old Numbers", "Fira Sans Condensed", sans-serif;
+  box-shadow: 0 2px 0 var(--ink-dark);
+}
+.listing-actions .quote-jump {
+  background: transparent;
+  color: var(--ink);
+  border: 2px solid var(--ink);
+  box-shadow: none;
+}
+@media (max-width: 480px) { .listing-actions .button { flex: 1 1 100%; } }
+
+/* The confirmed stamp: one clear sentence when the new line is present */
+.stamp:has(.stamp-what) .stamp-title { font-size: .82rem; letter-spacing: .16em; margin-bottom: .1rem; }
+.stamp-what { font-size: 1rem; line-height: 1.35; }
+
+/* Report fixes from review */
+.listing-card.grade-preview { padding: 1rem; border-bottom: 3px double var(--color-ink, #0F1B33); }
+.grade-lead { padding: 1rem 1.1rem; }
+.ai-answer-scored {
+  position: absolute;
+  top: .55rem;
+  right: 6.8rem;
+  padding: 0 .35rem;
+  background: var(--ink);
+  color: #FFFDF6;
+  font-size: .75rem;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  border-radius: 2px;
+}
+@media (max-width: 560px) {
+  /* Long section heads wrap on phones: drop the side rules, keep one rule under */
+  .grade-report h2, .grade-ai h2, .grade-kit h2, .grade-lead h2, .grade-offer h2 { flex-direction: column; gap: .35rem; text-align: center; text-wrap: balance; }
+  .grade-report h2::before { display: none; }
+  .grade-report h2::after { flex: none; width: 4rem; }
+}
+
+/* List your business: photo first, coupon after, a business card to show what to snap */
+.rise:has(#rise-form) > .founders-invite { margin-top: 2rem; }
+#rise-form.rise-form {
+  border: 2px solid #2B2620;
+  padding-top: 9.8rem;
+  background:
+    url("/images/sample-card.svg") center 1rem / 13rem auto no-repeat,
+    var(--grain),
+    linear-gradient(180deg, var(--paper-light), #F4E8CC);
+}
+
+/* Verified page: show the two badges */
+.badge-samples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .6rem 1rem;
+  align-items: center;
+  padding: .9rem 1rem;
+  margin: .4rem 0 1.2rem;
+  border: 1px dashed rgba(43, 38, 32, .45);
+  background: rgba(250, 242, 223, .6);
+}
+.badge-samples p { margin: 0; }
+
+/* Page block: stacked page edges down the right side on wide screens */
+@media (min-width: 1200px) {
+  body::before {
+    content: "";
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    width: 10px;
+    z-index: 49;
+    pointer-events: none;
+    background: repeating-linear-gradient(90deg, #E8D6B2 0 1px, #CDB487 1px 2px);
+    box-shadow: -2px 0 4px rgba(43, 38, 32, .12);
+  }
+}
+
+@media (prefers-contrast: more) {
+  .stamp { box-shadow: none; }
+  .verify-info > ol > li::before { -webkit-mask-image: none; mask-image: none; }
+}
+
+/* Round 3 polish */
+#quote-form { scroll-margin-top: 7.5rem; }
+.badge-samples { border-style: solid; }
+@media (max-width: 480px) {
+  .home-head::after { content: "Free for every local business\A Read by people and AI"; white-space: pre-line; }
+}
+.stamp-unconfirmed .confirm-cta {
+  background: transparent;
+  color: var(--ink);
+  border: 2px solid var(--ink);
+  box-shadow: none;
+}
+/* Phone: tighter directory rows, closer to a printed page */
+@media (max-width: 639px) {
+  .category > .listing-card, .category-grid > .listing-card { padding: .45rem 0 .5rem; }
+  .listing-card p { margin: .05rem 0; }
+}
+
+/* =====================================================================
+   CLASSIC TYPE (Nov 18, 2026)
+   Brings back the lettering of the original First Answer Pages design:
+   a book-style serif, a slanted headline, near-black ink and calm boxes.
+   Keeps the aged paper, stamps, coupon, index cards and columns above.
+   Old-style Rozha digits stay first in every stack ("Old Numbers").
+   Fonts: Playfair Display and Source Serif 4, both SIL Open Font License.
+   ===================================================================== */
+@font-face { font-family: "Headline Serif"; font-style: italic; font-weight: 700; font-display: swap; src: url("/fonts/playfair-display-latin-700-italic.woff2") format("woff2"); }
+@font-face { font-family: "Headline Serif"; font-style: normal; font-weight: 700; font-display: swap; src: url("/fonts/playfair-display-latin-700-normal.woff2") format("woff2"); }
+@font-face { font-family: "Book Serif"; font-style: normal; font-weight: 400; font-display: swap; src: url("/fonts/source-serif-4-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Book Serif"; font-style: italic; font-weight: 400; font-display: swap; src: url("/fonts/source-serif-4-latin-400-italic.woff2") format("woff2"); }
+@font-face { font-family: "Book Serif"; font-style: normal; font-weight: 600; font-display: swap; src: url("/fonts/source-serif-4-latin-600-normal.woff2") format("woff2"); }
+@font-face { font-family: "Book Serif"; font-style: normal; font-weight: 700; font-display: swap; src: url("/fonts/source-serif-4-latin-700-normal.woff2") format("woff2"); }
+
+:root {
+  --serif: "Old Numbers", "Book Serif", Georgia, "Times New Roman", serif;
+  --headline: "Old Numbers", "Headline Serif", "Book Serif", Georgia, serif;
+  --ink-black: #16130F;
+}
+
+/* Headings, the brand name and labels in the book serif, in near-black ink */
+h1, h2, h3, h4,
+.site-nav a.brand,
+.category-head, .category-title,
+.listing-card h3, .listing-card h3 a,
+.grade-preview h3,
+.filters label {
+  font-family: var(--serif);
+  color: var(--ink-black);
+  text-shadow: none;
+}
+h1, h2, .category-title, .grade-eyebrow-title { text-shadow: none; }
+.site-nav a.brand { font-weight: 600; font-size: 1.45rem; letter-spacing: 0; }
+@media (max-width: 480px) { .site-nav a.brand { font-size: 1.2rem; } }
+
+/* The cover: no heavy box, just the slanted headline like the original */
+.home-head {
+  border: 0;
+  outline: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 1.2rem 1rem .6rem;
+}
+.home-head::before { content: none; display: none; }
+.home-head h1 {
+  font-family: var(--headline);
+  font-style: italic;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--ink-black);
+  font-size: clamp(2.5rem, 11vw, 4.4rem);
+  line-height: 1.02;
+}
+.home-head .tagline { font-family: var(--serif); font-style: italic; color: var(--ink-black); font-size: 1.2rem; }
+.home-head .tagline::after { background: var(--ink-black); height: 2px; }
+.home-head .grade-link a {
+  border: 2px solid var(--ink);
+  border-radius: 6px;
+  background: rgba(255, 252, 243, .7);
+  color: var(--ink);
+  transform: none;
+  box-shadow: none;
+}
+.home-head .grade-link a:hover { background: #FFFCF3; }
+
+/* Section heads: mixed case in the serif, still between double rules */
+.category-head, .category-title {
+  text-transform: none;
+  letter-spacing: .01em;
+  font-weight: 700;
+}
+
+/* Page titles everywhere: mixed case, no caps */
+h1, h2 { text-transform: none; letter-spacing: 0; }
+
+/* Body text in the book serif, like the original; form fields and buttons stay in the clean sans */
+body { font-family: "Book Serif", Georgia, "Times New Roman", serif; }
+input, select, textarea, button, .site-nav a.nav-cta { font-family: "Old Numbers", "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif; }
+.home-head .grade-link a { font-family: var(--serif); font-weight: 700; }
+.home-head::after { content: none; display: none; }
+@media (max-width: 640px) { .home-head::after { content: none; } }
+
+/* Search: separate boxes like the original, no outer frame; mixed-case button */
+.filters { border: 0; background: transparent; box-shadow: none; border-radius: 0; }
+.filters label { border: 2px solid var(--ink-black); border-radius: 6px; background-color: rgba(255, 252, 243, .75); }
+.filters button { font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif; font-weight: 600; text-transform: none; letter-spacing: .01em; font-size: 1.15rem; border-radius: 4px; }
+.listing-detail h1, .listing-detail h2, main h1 { color: var(--ink-black); }

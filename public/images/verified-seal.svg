@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200" role="img" aria-label="Verified stamp">
+  <defs>
+    <path id="top" d="M 32,100 A 68,68 0 0 1 168,100"/>
+    <path id="bottom" d="M 20,100 A 80,80 0 0 0 180,100"/>
+    <filter id="wear" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".6" numOctaves="2" seed="4"/><feColorMatrix values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -2.4 2.45"/><feComposite in="SourceGraphic" operator="in"/></filter>
+  </defs>
+  <g filter="url(#wear)" transform="rotate(-8 100 100)">
+    <g fill="none" stroke="#0C2C73">
+      <circle cx="100" cy="100" r="94" stroke-width="5"/>
+      <circle cx="100" cy="100" r="86" stroke-width="1.6"/>
+      <circle cx="100" cy="100" r="48" stroke-width="2.2"/>
+      <path d="M78 100 l 15 16 l 31 -35" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+    <g fill="#0C2C73" font-family="'Fira Sans Condensed','Arial Narrow',Arial,sans-serif" font-weight="700">
+      <text font-size="17" letter-spacing="2"><textPath href="#top" startOffset="50%" text-anchor="middle" textLength="190" lengthAdjust="spacingAndGlyphs">FIRST ANSWER PAGES</textPath></text>
+      <text font-size="22" letter-spacing="4"><textPath href="#bottom" startOffset="50%" text-anchor="middle" textLength="120" lengthAdjust="spacingAndGlyphs">VERIFIED</textPath></text>
+      <path d="M27 104 l2.2 4.4 4.8.7-3.5 3.4.8 4.8-4.3-2.3-4.3 2.3.8-4.8-3.5-3.4 4.8-.7z"/>
+      <path d="M173 104 l2.2 4.4 4.8.7-3.5 3.4.8 4.8-4.3-2.3-4.3 2.3.8-4.8-3.5-3.4 4.8-.7z"/>
+    </g>
+  </g>
+</svg>
