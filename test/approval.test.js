@@ -223,7 +223,7 @@ async function assertVisible(env, i) {
   const html = await page.text();
   assert.ok(html.includes(name));
   assert.ok(html.includes('application/ld+json'));
-  assert.ok(html.includes('Details confirmed by the business'), 'page shows the Details confirmed by the business stamp');
+  assert.match(html, /confirmed by the business on <span class="stamp-date">/, 'page shows the confirmed-by-the-business stamp');
   assert.equal((await get(env, `/api/listings/${id}`)).status, 200);
 
   assert.ok((await mcpIds(env)).includes(id));
@@ -295,6 +295,8 @@ test('approve publishes the listing everywhere and writes the Details confirmed 
   assert.deepEqual((await readJson(env, 'verified.json', {}))[listingId(1)], {
     verifiedDate: '2025-01-15',
     verifiedAt: '2025-01-15T12:00:00.000Z',
+    confirmedAt: '2025-01-15T12:00:00.000Z',
+    confirmedFields: ['phone'],
   });
   const published = await readJson(env, 'published.json', []);
   assert.deepEqual(published.map(l => l.id), [listingId(1)]);

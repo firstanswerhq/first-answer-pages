@@ -21,15 +21,20 @@ export function createLlmsRouter(ctx) {
       ? store.getListings().filter(l => !store.isSeed(l.id))
       : store.getListings();
     const confirmedDates = new Map();
+    const confirmations = new Map();
     for (const l of listings) {
       const date = typeof store.getVerifiedDate === 'function' ? store.getVerifiedDate(l.id) : undefined;
       if (date) confirmedDates.set(l.id, date);
+      const c = typeof store.getConfirmation === 'function' ? store.getConfirmation(l.id) : undefined;
+      if (date && c) confirmations.set(l.id, { verifiedDate: date, ...c });
     }
     res.status(200).type('text/plain').send(
       generateLlmsTxt(listings.map(publicListing), baseUrlFor(req, config), store.getCategories(), {
         siteName: config.siteName,
         confirmed: new Set(confirmedDates.keys()),
         confirmedDates,
+        confirmations,
+        now: ctx.clock ? Number(ctx.clock.now()) : Date.now(),
         identityVerified: new Set(listings
           .filter(l => typeof store.getTrustStatus === 'function' && store.getTrustStatus(l).verified)
           .map(l => l.id)),

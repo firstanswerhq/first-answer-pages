@@ -210,8 +210,38 @@ function readHours(node) {
   return out;
 }
 
+/**
+ * Hours from structured data, kept apart by kind so the hours-match check can
+ * read them: `openingHours` strings as written, and regular
+ * openingHoursSpecification rows. Rows with validFrom/validThrough are holiday
+ * or seasonal hours and are left out.
+ */
+function readHoursParts(node) {
+  const raw = node.openingHours;
+  const text = (Array.isArray(raw) ? raw : [raw]).filter(h => str(h)).map(h => h.trim()).slice(0, 50);
+  const spec = [];
+  const rows = node.openingHoursSpecification;
+  for (const s of Array.isArray(rows) ? rows : [rows]) {
+    if (!s || typeof s !== 'object' || s.validFrom !== undefined || s.validThrough !== undefined) continue;
+    const days = [].concat(s.dayOfWeek ?? []).filter(d => typeof d === 'string').map(d => d.slice(d.lastIndexOf('/') + 1));
+    if (days.length && str(s.opens) && str(s.closes) && spec.length < 50) {
+      spec.push({ days, opens: s.opens.trim(), closes: s.closes.trim() });
+    }
+  }
+  return { text, spec };
+}
+
+/** The newest valid dateModified on any node, as written, or ''. */
+function newerDate(current, value) {
+  const v = str(value);
+  if (!v || v.length > 40) return current;
+  const t = Date.parse(v);
+  if (!Number.isFinite(t)) return current;
+  return current === '' || t > Date.parse(current) ? v : current;
+}
+
 function readJsonLd(blocks) {
-  const result = { blockCount: blocks.length, unreadableCount: 0, types: [], business: null };
+  const result = { blockCount: blocks.length, unreadableCount: 0, types: [], business: null, dateModified: '' };
   for (const body of blocks) {
     let parsed;
     try {
@@ -223,6 +253,7 @@ function readJsonLd(blocks) {
     for (const node of nodesOf(parsed)) {
       const types = typeNames(node);
       for (const t of types) if (!result.types.includes(t)) result.types.push(t);
+      result.dateModified = newerDate(result.dateModified, node.dateModified);
       if (result.business) continue;
       const hasPhoneAndAddress = str(node.telephone) && node.address;
       const isBusiness = types.some(t => BUSINESS_TYPES.has(t) || (t === 'Organization' && hasPhoneAndAddress));
@@ -232,6 +263,7 @@ function readJsonLd(blocks) {
         telephone: str(node.telephone),
         address: readAddress(node.address),
         hours: readHours(node),
+        hoursParts: readHoursParts(node),
         url: str(node.url),
       };
     }

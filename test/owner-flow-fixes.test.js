@@ -303,7 +303,10 @@ test('after approval the draft link shows "Your listing is live" and edits retur
   const html = await page.text();
   assert.match(html, /<h1>Your listing is live<\/h1>/);
   assert.ok(html.includes(`<a href="/listings/${listingId}">See your listing</a>`));
-  assert.ok(!html.includes('<form'), 'no editable fields');
+  // The only form left is the one-button "Still correct" form; no field can be edited.
+  assert.equal((html.match(/<form/g) ?? []).length, 1);
+  assert.ok(html.includes(`action="${draftPath}/still-correct"`));
+  assert.ok(!/<(?:input|textarea|select)\b/.test(html), 'no editable fields');
   assert.ok(!html.includes('This is a draft'));
 
   for (const p of [draftPath, `${draftPath}/confirm`]) {

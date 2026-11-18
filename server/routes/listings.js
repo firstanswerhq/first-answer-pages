@@ -113,6 +113,7 @@ export function createListingsRouter(ctx) {
     // JSON-LD goes to layout() only, so the page has exactly one ld+json block
     const detail = listingDetail(listing, undefined, {
       categories: store.getCategories(), verification, hasSeanceRuns: hasSeance,
+      now: ctx.clock ? Number(ctx.clock.now()) : Date.now(),
       founder: typeof store.getFounder === 'function' ? store.getFounder(listing.id) : undefined,
       trust: typeof store.getTrustStatus === 'function' ? store.getTrustStatus(listing) : undefined,
     });

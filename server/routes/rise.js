@@ -17,7 +17,10 @@ import { ACCEPTED_IMAGE_TYPES, MAX_IMAGE_BYTES, MAX_FORM_BYTES, detectImageType,
 import { extractDraft, ExtractionError } from '../lib/extractor.js';
 import { createDraftStore, draftProvider } from '../lib/drafts.js';
 import { validateFields, DAYS } from '../lib/listing-fields.js';
-import { uploadPage, reviewPage, messagePage } from '../lib/rise-html.js';
+import { uploadPage, reviewPage, messagePage, stillCorrectBlock } from '../lib/rise-html.js';
+import { verificationFor } from '../lib/verifier.js';
+import { confirmationView } from '../lib/confirmation.js';
+import { formatStampDate } from '../lib/html.js';
 import { formatFee } from '../lib/trust.js';
 
 const FORM_TYPE = 'application/x-www-form-urlencoded';
@@ -48,7 +51,7 @@ function pendingMessage() {
 }
 
 /** The owner's link after approval: point them at the live listing, not an edit form. */
-function livePage(draft, { verifyOn = false, fees } = {}) {
+function livePage(draft, { verifyOn = false, fees, still = '' } = {}) {
   const prices = fees
     ? `Optional. ${formatFee(fees.founderCents)} once for Founding Members, ${formatFee(fees.yearlyCents)} a year for everyone else.`
     : undefined;
@@ -59,6 +62,7 @@ function livePage(draft, { verifyOn = false, fees } = {}) {
       : 'Your listing has been approved and is live in the directory.',
     { href: `/listings/${encodeURIComponent(draft.listingId)}`, text: 'See your listing' },
     verifyOn ? { href: `/rise/drafts/${encodeURIComponent(draft.id)}/verify`, text: 'Get the Verified stamp', note: prices } : undefined,
+    still,
   );
 }
 
@@ -121,11 +125,23 @@ export function createRiseRouter(ctx) {
   const photoListingClosed = () => ctx.config.production === true && ctx.visionProvider?.name === 'mock';
   const comingSoon = res => sendPage(res, 503, messagePage('Photo listing is coming soon', 'Photo listing is coming soon.', HOME_LINK));
 
+  /** The "Still correct" block for a live, confirmed listing, or ''. */
+  function stillCorrect(draft, done = false) {
+    const listing = ctx.store.findById(draft.listingId);
+    const v = listing ? verificationFor(ctx.store, listing) : null;
+    if (!v) return '';
+    const view = confirmationView(v, Number(ctx.clock.now()));
+    return stillCorrectBlock(draft.id, { ...view, date: formatStampDate(view.stampDate) }, { done });
+  }
+  const liveOpts = (draft, done = false) => ({
+    verifyOn: Boolean(ctx.trust), fees: ctx.config?.trust, still: stillCorrect(draft, done),
+  });
+
   /** Page for an edit that can no longer be saved: live listing, review in progress, or not approved. */
   async function lockedPage(id) {
     const found = await drafts.get(id);
     const draft = found.status === 200 ? found.draft : undefined;
-    if (isLive(draft)) return livePage(draft, { verifyOn: Boolean(ctx.trust), fees: ctx.config?.trust });
+    if (isLive(draft)) return livePage(draft, liveOpts(draft));
     if (draft?.status === 'pending') return messagePage('Thanks!', pendingMessage(draft, ctx.config), HOME_LINK);
     if (draft?.status === 'rejected') return messagePage('Not approved', 'This listing was not approved.', HOME_LINK);
     return messagePage('Already sent for review', 'This listing was already sent for review, so it can no longer be changed here.', HOME_LINK);
@@ -258,7 +274,7 @@ export function createRiseRouter(ctx) {
         return sendPage(res, 200, messagePage('Thanks!', pendingMessage(found.draft, ctx.config), HOME_LINK));
       }
       if (isLive(found.draft)) {
-        return sendPage(res, 200, livePage(found.draft, { verifyOn: Boolean(ctx.trust), fees: ctx.config?.trust }));
+        return sendPage(res, 200, livePage(found.draft, liveOpts(found.draft, req.query.confirmed === '1')));
       }
       if (found.draft.status === 'rejected') {
         return sendPage(res, 200, messagePage('Not approved', 'This listing was not approved.', HOME_LINK));
@@ -342,6 +358,33 @@ export function createRiseRouter(ctx) {
         return sendPage(res, 404, messagePage('Draft not found', 'That draft does not exist or was discarded.'));
       }
       sendPage(res, 409, messagePage('Cannot confirm', result.error ?? 'This draft cannot be confirmed.', HOME_LINK));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // "Still correct": the owner confirms the same details again, as of now. The
+  // draft link is the owner's private link; nothing is emailed or texted.
+  router.post('/rise/drafts/:id/still-correct', async (req, res, next) => {
+    try {
+      const limited = ctx.rateLimiter.consume(`rise:${req.ip}`, RULES.rise);
+      if (!limited.allowed) {
+        res.set('Retry-After', String(limited.retryAfterSeconds));
+        return sendPage(res, 429, messagePage('Too many tries', `Please wait ${limited.retryAfterSeconds} seconds and try again.`, HOME_LINK));
+      }
+      const found = await drafts.get(req.params.id);
+      if (found.status !== 200) {
+        return sendPage(res, 404, messagePage('Draft not found', 'That draft does not exist or was discarded.'));
+      }
+      if (!isLive(found.draft)) return sendPage(res, 409, await lockedPage(req.params.id));
+      const result = await ctx.store.reconfirmListing(found.draft.listingId);
+      if (result.status === 404) {
+        return sendPage(res, 404, messagePage('Listing not found', 'This listing is no longer in the directory.', HOME_LINK));
+      }
+      if (result.status !== 200) {
+        return sendPage(res, 409, messagePage('Cannot confirm', 'This listing has not been confirmed before, so it cannot be confirmed again here.', HOME_LINK));
+      }
+      res.redirect(303, `/rise/drafts/${encodeURIComponent(req.params.id)}?confirmed=1`);
     } catch (err) {
       next(err);
     }

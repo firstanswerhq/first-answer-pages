@@ -7,6 +7,7 @@
 import { getCategories } from '../data.js';
 import { DEFAULT_SITE_NAME } from './config.js';
 import { filledHours } from './html.js';
+import { confirmationView, confirmedMs } from './confirmation.js';
 
 /** Forces a value onto one line: line breaks and control characters become one space. */
 function oneLine(value) {
@@ -22,7 +23,9 @@ function oneLine(value) {
  * @param {object[]} listings
  * @param {string} baseUrl  e.g. "https://firstanswerpages.com"
  * @param {object[]} [categories]  defaults to the default store's categories
- * @param {{ siteName?: string }} [options]  siteName defaults to "First Answer Pages"
+ * @param {{ siteName?: string, confirmed?: Set<string>, confirmedDates?: Map<string, string>,
+ *   confirmations?: Map<string, object>, now?: number }} [options]  siteName defaults to "First Answer Pages".
+ *   With `confirmations` and `now`, a confirmation over 90 days old is given as "last confirmed", not "yes".
  * @returns {string}
  */
 export function generateLlmsTxt(listings, baseUrl, categories, options = {}) {
@@ -54,6 +57,13 @@ export function generateLlmsTxt(listings, baseUrl, categories, options = {}) {
     if (typeof confirmed === 'function') return Boolean(confirmed(id));
     if (confirmed instanceof Set) return confirmed.has(id);
     return false;
+  };
+  // id -> { verifiedDate, confirmedAt, confirmedFields }; optional, for the field list and the 90-day rule.
+  const confirmations = options?.confirmations;
+  const confirmationFor = id => {
+    if (!confirmations) return undefined;
+    const c = typeof confirmations.get === 'function' ? confirmations.get(id) : confirmations[id];
+    return c && typeof c === 'object' && Number.isFinite(confirmedMs(c)) ? c : undefined;
   };
   const dateFor = id => {
     if (!confirmedDates) return '';
@@ -101,7 +111,15 @@ export function generateLlmsTxt(listings, baseUrl, categories, options = {}) {
       lines.push(`Page: ${base}/listings/${oneLine(l.id)}`);
       if (isConfirmed(l.id)) {
         const date = dateFor(l.id);
-        lines.push(`Details confirmed by the business: yes${date ? ` (${date})` : ''}`);
+        const record = confirmationFor(l.id);
+        const view = record ? confirmationView(record, options?.now) : { current: true, fields: '' };
+        if (!view.current) {
+          // Over 90 days old: give the date, never "yes".
+          lines.push(`Details last confirmed by the business: ${date || 'more than 90 days ago'}`);
+        } else {
+          lines.push(`Details confirmed by the business: yes${date ? ` (${date})` : ''}`);
+          if (view.fields) lines.push(`Confirmed details: ${oneLine(view.fields.toLowerCase())}`);
+        }
       }
       if (options?.identityVerified instanceof Set && options.identityVerified.has(l.id)) {
         lines.push('Verified: yes (business phone confirmed; photo ID checked for the person who manages this listing; not proof of ownership or licensing)');

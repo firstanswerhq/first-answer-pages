@@ -218,6 +218,7 @@ export function createSafeFetcher({
         contentType,
         text: decodeText(buffer, contentType),
         truncated,
+        lastModified: String(response.headers?.['last-modified'] ?? '').slice(0, 100),
       };
     }
   }
@@ -225,7 +226,7 @@ export function createSafeFetcher({
   /**
    * @param {string} url
    * @param {{ accept?: string, strictSize?: boolean }} [opts]
-   * @returns {Promise<{ status: number, finalUrl: string, contentType: string, text: string, truncated: boolean }>}
+   * @returns {Promise<{ status: number, finalUrl: string, contentType: string, text: string, truncated: boolean, lastModified: string }>}
    */
   function fetchText(url, { accept = DEFAULT_ACCEPT, strictSize = false } = {}) {
     const controller = new AbortController();

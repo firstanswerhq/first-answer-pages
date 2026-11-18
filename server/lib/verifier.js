@@ -28,7 +28,8 @@ export function hashListing(listing, verifiedDate) {
 /**
  * @param {{ getVerifiedDate(id: string): string|undefined|null }} store
  * @param {object} listing
- * @returns {{ verifiedDate: string, hash: string, verifiedAt?: string }|null} null when unverified
+ * @returns {{ verifiedDate: string, hash: string, verifiedAt?: string,
+ *   confirmedAt?: string, confirmedFields?: string[] }|null} null when unverified
  */
 export function verificationFor(store, listing) {
   const verifiedDate = store.getVerifiedDate(listing.id);
@@ -36,6 +37,10 @@ export function verificationFor(store, listing) {
   const result = { verifiedDate, hash: hashListing(listing, verifiedDate) };
   const verifiedAt = typeof store.getVerifiedAt === 'function' ? store.getVerifiedAt(listing.id) : undefined;
   if (verifiedAt) result.verifiedAt = verifiedAt;
+  // Which details were confirmed and when (older listings have no field list).
+  const c = typeof store.getConfirmation === 'function' ? store.getConfirmation(listing.id) : undefined;
+  if (c?.confirmedAt) result.confirmedAt = c.confirmedAt;
+  if (Array.isArray(c?.confirmedFields) && c.confirmedFields.length > 0) result.confirmedFields = c.confirmedFields;
   return result;
 }
 

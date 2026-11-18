@@ -6,6 +6,7 @@ import { getCategories } from '../data.js';
 import { DEFAULT_SITE_NAME } from './config.js';
 import { formatFoundersDeadline } from './founders.js';
 import { formatFee } from './trust.js';
+import { confirmationView } from './confirmation.js';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -287,15 +288,22 @@ export function quoteForm(listing, opts = {}) {
  * @param {string} id  listing id (for the verify link)
  * @returns {string}
  */
-function stamp(verification, id) {
+function stamp(verification, id, now) {
   if (!verification || !verification.verifiedDate || !verification.hash) {
     return '<aside class="stamp stamp-unconfirmed"><p class="unconfirmed-note">Not yet confirmed by the owner.</p> <a class="button confirm-cta" href="/rise">Is this your business? Confirm it free →</a></aside>';
   }
-  const date = escapeHtml(formatStampDate(verification));
+  const view = confirmationView(verification, now);
+  const date = escapeHtml(formatStampDate(view.stampDate));
   const hash = escapeHtml(verification.hash);
   const href = `/api/verify/${encodeURIComponent(id)}?hash=${encodeURIComponent(verification.hash)}`;
+  // Over 90 days old: say when, never that it is current. Older listings without a field list keep the general line.
+  const title = !view.current
+    ? `Last confirmed by the business on <span class="stamp-date">${date}</span>.`
+    : view.fields
+      ? `${escapeHtml(view.fields)} confirmed by the business on <span class="stamp-date">${date}</span>.`
+      : `Details confirmed by the business <span class="stamp-date">${date}</span>`;
   return `<aside class="stamp">
-      <p class="stamp-title">Details confirmed by the business <span class="stamp-date">${date}</span></p>
+      <p class="stamp-title">${title}</p>
       <details class="stamp-details"><summary>Details for AI tools</summary>
       <p class="stamp-note">Tamper check: unchanged since the owner confirmed it. This is not proof of ownership.</p>
       <p class="stamp-hash"><code data-hash="${hash}">${hash}</code></p>
@@ -366,7 +374,7 @@ ${days.map(([day, text]) => `      <tr><th scope="row">${day}</th><td>${escapeHt
 
   // Stamp only when the caller passes a `verification` key (null = unconfirmed).
   const stampBlock = opts && typeof opts === 'object' && 'verification' in opts
-    ? '\n    ' + stamp(opts.verification, listing.id)
+    ? '\n    ' + stamp(opts.verification, listing.id, opts.now)
     : '';
 
   // The Séance link shows only when the caller says this listing has at least one run.

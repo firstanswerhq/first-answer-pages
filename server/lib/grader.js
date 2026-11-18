@@ -16,6 +16,7 @@ import { randomUUID } from 'node:crypto';
 import { SafeFetchError } from './safe-fetch.js';
 import { readPageFacts, STREET_PATTERN } from './page-facts.js';
 import { runWebsiteChecks, CHECKS } from './grade-checks.js';
+import { findListingFor } from './grade-hours.js';
 import { scoreGrade } from './grade-score.js';
 import { analyzeAnswer, isNamed, listedNames, looksLikeSameName, registeredDomain } from './name-match.js';
 import { DROP_BELOW, NAMED_ABOVE } from './name-check.js';
@@ -281,10 +282,29 @@ export function createGrader({
 
   // ---- website part --------------------------------------------------------
 
+  /** This business's listing in our directory, only when the website's phone, city and state clearly match one. */
+  function matchedListing(facts, input) {
+    if (!facts || typeof store.getListings !== 'function') return null;
+    const phones = [facts.jsonLd?.business?.telephone, ...(facts.telLinks ?? []).slice(0, 5)].filter(Boolean);
+    return findListingFor(store.getListings(), { phones, city: input.city, state: input.state });
+  }
+
+  /** Everything runWebsiteChecks needs from one website read. */
+  const checkArgs = (site, input) => ({
+    facts: site.facts,
+    robots: site.robots,
+    llms: site.llms,
+    input,
+    failure: site.failure,
+    now: nowMs(),
+    lastModified: site.lastModified,
+    listing: matchedListing(site.facts, input),
+  });
+
   /** The website steps. With track=false (a recheck) no Scan_Step is recorded. */
   async function websitePart(id, input, track = true) {
     const names = stepNames(input);
-    const out = { facts: null, robots: null, llms: null, failure: undefined };
+    const out = { facts: null, robots: null, llms: null, failure: undefined, lastModified: '' };
     if (!input.website) {
       if (track) {
         for (const name of names.slice(0, 3)) {
@@ -318,6 +338,7 @@ export function createGrader({
     await timed(id, names[1], async () => {
       if (!home) return { finding: out.failure ?? FETCH_FAILURES.connect_failed, state: 'skipped' };
       out.facts = readPageFacts(home.text);
+      out.lastModified = typeof home.lastModified === 'string' ? home.lastModified : '';
       const n = out.facts.h1s.length;
       return { finding: `Found ${n} main ${n === 1 ? 'headline' : 'headlines'}.` };
     }, track);
@@ -508,7 +529,7 @@ export function createGrader({
     ]);
 
     const results = [
-      ...runWebsiteChecks({ facts: site.facts, robots: site.robots, llms: site.llms, input, failure: site.failure }),
+      ...runWebsiteChecks(checkArgs(site, input)),
       aiNamedResult(ai.ai, ai.reason),
     ];
     // (The ai-bots-allowed result carries `blocked`, the crawler names the Fix_Kit needs.)
@@ -755,9 +776,7 @@ export function createGrader({
       const grade = await get(id);
       const site = await withTimeout(websitePart(id, grade.input, false), WEBSITE_BUDGET_MS, 'website budget')
         .catch(() => ({ facts: null, robots: null, llms: null, failure: FETCH_FAILURES.timeout }));
-      const websiteResults = runWebsiteChecks({
-        facts: site.facts, robots: site.robots, llms: site.llms, input: grade.input, failure: site.failure,
-      });
+      const websiteResults = runWebsiteChecks(checkArgs(site, grade.input));
       // The site could not be read this time: keep the earlier results instead of wiping them.
       if (grade.input.website && !site.facts) {
         await updateGrade(id, g => {

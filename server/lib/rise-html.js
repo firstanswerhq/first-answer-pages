@@ -105,13 +105,14 @@ export function uploadPage({ photoEnabled = true, discarded = false, founders, f
  * @param {{ href: string, text: string }} [link]
  * @param {{ href: string, text: string, note?: string }} [second] optional button above the link, with a small note
  */
-export function messagePage(title, message, link = { href: '/rise', text: 'Back to the start' }, second) {
+export function messagePage(title, message, link = { href: '/rise', text: 'Back to the start' }, second, extraHtml = '') {
   const more = second
     ? `\n  <p><a class="button" href="${escapeHtml(second.href)}">${escapeHtml(second.text)}</a></p>${second.note ? `\n  <p class="hint">${escapeHtml(second.note)}</p>` : ''}`
     : '';
+  // extraHtml is built by our own code with every value escaped; never pass outside text here.
   const body = `<section class="message">
   <h1>${escapeHtml(title)}</h1>
-  <p>${escapeHtml(message)}</p>${more}
+  <p>${escapeHtml(message)}</p>${extraHtml ? `\n  ${extraHtml}` : ''}${more}
   <p><a href="${escapeHtml(link.href)}">${escapeHtml(link.text)}</a></p>
 </section>`;
   return layout({ title, body });
@@ -224,4 +225,25 @@ ${hoursRows}
   </details>
 </section>`;
   return layout({ title: `${heading}: First Answer Pages`, body });
+}
+
+/**
+ * The "Still correct" part of the owner's live-listing page: when the details
+ * were last confirmed, and a button to confirm the same details again today.
+ * @param {string} draftId
+ * @param {{ current: boolean, date: string, fields: string }} view
+ * @param {{ done?: boolean }} [opts] done: the owner just pressed the button
+ * @returns {string}
+ */
+export function stillCorrectBlock(draftId, view, { done = false } = {}) {
+  const what = view.fields ? view.fields.toLowerCase() : 'details';
+  const when = view.current
+    ? `Your ${what} ${view.fields && !view.fields.includes(' and ') ? 'was' : 'were'} confirmed on ${view.date}.`
+    : `Your ${what} ${view.fields && !view.fields.includes(' and ') ? 'was' : 'were'} last confirmed on ${view.date}. That is more than 90 days ago, so the listing no longer shows it as current.`;
+  const note = done ? '<p class="notice saved-note" role="status">Thanks. Your details are confirmed as of today.</p>\n  ' : '';
+  return `${note}<p>${escapeHtml(when)}</p>
+  <form method="POST" action="/rise/drafts/${encodeURIComponent(draftId)}/still-correct">
+    <button type="submit" class="button">Still correct</button>
+  </form>
+  <p class="hint">Check your listing first. Press the button only if everything on it is still right. If something changed, contact us.</p>`;
 }

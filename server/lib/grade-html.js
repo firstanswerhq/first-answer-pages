@@ -11,7 +11,7 @@ import { layout, escapeHtml } from './html.js';
 import { DEFAULT_SITE_NAME } from './config.js';
 import { STATE_HINT } from './listing-fields.js';
 import { formatRunTime, DEMO_LABEL } from './seance-html.js';
-import { CHECKS, GROUPS } from './grade-checks.js';
+import { CHECKS, GROUPS, STANDING_FIXES } from './grade-checks.js';
 import { stepNames, foundFromGrade, SECOND_OPINIONS, mainWho, freePromptFor } from './grader.js';
 import {
   suggestedTitle, suggestedSummary, jsonLdBlock, llmsDraft, robotsLines,
@@ -282,7 +282,9 @@ function topFailed(grade) {
   const byId = new Map(CHECKS.map(c => [c.id, c]));
   return (grade.results ?? [])
     .filter(r => r.result === 'fail' && byId.has(r.id) && r.id !== 'ai-named') // only things the owner can change
-    .sort((a, b) => byId.get(b.id).points - byId.get(a.id).points || order.get(a.id) - order.get(b.id))
+    // High-priority Checks come first, then the ones worth the most points.
+    .sort((a, b) => Number(byId.get(b.id).priority === 'high') - Number(byId.get(a.id).priority === 'high')
+      || byId.get(b.id).points - byId.get(a.id).points || order.get(a.id) - order.get(b.id))
     .slice(0, 3)
     .map(r => `<li><strong>${e(byId.get(r.id).label)}.</strong> ${e(r.detail)}</li>`)
     .join('');
@@ -301,8 +303,15 @@ function fixSection(grade) {
       <p class="hint">A free listing for your business in our directory, ${e(DEFAULT_SITE_NAME)}. Next you check the details and send it to us for approval. Nothing goes live until you do.</p>
       ${grade.input.website ? '' : '<p>You did not give a website. A free listing gives AI something to read about the business.</p>'}
     </section>
-    ${failed ? `<section class="grade-top-fails"><h2>Fix these first</h2><ul>${failed}</ul><p class="hint">Not a computer person? Send this page to whoever built your website.</p></section>` : ''}
+    ${failed
+    ? `<section class="grade-top-fails"><h2>Fix these first</h2><ul>${failed}</ul><p class="hint">Not a computer person? Send this page to whoever built your website.</p>${standingFixes('h3')}</section>`
+    : `<section class="grade-top-fails">${standingFixes('h2')}</section>`}
   </div>`;
+}
+
+/** Advice for every report. Not a Check, not scored, and we did not look at their Google profile. */
+function standingFixes(tag) {
+  return STANDING_FIXES.map(f => `<${tag}>${e(f.label)}</${tag}><p>${e(f.text)}</p>`).join('');
 }
 
 function googleSection(grade) {

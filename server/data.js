@@ -28,6 +28,7 @@
  */
 
 import { trustStatus } from './lib/trust.js';
+import { confirmedFieldsFor, cleanFields } from './lib/confirmation.js';
 import { earnsFounderSpot, nextFounderNumber, foundersStatus } from './lib/founders.js';
 import nodeFs from 'node:fs';
 import path from 'node:path';
@@ -231,6 +232,19 @@ export function createDataStore({
     const v = verifiedEntry(id);
     return v && typeof v === 'object' && typeof v.verifiedAt === 'string' ? v.verifiedAt : undefined;
   };
+  /**
+   * Which details the business confirmed and when: { confirmedAt, confirmedFields }.
+   * Older entries have no confirmedFields (null), and confirmedAt falls back to verifiedAt.
+   * undefined when the listing was never confirmed.
+   */
+  const getConfirmation = id => {
+    const v = verifiedEntry(id);
+    if (!v) return undefined;
+    if (typeof v !== 'object') return { confirmedAt: undefined, confirmedFields: null };
+    const confirmedAt = typeof v.confirmedAt === 'string' ? v.confirmedAt
+      : typeof v.verifiedAt === 'string' ? v.verifiedAt : undefined;
+    return { confirmedAt, confirmedFields: cleanFields(v.confirmedFields) };
+  };
 
   function searchListings({ category, city, query, limit } = {}) {
     const q = typeof query === 'string' ? query.trim().toLowerCase() : '';
@@ -370,7 +384,10 @@ export function createDataStore({
       let date;
       const verifiedNext = await updateJsonFile(file('verified.json'), map => {
         if (!Object.hasOwn(map, id)) {
-          map[id] = { verifiedDate: todayUtc(), verifiedAt: new Date(clock.now()).toISOString() };
+          const at = new Date(clock.now()).toISOString();
+          map[id] = {
+            verifiedDate: todayUtc(), verifiedAt: at, confirmedAt: at, confirmedFields: confirmedFieldsFor(listing),
+          };
         }
         date = map[id];
       }, { ...io, fallback: {} });
@@ -389,6 +406,30 @@ export function createDataStore({
       });
       void date;
       return { status: 200, listing: findById(id) ?? listing };
+    });
+  }
+
+  /**
+   * The owner says the listing is still correct: the same details are
+   * confirmed again as of now. Only a listing confirmed before can be
+   * confirmed again. The tamper-check date moves with it, so the hash changes.
+   * @returns {Promise<{ status: 200|404|409, confirmedAt?: string, confirmedFields?: string[] }>}
+   */
+  function reconfirmListing(id) {
+    return withLock('publish', async () => {
+      const listing = findById(id);
+      if (!listing) return { status: 404 };
+      if (!Object.hasOwn(state.verified, id)) return { status: 409 };
+      const at = new Date(clock.now()).toISOString();
+      let saved;
+      const verifiedNext = await updateJsonFile(file('verified.json'), map => {
+        const old = Object.hasOwn(map, id) && map[id] && typeof map[id] === 'object' ? map[id] : {};
+        const fields = cleanFields(old.confirmedFields) ?? confirmedFieldsFor(listing);
+        saved = { ...old, verifiedDate: todayUtc(), verifiedAt: at, confirmedAt: at, confirmedFields: fields };
+        map[id] = saved;
+      }, { ...io, fallback: {} });
+      swap({ verified: Object.freeze({ ...verifiedNext }) });
+      return { status: 200, confirmedAt: saved.confirmedAt, confirmedFields: saved.confirmedFields };
     });
   }
 
@@ -580,9 +621,9 @@ export function createDataStore({
   }
 
   return {
-    getListings, getCategories, findById, searchListings, getVerifiedDate, getVerifiedAt, isSeed,
+    getListings, getCategories, findById, searchListings, getVerifiedDate, getVerifiedAt, getConfirmation, isSeed,
     getFounder, getFoundersStatus, getTrustRecord, updateTrustRecord, findTrustIds, getTrustStatus,
-    publishDraft, submitDraft, rejectDraft, unpublish, updatePublished, reload, withLock, collection,
+    publishDraft, submitDraft, rejectDraft, reconfirmListing, unpublish, updatePublished, reload, withLock, collection,
     pruneExpired,
   };
 }

@@ -177,7 +177,8 @@ test('confirmed listing page shows the stamp and JSON-LD identifier and dateModi
 
   const stamp = stampBlock(html);
   assert.ok(stamp, 'stamp present');
-  assert.ok(stamp.includes('Details confirmed by the business <span class="stamp-date">Jan 15, 2025</span>'));
+  // Only the phone is named: this listing has no address and no hours.
+  assert.ok(stamp.includes('Phone confirmed by the business on <span class="stamp-date">Jan 15, 2025</span>.'));
   assert.ok(!/verified/i.test(stamp), 'no "Verified" wording in the stamp markup');
 
   const hash = stampHash(html);

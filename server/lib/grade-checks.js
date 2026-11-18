@@ -1,5 +1,5 @@
 /**
- * grade-checks.js — the 14 Checks and the website Check logic.
+ * grade-checks.js — the 16 Checks and the website Check logic.
  *
  * runWebsiteChecks never invents a result: when something could not be read it
  * returns `not_checked` with a plain reason, never `fail`.
@@ -8,6 +8,10 @@
 import { normalizeForMatch } from './seance.js';
 import { HOURS_PATTERN, STREET_PATTERN, CTA_PATTERN } from './page-facts.js';
 import { parseRobots, mayFetchRoot, AI_AGENTS } from './robots.js';
+import {
+  hoursFromText, hoursFromStructured, hoursFromListing, compareHours, valueText, DAY_LABELS,
+} from './grade-hours.js';
+import { judgeFreshness } from './grade-freshness.js';
 
 export const GROUPS = Object.freeze({
   ai_answers: 'AI answers',
@@ -69,6 +73,13 @@ export const CHECKS = Object.freeze([
     fix: 'Add a short description (alt text) to each picture, such as "Roof repair on a brick home".',
   },
   {
+    id: 'site-fresh', group: 'search_basics', points: 2,
+    label: 'Signs the site is kept up',
+    passText: 'Your website shows it was updated lately.',
+    failText: 'Your website shows an old year.',
+    fix: "Update the year in your website's footer, and change something on your site now and then so it looks kept up.",
+  },
+  {
     id: 'share-picture', group: 'search_basics', points: 2,
     label: 'Share picture',
     passText: 'Your page has a picture for sharing.',
@@ -88,6 +99,13 @@ export const CHECKS = Object.freeze([
     passText: 'Your hours are on your home page.',
     failText: 'We could not find your hours on your home page.',
     fix: 'Put your hours on your home page as plain text, such as "Mon-Fri 8am-5pm".',
+  },
+  {
+    id: 'hours-match', group: 'customer_basics', points: 5, priority: 'high',
+    label: 'Hours match everywhere',
+    passText: 'Your hours say the same thing in every place we checked.',
+    failText: 'Your hours say different things in different places, so AI may tell customers to call first instead of naming you.',
+    fix: 'Make your hours the same everywhere they appear, including your Google profile.',
   },
   {
     id: 'address-shown', group: 'customer_basics', points: 3,
@@ -111,11 +129,23 @@ export const CHECKS = Object.freeze([
     fix: "Claim your free listing and work through the fixes below. That gives AI more to read. It can take days to weeks, and we can't promise AI will name you.",
   },
   {
-    id: 'google-profile', group: 'google_profile', points: 15,
+    id: 'google-profile', group: 'google_profile', points: 8,
     label: 'Google business profile',
     passText: 'Your Google business profile looks complete.',
     failText: 'Your Google business profile needs work.',
     fix: 'Fill in your Google business profile with the same name, phone and hours as your website.',
+  },
+]);
+
+/**
+ * Advice shown in every report. It is not a Check: no data behind it and no
+ * points. It never says we looked at the Google profile.
+ */
+export const STANDING_FIXES = Object.freeze([
+  {
+    id: 'monthly-activity',
+    label: 'Every month',
+    text: "Reply to your reviews and add a photo to your Google profile at least once a month. AI assistants treat recent owner activity as a sign you're still open.",
   },
 ]);
 
@@ -136,6 +166,39 @@ const plainAgent = agent => (AGENT_OWNER[agent] ? `${AGENT_OWNER[agent]} (${agen
 
 const WEBSITE_IDS = CHECKS.filter(c => !['ai-named', 'google-profile'].includes(c.id)).map(c => c.id);
 const TEXT_BASED = new Set(['one-headline', 'hours-shown', 'address-shown', 'call-button']);
+
+const HOURS_PLACES = Object.freeze({
+  text: 'your home page',
+  label: 'your business label for AI',
+  listing: 'your free listing in our directory',
+});
+const upperFirst = text => text.charAt(0).toUpperCase() + text.slice(1);
+
+/**
+ * hours-match. Fails only when two places clearly give different hours for
+ * the same day; anything unclear is "not checked".
+ */
+function hoursMatchResult(facts, listing) {
+  const sources = [];
+  const text = facts.scriptBuilt ? null : hoursFromText(facts.text);
+  if (text) sources.push({ label: HOURS_PLACES.text, hours: text });
+  const label = hoursFromStructured(facts.jsonLd?.business?.hoursParts);
+  if (label) sources.push({ label: HOURS_PLACES.label, hours: label });
+  const listed = listing ? hoursFromListing(listing.hours) : null;
+  if (listed) sources.push({ label: HOURS_PLACES.listing, hours: listed });
+  if (sources.length < 2) {
+    return notChecked('hours-match', 'We found your hours in fewer than two places we could read, so there was nothing to compare.');
+  }
+  const { compared, mismatch } = compareHours(sources);
+  if (mismatch) {
+    const day = DAY_LABELS[mismatch.day];
+    return fail('hours-match', `${upperFirst(mismatch.a.label)} says ${day} ${valueText(mismatch.av)}. ${upperFirst(mismatch.b.label)} says ${day} ${valueText(mismatch.bv)}. ${byId['hours-match'].failText}`);
+  }
+  if (compared === 0) return notChecked('hours-match', "We couldn't line up the same days in two places, so we couldn't compare your hours.");
+  return pass('hours-match', `Your hours say the same thing on ${andList(sources.map(s => s.label))}.`);
+}
+
+const andList = xs => (xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
 
 const SCRIPT_BUILT_REASON = "your page loads its words in a way this check can't read yet";
 const UNREACHABLE_REASON = "We couldn't reach your website.";
@@ -166,10 +229,15 @@ const codePoints = text => Array.from(text).length;
  *   llms: { status: number, contentType?: string, text?: string }|null,
  *   input: { city: string, service: string, website: string|null },
  *   failure?: string,
+ *   now?: number, the app clock's time, for the freshness Check
+ *   lastModified?: string, the home page's Last-Modified header, if any
+ *   listing?: object|null, this business's listing in our directory, when clearly matched
  * }} args
  * @returns {{ id: string, result: 'pass'|'fail'|'not_checked', detail: string }[]}
  */
-export function runWebsiteChecks({ facts, robots, llms, input, failure }) {
+export function runWebsiteChecks({
+  facts, robots, llms, input, failure, now = Date.now(), lastModified, listing = null,
+}) {
   const google = notChecked('google-profile', 'Google check coming soon');
   if (!input?.website) {
     return [...WEBSITE_IDS.map(id => notChecked(id, 'No website given')), google];
@@ -233,9 +301,15 @@ export function runWebsiteChecks({ facts, robots, llms, input, failure }) {
     return described / f.imgCount >= 0.8
       || `${f.imgMissingAlt} of ${f.imgCount} pictures have no description.`;
   }));
+  if (!facts) out.push(notChecked('site-fresh', homeReason));
+  else {
+    const fresh = judgeFreshness(facts, { now: Number(now), lastModified });
+    out.push({ id: 'site-fresh', ...fresh });
+  }
   out.push(home('share-picture', f => f.ogImage !== ''));
   out.push(home('tap-to-call', f => f.telLinks.length > 0));
   out.push(home('hours-shown', f => HOURS_PATTERN.test(f.text)));
+  out.push(facts ? hoursMatchResult(facts, listing) : notChecked('hours-match', homeReason));
   out.push(home('address-shown', f => STREET_PATTERN.test(f.text)));
   out.push(home('call-button', f => f.ctaLabels.some(label => CTA_PATTERN.test(label))));
 
