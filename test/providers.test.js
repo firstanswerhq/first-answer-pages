@@ -1252,3 +1252,17 @@ describe('refused calls log a safe error label only', () => {
     });
   });
 });
+
+test('error label: words beat numbers, and sentence-like codes are not logged', async () => {
+  await withFetch(async () => jsonResponse({ error: { code: 403, status: 'PERMISSION_DENIED', message: 'x' } }, 403), async () => {
+    const provider = createPerplexityAssistantProvider({ apiKey: 'k', timeoutMs: 1000 });
+    const out = await captureOutput(async () => { await assert.rejects(() => provider.ask({ prompt: 'q' })); });
+    assert.match(out, /error=PERMISSION_DENIED/);
+  });
+  await withFetch(async () => jsonResponse({ error: { type: 'Incorrect API key provided: pplx-123' } }, 401), async () => {
+    const provider = createPerplexityAssistantProvider({ apiKey: 'k', timeoutMs: 1000 });
+    const out = await captureOutput(async () => { await assert.rejects(() => provider.ask({ prompt: 'q' })); });
+    assert.match(out, /error=other/);
+    assert.doesNotMatch(out, /Incorrect|pplx/);
+  });
+});

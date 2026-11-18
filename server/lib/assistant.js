@@ -156,7 +156,6 @@ function logShape(provider, data) {
   process.stderr.write(`[assistant] provider=${provider} stop=${clean(data?.stop_reason)} blocks=${blocks || 'none'} out=${out}\n`);
 }
 
-/** One fetch call; returns parsed response JSON. Logs name and status only. */
 const USER_AGENT = 'FirstAnswerPages/1.0 (+https://firstanswerpages.com)';
 
 /**
@@ -171,10 +170,15 @@ async function errorKind(res) {
   let data;
   try { data = JSON.parse(text); } catch { return 'not-json'; }
   const err = data?.error ?? data;
-  const kind = [err?.type, err?.code, err?.status].find(v => typeof v === 'string' || typeof v === 'number');
-  return kind === undefined ? 'unknown' : String(kind).replace(/[^A-Za-z0-9_]/g, '').slice(0, 40) || 'unknown';
+  const vals = [err?.type, err?.code, err?.status];
+  const kind = vals.find(v => typeof v === 'string') ?? vals.find(v => typeof v === 'number');
+  if (kind === undefined) return 'unknown';
+  // A code looks like one word; anything sentence-like could quote input, so it is not logged.
+  if (typeof kind === 'string' && !/^[A-Za-z0-9_.-]{1,64}$/.test(kind)) return 'other';
+  return String(kind).replace(/[^A-Za-z0-9_]/g, '').slice(0, 40) || 'unknown';
 }
 
+// One fetch call; returns parsed response JSON. Logs name, status and, on a refusal, a safe error label.
 async function callProvider(name, url, headers, body, timeoutMs, outerSignal) {
   const ctrl = new AbortController();
   // timeoutMs null: the caller owns the deadline and passes it in outerSignal.
