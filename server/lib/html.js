@@ -6,7 +6,7 @@ import { getCategories } from '../data.js';
 import { DEFAULT_SITE_NAME } from './config.js';
 import { formatFoundersDeadline } from './founders.js';
 import { formatFee } from './trust.js';
-import { confirmationView } from './confirmation.js';
+import { confirmationView, confirmationLead } from './confirmation.js';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -297,11 +297,7 @@ function stamp(verification, id, now) {
   const hash = escapeHtml(verification.hash);
   const href = `/api/verify/${encodeURIComponent(id)}?hash=${encodeURIComponent(verification.hash)}`;
   // Over 90 days old: say when, never that it is current. Older listings without a field list keep the general line.
-  const title = !view.current
-    ? `Last confirmed by the business on <span class="stamp-date">${date}</span>.`
-    : view.fields
-      ? `${escapeHtml(view.fields)} confirmed by the business on <span class="stamp-date">${date}</span>.`
-      : `Details confirmed by the business <span class="stamp-date">${date}</span>`;
+  const title = `${escapeHtml(confirmationLead(view))} <span class="stamp-date">${date}</span>.`;
   return `<aside class="stamp">
       <p class="stamp-title">${title}</p>
       <details class="stamp-details"><summary>Details for AI tools</summary>

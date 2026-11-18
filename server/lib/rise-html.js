@@ -210,7 +210,7 @@ ${hoursRows}
     </fieldset>
     <div class="confirm">
       <h2>Send for review</h2>
-      <p>Confirming saves your changes and sends this listing to us for review. We review every listing before it goes live. Once approved it shows a "Details confirmed by the business" stamp.</p>
+      <p>Confirming saves your changes and sends this listing to us for review. We review every listing before it goes live. Once approved, it shows a stamp saying which details you confirmed and when.</p>
       <button type="submit" formaction="${base}">Save changes</button>
       <button type="submit" formaction="${base}/confirm">Confirm and send for review</button>
     </div>
@@ -232,18 +232,25 @@ ${hoursRows}
  * were last confirmed, and a button to confirm the same details again today.
  * @param {string} draftId
  * @param {{ current: boolean, date: string, fields: string }} view
- * @param {{ done?: boolean }} [opts] done: the owner just pressed the button
+ * @param {{ done?: boolean|'same', contactEmail?: string }} [opts]
+ *   done: true when the owner just confirmed, 'same' when they had already confirmed in the last day
  * @returns {string}
  */
-export function stillCorrectBlock(draftId, view, { done = false } = {}) {
+export function stillCorrectBlock(draftId, view, { done = false, contactEmail } = {}) {
   const what = view.fields ? view.fields.toLowerCase() : 'details';
+  const one = Boolean(view.fields) && !view.fields.includes(' and ') && !view.fields.includes(',');
   const when = view.current
-    ? `Your ${what} ${view.fields && !view.fields.includes(' and ') ? 'was' : 'were'} confirmed on ${view.date}.`
-    : `Your ${what} ${view.fields && !view.fields.includes(' and ') ? 'was' : 'were'} last confirmed on ${view.date}. That is more than 90 days ago, so the listing no longer shows it as current.`;
-  const note = done ? '<p class="notice saved-note" role="status">Thanks. Your details are confirmed as of today.</p>\n  ' : '';
+    ? `Your ${what} ${one ? 'was' : 'were'} confirmed on ${view.date}.`
+    : `Your ${what} ${one ? 'was' : 'were'} last confirmed on ${view.date}. That is more than 90 days ago, so your listing no longer shows ${one ? 'it' : 'them'} as current.`;
+  const note = done === 'same'
+    ? '<p class="notice saved-note" role="status">You already confirmed your details in the last day. Nothing changed.</p>\n  '
+    : done ? '<p class="notice saved-note" role="status">Thanks. Your details are confirmed as of today.</p>\n  ' : '';
+  const email = contactEmail
+    ? `<a href="mailto:${escapeHtml(contactEmail)}">email us</a>`
+    : '<a href="/about">contact us</a>';
   return `${note}<p>${escapeHtml(when)}</p>
+  <p>Your listing shows these details as current for 90 days. Save this page. Come back and press "Yes, still correct" whenever your details are still right. If something changed, ${email}.</p>
   <form method="POST" action="/rise/drafts/${encodeURIComponent(draftId)}/still-correct">
-    <button type="submit" class="button">Still correct</button>
-  </form>
-  <p class="hint">Check your listing first. Press the button only if everything on it is still right. If something changed, contact us.</p>`;
+    <button type="submit" class="button">Yes, still correct</button>
+  </form>`;
 }

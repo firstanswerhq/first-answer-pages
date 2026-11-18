@@ -188,12 +188,12 @@ Each listing page loads `/js/webmcp.js`. In a browser that supports WebMCP, it r
 
 ### The "Details confirmed by the business" stamp (`/api/verify/:id`)
 
-A listing confirmed by its owner (through `/rise`) shows a stamp that says which details were confirmed and when, for example "Phone, address and hours confirmed by the business on Nov 18, 2026.", plus a SHA-256 hash of the listing. The JSON-LD on the page carries the same hash as `identifier` and the date as `dateModified`. Listings confirmed before this change have no field list and keep the line "Details confirmed by the business" with the date.
+A listing confirmed by its owner (through `/rise`) shows a stamp that says which details were confirmed and when, for example "Phone, address and hours confirmed by the business on Nov 18, 2026.", plus a SHA-256 hash of the listing. The JSON-LD on the page carries the same hash as `identifier` and the date as `dateModified`. Listings confirmed before this change have no field list and read "Details confirmed by the business on <date>." The Séance page uses the same line and the same 90-day rule.
 
 - **90-day rule.** A confirmation more than 90 days old is not shown as current. The stamp reads "Last confirmed by the business on <date>." and `/llms.txt` drops the "yes". `dateModified` stays the real confirmation date; it is never moved forward on its own.
-- **Still correct.** The owner's private draft link (`/rise/drafts/:id`, the page that says "Your listing is live") shows when the details were last confirmed and a **Still correct** button (`POST /rise/drafts/:id/still-correct`). Pressing it confirms the same details again as of today, which moves the stamp date, `dateModified` and the hash. It uses the `POST /rise` rate limit. Nothing is emailed or texted.
+- **Still correct.** The owner's private draft link (`/rise/drafts/:id`, the page that says "Your listing is live") shows when the details were last confirmed and a **Yes, still correct** button (`POST /rise/drafts/:id/still-correct`). Pressing it confirms the same details again as of today, which moves the stamp date, `dateModified` and the hash. A second press within 24 hours changes nothing. The Séance keeps splitting its runs into before and after at the first confirmation date (`firstVerifiedDate`), so pressing the button never relabels its history. It uses the `POST /rise` rate limit. Nothing is emailed or texted.
 
-- `GET /api/verify/:id` returns `{ id, verified, verifiedDate, hash, match }`.
+- `GET /api/verify/:id` returns `{ id, verified, verifiedDate, hash, match }`. For a confirmed listing it also returns `current` (`false` once the confirmation is over 90 days old) and `confirmedFields` (`null` for older listings). `GET /api/listings/:id` and the MCP `get_listing` tool add the same two fields.
 - `GET /api/verify/:id?hash=...` also compares your hash with the current one. `match` is `true` or `false`, or `null` when you send no hash. The comparison ignores letter case and surrounding spaces.
 - If the listing changes after confirmation, the hash changes and an old hash no longer matches.
 
@@ -216,8 +216,9 @@ A free check for one local business. The owner types the business name, city, st
 - whether an AI assistant names the business when asked for the best business like it in that city, and who it names instead;
 - whether the business's website lets AI assistants in (`robots.txt`), labels its name and phone in a way AI can read, and has an `llms.txt` info sheet;
 - whether the home page has the search and customer basics (city and service in the title, a tap-to-call phone number, hours, address, a call or book button);
-- whether the hours say the same thing everywhere we can read them: the home page text, the business label (JSON-LD `openingHours` / `openingHoursSpecification`), and the business's listing in this directory when the website's phone, city and state match exactly one listing. It fails only when two places clearly give different hours for the same day; anything unclear is "Not checked". A failed hours check is listed first under "Fix these first";
-- signs the site is kept up: a copyright year, `dateModified` in the business label, an "updated" date on the page, or the server's `Last-Modified` header. A copyright year older than last year fails. No date at all is a note, not a fail.
+- whether the hours say the same thing everywhere we can read them: the home page text, the business label (JSON-LD `openingHours` / `openingHoursSpecification`), and the business's listing in this directory when the website's phone, city and state match exactly one owner listing whose name looks the same (or whose website domain is the same). Sample listings are never used. It fails only when two places clearly give different hours for the same day; anything unclear is "Not checked". A failed hours check is listed first under "Fix these first";
+- hours written before their days ("9am-5pm Mon-Fri"), and holiday, seasonal or appointment hours, are not read from page text;
+- signs the site is kept up: a copyright year ("© 2010 - Present", "© 2019-26" and "© 2015, 2026" count as their newest year), `dateModified` in the business label, an "updated" date on the page, or the server's `Last-Modified` header. A copyright year older than last year fails. No date at all is a note, not a fail.
 
 Every report also has one piece of monthly advice that is not a check and is not scored: reply to reviews and add a photo to the Google profile at least once a month. The Grader does not look at Google profiles.
 
@@ -352,7 +353,7 @@ The owner tools are the one place the web layer writes files. It writes only the
 - `drafts.json` owner drafts from `/rise`
 - `pending.json` drafts waiting for review
 - `published.json` owner listings an admin approved
-- `verified.json` for each confirmed listing: the details-confirmed date and time (`verifiedDate`, `verifiedAt`, `confirmedAt`) and which details were confirmed (`confirmedFields`, such as `["phone", "address", "hours"]`)
+- `verified.json` for each confirmed listing: the details-confirmed date and time (`verifiedDate`, `verifiedAt`, `confirmedAt`) and which details were confirmed (`confirmedFields`, such as `["phone", "address", "hours"]`), plus `firstVerifiedDate` once the owner has pressed "Yes, still correct"
 - `quotes.json` quote requests
 - `seance.json` Séance run history
 - `grades.json` Grader reports (deleted after 90 days)

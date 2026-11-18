@@ -282,11 +282,18 @@ export function createGrader({
 
   // ---- website part --------------------------------------------------------
 
-  /** This business's listing in our directory, only when the website's phone, city and state clearly match one. */
+  /**
+   * This business's listing in our directory, only when the website's phone, city and state
+   * match one owner listing whose name looks the same (or whose website domain is the same).
+   * Sample listings are never used.
+   */
   function matchedListing(facts, input) {
     if (!facts || typeof store.getListings !== 'function') return null;
     const phones = [facts.jsonLd?.business?.telephone, ...(facts.telLinks ?? []).slice(0, 5)].filter(Boolean);
-    return findListingFor(store.getListings(), { phones, city: input.city, state: input.state });
+    const owned = store.getListings().filter(l => !(typeof store.isSeed === 'function' && store.isSeed(l.id)));
+    return findListingFor(owned, {
+      phones, city: input.city, state: input.state, name: input.name, website: input.website ?? '',
+    });
   }
 
   /** Everything runWebsiteChecks needs from one website read. */

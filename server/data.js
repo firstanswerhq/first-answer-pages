@@ -232,6 +232,12 @@ export function createDataStore({
     const v = verifiedEntry(id);
     return v && typeof v === 'object' && typeof v.verifiedAt === 'string' ? v.verifiedAt : undefined;
   };
+  /** The date of the FIRST confirmation (YYYY-MM-DD); "Still correct" never moves it. */
+  const getFirstVerifiedDate = id => {
+    const v = verifiedEntry(id);
+    if (v && typeof v === 'object' && typeof v.firstVerifiedDate === 'string') return v.firstVerifiedDate;
+    return getVerifiedDate(id);
+  };
   /**
    * Which details the business confirmed and when: { confirmedAt, confirmedFields }.
    * Older entries have no confirmedFields (null), and confirmedAt falls back to verifiedAt.
@@ -409,11 +415,13 @@ export function createDataStore({
     });
   }
 
+  const RECONFIRM_MIN_MS = 24 * 60 * 60 * 1000;
   /**
    * The owner says the listing is still correct: the same details are
    * confirmed again as of now. Only a listing confirmed before can be
    * confirmed again. The tamper-check date moves with it, so the hash changes.
-   * @returns {Promise<{ status: 200|404|409, confirmedAt?: string, confirmedFields?: string[] }>}
+   * A second press within 24 hours changes nothing and returns `unchanged: true`.
+   * @returns {Promise<{ status: 200|404|409, unchanged?: boolean, confirmedAt?: string, confirmedFields?: string[] }>}
    */
   function reconfirmListing(id) {
     return withLock('publish', async () => {
@@ -422,12 +430,29 @@ export function createDataStore({
       if (!Object.hasOwn(state.verified, id)) return { status: 409 };
       const at = new Date(clock.now()).toISOString();
       let saved;
+      let unchanged = false;
       const verifiedNext = await updateJsonFile(file('verified.json'), map => {
-        const old = Object.hasOwn(map, id) && map[id] && typeof map[id] === 'object' ? map[id] : {};
+        const raw = Object.hasOwn(map, id) ? map[id] : undefined;
+        const old = raw && typeof raw === 'object' ? raw : {};
+        const lastMs = Date.parse(old.confirmedAt ?? old.verifiedAt ?? '');
+        // A second press within a day changes nothing (no new date, no new hash).
+        if (Number.isFinite(lastMs) && clock.now() - lastMs < RECONFIRM_MIN_MS && clock.now() >= lastMs) {
+          saved = old;
+          unchanged = true;
+          return;
+        }
         const fields = cleanFields(old.confirmedFields) ?? confirmedFieldsFor(listing);
-        saved = { ...old, verifiedDate: todayUtc(), verifiedAt: at, confirmedAt: at, confirmedFields: fields };
+        // The first confirmation date is kept so the Séance's before/after split never moves.
+        const first = typeof old.firstVerifiedDate === 'string' ? old.firstVerifiedDate
+          : typeof old.verifiedDate === 'string' ? old.verifiedDate
+            : typeof raw === 'string' ? raw : undefined;
+        saved = {
+          ...old, ...(first ? { firstVerifiedDate: first } : {}),
+          verifiedDate: todayUtc(), verifiedAt: at, confirmedAt: at, confirmedFields: fields,
+        };
         map[id] = saved;
       }, { ...io, fallback: {} });
+      if (unchanged) return { status: 200, unchanged: true, confirmedAt: saved.confirmedAt ?? saved.verifiedAt, confirmedFields: saved.confirmedFields };
       swap({ verified: Object.freeze({ ...verifiedNext }) });
       return { status: 200, confirmedAt: saved.confirmedAt, confirmedFields: saved.confirmedFields };
     });
@@ -621,7 +646,7 @@ export function createDataStore({
   }
 
   return {
-    getListings, getCategories, findById, searchListings, getVerifiedDate, getVerifiedAt, getConfirmation, isSeed,
+    getListings, getCategories, findById, searchListings, getVerifiedDate, getVerifiedAt, getFirstVerifiedDate, getConfirmation, isSeed,
     getFounder, getFoundersStatus, getTrustRecord, updateTrustRecord, findTrustIds, getTrustStatus,
     publishDraft, submitDraft, rejectDraft, reconfirmListing, unpublish, updatePublished, reload, withLock, collection,
     pruneExpired,

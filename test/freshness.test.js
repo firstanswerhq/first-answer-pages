@@ -64,6 +64,33 @@ test('hours are read from page text, the business label and a listing', () => {
   assert.deepEqual([...listed], [[0, '420-1020'], [6, 'closed']]);
 });
 
+test('hours written before their days are never paired with the wrong days', () => {
+  assert.equal(hoursFromText('Hours: 9am-5pm Mon-Fri, 10am-2pm Sat'), null);
+  assert.equal(hoursFromText('Closed Sun, Mon-Sat 9am-6pm'), null);
+  // The usual order still reads, including "Sun closed" in the middle.
+  assert.deepEqual([...hoursFromText('Sun closed Mon 9am-5pm')], [[6, 'closed'], [0, '540-1020']]);
+  assert.equal(hoursFromText('Mon-Fri 8am-5pm Sat 9am-1pm').get(5), '540-780');
+  const r = check(page({ text: 'Hours: 9am-5pm Mon-Fri, 10am-2pm Sat', ld: label({ openingHours: 'Mo-Fr 09:00-17:00, Sa 10:00-14:00' }) }));
+  assert.equal(r['hours-match'].result, 'not_checked');
+});
+
+test('holiday, seasonal and appointment hours are not read as regular hours', () => {
+  for (const t of [
+    'Holiday hours: Fri 9am-12pm', 'Thanksgiving hours Thu 9am-12pm', 'Summer hours: Mon-Fri 7am-3pm',
+    'Mon-Thu 8am-5pm. (Sat 9am-12pm May-Sept)', 'Sat 10am-2pm by appointment only', 'Christmas Eve: Wed 8am-noon',
+  ]) assert.equal(hoursFromText(t), null, t);
+  const r = check(page({ text: 'Holiday hours: Mon-Fri 10am-2pm', ld: label({ openingHours: 'Mo-Fr 08:00-17:00' }) }));
+  assert.notEqual(r['hours-match'].result, 'fail');
+});
+
+test('"Su 00:00-00:00" in openingHours means closed, the same as in openingHoursSpecification', () => {
+  const ld = hoursFromStructured({ text: ['Mo-Sa 09:00-17:00, Su 00:00-00:00'], spec: [] });
+  assert.equal(ld.get(6), 'closed');
+  const r = check(page({ text: 'Mon-Sat 9am-5pm, Sunday closed', ld: label({ openingHours: 'Mo-Sa 09:00-17:00, Su 00:00-00:00' }) }));
+  assert.equal(r['hours-match'].result, 'pass');
+  assert.equal(readDayValue('12am-12am'), null, 'unclear in page text');
+});
+
 test('unclear hours are left out instead of guessed', () => {
   assert.equal(readDayValue('9-5'), null, 'no am/pm');
   assert.equal(readDayValue('9-5pm'), null, 'only one side has am/pm');
@@ -84,7 +111,7 @@ test('hours-match fails with plain words when two places clearly differ', () => 
   assert.equal(r['hours-match'].result, 'fail');
   assert.equal(r['hours-match'].detail,
     'Your home page says Monday 8 AM to 5 PM. Your business label for AI says Monday 9 AM to 5 PM. '
-    + 'Your hours say different things in different places, so AI may tell customers to call first instead of naming you.');
+    + "Your hours don't match, so customers and AI can't tell which ones are right.");
   assert.match(checkById('hours-match').fix, /including your Google profile/);
 });
 
@@ -105,20 +132,29 @@ test('hours-match is "not checked", never failed, when it cannot compare', () =>
   assert.equal(check(null)['hours-match'].result, 'not_checked');
 });
 
-test('hours-match also compares the business\'s listing in our directory', () => {
+test('hours-match also compares the business\'s listing in our directory, by name', () => {
   const facts = page({ text: 'Open Mon-Fri 8am-5pm', ld: label() });
-  const listing = { hours: { monday: '7am-5pm' } };
+  const listing = { name: 'Acme Roofing', hours: { monday: '7am-5pm' } };
   const r = check(facts, { listing });
   assert.equal(r['hours-match'].result, 'fail');
-  assert.match(r['hours-match'].detail, /Your free listing in our directory says Monday 7 AM to 5 PM\./);
+  assert.match(r['hours-match'].detail, /Your listing in our directory \(Acme Roofing\) says Monday 7 AM to 5 PM\./);
+  assert.match(r['hours-match'].detail, /If the hours in our directory are wrong, contact us to change them\.$/);
+  // No listing involved: no directory sentence.
+  const plain = check(page({ text: 'Open Mon-Fri 8am-5pm', ld: label({ openingHours: 'Mo-Fr 09:00-17:00' }) }));
+  assert.doesNotMatch(plain['hours-match'].detail, /our directory/);
 });
 
 test('a listing is used only when phone, city and state clearly match one listing', () => {
   const a = { id: 'a', phone: '(615) 555-0100', city: 'Nashville', state: 'TN' };
   const b = { id: 'b', phone: '615.555.0100', city: 'Nashville', state: 'TN' };
   const other = { id: 'c', phone: '(615) 555-0100', city: 'Memphis', state: 'TN' };
-  const who = { phones: ['tel:+16155550100'], city: 'nashville', state: 'tn' };
+  for (const l of [a, b, other]) l.name = 'Acme Roofing';
+  const who = { phones: ['tel:+16155550100'], city: 'nashville', state: 'tn', name: 'Acme Roofing LLC' };
   assert.equal(findListingFor([a, other], who), a);
+  // Same phone, city and state but a different business name: not used.
+  assert.equal(findListingFor([{ ...a, name: 'Zed Plumbing' }], who), null);
+  // A different name is fine when the website domain is the same.
+  assert.equal(findListingFor([{ ...a, name: 'Zed Plumbing', website: 'https://www.acme.example/' }], { ...who, website: 'acme.example' })?.id, 'a');
   assert.equal(findListingFor([a, b], who), null, 'two matches: unsure');
   assert.equal(findListingFor([other], who), null);
   assert.equal(findListingFor([a], { ...who, phones: [] }), null);
@@ -150,6 +186,11 @@ test('copyright years and "updated" dates are read from page text', () => {
   assert.equal(copyrightYear('© 2019–2026 Acme. Copyright 2021.', 2026), 2026);
   assert.equal(copyrightYear('(c) 2031 typo', 2026), null, 'far-future years are ignored');
   assert.equal(copyrightYear('Call 2026 times', 2026), null);
+  assert.equal(copyrightYear('\u00a9 2010 - Present Acme', 2026), 2026);
+  assert.equal(copyrightYear('Copyright 2012-today', 2026), 2026);
+  assert.equal(copyrightYear('\u00a9 2019-26 Acme', 2026), 2026);
+  assert.equal(copyrightYear('\u00a9 2015, 2026 Acme', 2026), 2026);
+  assert.equal(copyrightYear('\u00a9 2015, 2018 Acme', 2026), 2018);
   assert.deepEqual(updatedDates('Last updated: March 3, 2026. Updated on 2025-12-01. Updated 2/30/2026'),
     [Date.UTC(2026, 2, 3), Date.UTC(2025, 11, 1)]);
 });
@@ -175,6 +216,10 @@ test('site-fresh uses dateModified, "updated" dates and Last-Modified; no date i
   const none = judgeFreshness(page(), { now: NOW, lastModified: 'Mon, 01 Jan 2018 10:00:00 GMT' });
   assert.equal(none.result, 'not_checked');
   assert.match(none.detail, /^We found no date on your home page\./);
+  const built = judgeFreshness({ text: '', scriptBuilt: true, jsonLd: {} }, { now: NOW });
+  assert.deepEqual(built, { result: 'not_checked', detail: "Your page loads its words in a way this check can't read yet." });
+  assert.equal(header.detail, "Your website's settings say the home page changed on Nov 16, 2026.");
+  assert.equal(judgeFreshness(page({ text: '\u00a9 2010 - Present' }), { now: NOW }).result, 'pass');
 });
 
 test('site-fresh runs inside the website checks with the injected clock and Last-Modified', () => {
@@ -205,7 +250,7 @@ function doneGrade(results) {
 
 test('every report has the monthly standing fix, worth no points and with no claim we checked', () => {
   assert.equal(CHECKS.some(c => c.id === STANDING_FIXES[0].id), false, 'not a Check, so never scored');
-  const text = "Reply to your reviews and add a photo to your Google profile at least once a month. AI assistants treat recent owner activity as a sign you're still open.";
+  const text = "Once a month, reply to your reviews and add a new photo to your Google business profile. Recent activity shows customers, and AI, that you're still open.";
   assert.equal(STANDING_FIXES[0].text, text);
   const allPass = doneGrade(CHECKS.filter(c => c.id !== 'google-profile').map(c => ({ id: c.id, result: 'pass', detail: c.passText })));
   const someFail = doneGrade([{ id: 'summary', result: 'fail', detail: 'x' }, { id: 'tap-to-call', result: 'pass', detail: 'y' }]);
@@ -213,7 +258,16 @@ test('every report has the monthly standing fix, worth no points and with no cla
     const html = reportPage(grade, { unlocked: true });
     assert.ok(html.includes(text.replace("'", '&#39;')) || html.includes(text), 'standing fix shown');
     assert.doesNotMatch(html, /we (checked|looked at) your Google/i);
+    // Shown as a row like the fixes, inside the same box.
+    assert.match(html, /<section class="grade-top-fails">[\s\S]*<li><strong>Every month\.<\/strong> Once a month/);
   }
+  const html = reportPage(someFail, { unlocked: true });
+  assert.ok(html.indexOf('Once a month') < html.indexOf('Not a computer person?'), 'before the hint');
+});
+
+test('the about page says we compare hours with a matching listing', async () => {
+  const { aboutPage } = await import('../server/lib/grade-html.js');
+  assert.match(aboutPage(), /We also compare your hours with your listing in our directory, if we find one with the same phone, name, city and state\./);
 });
 
 test('a failed hours-match is listed first under "Fix these first"', () => {
@@ -235,6 +289,12 @@ const listing = {
   address: '12 Main Street', hours: { monday: '8am-5pm' }, services: ['Roof repair'],
   serviceArea: 'Nashville', description: 'We fix roofs.', city: 'Nashville', state: 'TN',
 };
+
+test('the owner review page says the stamp will name the details and the date', async () => {
+  const { reviewPage } = await import('../server/lib/rise-html.js');
+  const html = reviewPage({ id: 'd1', status: 'draft', fields: {}, missingFields: [] }, []);
+  assert.match(html, /Once approved, it shows a stamp saying which details you confirmed and when\./);
+});
 
 test('confirmed fields are named in plain words', () => {
   assert.deepEqual(confirmedFieldsFor(listing), ['phone', 'address', 'hours']);
@@ -259,7 +319,7 @@ test('the stamp names what was confirmed and when; over 90 days it says "last co
   assert.doesNotMatch(old, /Phone, address and hours confirmed/);
   // Older listings without a field list keep the general line.
   const legacy = listingDetail(listing, undefined, { categories: [], verification: { verifiedDate: '2026-11-09', hash: 'b'.repeat(64) }, now: NOW });
-  assert.ok(legacy.includes('Details confirmed by the business <span class="stamp-date">Nov 9, 2026</span>'));
+  assert.ok(legacy.includes('Details confirmed by the business on <span class="stamp-date">Nov 9, 2026</span>.'));
 });
 
 test('dateModified is the real confirmation date and is never moved forward', () => {
@@ -331,6 +391,15 @@ function ownerForm() {
   return p.toString();
 }
 
+let rpcId = 0;
+async function callTool(env, name, args) {
+  const res = await fetch(`${env.base}/mcp`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: ++rpcId, method: 'tools/call', params: { name, arguments: args } }),
+  });
+  return (await res.json()).result;
+}
+
 const ldOf = html => JSON.parse(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec(html)[1]);
 
 test('the owner presses "Still correct" and the listing shows the new date everywhere', async () => {
@@ -356,19 +425,59 @@ test('the owner presses "Still correct" and the listing shows the new date every
   assert.ok(feed.includes('Details last confirmed by the business: 2026-08-01'));
 
   const live = await (await get(env, draftPath)).text();
-  assert.match(live, /more than 90 days ago/);
+  assert.match(live, /more than 90 days ago, so your listing no longer shows them as current\./);
   assert.ok(live.includes(`action="${draftPath}/still-correct"`));
+  assert.match(live, /Your listing shows these details as current for 90 days\. Save this page\./);
+  assert.match(live, /If something changed, <a href="\/about">contact us<\/a>\./, 'no CONTACT_EMAIL set: the contact page');
+  assert.match(live, /<button type="submit" class="button">Yes, still correct<\/button>/);
+  assert.ok(live.indexOf('See your listing') < live.indexOf('Yes, still correct'), '"See your listing" comes first');
+
+  // Over 90 days, the JSON answers say the confirmation is not current.
+  const apiOld = await (await get(env, `/api/verify/${listingId}`)).json();
+  assert.equal(apiOld.current, false);
+  assert.deepEqual(apiOld.confirmedFields, ['phone', 'address', 'hours']);
+  const mcpOld = await callTool(env, 'get_listing', { id: listingId });
+  assert.equal(mcpOld.structuredContent.verification.current, false);
+  assert.deepEqual(mcpOld.structuredContent.verification.confirmedFields, ['phone', 'address', 'hours']);
+
+  // A Séance run from before the first confirmation, and the Séance page's stamp.
+  await fs.writeFile(path.join(env.dir, 'seance.json'), JSON.stringify([{
+    id: 'run-1', listingId, prompt: 'best plumbers in Springfield', provider: 'fake',
+    timestamp: '2026-09-01T12:00:00.000Z', answer: 'An answer.', named: false,
+  }]));
+  const seanceOld = await (await get(env, `/seance/${listingId}`)).text();
+  assert.match(seanceOld, /Last confirmed by the business on Aug 1, 2026\./);
+  // The run is after the first confirmation (Aug 1) and before "Still correct" (Nov 9).
+  const tagBefore = (await (await get(env, `/api/seance/${listingId}`)).json()).runs[0].ownerConfirmation;
+  assert.equal(tagBefore, 'after owner confirmation');
 
   const pressed = await post(env, `${draftPath}/still-correct`);
   assert.equal(pressed.status, 303);
   assert.equal(pressed.headers.get('location'), `${draftPath}?confirmed=1`);
   assert.match(await (await get(env, `${draftPath}?confirmed=1`)).text(), /Your details are confirmed as of today\./);
 
+  // Pressing again the same day changes nothing.
+  const savedOnce = await fs.readFile(path.join(env.dir, 'verified.json'), 'utf8');
+  env.clock.t += 60 * 60 * 1000;
+  const again = await post(env, `${draftPath}/still-correct`);
+  assert.equal(again.headers.get('location'), `${draftPath}?confirmed=same`);
+  assert.equal(await fs.readFile(path.join(env.dir, 'verified.json'), 'utf8'), savedOnce);
+  assert.match(await (await get(env, `${draftPath}?confirmed=same`)).text(), /You already confirmed your details in the last day\. Nothing changed\./);
+  env.clock.t -= 60 * 60 * 1000;
+
+  // The Séance keeps its before/after split at the FIRST confirmation date.
+  const afterTag = (await (await get(env, `/api/seance/${listingId}`)).json()).runs[0].ownerConfirmation;
+  assert.equal(afterTag, tagBefore);
+  assert.match(await (await get(env, `/seance/${listingId}`)).text(), /Phone, address and hours confirmed by the business on Nov 9, 2026\./);
+  const api = await (await get(env, `/api/listings/${listingId}`)).json();
+  assert.equal(api.current, true);
+
   html = await (await get(env, `/listings/${listingId}`)).text();
   assert.ok(html.includes('Phone, address and hours confirmed by the business on <span class="stamp-date">Nov 9, 2026</span>.'));
   assert.equal(ldOf(html).dateModified, '2026-11-09');
   const saved = JSON.parse(await fs.readFile(path.join(env.dir, 'verified.json'), 'utf8'))[listingId];
   assert.deepEqual(saved.confirmedFields, ['phone', 'address', 'hours']);
+  assert.equal(saved.firstVerifiedDate, '2026-08-01');
   assert.equal(saved.confirmedAt, new Date(env.clock.t).toISOString());
   // The tamper check still matches the page after the new date.
   const v = await (await get(env, `/api/verify/${listingId}`)).json();

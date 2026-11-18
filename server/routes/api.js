@@ -6,6 +6,7 @@ import express, { Router } from 'express';
 import { submitQuote } from '../lib/quotes.js';
 import { verificationFor, checkHash } from '../lib/verifier.js';
 import { publicListing } from '../lib/public-listing.js';
+import { freshnessFields } from '../lib/confirmation.js';
 
 const jsonParser = express.json({ limit: '16kb' });
 
@@ -17,6 +18,7 @@ export function createApiRouter(ctx) {
   const router = Router();
   const { store } = ctx;
 
+  const now = () => (ctx.clock ? Number(ctx.clock.now()) : Date.now());
   const sendJson = (res, status, payload) =>
     res.status(status).type('application/json').send(JSON.stringify(payload));
 
@@ -52,7 +54,9 @@ export function createApiRouter(ctx) {
     // Unverified output is unchanged; confirmed listings gain two fields.
     const v = verificationFor(store, listing);
     const pub = publicListing(listing);
-    const payload = v ? { ...pub, verifiedDate: v.verifiedDate, verificationHash: v.hash } : pub;
+    const payload = v
+      ? { ...pub, verifiedDate: v.verifiedDate, verificationHash: v.hash, ...freshnessFields(v, now()) }
+      : pub;
     res.status(200).type('application/json').send(JSON.stringify(payload));
   });
 
@@ -78,6 +82,7 @@ export function createApiRouter(ctx) {
       verifiedDate: v.verifiedDate,
       hash: v.hash,
       match: checkHash(v.hash, supplied),
+      ...freshnessFields(v, now()),
     });
   });
 

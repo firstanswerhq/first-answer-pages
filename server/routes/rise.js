@@ -55,14 +55,16 @@ function livePage(draft, { verifyOn = false, fees, still = '' } = {}) {
   const prices = fees
     ? `Optional. ${formatFee(fees.founderCents)} once for Founding Members, ${formatFee(fees.yearlyCents)} a year for everyone else.`
     : undefined;
+  // "See your listing" comes first, then "Still correct", then the Verified button, so the buttons don't stack.
+  const see = `<p><a href="/listings/${encodeURIComponent(draft.listingId)}">See your listing</a></p>`;
   return messagePage(
     'Your listing is live',
     verifyOn
       ? 'Your listing has been approved and is live in the directory. Save this page now: bookmark it, or text the link to yourself. It is the only way back to get or renew the Verified stamp.'
       : 'Your listing has been approved and is live in the directory.',
-    { href: `/listings/${encodeURIComponent(draft.listingId)}`, text: 'See your listing' },
+    HOME_LINK,
     verifyOn ? { href: `/rise/drafts/${encodeURIComponent(draft.id)}/verify`, text: 'Get the Verified stamp', note: prices } : undefined,
-    still,
+    still ? `${see}\n  ${still}` : see,
   );
 }
 
@@ -131,7 +133,9 @@ export function createRiseRouter(ctx) {
     const v = listing ? verificationFor(ctx.store, listing) : null;
     if (!v) return '';
     const view = confirmationView(v, Number(ctx.clock.now()));
-    return stillCorrectBlock(draft.id, { ...view, date: formatStampDate(view.stampDate) }, { done });
+    return stillCorrectBlock(draft.id, { ...view, date: formatStampDate(view.stampDate) }, {
+      done, contactEmail: ctx.config?.contactEmail,
+    });
   }
   const liveOpts = (draft, done = false) => ({
     verifyOn: Boolean(ctx.trust), fees: ctx.config?.trust, still: stillCorrect(draft, done),
@@ -274,7 +278,8 @@ export function createRiseRouter(ctx) {
         return sendPage(res, 200, messagePage('Thanks!', pendingMessage(found.draft, ctx.config), HOME_LINK));
       }
       if (isLive(found.draft)) {
-        return sendPage(res, 200, livePage(found.draft, liveOpts(found.draft, req.query.confirmed === '1')));
+        const done = req.query.confirmed === '1' ? true : req.query.confirmed === 'same' ? 'same' : false;
+        return sendPage(res, 200, livePage(found.draft, liveOpts(found.draft, done)));
       }
       if (found.draft.status === 'rejected') {
         return sendPage(res, 200, messagePage('Not approved', 'This listing was not approved.', HOME_LINK));
@@ -384,7 +389,7 @@ export function createRiseRouter(ctx) {
       if (result.status !== 200) {
         return sendPage(res, 409, messagePage('Cannot confirm', 'This listing has not been confirmed before, so it cannot be confirmed again here.', HOME_LINK));
       }
-      res.redirect(303, `/rise/drafts/${encodeURIComponent(req.params.id)}?confirmed=1`);
+      res.redirect(303, `/rise/drafts/${encodeURIComponent(req.params.id)}?confirmed=${result.unchanged ? 'same' : '1'}`);
     } catch (err) {
       next(err);
     }

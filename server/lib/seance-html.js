@@ -5,6 +5,7 @@
  */
 
 import { layout, escapeHtml, formatStampDate } from './html.js';
+import { confirmationView, confirmationLead } from './confirmation.js';
 
 export const TAG_BEFORE = 'before owner confirmation';
 export const TAG_AFTER = 'after owner confirmation';
@@ -217,14 +218,19 @@ function runSection(run) {
  * Seance report page.
  * @param {{ id: string, name: string }} listing
  * @param {object[]} runs
- * @param {string|null|undefined} confirmedDate
+ * @param {string|null|undefined} confirmedDate the FIRST confirmation date (YYYY-MM-DD); splits runs into before and after
+ * @param {string} [verifiedAt]
+ * @param {{ confirmation?: object, now?: number }} [opts] confirmation: the latest
+ *   { verifiedDate, verifiedAt, confirmedAt, confirmedFields }; now: the app clock, for the 90-day rule
  * @returns {string} full HTML document
  */
-export function seanceReportPage(listing, runs, confirmedDate, verifiedAt) {
+export function seanceReportPage(listing, runs, confirmedDate, verifiedAt, opts = {}) {
   const { runs: tagged, groups } = buildHistory(runs, confirmedDate);
-  // Same Central-time date as the listing's Owner-confirmed stamp.
-  const confirmed = confirmedDate
-    ? `<p>Details confirmed by the business ${escapeHtml(formatStampDate({ verifiedDate: confirmedDate, verifiedAt }))}.</p>`
+  // Same wording, date and 90-day rule as the listing page's stamp.
+  const latest = opts.confirmation ?? (confirmedDate ? { verifiedDate: confirmedDate, verifiedAt } : null);
+  const view = latest ? confirmationView(latest, opts.now) : null;
+  const confirmed = view
+    ? `<p>${escapeHtml(`${confirmationLead(view)} ${formatStampDate(view.stampDate)}.`)}</p>`
     : '<p>Not yet confirmed by the owner.</p>';
   let content;
   if (tagged.length === 0) {

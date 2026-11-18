@@ -304,14 +304,17 @@ function fixSection(grade) {
       ${grade.input.website ? '' : '<p>You did not give a website. A free listing gives AI something to read about the business.</p>'}
     </section>
     ${failed
-    ? `<section class="grade-top-fails"><h2>Fix these first</h2><ul>${failed}</ul><p class="hint">Not a computer person? Send this page to whoever built your website.</p>${standingFixes('h3')}</section>`
-    : `<section class="grade-top-fails">${standingFixes('h2')}</section>`}
+    ? `<section class="grade-top-fails"><h2>Fix these first</h2><ul>${failed}${standingFixes()}</ul><p class="hint">Not a computer person? Send this page to whoever built your website.</p></section>`
+    : `<section class="grade-top-fails"><h2>Keep it up</h2><ul>${standingFixes()}</ul></section>`}
   </div>`;
 }
 
-/** Advice for every report. Not a Check, not scored, and we did not look at their Google profile. */
-function standingFixes(tag) {
-  return STANDING_FIXES.map(f => `<${tag}>${e(f.label)}</${tag}><p>${e(f.text)}</p>`).join('');
+/**
+ * Advice for every report, as rows like the fixes above it. Not a Check, not
+ * scored, and we did not look at their Google profile.
+ */
+function standingFixes() {
+  return STANDING_FIXES.map(f => `<li><strong>${e(f.label)}.</strong> ${e(f.text)}</li>`).join('');
 }
 
 function googleSection(grade) {
@@ -615,6 +618,7 @@ export function aboutPage({ contactEmail, userAgent = '' } = {}) {
     <li>The file <code>/robots.txt</code>, to see whether AI assistants are allowed in.</li>
     <li>The file <code>/llms.txt</code>, to see whether there is an info sheet for AI.</li>
   </ul>
+  <p>We also compare your hours with your listing in our directory, if we find one with the same phone, name, city and state.</p>
   <p>We read only public pages. We do not log in, fill in forms, or run the page's scripts. We send no cookies. We visit only websites on the public internet.</p>
   ${userAgent ? `<p>Our visits identify themselves as <code>${e(userAgent)}</code>.</p>` : ''}
   <p>We also ask Claude up to three questions about the best businesses of that kind in that city, and check whether the business is named. The questions name the kind of business and the city, never the business name. To read the answers, we also send each answer, with the business name, city and state, to Google's Gemini, which helps us check whether the business is named. When we can, we also ask ChatGPT, Gemini, Grok and Perplexity the same questions so you can compare; only Claude's answers count toward the score. The person who ran a check can also see Google's live answer (Gemini with Google Search). It is private to them: we never save, score or share it.</p>

@@ -13,6 +13,7 @@ import { runSeance, createSeanceStore, SeanceError } from '../lib/seance.js';
 import { buildHistory, seanceReportPage } from '../lib/seance-html.js';
 import { messagePage } from '../lib/rise-html.js';
 import { publicListing } from '../lib/public-listing.js';
+import { verificationFor } from '../lib/verifier.js';
 
 /**
  * One Séance run for a listing, shared by POST /seance/run (bearer token) and
@@ -93,12 +94,16 @@ export function createSeanceRouter(ctx) {
     });
   });
 
+  const firstConfirmed = id => (typeof ctx.store.getFirstVerifiedDate === 'function'
+    ? ctx.store.getFirstVerifiedDate(id) : ctx.store.getVerifiedDate(id));
+
   router.get('/api/seance/:id', async (req, res, next) => {
     try {
       const listing = ctx.store.findById(req.params.id);
       if (!listing) return res.status(404).json({ error: 'Listing not found' });
       const runs = await history.list(listing.id);
-      const { runs: tagged, groups } = buildHistory(runs, ctx.store.getVerifiedDate(listing.id));
+      // Before/after is split at the FIRST confirmation; "Still correct" never moves it.
+      const { runs: tagged, groups } = buildHistory(runs, firstConfirmed(listing.id));
       res.json({ id: listing.id, runs: tagged, groups });
     } catch (err) {
       next(err);
@@ -115,7 +120,10 @@ export function createSeanceRouter(ctx) {
       }
       const runs = await history.list(listing.id);
       const verifiedAt = typeof ctx.store.getVerifiedAt === 'function' ? ctx.store.getVerifiedAt(listing.id) : undefined;
-      res.type('html').send(seanceReportPage(publicListing(listing), runs, ctx.store.getVerifiedDate(listing.id), verifiedAt));
+      const confirmation = verificationFor(ctx.store, listing) ?? undefined;
+      res.type('html').send(seanceReportPage(publicListing(listing), runs, firstConfirmed(listing.id), verifiedAt, {
+        confirmation, now: ctx.clock ? Number(ctx.clock.now()) : Date.now(),
+      }));
     } catch (err) {
       next(err);
     }

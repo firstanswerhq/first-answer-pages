@@ -63,6 +63,18 @@ export function confirmedMs(v) {
 }
 
 /**
+ * The words before the date in the confirmation line: "Phone, address and
+ * hours confirmed by the business on", "Last confirmed by the business on"
+ * (over 90 days), or "Details confirmed by the business on" (no field list).
+ * @param {{ current: boolean, fields: string }} view
+ * @returns {string}
+ */
+export function confirmationLead(view) {
+  if (!view.current) return 'Last confirmed by the business on';
+  return view.fields ? `${view.fields} confirmed by the business on` : 'Details confirmed by the business on';
+}
+
+/**
  * How to show a confirmation.
  * @param {{ verifiedDate?: string, verifiedAt?: string, confirmedAt?: string, confirmedFields?: string[] }} v
  * @param {number} [now] the app clock's time; without it the confirmation counts as current
@@ -75,4 +87,15 @@ export function confirmationView(v, now) {
   const current = !Number.isFinite(nowMs) || !Number.isFinite(at) || nowMs - at <= CONFIRM_FRESH_DAYS * DAY_MS;
   const stampDate = { verifiedDate: v?.verifiedDate, verifiedAt: v?.confirmedAt ?? v?.verifiedAt };
   return { current, stampDate, fields: fieldsText(v?.confirmedFields) };
+}
+
+/**
+ * Two fields for JSON answers about a confirmed listing: `current` (false after
+ * 90 days) and `confirmedFields` (null for older listings without a field list).
+ * @param {object} v a verification from verificationFor
+ * @param {number} [now] the app clock's time
+ * @returns {{ current: boolean, confirmedFields: string[]|null }}
+ */
+export function freshnessFields(v, now) {
+  return { current: confirmationView(v, now).current, confirmedFields: cleanFields(v?.confirmedFields) };
 }

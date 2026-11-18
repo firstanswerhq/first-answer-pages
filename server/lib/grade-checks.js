@@ -104,7 +104,7 @@ export const CHECKS = Object.freeze([
     id: 'hours-match', group: 'customer_basics', points: 5, priority: 'high',
     label: 'Hours match everywhere',
     passText: 'Your hours say the same thing in every place we checked.',
-    failText: 'Your hours say different things in different places, so AI may tell customers to call first instead of naming you.',
+    failText: "Your hours don't match, so customers and AI can't tell which ones are right.",
     fix: 'Make your hours the same everywhere they appear, including your Google profile.',
   },
   {
@@ -145,7 +145,7 @@ export const STANDING_FIXES = Object.freeze([
   {
     id: 'monthly-activity',
     label: 'Every month',
-    text: "Reply to your reviews and add a photo to your Google profile at least once a month. AI assistants treat recent owner activity as a sign you're still open.",
+    text: "Once a month, reply to your reviews and add a new photo to your Google business profile. Recent activity shows customers, and AI, that you're still open.",
   },
 ]);
 
@@ -170,8 +170,10 @@ const TEXT_BASED = new Set(['one-headline', 'hours-shown', 'address-shown', 'cal
 const HOURS_PLACES = Object.freeze({
   text: 'your home page',
   label: 'your business label for AI',
-  listing: 'your free listing in our directory',
 });
+/** The listing's place name, with its name: "your listing in our directory (Acme Roofing)". */
+const listingPlace = listing => `your listing in our directory (${String(listing.name ?? '').replace(/\s+/g, ' ').trim().slice(0, 80)})`;
+const LISTING_FIX = 'If the hours in our directory are wrong, contact us to change them.';
 const upperFirst = text => text.charAt(0).toUpperCase() + text.slice(1);
 
 /**
@@ -185,14 +187,15 @@ function hoursMatchResult(facts, listing) {
   const label = hoursFromStructured(facts.jsonLd?.business?.hoursParts);
   if (label) sources.push({ label: HOURS_PLACES.label, hours: label });
   const listed = listing ? hoursFromListing(listing.hours) : null;
-  if (listed) sources.push({ label: HOURS_PLACES.listing, hours: listed });
+  if (listed) sources.push({ label: listingPlace(listing), hours: listed, listing: true });
   if (sources.length < 2) {
     return notChecked('hours-match', 'We found your hours in fewer than two places we could read, so there was nothing to compare.');
   }
   const { compared, mismatch } = compareHours(sources);
   if (mismatch) {
     const day = DAY_LABELS[mismatch.day];
-    return fail('hours-match', `${upperFirst(mismatch.a.label)} says ${day} ${valueText(mismatch.av)}. ${upperFirst(mismatch.b.label)} says ${day} ${valueText(mismatch.bv)}. ${byId['hours-match'].failText}`);
+    const listingNote = mismatch.a.listing || mismatch.b.listing ? ` ${LISTING_FIX}` : '';
+    return fail('hours-match', `${upperFirst(mismatch.a.label)} says ${day} ${valueText(mismatch.av)}. ${upperFirst(mismatch.b.label)} says ${day} ${valueText(mismatch.bv)}. ${byId['hours-match'].failText}${listingNote}`);
   }
   if (compared === 0) return notChecked('hours-match', "We couldn't line up the same days in two places, so we couldn't compare your hours.");
   return pass('hours-match', `Your hours say the same thing on ${andList(sources.map(s => s.label))}.`);

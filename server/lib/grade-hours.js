@@ -9,6 +9,7 @@
  */
 
 import { normalizeForMatch } from './seance.js';
+import { looksLikeSameName, registeredDomain } from './name-match.js';
 
 export const DAY_LABELS = Object.freeze(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']);
 const LISTING_DAYS = Object.freeze(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']);
@@ -71,6 +72,7 @@ function rangeKey(opens, closes) {
   const o = readTime(opens);
   const c = readTime(closes);
   if (!o || !c) return null;
+  if (o.minutes === 0 && c.minutes === 0) return null; // "00:00-00:00": closed or open all day? Unclear here.
   let close = c.minutes;
   if (close === 0 || close === 1439) close = 1440;
   if (o.minutes === close) return null; // "9am-9am" says nothing
@@ -119,8 +121,17 @@ const DAY_LIST = `${DAYW}(?:${DAY_JOIN}${DAYW})?(?:\\s*(?:,|&|and|/)\\s*${DAYW}(
 const TIME_RANGE = `${CLOCK}\\s*(?:-|\u2013|\u2014|to|until|till)\\s*${CLOCK}`;
 const SEGMENT = new RegExp(
   `\\b(${DAY_LIST})\\s*[:,]?\\s*(?:from\\s+)?(closed\\b|${TIME_RANGE}(?:\\s*(?:,|&|and)\\s*${TIME_RANGE}){0,2})`,
-  'gi',
+  'gid',
 );
+/** A time range or "closed" written BEFORE the days ("9am-5pm Mon-Fri", "Closed Sun"). */
+const VALUE_FIRST = new RegExp(`(?:\\bclosed\\b|${TIME_RANGE})\\s*[:,]?\\s*(?:on\\s+)?\\b${DAYW}`, 'gi');
+
+/**
+ * Words that mean the hours nearby are not the regular weekly hours: holidays,
+ * seasons, months, special or temporary hours, or by appointment.
+ */
+const NOT_REGULAR = /\b(?:holidays?|thanksgiving|christmas|xmas|new year|easter|memorial|labor day|independence|summer|winter|fall|autumn|spring|seasons?|seasonal|temporar(?:y|ily)|special|appointments?|january|february|march|april|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sept?|oct|nov|dec|may(?=\s*(?:-|\u2013|\u2014|\d)))\b/i;
+const CONTEXT = 60; // characters looked at before and after a stretch of hours
 
 /** The days named in "Mon-Fri", "Sat & Sun", "Monday through Wednesday, Friday". */
 function daysOf(spec, short = false) {
@@ -150,17 +161,34 @@ function daysOf(spec, short = false) {
 export function hoursFromText(text) {
   const s = String(text ?? '').slice(0, MAX_TEXT);
   const map = new Map();
+  const values = []; // [start, end] of each value read as "days first, then hours"
   SEGMENT.lastIndex = 0;
   let m;
   let n = 0;
   while ((m = SEGMENT.exec(s)) !== null && n < MAX_SEGMENTS) {
     n += 1;
+    values.push(m.indices[2]);
+    // Holiday, seasonal or appointment hours are not the regular hours: skip them.
+    const around = s.slice(Math.max(0, m.index - CONTEXT), m.index + m[0].length + CONTEXT);
+    if (NOT_REGULAR.test(around)) continue;
     const days = daysOf(m[1]);
     const value = readDayValue(m[2]);
     if (days.length === 0 || value === null) continue;
     if (!put(map, days, value)) return null;
   }
-  return map.size > 0 ? map : null;
+  if (map.size === 0) return null;
+  // Hours written before their days ("9am-5pm Mon-Fri, 10am-2pm Sat", "Closed Sun, Mon-Sat 9am-6pm")
+  // would be paired with the wrong days, so a page written that way is not read at all.
+  VALUE_FIRST.lastIndex = 0;
+  let v;
+  let k = 0;
+  while ((v = VALUE_FIRST.exec(s)) !== null && k < MAX_SEGMENTS) {
+    k += 1;
+    const inside = values.some(([a, b]) => v.index >= a && v.index < b);
+    if (!inside) return null;
+    VALUE_FIRST.lastIndex = v.index + 1;
+  }
+  return map;
 }
 
 /**
@@ -181,7 +209,8 @@ export function hoursFromStructured(parts) {
     while ((m = rule.exec(s)) !== null) {
       used += m[0];
       const days = daysOf(m[1], true);
-      const value = readDayValue(m[2]);
+      // "Su 00:00-00:00" is how schema.org writes "closed", the same as in openingHoursSpecification.
+      const value = /^0?0:00\s*[-\u2013]\s*0?0:00$/.test(m[2].trim()) ? 'closed' : readDayValue(m[2]);
       if (days.length === 0 || value === null) return null;
       if (!put(map, days, value)) return null;
     }
@@ -232,19 +261,26 @@ const digits10 = phone => {
 
 /**
  * The one public listing that is clearly this business: same 10-digit phone
- * as the website, same city and same state. Anything less clear returns null.
- * @param {object[]} listings
- * @param {{ phones: string[], city: string, state: string }} who
+ * as the website, same city and same state, and either a name that looks the
+ * same or the same website domain. Anything less clear returns null.
+ * @param {object[]} listings  owner listings only (no sample listings)
+ * @param {{ phones: string[], city: string, state: string, name?: string, website?: string }} who
  * @returns {object|null}
  */
-export function findListingFor(listings, { phones, city, state }) {
+export function findListingFor(listings, {
+  phones, city, state, name = '', website = '',
+}) {
   const wanted = new Set((Array.isArray(phones) ? phones : []).map(digits10).filter(Boolean));
   if (wanted.size === 0 || !Array.isArray(listings)) return null;
   const c = normalizeForMatch(city ?? '');
   const st = String(state ?? '').trim().toUpperCase();
   if (c === '' || st === '') return null;
+  const domain = registeredDomain(website);
+  const sameBusiness = l => looksLikeSameName(l.name ?? '', { name, city, state })
+    || (domain !== '' && registeredDomain(l.website ?? '') === domain);
   const hits = listings.filter(l => l && wanted.has(digits10(l.phone))
-    && normalizeForMatch(l.city ?? '') === c && String(l.state ?? '').trim().toUpperCase() === st);
+    && normalizeForMatch(l.city ?? '') === c && String(l.state ?? '').trim().toUpperCase() === st
+    && sameBusiness(l));
   return hits.length === 1 ? hits[0] : null;
 }
 

@@ -219,7 +219,10 @@ test('/api/listings/:id adds verifiedDate and verificationHash for confirmed lis
   const verify = (await getJson(`/api/verify/${listing.id}`)).json;
   assert.equal(json.verificationHash, verify.hash);
 
-  const { verifiedDate, verificationHash, ...rest } = json;
+  // Confirmed listings also say whether the confirmation is current and which details were confirmed.
+  assert.equal(json.current, true);
+  assert.deepEqual(json.confirmedFields, ['phone']);
+  const { verifiedDate, verificationHash, current, confirmedFields, ...rest } = json;
   assert.deepEqual(rest, JSON.parse(JSON.stringify(store.findById(listing.id))));
 
   const seed = await getJson(`/api/listings/${UNCONFIRMED_ID}`);

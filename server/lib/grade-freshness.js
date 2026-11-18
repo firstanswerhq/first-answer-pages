@@ -22,18 +22,34 @@ export function dayText(ms) {
 }
 
 /**
- * The newest copyright year on the page ("© 2019-2026" counts as 2026), or null.
+ * The newest copyright year on the page, or null. Handles "\u00a9 2019-2026",
+ * "\u00a9 2019-26", "\u00a9 2015, 2026" and "\u00a9 2010 - Present" (this year).
  * Years more than one year ahead of `nowYear` are ignored as typos.
  */
 export function copyrightYear(text, nowYear) {
   const s = String(text ?? '').slice(0, MAX_TEXT);
-  const re = /(?:©|\(c\)|\bcopyright\b)\s*(?:©\s*)?(?:(?:19|20)\d{2}\s*(?:-|–|—|to)\s*)?((?:19|20)\d{2})\b/gi;
+  const YEAR = '(?:19|20)\\d{2}';
+  const JOIN = '\\s*(?:,|&|\\band\\b|-|\u2013|\u2014|\\bto\\b)\\s*';
+  const TAIL = `(?:${YEAR}|\\d{2}\\b|present\\b|today\\b|now\\b|current\\b)`;
+  const re = new RegExp(`(?:\u00a9|\\(c\\)|\\bcopyright\\b)\\s*(?:\u00a9\\s*)?(${YEAR}\\b(?:${JOIN}${TAIL}){0,5})`, 'gi');
   let best = null;
   let m;
   while ((m = re.exec(s)) !== null) {
-    const y = Number(m[1]);
-    if (y > nowYear + 1) continue;
-    if (best === null || y > best) best = y;
+    const years = [];
+    let last = null;
+    for (const part of m[1].split(new RegExp(JOIN, 'i')).map(p => p.trim().toLowerCase()).filter(Boolean)) {
+      let y = null;
+      if (/^(?:19|20)\d{2}$/.test(part)) y = Number(part);
+      else if (/^\d{2}$/.test(part) && last !== null) {
+        // "2019-26": the end year shares the century of the start year.
+        y = Math.floor(last / 100) * 100 + Number(part);
+        if (y < last) y = null;
+      } else if (['present', 'today', 'now', 'current'].includes(part)) y = nowYear;
+      if (y === null) continue;
+      last = y;
+      if (y <= nowYear + 1) years.push(y);
+    }
+    for (const y of years) if (best === null || y > best) best = y;
   }
   return best;
 }
@@ -85,7 +101,10 @@ export function judgeFreshness(facts, { now, lastModified } = {}) {
     return { result: 'fail', detail: `Your website shows © ${copyright}. That can make it look out of date to customers and AI.` };
   }
   // A server date alone never outweighs an old year people can see, so it is checked last.
-  if (recent(headerMs)) return { result: 'pass', detail: `Your web server says the home page changed on ${dayText(headerMs)}.` };
+  if (recent(headerMs)) return { result: 'pass', detail: `Your website's settings say the home page changed on ${dayText(headerMs)}.` };
+  if (facts?.scriptBuilt) {
+    return { result: 'not_checked', detail: "Your page loads its words in a way this check can't read yet." };
+  }
   return {
     result: 'not_checked',
     detail: 'We found no date on your home page. Showing the current year in your footer tells people the site is kept up.',

@@ -13,6 +13,7 @@ import {
 } from './tool-validator.js';
 import { submitQuote } from './quotes.js';
 import { verificationFor } from './verifier.js';
+import { freshnessFields } from './confirmation.js';
 import { publicListing } from './public-listing.js';
 import { DEFAULT_SITE_NAME } from './config.js';
 import { normalizeCategory, normalizeCity, categoryForQuery } from './search-match.js';
@@ -172,7 +173,7 @@ function getListing(ctx, args) {
   if (!listing) return toolFailure('Listing not found');
   const v = verificationFor(ctx.store, listing);
   const verification = v
-    ? { verified: true, verifiedDate: v.verifiedDate, hash: v.hash }
+    ? { verified: true, verifiedDate: v.verifiedDate, hash: v.hash, ...freshnessFields(v, ctx.clock ? Number(ctx.clock.now()) : Date.now()) }
     : { verified: false, verifiedDate: null, hash: null };
   // Hours: only the days the owner filled in, the same as the page and JSON-LD.
   const out = publicListing(listing);
