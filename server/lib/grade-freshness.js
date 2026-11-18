@@ -33,8 +33,8 @@ export function copyrightYear(text, nowYear) {
   const TAIL = `(?:${YEAR}|\\d{2}\\b|present\\b|today\\b|now\\b|current\\b)`;
   const re = new RegExp(`(?:\u00a9|\\(c\\)|\\bcopyright\\b)\\s*(?:\u00a9\\s*)?(${YEAR}\\b(?:${JOIN}${TAIL}){0,5})`, 'gi');
   let best = null;
-  // Years that may be a picture credit. They can never cause a fail, but a
-  // recent one still counts ("\u00a9 2026 Acme Maps & Surveying" is current).
+  // Years that may be a picture credit. They can never cause a fail, and they
+  // count only when the page has no other year ("\u00a9 2026 Acme Maps & Surveying").
   let creditBest = null;
   let m;
   while ((m = re.exec(s)) !== null) {
@@ -63,7 +63,7 @@ export function copyrightYear(text, nowYear) {
       else if (best === null || y > best) best = y;
     }
   }
-  if (creditBest !== null && creditBest >= nowYear - 1 && (best === null || creditBest > best)) return creditBest;
+  if (best === null && creditBest !== null && creditBest >= nowYear - 1) return creditBest;
   return best;
 }
 

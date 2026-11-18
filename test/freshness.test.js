@@ -221,6 +221,8 @@ test('copyright years and "updated" dates are read from page text', () => {
   assert.equal(copyrightYear('\u00a9 2026 Acme Maps & Surveying', 2026), 2026);
   assert.equal(copyrightYear('\u00a9 2026 Acme Images', 2026), 2026);
   assert.equal(copyrightYear('\u00a9 2020 Acme Maps & Surveying', 2026), null, 'an old year with a credit word still never fails');
+  assert.equal(copyrightYear('Photo \u00a9 2026 Jane Doe. \u00a9 2019 Acme', 2026), 2019, 'a recent photo credit never hides an old site year');
+  assert.equal(copyrightYear('\u00a9 2019 Acme. Photos \u00a9 2026 Unsplash', 2026), 2019);
   assert.equal(judgeFreshness(page({ text: '\u00a9 2014 Old Name Inc. \u00a9 2026 Acme | Photos by Unsplash' }), { now: NOW }).result, 'pass');
   assert.equal(judgeFreshness(page({ text: '\u00a9 2026 Acme | Photos by Unsplash' }), { now: NOW }).result, 'pass');
   assert.equal(judgeFreshness(page({ text: 'Photo \u00a9 2014 Jane Doe' }), { now: NOW }).result, 'not_checked', 'never a false fail');
