@@ -359,7 +359,7 @@ export function formatStampDate(verification) {
 function actionRow(listing, withQuote) {
   const digits = String(listing.phone ?? '').trim();
   const num = digits.replace(/\D/g, '');
-  const call = num ? `<a class="button call-button" href="tel:${digits.startsWith('+') ? '+' : ''}${num}"><span class="call-label">Tap to call</span> <span class="call-number">${escapeHtml(listing.phone)}</span></a>` : '';
+  const call = num ? `<a class="button call-button" href="tel:${digits.startsWith('+') ? '+' : ''}${num}"><span class="call-label"><span class="call-tap">Tap to </span>call</span> <span class="call-number">${escapeHtml(listing.phone)}</span></a>` : '';
   const quote = withQuote ? '<a class="button button-secondary quote-jump" href="#quote-form">Request a quote</a>' : '';
   if (!call && !quote) return '';
   return `\n    <p class="listing-actions">${[call, quote].filter(Boolean).join(' ')}</p>`;

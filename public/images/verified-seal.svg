@@ -11,7 +11,7 @@
       <circle cx="100" cy="100" r="48" stroke-width="2.2"/>
       <path d="M78 100 l 15 16 l 31 -35" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
     </g>
-    <g fill="#0C2C73" font-family="'Fira Sans Condensed','Arial Narrow',Arial,sans-serif" font-weight="700">
+    <g fill="#0C2C73" font-family="Georgia,'Times New Roman',serif" font-weight="700">
       <text font-size="17" letter-spacing="2"><textPath href="#top" startOffset="50%" text-anchor="middle" textLength="190" lengthAdjust="spacingAndGlyphs">FIRST ANSWER PAGES</textPath></text>
       <text font-size="22" letter-spacing="4"><textPath href="#bottom" startOffset="50%" text-anchor="middle" textLength="120" lengthAdjust="spacingAndGlyphs">VERIFIED</textPath></text>
       <path d="M27 104 l2.2 4.4 4.8.7-3.5 3.4.8 4.8-4.3-2.3-4.3 2.3.8-4.8-3.5-3.4 4.8-.7z"/>

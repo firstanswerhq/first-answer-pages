@@ -8,7 +8,7 @@
 @font-face {
   font-family: "Old Numbers";
   font-style: normal;
-  font-weight: 400 900;
+  font-weight: 400;
   font-display: swap;
   src: url("/fonts/rozha-one-latin-400-normal.woff2") format("woff2");
   unicode-range: U+0030-0039;
@@ -2515,7 +2515,7 @@ body::after {
 @media (max-width: 640px) {
   body::after {
     background:
-      linear-gradient(90deg, rgba(110, 70, 25, .24), transparent 5%, transparent 95%, rgba(110, 70, 25, .24)),
+      linear-gradient(90deg, rgba(110, 70, 25, .24), transparent 3%, transparent 97%, rgba(110, 70, 25, .24)),
       linear-gradient(180deg, rgba(110, 70, 25, .10), transparent 3%, transparent 97%, rgba(110, 70, 25, .14));
   }
 }
@@ -3320,8 +3320,11 @@ input, select, textarea, button, .site-nav a.nav-cta { font-family: "Old Numbers
   gap: .1rem;
   padding: .55rem 1.1rem .7rem;
   border-radius: 10px;
-  outline: 2px solid var(--ink);
-  outline-offset: 3px;
+  box-shadow: 0 0 0 3px var(--paper-light), 0 0 0 5px var(--ink);
+}
+.listing-detail .listing-actions a.call-button:focus-visible {
+  outline: 3px solid var(--rubber);
+  outline-offset: 7px;
 }
 .call-button .call-label {
   font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
@@ -3432,8 +3435,7 @@ input, select, textarea { background-image: none; }
 
 /* Desktop and mouse users can't tap: say "Call" there */
 @media (hover: hover) and (pointer: fine) {
-  .call-button .call-label { font-size: 0; letter-spacing: 0; }
-  .call-button .call-label::before { content: "Call"; font-size: .78rem; letter-spacing: .22em; }
+  .call-button .call-tap { display: none; }
 }
 
 /* Long names in the 3 columns: the number stays with the end of the name */
@@ -3454,3 +3456,31 @@ input, select, textarea { background-image: none; }
   .site-nav a.brand { min-width: 0; }
   .site-nav a.nav-cta { white-space: normal; max-width: 7.6rem; text-align: center; line-height: 1.15; flex: none; }
 }
+
+/* The worn rubber look sits on the stamp's border only, never on its words or links */
+.stamp:not(.stamp-unconfirmed) {
+  position: relative;
+  -webkit-mask-image: none;
+  mask-image: none;
+  border-color: transparent;
+  box-shadow: none;
+}
+.stamp:not(.stamp-unconfirmed)::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 3px solid var(--rubber);
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 3px var(--paper-light), inset 0 0 0 4px var(--rubber);
+  -webkit-mask-image: var(--worn);
+  mask-image: var(--worn);
+  pointer-events: none;
+}
+@media (prefers-contrast: more) { .stamp:not(.stamp-unconfirmed)::before { -webkit-mask-image: none; mask-image: none; } }
+
+/* AI answer cards: the "Scored" tag never sits on the assistant's name */
+.ai-answer-who { max-width: calc(100% - 11.5rem); }
+@media (max-width: 420px) { .ai-answer-scored { position: static; display: inline-block; margin: .2rem 0 0; } .ai-answer-who { max-width: calc(100% - 6.2rem); } }
+
+/* Very small phones: the category box keeps its words */
+@media (max-width: 340px) { .filters label { padding-left: .6rem; padding-right: .6rem; gap: .4rem; } }
