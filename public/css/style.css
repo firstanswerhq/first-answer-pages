@@ -1,93 +1,52 @@
-/* First Answer Pages — Modern Phone Book
+/* First Answer Pages — Aged Phone Book
    Hand-written CSS. No frameworks. Keeps existing class names.
-   Mobile-first. American spelling.
+   Mobile-first. American spelling. No trademarked phone-book names or marks.
+   Fonts: Source Serif 4 (headings), Inter (UI), Rozha One (numbers/scores) — all OFL.
 */
 
-/* Fonts are served from this site (no outside requests). */
-/* Old-style curvy numbers (Rozha One, SIL Open Font License). Covers the digits 0-9 only. Used where numbers are the point: the score, phone numbers, headings and numbered lists. */
-@font-face {
-  font-family: "Old Numbers";
-  font-style: normal;
-  font-weight: 400 900;
-  font-display: swap;
-  src: url("/fonts/rozha-one-latin-400-normal.woff2") format("woff2");
-  unicode-range: U+0030-0039;
-}
-
-/* Phone-book lettering: a condensed sans, like the printed white pages (Fira Sans Condensed, SIL Open Font License) */
-@font-face {
-  font-family: "Fira Sans Condensed";
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url("/fonts/fira-sans-condensed-latin-400-normal.woff2") format("woff2");
-}
-
-@font-face {
-  font-family: "Fira Sans Condensed";
-  font-style: italic;
-  font-weight: 400;
-  font-display: swap;
-  src: url("/fonts/fira-sans-condensed-latin-400-italic.woff2") format("woff2");
-}
-
-@font-face {
-  font-family: "Fira Sans Condensed";
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src: url("/fonts/fira-sans-condensed-latin-500-normal.woff2") format("woff2");
-}
-
-@font-face {
-  font-family: "Fira Sans Condensed";
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-  src: url("/fonts/fira-sans-condensed-latin-600-normal.woff2") format("woff2");
-}
-
-@font-face {
-  font-family: "Fira Sans Condensed";
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: url("/fonts/fira-sans-condensed-latin-700-normal.woff2") format("woff2");
-}
-
-@font-face {
-  font-family: "Fira Sans Condensed";
-  font-style: italic;
-  font-weight: 700;
-  font-display: swap;
-  src: url("/fonts/fira-sans-condensed-latin-700-italic.woff2") format("woff2");
-}
+/* Fonts are served from this site (no outside requests). All SIL Open Font License. */
+@font-face { font-family: "Source Serif 4"; font-style: normal; font-weight: 400; font-display: swap; src: url("/fonts/source-serif-4-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Source Serif 4"; font-style: italic; font-weight: 400; font-display: swap; src: url("/fonts/source-serif-4-latin-400-italic.woff2") format("woff2"); }
+@font-face { font-family: "Source Serif 4"; font-style: normal; font-weight: 600; font-display: swap; src: url("/fonts/source-serif-4-latin-600-normal.woff2") format("woff2"); }
+@font-face { font-family: "Source Serif 4"; font-style: normal; font-weight: 700; font-display: swap; src: url("/fonts/source-serif-4-latin-700-normal.woff2") format("woff2"); }
+@font-face { font-family: Inter; font-style: normal; font-weight: 400; font-display: swap; src: url("/fonts/inter-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: Inter; font-style: normal; font-weight: 500; font-display: swap; src: url("/fonts/inter-latin-500-normal.woff2") format("woff2"); }
+@font-face { font-family: Inter; font-style: normal; font-weight: 600; font-display: swap; src: url("/fonts/inter-latin-600-normal.woff2") format("woff2"); }
+@font-face { font-family: Inter; font-style: normal; font-weight: 700; font-display: swap; src: url("/fonts/inter-latin-700-normal.woff2") format("woff2"); }
+@font-face { font-family: "Rozha One"; font-style: normal; font-weight: 400; font-display: swap; src: url("/fonts/rozha-one-latin-400-normal.woff2") format("woff2"); }
 
 :root {
-  /* Paper & ink */
-  --color-page-bg:    #F8F1E3;   /* warm cream paper */
-  --color-surface:    #FFFEF9;   /* soft off-white cards */
-  --color-text:       #1C1917;   /* near-black */
-  --color-text-muted: #57534E;   /* secondary text */
-  --color-divider:    #44403C;   /* charcoal rules */
+  /* Aged paper & ink */
+  --color-page-bg:       #F3E6C8;   /* warmer, slightly browned cream */
+  --color-page-bg-edge:  #E8D4A8;   /* deeper edge tone */
+  --color-surface:       #FFF8EB;   /* soft aged card */
+  --color-surface-2:     #FBF0D6;   /* secondary surface */
+  --color-text:          #1A1612;   /* near-black ink */
+  --color-text-muted:    #5C5346;   /* secondary ink */
+  --color-divider:       #3D3429;   /* charcoal rule */
 
   /* Accent & status */
-  --color-primary:    #1E3A5F;   /* deep ink blue */
+  --color-primary:       #1E3A5F;   /* deep navy / ink blue */
   --color-primary-hover: #152A45;
-  --color-link:       #1E3A5F;
-  --color-success:    #2D6A4F;   /* forest green */
-  --color-success-bg: #E8F5E9;
-  --color-fail:       #9B2C2C;   /* deep brick */
-  --color-fail-bg:    #FEF2F2;
-  --color-warn:       #B45309;   /* amber */
-  --color-warn-bg:    #FFFBEB;
+  --color-link:          #1E3A5F;
+  --color-success:       #2D6A4F;
+  --color-success-bg:    #E4F0E6;
+  --color-fail:          #8B2E2E;
+  --color-fail-bg:       #F8E8E8;
+  --color-warn:          #9A5B12;
+  --color-warn-bg:       #FBF0D4;
+  --color-gold:          #B8860B;   /* founding member */
+  --color-gold-bg:       #FBF3D0;
+  --color-stamp:         #8B2E2E;   /* rubber stamp red */
 
-  /* Surfaces */
-  --color-button-text: #FFFEF9;
-  --color-focus:      #1E3A5F;
-  --radius:           4px;
-  --shadow-sm:        0 1px 2px rgba(28, 25, 23, 0.06);
-  --shadow-md:        0 4px 12px rgba(28, 25, 23, 0.08);
+  --color-button-text:   #FFF8EB;
+  --color-focus:         #1E3A5F;
+  --radius:              3px;
+  --shadow-sm:           0 1px 3px rgba(26, 22, 18, 0.08);
+  --shadow-md:           0 4px 14px rgba(26, 22, 18, 0.1);
+  --font-display:        "Source Serif 4", Georgia, "Times New Roman", serif;
+  --font-body:           Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-numbers:        "Rozha One", "Source Serif 4", Georgia, serif;
 }
 
 /* ---------- Reset & base ---------- */
@@ -104,14 +63,17 @@ html {
 
 body {
   margin: 0;
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  font-family: var(--font-body);
   font-size: 1rem;
   line-height: 1.5;
   color: var(--color-text);
-  background: var(--color-page-bg);
+  background-color: var(--color-page-bg);
+  /* Subtle aged-paper gradient + soft edge vignette */
+  background-image:
+    radial-gradient(ellipse 120% 80% at 50% 0%, transparent 40%, rgba(180, 140, 80, 0.07) 100%),
+    linear-gradient(180deg, var(--color-page-bg) 0%, var(--color-page-bg-edge) 100%);
+  background-attachment: fixed;
   min-height: 100vh;
-  display: flex;
-  flex-direction: column;
 }
 
 a {
@@ -120,7 +82,7 @@ a {
   text-underline-offset: 2px;
 }
 
-a:hover:not(.google-search-suggestions *) {
+a:hover {
   color: var(--color-primary-hover);
 }
 
@@ -139,10 +101,25 @@ img {
   height: auto;
 }
 
+/* Curvy old-time numbers (Rozha One) for phones, scores, lists */
+.phone,
+.tel,
+a[href^="tel"],
+.grade-score-number .num,
+.grade-score-number,
+.listing-card .phone,
+.listing-detail a[href^="tel"],
+.num-display,
+ol.grade-competitors {
+  font-family: var(--font-numbers);
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
 /* ---------- Typography ---------- */
 
 h1, h2, h3, h4 {
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  font-family: var(--font-display);
   font-weight: 700;
   line-height: 1.2;
   color: var(--color-text);
@@ -150,8 +127,18 @@ h1, h2, h3, h4 {
 
 h1 {
   margin: 0.5rem 0;
-  font-size: clamp(1.75rem, 5vw, 2.25rem);
-  letter-spacing: -0.01em;
+  font-size: clamp(1.75rem, 5.5vw, 2.35rem);
+  letter-spacing: -0.015em;
+}
+
+/* Slanted display headline (home / section openers) */
+h1.slant,
+.headline-slant,
+.tagline + h1,
+main > h1:first-of-type {
+  font-style: italic;
+  font-weight: 600;
+  letter-spacing: -0.02em;
 }
 
 h2 {
@@ -165,11 +152,11 @@ h3 {
 }
 
 .tagline {
-  margin: 0.25rem 0 1rem;
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  margin: 0.25rem 0 1.1rem;
+  font-family: var(--font-display);
   font-style: italic;
   font-weight: 400;
-  font-size: 1.05rem;
+  font-size: 1.08rem;
   color: var(--color-text-muted);
 }
 
@@ -184,7 +171,8 @@ h3 {
   padding: 0.85rem 1.25rem;
   border-bottom: 3px double var(--color-divider);
   background: var(--color-surface);
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  box-shadow: 0 1px 0 rgba(26, 22, 18, 0.04);
+  font-family: var(--font-display);
   font-size: 1.15rem;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -200,10 +188,10 @@ h3 {
 }
 
 .site-nav a.nav-cta {
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  font-family: var(--font-body);
   font-size: 0.9rem;
   font-weight: 600;
-  padding: 0.45rem 0.9rem;
+  padding: 0.5rem 0.95rem;
   border: 2px solid var(--color-primary);
   border-radius: var(--radius);
   background: var(--color-primary);
@@ -220,22 +208,20 @@ h3 {
 }
 
 main {
-  flex: 1 0 auto;
-  width: 100%;
   max-width: 42rem;
   margin: 0 auto;
-  padding: 1.25rem 1.15rem 2.5rem;
+  padding: 1.25rem 1.15rem 2.75rem;
 }
 
 @media (min-width: 720px) {
   main {
     max-width: 60rem;
-    padding: 1.75rem 1.75rem 3rem;
+    padding: 1.75rem 1.75rem 3.25rem;
   }
 }
 
 .site-footer {
-  padding: 1rem 1.25rem;
+  padding: 1.1rem 1.25rem;
   border-top: 3px double var(--color-divider);
   background: var(--color-surface);
   font-size: 0.875rem;
@@ -259,13 +245,13 @@ a.button,
 button.button {
   display: inline-block;
   margin: 0.35rem 0;
-  padding: 0.65rem 1.25rem;
-  min-height: 2.75rem;
+  padding: 0.7rem 1.3rem;
+  min-height: 2.85rem;
   border: 2px solid var(--color-primary);
   border-radius: var(--radius);
   background: var(--color-primary);
   color: var(--color-button-text);
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  font-family: var(--font-body);
   font-size: 1rem;
   font-weight: 600;
   line-height: 1.25;
@@ -288,13 +274,28 @@ a.button:focus-visible {
   transform: translateY(1px);
 }
 
-/* ---------- Forms (shared: rise, grade, quote) ---------- */
+/* Big tap-to-call on listing pages */
+a.button.phone-call,
+a.button.tap-call,
+.listing-detail a.button[href^="tel"] {
+  display: block;
+  width: 100%;
+  max-width: 22rem;
+  margin: 0.75rem 0;
+  padding: 0.95rem 1.25rem;
+  font-family: var(--font-numbers);
+  font-size: 1.35rem;
+  letter-spacing: 0.03em;
+  text-align: center;
+}
+
+/* ---------- Forms ---------- */
 
 .rise-form,
 .quote-form,
 .filters {
   margin: 1rem 0;
-  padding: 1rem;
+  padding: 1.05rem;
   border: 2px solid var(--color-divider);
   border-radius: var(--radius);
   background: var(--color-surface);
@@ -305,7 +306,7 @@ a.button:focus-visible {
 .quote-form label,
 .filters label {
   display: block;
-  margin-top: 0.75rem;
+  margin-top: 0.8rem;
   font-weight: 600;
   font-size: 0.95rem;
 }
@@ -329,9 +330,9 @@ a.button:focus-visible {
 .filters select,
 .filters input {
   width: 100%;
-  margin-top: 0.25rem;
-  padding: 0.55rem 0.75rem;
-  min-height: 2.75rem;
+  margin-top: 0.3rem;
+  padding: 0.6rem 0.8rem;
+  min-height: 2.85rem;
   border: 1.5px solid var(--color-divider);
   border-radius: var(--radius);
   background: #fff;
@@ -361,11 +362,11 @@ a.button:focus-visible {
 }
 
 .rise-form .field {
-  margin-top: 0.75rem;
+  margin-top: 0.8rem;
 }
 
 .rise-form .field.missing {
-  padding: 0.5rem 0.65rem;
+  padding: 0.55rem 0.7rem;
   border: 2px solid var(--color-fail);
   border-radius: var(--radius);
   background: var(--color-fail-bg);
@@ -383,7 +384,7 @@ a.button:focus-visible {
 
 .rise-form .check {
   display: block;
-  margin-top: 0.85rem;
+  margin-top: 0.9rem;
   font-weight: 400;
 }
 
@@ -392,16 +393,16 @@ a.button:focus-visible {
   margin-top: 1rem;
 }
 
-/* Big photo upload button on /rise */
+/* Big photo upload on /rise */
 .rise-form label.big-button {
   display: block;
   margin: 1.25rem 0 0.5rem;
-  padding: 1.35rem 1rem;
+  padding: 1.4rem 1rem;
   border: 3px solid var(--color-primary);
   border-radius: var(--radius);
   background: var(--color-primary);
   color: var(--color-button-text);
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  font-family: var(--font-body);
   font-size: 1.25rem;
   font-weight: 700;
   text-align: center;
@@ -449,7 +450,7 @@ details.advanced summary {
 .filters {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.85rem 1rem;
+  gap: 0.9rem 1rem;
   align-items: flex-end;
 }
 
@@ -461,88 +462,75 @@ details.advanced summary {
 .filters button {
   flex: 0 0 auto;
   margin-top: 0;
-  min-height: 2.75rem;
-  padding: 0.55rem 1.25rem;
-  border: 2px solid var(--color-primary);
-  border-radius: var(--radius);
-  background: var(--color-primary);
-  color: var(--color-button-text);
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
-}
-
-.filters button:hover,
-.filters button:focus-visible {
-  background: var(--color-primary-hover);
-  border-color: var(--color-primary-hover);
+  min-height: 2.85rem;
 }
 
 .no-results {
   margin: 1.5rem 0;
-  padding: 1.25rem;
+  padding: 1.35rem;
   border: 2px solid var(--color-divider);
   border-radius: var(--radius);
   background: var(--color-surface);
   font-weight: 600;
   text-align: center;
+  box-shadow: var(--shadow-sm);
 }
 
-.category,
+.directory,
 .category-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 0;
+  columns: 1;
+  column-gap: 2rem;
 }
 
 @media (min-width: 640px) {
-  .category,
+  .directory,
   .category-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  /* the rule down the middle, like a phone book column */
-  .category > .listing-card:nth-of-type(even),
-  .category-grid > .listing-card:nth-of-type(even) {
-    padding-left: 2rem;
-    border-left: 1px solid var(--color-divider);
+    columns: 2;
+    column-rule: 1px solid var(--color-divider);
   }
 }
 
 .category-head,
 .category-title {
-  margin: 0 0 0.85rem;
+  margin: 0 0 0.9rem;
   padding-bottom: 0.35rem;
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  font-family: var(--font-display);
   font-size: 1.35rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.045em;
   border-bottom: 3px solid var(--color-divider);
-  grid-column: 1 / -1;
+  break-after: avoid;
+  column-span: all;
 }
 
 .category {
   margin-bottom: 1.75rem;
+  break-inside: avoid;
 }
 
 .listing-card {
-  min-width: 0;
-  margin-bottom: 1.1rem;
-  padding-bottom: 0.35rem;
+  break-inside: avoid;
+  margin-bottom: 1.15rem;
+  padding-bottom: 0.4rem;
 }
 
 .listing-card h3 {
   margin: 0;
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
-  font-size: 1.1rem;
+  font-family: var(--font-display);
+  font-size: 1.12rem;
   font-weight: 700;
 }
 
 .listing-card p {
   margin: 0.15rem 0;
   font-size: 0.95rem;
+}
+
+.listing-card .phone,
+.listing-card a[href^="tel"] {
+  font-family: var(--font-numbers);
+  font-size: 1.05rem;
 }
 
 /* ---------- Single listing page ---------- */
@@ -552,7 +540,7 @@ details.advanced summary {
 }
 
 .listing-detail dt {
-  margin-top: 0.85rem;
+  margin-top: 0.9rem;
   font-weight: 700;
   font-size: 0.8rem;
   text-transform: uppercase;
@@ -589,26 +577,27 @@ details.advanced summary {
   white-space: nowrap;
 }
 
-/* Owner-confirmed stamp */
+/* Owner-confirmed / Verified rubber stamp */
 .stamp {
   display: inline-block;
   max-width: 100%;
   margin: 1rem 0;
-  padding: 0.6rem 1rem;
-  border: 3px double var(--color-fail);
+  padding: 0.65rem 1.1rem;
+  border: 3px double var(--color-stamp);
   border-radius: 2px;
-  color: var(--color-fail);
-  transform: rotate(-1.5deg);
+  color: var(--color-stamp);
+  transform: rotate(-2deg);
   overflow-wrap: anywhere;
-  background: rgba(255, 254, 249, 0.9);
+  background: rgba(255, 248, 235, 0.92);
+  box-shadow: 1px 1px 0 rgba(139, 46, 46, 0.15);
 }
 
 .stamp-title {
   margin: 0;
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
-  font-size: 1.15rem;
+  font-family: var(--font-display);
+  font-size: 1.2rem;
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   white-space: nowrap;
 }
@@ -619,11 +608,6 @@ details.advanced summary {
   color: var(--color-text);
   font-size: 0.85rem;
   font-style: italic;
-}
-
-.stamp-date,
-.stamp-title {
-  white-space: nowrap;
 }
 
 .stamp-hash {
@@ -641,6 +625,7 @@ details.advanced summary {
   color: var(--color-text);
   transform: none;
   background: transparent;
+  box-shadow: none;
 }
 
 .unconfirmed-note {
@@ -656,14 +641,33 @@ details.advanced summary {
   cursor: pointer;
 }
 
+/* Gold Founding Member badge */
+.badge-founding,
+.founding-member {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.5rem 0;
+  padding: 0.35rem 0.75rem;
+  border: 2px solid var(--color-gold);
+  border-radius: 999px;
+  background: var(--color-gold-bg);
+  color: #6B4E0A;
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 @media (max-width: 480px) {
   .stamp {
-    padding: 0.45rem 0.65rem;
-    transform: rotate(-1deg);
+    padding: 0.5rem 0.7rem;
+    transform: rotate(-1.5deg);
   }
   .stamp-title {
-    font-size: 0.95rem;
-    letter-spacing: 0.02em;
+    font-size: 1rem;
+    letter-spacing: 0.03em;
     white-space: normal;
   }
 }
@@ -671,7 +675,7 @@ details.advanced summary {
 /* Quote request on listing */
 .quote-request {
   margin-top: 2rem;
-  padding-top: 0.75rem;
+  padding-top: 0.85rem;
   border-top: 3px double var(--color-divider);
 }
 
@@ -681,7 +685,7 @@ details.advanced summary {
   text-transform: none;
 }
 
-/* ---------- Messages, notices, banners ---------- */
+/* ---------- Messages, notices ---------- */
 
 .message {
   padding: 1.25rem 0;
@@ -689,7 +693,7 @@ details.advanced summary {
 
 .notice {
   margin: 0.75rem 0;
-  padding: 0.65rem 0.9rem;
+  padding: 0.7rem 0.95rem;
   border: 2px solid var(--color-fail);
   border-radius: var(--radius);
   font-weight: 600;
@@ -704,8 +708,8 @@ details.advanced summary {
 
 .demo-banner {
   margin: 0.75rem 0;
-  padding: 0.55rem 0.85rem;
-  background: #FEF3C7;
+  padding: 0.6rem 0.9rem;
+  background: var(--color-warn-bg);
   color: var(--color-text);
   border: 2px solid var(--color-divider);
   border-radius: var(--radius);
@@ -714,7 +718,7 @@ details.advanced summary {
 
 .form-error {
   margin: 0.75rem 0;
-  padding: 0.5rem 0.85rem;
+  padding: 0.55rem 0.9rem;
   border-left: 4px solid var(--color-fail);
   color: var(--color-fail);
   font-weight: 600;
@@ -722,7 +726,7 @@ details.advanced summary {
 
 .success-box {
   margin: 0 0 1rem;
-  padding: 0.85rem 1rem;
+  padding: 0.9rem 1.05rem;
   background: var(--color-success-bg);
   border: 2px solid var(--color-success);
   border-radius: var(--radius);
@@ -736,7 +740,7 @@ details.advanced summary {
   letter-spacing: 0.03em;
 }
 
-/* ---------- Admin (kept functional) ---------- */
+/* ---------- Admin (functional) ---------- */
 
 .pending-list {
   list-style: none;
@@ -745,7 +749,7 @@ details.advanced summary {
 
 .pending-item {
   margin-bottom: 1rem;
-  padding: 0.85rem;
+  padding: 0.9rem;
   border: 2px solid var(--color-divider);
   border-radius: var(--radius);
   background: var(--color-surface);
@@ -759,8 +763,8 @@ details.advanced summary {
 .admin-button {
   font: inherit;
   font-weight: 600;
-  min-height: 2.75rem;
-  padding: 0.5rem 1.25rem;
+  min-height: 2.85rem;
+  padding: 0.55rem 1.3rem;
   background: var(--color-primary);
   color: var(--color-button-text);
   border: 2px solid var(--color-primary);
@@ -771,8 +775,6 @@ details.advanced summary {
 .admin-button:hover,
 .admin-button:focus-visible {
   background: var(--color-primary-hover);
-  border-color: var(--color-primary-hover);
-  color: var(--color-button-text);
 }
 
 .admin-button-secondary {
@@ -795,13 +797,13 @@ details.advanced summary {
 }
 
 .admin-nav .admin-logout .admin-button {
-  padding: 0.25rem 0.7rem;
+  padding: 0.3rem 0.75rem;
   font-size: 0.9rem;
-  min-height: 2.25rem;
+  min-height: 2.3rem;
 }
 
 .admin-note {
-  padding: 0.75rem;
+  padding: 0.8rem;
   background: var(--color-success-bg);
   color: var(--color-text);
   border: 2px solid var(--color-success);
@@ -809,7 +811,7 @@ details.advanced summary {
 }
 
 .admin-error {
-  padding: 0.75rem;
+  padding: 0.8rem;
   background: var(--color-surface);
   border: 2px solid var(--color-divider);
   border-radius: var(--radius);
@@ -826,8 +828,8 @@ details.advanced summary {
 .admin-login input {
   width: 100%;
   max-width: 24rem;
-  padding: 0.55rem 0.75rem;
-  min-height: 2.75rem;
+  padding: 0.6rem 0.8rem;
+  min-height: 2.85rem;
   border: 1.5px solid var(--color-divider);
   border-radius: var(--radius);
 }
@@ -862,7 +864,7 @@ details.advanced summary {
   background: var(--color-warn-bg);
   border-left: 4px solid var(--color-warn);
   color: #5A3200;
-  padding: 0.55rem 0.85rem;
+  padding: 0.6rem 0.9rem;
   margin: 0.5rem 0;
   font-weight: 600;
   border-radius: 0 var(--radius) var(--radius) 0;
@@ -878,7 +880,7 @@ details.advanced summary {
   color: var(--color-text-muted);
 }
 
-/* ---------- Séance (kept) ---------- */
+/* ---------- Séance ---------- */
 
 .seance h2 {
   margin: 1.5rem 0 0.5rem;
@@ -889,7 +891,7 @@ details.advanced summary {
 .seance-group,
 .seance-run {
   margin: 0 0 1rem;
-  padding: 0.65rem 0.85rem;
+  padding: 0.7rem 0.9rem;
   border: 1px solid var(--color-divider);
   border-radius: var(--radius);
   background: var(--color-surface);
@@ -921,7 +923,7 @@ details.advanced summary {
 
 .seance-answer {
   margin: 0;
-  padding-left: 0.85rem;
+  padding-left: 0.9rem;
   border-left: 4px solid var(--color-divider);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -929,7 +931,7 @@ details.advanced summary {
 
 .seance-result {
   font-weight: 600;
-  padding: 0.65rem 0.85rem;
+  padding: 0.7rem 0.9rem;
   border-left: 5px solid var(--color-divider);
   margin: 1rem 0;
   border-radius: 0 var(--radius) var(--radius) 0;
@@ -974,7 +976,7 @@ details.advanced summary {
 
 .rise pre {
   overflow-x: auto;
-  padding: 0.65rem;
+  padding: 0.7rem;
   border: 1px solid var(--color-divider);
   border-radius: var(--radius);
   background: #fff;
@@ -1001,7 +1003,6 @@ details.advanced summary {
   margin-bottom: 1.25rem;
 }
 
-/* Scanning progress */
 .grade-steps {
   list-style: none;
   margin: 1.25rem 0;
@@ -1010,21 +1011,16 @@ details.advanced summary {
 
 .grade-step {
   margin: 0.55rem 0;
-  padding: 0.5rem 0.65rem;
+  padding: 0.55rem 0.7rem;
   border-radius: var(--radius);
   background: var(--color-surface);
   border: 1px solid transparent;
 }
 
-.grade-step {
-  display: grid;
-  grid-template-columns: 6.5rem minmax(0, 1fr);
-  column-gap: 0.5rem;
-  align-items: baseline;
-}
-
 .grade-step .step-mark {
-  grid-row: 1 / span 2;
+  display: inline-block;
+  min-width: 6.5rem;
+  vertical-align: top;
   font-weight: 700;
   text-transform: uppercase;
   font-size: 0.8rem;
@@ -1037,7 +1033,6 @@ details.advanced summary {
 
 .grade-step .finding {
   display: block;
-  grid-column: 2;
   margin-left: 0;
   margin-top: 0.2rem;
   font-size: 0.9rem;
@@ -1045,18 +1040,21 @@ details.advanced summary {
   color: var(--color-text-muted);
 }
 
-/* Report — the money page */
-.grade-report {
-  /* nothing extra; inherits body */
+@media (min-width: 480px) {
+  .grade-step .finding {
+    display: inline;
+    margin-left: 0.5rem;
+  }
 }
 
+/* Report — money page */
 .grade-top {
   margin-bottom: 1.5rem;
 }
 
 .grade-score {
-  margin: 0 0 1.25rem;
-  padding: 1.25rem 1rem;
+  margin: 0 0 1.35rem;
+  padding: 1.4rem 1.1rem;
   background: var(--color-surface);
   border: 2px solid var(--color-divider);
   border-radius: var(--radius);
@@ -1066,46 +1064,47 @@ details.advanced summary {
 
 .grade-score h1 {
   margin: 0 0 0.35rem;
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.07em;
   color: var(--color-text-muted);
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  font-family: var(--font-body);
+  font-style: normal;
 }
 
 .grade-where {
-  margin: 0 0 0.75rem;
+  margin: 0 0 0.8rem;
   font-style: italic;
   color: var(--color-text-muted);
   font-size: 0.95rem;
 }
 
 .grade-score-number {
-  margin: 0.15rem 0 0.35rem;
+  margin: 0.15rem 0 0.4rem;
 }
 
 .grade-score-number .num {
   display: inline-block;
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
-  font-size: clamp(3.5rem, 14vw, 5rem);
-  font-weight: 700;
+  font-family: var(--font-numbers);
+  font-size: clamp(3.75rem, 15vw, 5.25rem);
+  font-weight: 400;
   line-height: 1;
   color: var(--color-text);
-  letter-spacing: -0.02em;
+  letter-spacing: 0.01em;
 }
 
 .grade-score-number .of {
   display: block;
-  margin-top: 0.15rem;
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  margin-top: 0.2rem;
+  font-family: var(--font-body);
   font-size: 1rem;
   font-weight: 500;
   color: var(--color-text-muted);
 }
 
 .grade-score-number .num-text {
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  font-family: var(--font-display);
   font-size: 1.5rem;
   font-weight: 700;
 }
@@ -1124,14 +1123,14 @@ details.advanced summary {
 }
 
 .grade-meta {
-  margin: 0.75rem 0 0;
+  margin: 0.8rem 0 0;
   font-size: 0.875rem;
   font-style: italic;
   color: var(--color-text-muted);
   text-align: center;
 }
 
-/* Checks list — easy to scan */
+/* Checks */
 .grade-checks {
   list-style: none;
   margin: 0.75rem 0 1.25rem;
@@ -1139,8 +1138,8 @@ details.advanced summary {
 }
 
 .grade-check {
-  margin: 0 0 0.65rem;
-  padding: 0.65rem 0.85rem;
+  margin: 0 0 0.7rem;
+  padding: 0.7rem 0.9rem;
   border-left: 5px solid var(--color-divider);
   border-radius: 0 var(--radius) var(--radius) 0;
   background: var(--color-surface);
@@ -1159,15 +1158,14 @@ details.advanced summary {
 }
 
 .grade-check.not_checked {
-  border-left-color: #A8A29E;
+  border-left-color: #A89880;
   opacity: 0.85;
 }
 
 .grade-result {
   display: inline-block;
-  white-space: nowrap;
   margin-left: 0.35rem;
-  padding: 0.1rem 0.45rem;
+  padding: 0.12rem 0.5rem;
   font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -1184,11 +1182,10 @@ details.advanced summary {
 .grade-check.fail .grade-result,
 .grade-check.needs_work .grade-result {
   color: var(--color-fail);
-  background: rgba(155, 44, 44, 0.1);
+  background: rgba(139, 46, 46, 0.1);
 }
 
 .grade-points {
-  white-space: nowrap;
   font-size: 0.8rem;
   color: var(--color-text-muted);
   font-weight: 500;
@@ -1210,15 +1207,16 @@ details.advanced summary {
   border-bottom: 2px solid var(--color-divider);
 }
 
-/* AI answers section */
+/* AI answers as index cards */
 .grade-ai {
   margin: 1.25rem 0;
 }
 
 .grade-competitors {
   margin: 0.5rem 0 0.75rem;
-  padding-left: 1.25rem;
+  padding-left: 1.35rem;
   font-weight: 600;
+  font-family: var(--font-numbers);
 }
 
 .grade-answer {
@@ -1235,6 +1233,26 @@ details.advanced summary {
   padding-left: 1.25rem;
 }
 
+/* Index-card style for AI answer blocks */
+.grade-ai details,
+.grade-all-answers details,
+.seance-answer {
+  background: var(--color-surface);
+  border: 1.5px solid var(--color-divider);
+  border-radius: 2px;
+  box-shadow: 2px 3px 0 rgba(61, 52, 41, 0.08);
+}
+
+.grade-ai details {
+  margin-top: 0.6rem;
+  padding: 0.65rem 0.85rem;
+}
+
+.grade-ai details summary {
+  font-weight: 600;
+  cursor: pointer;
+}
+
 /* Free page preview */
 .grade-fix {
   display: block;
@@ -1242,10 +1260,10 @@ details.advanced summary {
 }
 
 .grade-preview {
-  padding: 1rem;
+  padding: 1.05rem;
   border: 3px double var(--color-divider);
   border-radius: var(--radius);
-  background: #FFFBE0;
+  background: #FBF3D4;
   box-shadow: var(--shadow-sm);
 }
 
@@ -1261,7 +1279,7 @@ details.advanced summary {
 
 .serp {
   margin: 0 0 1rem;
-  padding: 0.65rem 0.85rem;
+  padding: 0.7rem 0.9rem;
   border: 1.5px solid var(--color-divider);
   border-radius: var(--radius);
   background: #fff;
@@ -1269,7 +1287,7 @@ details.advanced summary {
 
 .serp h3 {
   margin: 0 0 0.3rem;
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  font-family: var(--font-body);
   font-size: 0.8rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -1299,7 +1317,7 @@ details.advanced summary {
 
 .kit-item {
   margin: 0.75rem 0;
-  padding: 0.85rem;
+  padding: 0.9rem;
   border: 1px solid var(--color-divider);
   border-radius: var(--radius);
   background: var(--color-surface);
@@ -1308,7 +1326,7 @@ details.advanced summary {
 .kit-item pre {
   overflow-x: auto;
   margin: 0.5rem 0 0;
-  padding: 0.65rem;
+  padding: 0.7rem;
   border: 1px solid var(--color-divider);
   border-radius: var(--radius);
   background: #fff;
@@ -1321,10 +1339,10 @@ details.advanced summary {
   display: none;
 }
 
-/* Lead form (unlock / contact) */
+/* Lead form */
 .grade-lead {
   margin: 1.75rem 0;
-  padding: 1.15rem;
+  padding: 1.2rem;
   border: 2px solid var(--color-divider);
   border-radius: var(--radius);
   background: var(--color-surface);
@@ -1333,7 +1351,7 @@ details.advanced summary {
 
 .grade-lead .button {
   width: 100%;
-  margin-top: 0.85rem;
+  margin-top: 0.9rem;
 }
 
 .grade-offer {
@@ -1347,10 +1365,9 @@ details.advanced summary {
 .grade-fix .button,
 .grade-recheck .button,
 .grade-lead .button {
-  margin-top: 0.65rem;
+  margin-top: 0.7rem;
 }
 
-/* Wide screens: preview beside checks */
 @media (min-width: 900px) {
   .grade-fix {
     display: grid;
@@ -1367,16 +1384,15 @@ details.advanced summary {
 
   .grade-score {
     text-align: left;
-    padding: 1.5rem 1.5rem;
+    padding: 1.6rem 1.6rem;
   }
 
   .grade-score-number .of {
     display: inline;
-    margin-left: 0.35rem;
+    margin-left: 0.4rem;
   }
 }
 
-/* Confirm CTAs etc. */
 .confirm-cta {
   font-size: 0.95rem;
 }
@@ -1390,949 +1406,7 @@ details.discard-confirm summary {
   font-weight: 600;
 }
 
-/* A phone number never splits across two lines */
-.listing-card .phone {
-  white-space: nowrap;
-}
-
-/* "No photo? Type it in" is a second choice, so it looks like one */
-main .rise-form.type-it-in button:not([class]) {
-  margin-top: 0;
-  min-height: 2.75rem;
-  padding: 0.55rem 1.1rem;
-  border: 2px solid var(--color-primary);
-  border-radius: var(--radius);
-  background: var(--color-surface);
-  color: var(--color-primary);
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-main .rise-form.type-it-in button:not([class]):hover,
-main .rise-form.type-it-in button:not([class]):focus-visible {
-  background: var(--color-primary);
-  color: var(--color-button-text);
-}
-
-/* Any form button without its own class gets the standard look */
-main form button:not([class]) {
-  min-height: 2.75rem;
-  padding: 0.6rem 1.25rem;
-  border: 2px solid var(--color-primary);
-  border-radius: var(--radius);
-  background: var(--color-primary);
-  color: var(--color-button-text);
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
-}
-
-main form button:not([class]):hover,
-main form button:not([class]):focus-visible {
-  background: var(--color-primary-hover);
-  border-color: var(--color-primary-hover);
-}
-
-.grade-full {
-  scroll-margin-top: 1rem;
-}
-
-/* Long names, emails and addresses wrap instead of pushing the page wide */
-h1, h2, h3, p, li, dd, .listing-card, .owner-email, code {
-  overflow-wrap: anywhere;
-}
-
-/* Quieter look for the second-choice buttons on the draft page */
-main .rise-form .confirm button:not([class]):first-of-type,
-main .rise-form.discard button:not([class]) {
-  background: var(--color-surface);
-  color: var(--color-primary);
-}
-
-main .rise-form .confirm button:not([class]):first-of-type:hover,
-main .rise-form .confirm button:not([class]):first-of-type:focus-visible,
-main .rise-form.discard button:not([class]):hover,
-main .rise-form.discard button:not([class]):focus-visible {
-  background: var(--color-primary);
-  color: var(--color-button-text);
-}
-
-/* Bigger tap targets */
-.site-nav a.nav-cta {
-  display: inline-flex;
-  align-items: center;
-  min-height: 2.75rem;
-}
-
-.site-nav a.brand {
-  padding: 0.5rem 0;
-}
-
-summary {
-  padding: 0.6rem 0;
-}
-
-.listing-card p a {
-  display: inline-block;
-  padding: 0.3rem 0;
-}
-
-.site-footer a {
-  display: inline-block;
-  padding: 0.5rem 0.25rem;
-}
-
-.rise-form .check input {
-  width: 1.25rem;
-  height: 1.25rem;
-  vertical-align: middle;
-}
-
-.filters select,
-.filters input {
-  font-size: 1rem;
-  font-weight: 400;
-}
-
-/* A status note is not an error */
-.notice[role="status"]:not(.saved-note) {
-  border-color: var(--color-divider);
-  background: var(--color-surface);
-}
-
-/* Keyboard focus shows on the big photo button itself */
-.rise-form:has(.visually-hidden-file:focus-visible) label.big-button {
-  outline: 3px solid var(--color-focus);
-  outline-offset: 2px;
-}
-
-/* The lead form sits in one card, not a card inside a card */
-.grade-lead .rise-form {
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: none;
-  box-shadow: none;
-}
-
-.hours-edit {
-  padding: 0.5rem 0.75rem 0.75rem;
-}
-
-.hours-edit legend {
-  padding: 0 0.35rem;
-  font-weight: 600;
-}
-
-/* Rules carried over from the earlier stylesheet */
-.rise-form .confirm button {
-  margin-right: 0.75rem;
-}
-
-.rise-form .field .hint {
-  display: block;
-}
-
-.grade-ai details {
-  margin-top: 0.5rem;
-}
-
-
-/* =====================================================================
-   Match the designer's mockups (Direction A, Modern Phone Book)
-   Centered serif headings, gold rules, icon fields, big score, check rows
-   ===================================================================== */
-
-:root {
-  --color-primary: #0C2C73;        /* phone-book blue for buttons and links */
-  --color-primary-hover: #081F52;
-  --color-link: #0C2C73;
-  --color-focus: #0C2C73;
-  --color-ink: #0F1B33;            /* score number and dark buttons */
-  --color-gold: #B8893B;           /* thin rules and ornaments */
-  --color-tan: #F3E7CC;            /* empty-state card */
-  --radius: 6px;
-}
-
-/* Top bar and footer sit on the paper, with the double rule */
-.site-nav,
-.site-footer {
-  background: var(--color-page-bg);
-}
-
-.site-nav {
-  flex-wrap: nowrap;
-  font-size: clamp(1.1rem, 4.6vw, 1.5rem);
-  letter-spacing: 0;
-}
-
-.site-nav a.nav-cta {
-  flex: 0 0 auto;
-  font-size: clamp(0.78rem, 3.3vw, 0.95rem);
-  padding: 0.45rem 0.8rem;
-  text-align: center;
-}
-
-.site-footer {
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
-  font-size: 1rem;
-  color: var(--color-text);
-}
-
-/* ---------- Home ---------- */
-
-.home-head {
-  text-align: center;
-  margin: 1.5rem 0 1.5rem;
-}
-
-.home-head h1 {
-  margin: 0;
-  font-style: italic;
-  font-size: clamp(2.6rem, 12.5vw, 4.5rem);
-  line-height: 1.02;
-  letter-spacing: -0.02em;
-  color: var(--color-ink);
-}
-
-.home-head .tagline {
-  margin: 0.9rem 0 0;
-  font-size: clamp(1.1rem, 4.6vw, 1.5rem);
-  color: var(--color-text);
-}
-
-.home-head .tagline::after {
-  content: "";
-  display: block;
-  width: 9rem;
-  max-width: 40%;
-  height: 2px;
-  margin: 1.1rem auto 0;
-  background: var(--color-ink);
-}
-
-.home-head .grade-link {
-  margin: 1.1rem 0 0;
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
-  font-size: 1.1rem;
-}
-
-.filters {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 0.85rem;
-  max-width: 44rem;
-  margin: 0 auto 1.5rem;
-  padding: 0;
-  border: 0;
-  background: none;
-  box-shadow: none;
-}
-
-.filters label {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  min-height: 3.5rem;
-  margin: 0;
-  padding: 0.25rem 0.75rem 0.25rem 3.1rem;
-  border: 1.5px solid var(--color-ink);
-  border-radius: var(--radius);
-  background: var(--color-surface) no-repeat 0.85rem center / 1.6rem;
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
-  font-size: 1.2rem;
-  font-weight: 700;
-}
-
-.filters label:nth-of-type(1) {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230F1B33' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 12V4h8l10 10-8 8z'/%3E%3Ccircle cx='7.5' cy='8.5' r='1.3'/%3E%3C/svg%3E");
-}
-
-.filters label:nth-of-type(2) {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230F1B33' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 21s-7-6.2-7-11.5a7 7 0 0114 0C19 14.8 12 21 12 21z'/%3E%3Ccircle cx='12' cy='9.5' r='2.3'/%3E%3C/svg%3E");
-}
-
-.filters label:focus-within {
-  outline: 3px solid var(--color-focus);
-  outline-offset: 2px;
-}
-
-.filters select,
-.filters input {
-  flex: 1 1 auto;
-  min-width: 0;
-  width: auto;
-  margin: 0;
-  padding: 0.5rem 0.25rem;
-  border: 0;
-  background: transparent;
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
-  color: var(--color-text-muted);
-}
-
-.filters select:focus-visible,
-.filters input:focus-visible {
-  outline: none;
-}
-
-.filters button {
-  width: 100%;
-  min-height: 3.5rem;
-  font-size: 1.3rem;
-  font-weight: 700;
-}
-
-.no-results {
-  max-width: 44rem;
-  margin: 1.5rem auto;
-  padding: 1.5rem 1.25rem;
-  border: 1.5px solid var(--color-gold);
-  border-radius: 10px;
-  background: var(--color-tan);
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
-  font-size: clamp(1.4rem, 6vw, 1.9rem);
-  font-weight: 700;
-  line-height: 1.25;
-  color: var(--color-ink);
-}
-
-.no-results a {
-  display: block;
-  margin-top: 1rem;
-  padding-top: 1rem;
-  border-top: 1.5px solid var(--color-ink);
-  font-size: clamp(1.15rem, 5vw, 1.5rem);
-  font-weight: 400;
-  text-decoration: none;
-}
-
-.no-results a:hover {
-  text-decoration: underline;
-}
-
-/* Section heads: centered capitals with a gold rule on each side */
-.category-head,
-.category-title,
-.grade-group h2,
-.grade-report h2,
-.grade-ai h2,
-.grade-kit h2,
-.grade-lead h2,
-.grade-offer h2 {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.9rem;
-  padding-bottom: 0;
-  border-bottom: 0;
-  font-size: 1.2rem;
-  font-weight: 700;
-  text-align: center;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--color-ink);
-}
-
-.category-head::before,
-.category-head::after,
-.category-title::before,
-.category-title::after,
-.grade-report h2::before,
-.grade-report h2::after {
-  content: "";
-  flex: 1 1 1.5rem;
-  min-width: 1rem;
-  height: 1px;
-  background: var(--color-gold);
-}
-
-/* Directory entries: name, dotted leader, number, like a phone book line */
-.directory,
-.directory-single {
-  max-width: 60rem;
-  margin: 0 auto;
-}
-
-.listing-card h3 {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-}
-
-.listing-card h3 a {
-  text-decoration: none;
-}
-
-.listing-card h3 a:hover {
-  text-decoration: underline;
-}
-
-.listing-card .phone {
-  display: flex;
-  flex: 1 1 auto;
-  align-items: baseline;
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
-  font-size: 1rem;
-}
-
-.listing-card .phone::before {
-  content: "";
-  flex: 1 1 1rem;
-  min-width: 1rem;
-  margin: 0 0.45rem;
-  border-bottom: 2px dotted var(--color-text-muted);
-  transform: translateY(-0.25em);
-}
-
-.listing-card .phone a {
-  color: var(--color-ink);
-  text-decoration: none;
-}
-
-@media (min-width: 640px) {
-  .category > .listing-card:nth-of-type(odd),
-  .category-grid > .listing-card:nth-of-type(odd) {
-    padding-right: 2rem;
-  }
-}
-
-/* ---------- Grader report ---------- */
-
-.grade-score {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin: 0 0 1.5rem;
-  padding: 0.5rem 0 0;
-  border: 0;
-  background: none;
-  box-shadow: none;
-  text-align: center;
-}
-
-@media (min-width: 900px) {
-  .grade-score {
-    padding: 1rem 0 0;
-    text-align: center;
-  }
-}
-
-.grade-eyebrow {
-  order: 0;
-  width: 100%;
-  margin: 0 0 0.4rem;
-  padding-bottom: 0.9rem;
-  border-bottom: 1px solid var(--color-gold);
-}
-
-.grade-eyebrow::before {
-  content: "\2733";
-  display: block;
-  margin-bottom: 0.15rem;
-  font-size: 1.4rem;
-  line-height: 1;
-  color: var(--color-gold);
-}
-
-.grade-eyebrow-title {
-  display: block;
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
-  font-size: clamp(1.25rem, 5.5vw, 1.7rem);
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--color-ink);
-}
-
-.grade-eyebrow-sub {
-  display: block;
-  margin-top: 0.2rem;
-  font-size: 0.8rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  color: var(--color-text-muted);
-}
-
-.grade-score-number {
-  order: 1;
-  margin: 0.2rem 0 0.4rem;
-  padding: 0 1rem 0.5rem;
-  border-bottom: 1px solid var(--color-gold);
-  white-space: nowrap;
-}
-
-.grade-score-number .num {
-  font-size: clamp(5.5rem, 27vw, 9rem);
-  line-height: 1.05;
-  color: var(--color-ink);
-}
-
-/* The page says "out of 100"; it is drawn as "/ 100" */
-.grade-score-number .of,
-.grade-score-number .of:only-child {
-  display: inline;
-  margin: 0;
-  font-size: 0;
-}
-
-.grade-score-number .of::after {
-  content: "/ 100";
-  margin-left: 0.18em;
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
-  font-size: clamp(3rem, 15vw, 5rem);
-  font-weight: 700;
-  line-height: 1;
-  color: var(--color-ink);
-}
-
-.grade-score h1 {
-  order: 2;
-  margin: 0.4rem 0 0;
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
-  font-size: clamp(1.5rem, 6.5vw, 2rem);
-  font-style: italic;
-  font-weight: 400;
-  text-transform: none;
-  letter-spacing: 0;
-  color: var(--color-ink);
-}
-
-.grade-where {
-  order: 3;
-  margin: 0.1rem 0 0;
-  font-size: 1rem;
-  color: var(--color-text);
-}
-
-.grade-failed {
-  order: 4;
-  margin: 0.35rem 0 0;
-  font-style: italic;
-  font-weight: 600;
-}
-
-.grade-prev,
-.grade-score .notice {
-  order: 5;
-}
-
-/* Check rows: icon on the left, pill on the right */
-.grade-check,
-.grade-check.pass,
-.grade-check.fail,
-.grade-check.needs_work {
-  position: relative;
-  margin: 0;
-  padding: 0.7rem 0.85rem 0.7rem 3.25rem;
-  border: 1px solid #D9CDB4;
-  border-left: 4px solid var(--color-divider);
-  border-radius: 0;
-  background: var(--color-surface) no-repeat 0.7rem 0.75rem / 1.75rem;
-  box-shadow: none;
-  overflow: hidden;
-}
-
-.grade-check + .grade-check {
-  border-top: 0;
-}
-
-.grade-check.pass {
-  border-left-color: var(--color-success);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='11' fill='%232D6A4F'/%3E%3Cpath d='M7 12.5l3.2 3.2L17 9' fill='none' stroke='%23fff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-}
-
-.grade-check.fail,
-.grade-check.needs_work {
-  border-left-color: var(--color-fail);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='11' fill='%239B2C2C'/%3E%3Cpath d='M12 6.500v7' stroke='%23fff' stroke-width='2.6' stroke-linecap='round'/%3E%3Ccircle cx='12' cy='17.200' r='1.500' fill='%23fff'/%3E%3C/svg%3E");
-}
-
-.grade-check.not_checked {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='11' fill='%238A8279'/%3E%3Cpath d='M7.500 12h9' stroke='%23fff' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E");
-  opacity: 1;
-}
-
-.grade-result,
-.grade-check.pass .grade-result,
-.grade-check.fail .grade-result,
-.grade-check.needs_work .grade-result {
-  float: right;
-  margin: 0 0 0.25rem 0.75rem;
-  padding: 0.2rem 0.7rem;
-  border: 1.5px solid currentColor;
-  border-radius: 999px;
-  background: transparent;
-  font-size: 0.72rem;
-  letter-spacing: 0.06em;
-}
-
-/* "Fix these first" uses the same rows */
-.grade-top-fails ul {
-  list-style: none;
-  margin: 0.75rem 0;
-  padding: 0;
-}
-
-.grade-top-fails li {
-  padding: 0.7rem 0.85rem 0.7rem 3.25rem;
-  border: 1px solid #D9CDB4;
-  border-left: 4px solid var(--color-fail);
-  background: var(--color-surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='11' fill='%239B2C2C'/%3E%3Cpath d='M12 6.500v7' stroke='%23fff' stroke-width='2.6' stroke-linecap='round'/%3E%3Ccircle cx='12' cy='17.200' r='1.500' fill='%23fff'/%3E%3C/svg%3E") no-repeat 0.7rem 0.75rem / 1.75rem;
-}
-
-.grade-top-fails li + li {
-  border-top: 0;
-}
-
-/* Free listing preview: double-rule card on paper */
-.grade-preview {
-  background: var(--color-surface);
-  border: 3px double var(--color-ink);
-}
-
-/* Lead form */
-.grade-lead {
-  padding: 0;
-  border: 0;
-  background: none;
-  box-shadow: none;
-}
-
-.grade-lead > p {
-  text-align: center;
-}
-
-.grade-lead .field label {
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
-}
-
-.grade-lead .field input {
-  padding-left: 2.9rem;
-  border: 1.5px solid var(--color-gold);
-  background: #fff no-repeat 0.8rem center / 1.35rem;
-}
-
-#l-name {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230F1B33' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='8' r='4'/%3E%3Cpath d='M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7'/%3E%3C/svg%3E");
-}
-
-#l-email {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230F1B33' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='5' width='18' height='14' rx='1.5'/%3E%3Cpath d='M3.5 6.5l8.5 6.5 8.5-6.5'/%3E%3C/svg%3E");
-}
-
-#l-phone {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230F1B33' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6.5 3h3l1.5 4.5-2 1.5a12 12 0 006 6l1.5-2 4.5 1.5v3a2 2 0 01-2 2A16 16 0 014.500 5a2 2 0 012-2z'/%3E%3C/svg%3E");
-}
-
-.grade-lead .button {
-  min-height: 3.25rem;
-  border-color: var(--color-ink);
-  background: var(--color-ink);
-  font-size: 1rem;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-}
-
-.grade-lead .button::after {
-  content: "\2192";
-  margin-left: 0.75rem;
-  color: var(--color-gold);
-}
-
-.grade-lead .button:hover,
-.grade-lead .button:focus-visible {
-  border-color: #000;
-  background: #000;
-}
-
-.site-nav {
-  padding: 0.85rem 1rem;
-}
-
-.site-nav a.brand {
-  white-space: nowrap;
-}
-
-.home-head .grade-link {
-  font-size: 1rem;
-  font-weight: 600;
-}
-
-.grade-preview h3 {
-  display: block;
-}
-
-.grade-preview .phone {
-  display: inline;
-  font-family: inherit;
-  font-size: inherit;
-}
-
-.grade-preview .phone::before {
-  display: none;
-}
-
-/* Check rows: pill pinned top right, label and points stacked beside it */
-.grade-check {
-  overflow: visible;
-}
-
-.grade-check > strong {
-  display: block;
-  padding-right: 7.25rem;
-}
-
-.grade-check > .grade-points {
-  display: block;
-  margin-bottom: 0.15rem;
-}
-
-.grade-check > br:first-of-type {
-  display: none;
-}
-
-.grade-result,
-.grade-check.pass .grade-result,
-.grade-check.fail .grade-result,
-.grade-check.needs_work .grade-result {
-  position: absolute;
-  top: 0.7rem;
-  right: 0.75rem;
-  float: none;
-  margin: 0;
-}
-
-/* The old-style digits are drawn heavy, so they carry no extra bold */
-.grade-score-number .num,
-.grade-score-number .of::after {
-  font-weight: 400;
-}
-
-/* What a visitor types stays in the plain font, so it is easy to check */
-input,
-select,
-textarea {
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif !important;
-}
-
-/* Old lettering on every heading and title */
-h1,
-h2,
-h3,
-h4,
-.site-nav a.brand,
-.home-head h1,
-.grade-score h1,
-.category-head,
-.category-title,
-.grade-eyebrow-title,
-.no-results,
-.stamp-title,
-.listing-card h3,
-.listing-card h3 a,
-.grade-preview h3 {
-  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
-  font-style: normal;
-  font-weight: 700;
-}
-
-.home-head h1,
-.grade-score h1 {
-  letter-spacing: 0;
-}
-
-body {
-  font-size: 1.125rem;
-}
-
-/* A phone number is the main thing to tap in a phone book */
-.listing-card .phone a,
-.listing-detail a[href^="tel:"] {
-  display: inline-block;
-  padding: 0.5rem 0;
-}
-
-.pending-item form {
-  margin-bottom: 0.5rem;
-}
-
-/* More visible calls to action */
-.site-nav a.nav-cta {
-  min-height: 3rem;
-  padding: 0.55rem 1rem;
-  border-width: 2px;
-  font-size: clamp(1rem, 4.4vw, 1.2rem);
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  box-shadow: 0 2px 0 var(--color-ink);
-}
-
-.home-head .grade-link a {
-  display: inline-block;
-  padding: 0.7rem 1.2rem;
-  border: 2px solid var(--color-primary);
-  border-radius: var(--radius);
-  background: var(--color-surface);
-  font-size: clamp(1.1rem, 4.8vw, 1.3rem);
-  font-weight: 700;
-  text-decoration: none;
-}
-
-.home-head .grade-link a:hover,
-.home-head .grade-link a:focus-visible {
-  background: var(--color-primary);
-  color: var(--color-button-text);
-}
-
-.grade-eyebrow-title {
-  font-size: clamp(1.7rem, 7.6vw, 2.6rem);
-  letter-spacing: 0.08em;
-}
-
-.grade-eyebrow-sub {
-  font-size: 0.95rem;
-}
-
-/* ---------- Final review fixes ---------- */
-
-/* The old-style digits have no italic or bold of their own, so never fake one */
-body {
-  font-synthesis: none;
-}
-
-/* No sideways scroll on the narrowest phones */
-.filters {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-@media (max-width: 380px) {
-  .site-nav {
-    gap: 0.5rem;
-    padding-left: 0.75rem;
-    padding-right: 0.75rem;
-  }
-
-  .site-nav a.brand {
-    font-size: 1rem;
-  }
-
-  .site-nav a.nav-cta {
-    padding: 0.5rem 0.6rem;
-    font-size: 0.9rem;
-  }
-}
-
-.grade-points {
-  font-size: 0.95rem;
-}
-
-/* Decorations are drawn for the eye only; screen readers skip them */
-.grade-score-number .of::after {
-  content: "/ 100" / "";
-}
-
-.grade-eyebrow::before {
-  content: "\2733" / "";
-}
-
-.grade-lead .button::after {
-  content: "\2192" / "";
-}
-
-/* Headings that wrap split evenly, never leaving one word alone */
-h1,
-h2,
-h3,
-.home-head .grade-link a {
-  text-wrap: balance;
-}
-
-.grade-preview h3 .blank {
-  font-size: 0.95rem;
-  font-weight: 400;
-}
-
-/* What a visitor types in the search boxes is as dark as other text */
-.filters input,
-.filters select {
-  color: var(--color-text);
-}
-
-.filters input::placeholder {
-  color: var(--color-text-muted);
-}
-
-/* Bigger tap targets on the directory and listing pages */
-.listing-card h3 a,
-.listing-detail > p:first-child a,
-.listing-card p a {
-  display: inline-block;
-  padding: 0.5rem 0;
-}
-
-/* "No photo? Type it in" sits on the paper, not alone in a box */
-.rise-form.type-it-in {
-  padding: 0;
-  border: 0;
-  background: none;
-  box-shadow: none;
-}
-
-.grade-preview h3 {
-  text-wrap: wrap;
-}
-
-.confirm-cta {
-  text-wrap: balance;
-}
-
-/* Inline contact links on the report are big enough to tap */
-.grade-report p > a[href^="mailto:"],
-.grade-report p > a[href="/about"] {
-  display: inline-block;
-  padding: 0.5rem 0;
-}
-
-/* On the narrowest phones the pill drops under the check title */
-@media (max-width: 359px) {
-  .grade-check > strong {
-    padding-right: 0;
-  }
-
-  .grade-result,
-  .grade-check.pass .grade-result,
-  .grade-check.fail .grade-result,
-  .grade-check.needs_work .grade-result {
-    position: static;
-    display: inline-block;
-    margin: 0.25rem 0;
-  }
-}
-
-/* Old-style digits only where a number is the point of the line */
-h1,
-h2,
-h3,
-.grade-score-number .num,
-.grade-score-number .of::after,
-.home-head h1,
-.grade-score h1,
-.category-head,
-.category-title,
-.listing-card h3,
-.listing-card h3 a,
-.grade-preview h3,
-a.tel,
-.phone,
-.grade-competitors > li::marker,
-.grade-all-answers ol > li::marker {
-  font-family: "Old Numbers", "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
-}
-
-/* ---------- Utility / print ---------- */
+/* ---------- Print ---------- */
 
 @media print {
   body {
@@ -2349,111 +1423,9 @@ a.tel,
   }
 }
 
-/* ---- Founding Members ------------------------------------------------ */
-.founder-badge {
-  display: inline-flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 0 0.5em;
-  margin: 0.35rem 0 0;
-  padding: 0.15rem 0.6rem;
-  border: 2px solid var(--color-gold);
-  border-radius: 3px;
-  background: var(--color-tan);
-  color: var(--color-primary);
-  font-size: 0.85rem;
-  line-height: 1.5;
+/* Kept from the site's stylesheet: the confirmed date never breaks across lines */
+.stamp-date { white-space: nowrap; }
+@media (max-width: 480px) {
+  .stamp { transform: rotate(-1deg); }
+  .stamp-title { font-size: 0.95rem; white-space: normal; }
 }
-.founder-badge-title {
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-.founder-badge-number { font-weight: 600; white-space: nowrap; }
-.listing-detail .founder-badge { font-size: 0.95rem; margin: 0 0 0.75rem; }
-.founders-invite {
-  margin: 1.5rem 0;
-  padding: 0.9rem 1.1rem;
-  border: 2px solid var(--color-gold);
-  border-radius: 4px;
-  background: var(--color-tan);
-  color: var(--color-ink);
-}
-.founders-invite p { margin: 0; }
-.founders-invite .founders-invite-title {
-  color: var(--color-primary);
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  margin-bottom: 0.25rem;
-}
-
-.founders-invite .founders-invite-link { margin-top: 0.5rem; font-weight: 600; }
-
-/* ---- Verified stamp and the owner's verification page ---------------- */
-.verified-badge {
-  display: inline-flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 0 0.5em;
-  margin: 0.35rem 0.4rem 0 0;
-  padding: 0.15rem 0.6rem;
-  border: 2px solid var(--color-primary);
-  border-radius: 3px;
-  background: var(--color-primary);
-  color: #FFFEF9;
-  font-size: 0.85rem;
-  line-height: 1.5;
-}
-.verified-badge-title { font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
-.verified-badge-title::before { content: "\2713\00a0"; }
-.verified-badge-note { font-weight: 500; }
-.listing-detail .verified-badge { font-size: 0.95rem; margin: 0 0.4rem 0.75rem 0; }
-.verify-steps { padding-left: 1.4rem; }
-.verify-steps > li { margin: 0 0 1.5rem; padding-bottom: 1.25rem; border-bottom: 1px solid var(--color-gold); }
-.verify-steps h2 { margin: 0 0 0.4rem; font-size: 1.25rem; }
-.verify-done {
-  display: inline-block;
-  padding: 0 0.5rem;
-  border: 2px solid var(--color-primary);
-  border-radius: 3px;
-  color: var(--color-primary);
-  font-weight: 700;
-  font-size: 0.8rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-.verify-inline { display: flex; flex-wrap: wrap; gap: 0.6rem; margin: 0.6rem 0; }
-.verify-code { display: flex; flex-wrap: wrap; align-items: end; gap: 0.6rem; margin-top: 0.8rem; }
-.verify-code label { flex-basis: 100%; font-weight: 600; }
-.verify-code input { max-width: 10rem; font-size: 1.2rem; letter-spacing: 0.15em; }
-.verify-inline .button-secondary {
-  padding: 0.6rem 1.1rem;
-  border: 2px solid var(--color-primary);
-  border-radius: 6px;
-  background: transparent;
-  color: var(--color-primary);
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.notice.verify-note {
-  border-color: var(--color-gold);
-  background: var(--color-tan);
-  color: var(--color-ink);
-}
-.verify h2 { margin: 1.5rem 0 0.5rem; }
-.verify-steps h3 { margin: 0 0 0.4rem; font-size: 1.2rem; }
-.verify-benefits { padding-left: 1.2rem; }
-.verify-benefits li { margin-bottom: 0.5rem; }
-.verify-inline button, .verify-inline .button-secondary { min-height: 2.75rem; }
-.verify-code input {
-  min-height: 2.75rem;
-  padding: 0 0.6rem;
-  border: 1.5px solid var(--color-ink);
-  border-radius: 6px;
-  background: #FFFEF9;
-}
-.verified-badge a { color: inherit; text-decoration: underline; }
-.founders-invite .founders-invite-deal { margin-top: 0.5rem; }
