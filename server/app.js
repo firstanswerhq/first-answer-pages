@@ -135,6 +135,8 @@ export function createApp(deps = {}) {
     clock,
     newId: ctx.newGradeId,
     config,
+    // Tests only: a fake pause before the retry and a short limit for second opinions.
+    ...(deps.graderTiming ?? {}),
   });
 
   // IndexNow (Bing ping): real sites only; tests send only with their own fetch.

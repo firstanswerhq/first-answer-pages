@@ -174,6 +174,18 @@ export function createAiBudget({ clock, limit, photoLimit, gradeLimit, file } = 
       persist();
       return result(true, kind);
     },
+    /**
+     * Gives back one call that was counted but never served (the provider was rate limited or
+     * overloaded). Never goes below zero.
+     * @param {{ kind?: 'photo' | 'seance' | 'grade' }} [opts]
+     */
+    refund({ kind = 'seance' } = {}) {
+      state();
+      if (total > 0) total -= 1;
+      if (kind === 'photo' && photo > 0) photo -= 1;
+      if (kind === 'grade' && grade > 0) grade -= 1;
+      persist();
+    },
     /** Reports the current state without counting. */
     peek({ kind = 'seance' } = {}) {
       state();

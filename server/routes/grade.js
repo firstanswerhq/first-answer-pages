@@ -115,6 +115,8 @@ export function createGradeRouter(ctx) {
     googleLive: Boolean(ctx.googleLive),
     requester: hasCookie('ran', grade.id, req),
     rechecking: recheckIsRunning(grade, now()),
+    // Second opinions still answering: the report says so and refreshes until they arrive.
+    secondPending: ctx.grader.secondPending(grade.id),
     now: now(),
     ...extra,
   });
@@ -126,7 +128,13 @@ export function createGradeRouter(ctx) {
       const grade = ctx.grader.peek(id) ?? await ctx.grader.get(id);
       if (!grade) return res.status(404).json({ error: 'Not found' });
       const status = ctx.grader.isStale(grade, now()) ? 'failed' : grade.status;
-      return res.json({ status, steps: Array.isArray(grade.steps) ? grade.steps : [], done: status !== 'running' });
+      return res.json({
+        status,
+        steps: Array.isArray(grade.steps) ? grade.steps : [],
+        done: status !== 'running',
+        // Only present while the check waits in line behind GRADE_MAX_RUNNING others.
+        ...(grade.queued === true && status === 'running' ? { queued: true } : {}),
+      });
     } catch (err) {
       return next(err);
     }
@@ -139,7 +147,8 @@ export function createGradeRouter(ctx) {
       if (grade.status === 'failed' || ctx.grader.isStale(grade, now())) {
         return html(res, 200, failedPage(grade, { stamp: signFormStamp(secret(), now()) }));
       }
-      if (grade.status === 'running') return html(res, 200, scanPage(grade));
+      // The in-memory copy knows whether this check is still waiting in line.
+      if (grade.status === 'running') return html(res, 200, scanPage(ctx.grader.peek(grade.id) ?? grade));
 
       const opts = reportOptions(req, grade);
       const full = !opts.leadGate || opts.unlocked;

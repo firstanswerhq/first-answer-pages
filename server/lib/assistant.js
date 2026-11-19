@@ -50,11 +50,19 @@ const MESSAGES = Object.freeze({
 });
 
 export class AssistantError extends Error {
-  /** @param {'provider_failed' | 'timeout' | 'unparseable'} code */
-  constructor(code) {
+  /**
+   * @param {'provider_failed' | 'timeout' | 'unparseable'} code
+   * @param {{ status?: number, retryAfterSeconds?: number }} [details] the provider's HTTP status and
+   *   its retry-after value in seconds, when it gave one (used to retry once after a 429 or 529)
+   */
+  constructor(code, details = {}) {
     super(MESSAGES[code] ?? MESSAGES.provider_failed);
     this.name = 'AssistantError';
     this.code = Object.hasOwn(MESSAGES, code) ? code : 'provider_failed';
+    if (Number.isInteger(details?.status)) this.status = details.status;
+    if (Number.isFinite(details?.retryAfterSeconds) && details.retryAfterSeconds >= 0) {
+      this.retryAfterSeconds = details.retryAfterSeconds;
+    }
   }
 }
 
@@ -98,6 +106,15 @@ function errorLabel(data, text, secret) {
   return 'other';
 }
 
+/** The retry-after header as seconds (a number, or an HTTP date), or undefined when there is none. */
+function retryAfterSeconds(res) {
+  const raw = typeof res?.headers?.get === 'function' ? res.headers.get('retry-after') : null;
+  if (typeof raw !== 'string' || raw.trim() === '') return undefined;
+  if (/^\d+(\.\d+)?$/.test(raw.trim())) return Number(raw.trim());
+  const at = Date.parse(raw);
+  return Number.isFinite(at) ? Math.max(0, Math.ceil((at - Date.now()) / 1000)) : undefined;
+}
+
 /** One deadline for everything a single ask() does, including a resend. */
 function startDeadline(timeoutMs, outer) {
   const ctrl = new AbortController();
@@ -135,7 +152,10 @@ async function postJson({ provider, url, headers, body, signal, secret }) {
   }
   if (!res.ok) {
     log(`provider=${provider} error=${errorLabel(data, text, secret)} status=${Number(res.status) || 0}`);
-    throw new AssistantError('provider_failed');
+    throw new AssistantError('provider_failed', {
+      status: Number(res.status) || undefined,
+      retryAfterSeconds: retryAfterSeconds(res),
+    });
   }
   if (data === undefined) throw new AssistantError('unparseable');
   return data;

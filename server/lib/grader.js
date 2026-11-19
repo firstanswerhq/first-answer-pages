@@ -32,6 +32,11 @@ const STALE_AFTER_MS = 4 * 60 * 1000;
 const REUSE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const AI_TIMEOUT_MS = 120 * 1000;
 const NOTIFY_TIMEOUT_MS = 5 * 1000;
+const SECOND_OPINION_TIMEOUT_MS = 45 * 1000; // a second opinion never holds up the report
+const RETRY_DEFAULT_SECONDS = 5; // pause before the one retry after a 429 or 529 with no retry-after
+const RETRY_MAX_SECONDS = 20;
+const DEFAULT_MAX_RUNNING = 20;
+const SECOND_RETRY_MAX_SECONDS = 5; // a second opinion's pause before its one retry is never longer than this
 const MAX_ANSWER_CODE_POINTS = 4000;
 const MAX_NAMES_TO_CHECK = 30;
 const MAX_COMPETITORS = 5;
@@ -347,6 +352,15 @@ export function foundOf(grade) {
   };
 }
 
+/**
+ * True when the Grade has a number for a Score but the AI part was not checked (Claude did not answer, the
+ * daily limit was reached, or the AI check is not connected): the number counts website points only.
+ */
+export function isPartialScore(grade) {
+  const list = Array.isArray(grade?.results) ? grade.results : [];
+  return Number.isInteger(grade?.score?.score) && list.some(r => r && r.id === 'ai-named' && r.result === 'not_checked');
+}
+
 /** True while a "check again" is really running: it stops counting after 4 minutes, like a stale Grade. */
 export function recheckIsRunning(grade, nowMs) {
   if (!grade?.recheckRunning) return false;
@@ -445,6 +459,20 @@ const codeOf = err => (
 
 function coded(code) {
   return Object.assign(new Error(code), { code });
+}
+
+/** True when a provider answered 429 (rate limited) or 529 (overloaded). */
+const isBusy = err => Boolean(err) && (err.status === 429 || err.status === 529);
+
+/** Wait `ms`, ending early with a timeout error when `signal` aborts. */
+function pause(ms, signal) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener('abort', () => {
+      clearTimeout(timer);
+      reject(coded('timeout'));
+    }, { once: true });
+  });
 }
 
 /** Run `fn(signal)` with a deadline; the signal aborts when time runs out. */
@@ -548,6 +576,8 @@ function scoreOf(results) {
 export function createGrader({
   store, assistantProvider, extraAssistants = [], nameChecker = null, aiBudget, safeFetcher,
   draftStore, notifier, clock, newId, config = {}, websiteBudgetMs = WEBSITE_BUDGET_MS,
+  // Injectable so tests need no real waiting: the pause before a retry and a second opinion's time limit.
+  sleep = pause, secondOpinionTimeoutMs = SECOND_OPINION_TIMEOUT_MS,
 }) {
   const grades = () => store.collection('grades');
   const leads = () => store.collection('leads');
@@ -556,6 +586,11 @@ export function createGrader({
   const live = new Map(); // Grade_Id -> running Grade, so status.json need not read the file
   const active = new Map(); // Grade_Id -> promise of the run, so one id runs once
   const secondOpinion = new Map(); // assistant name -> { fails, until }
+  // At most GRADE_MAX_RUNNING checks run at once; the rest wait here, first in first out.
+  const maxRunning = Number.isInteger(config.gradeMaxRunning) && config.gradeMaxRunning > 0
+    ? config.gradeMaxRunning
+    : DEFAULT_MAX_RUNNING;
+  const waiting = []; // Grade_Ids in line
 
   const background = (id, label, fn) => {
     Promise.resolve().then(fn).catch(() => log(`${label}-failed id=${id}`));
@@ -566,9 +601,13 @@ export function createGrader({
     return Array.isArray(list) ? list.find(g => g && g.id === id) : undefined;
   }
 
+  // A check counts from when it started running (`startedAt`), not from when it was created, so one
+  // that waited in line is not failed for the time it waited. A check still in this process's line is
+  // never stale; one left over from before a restart has no place in the line and goes stale as before.
   const isStale = (grade, now) => Boolean(grade)
     && grade.status === 'running'
-    && now - Date.parse(grade.createdAt) > STALE_AFTER_MS;
+    && !waiting.includes(grade.id)
+    && now - Date.parse(grade.startedAt || grade.createdAt) > STALE_AFTER_MS;
 
   // ---- reading one answer ----------------------------------------------------------------
 
@@ -672,7 +711,7 @@ export function createGrader({
    * `existing` holds answers already on the Grade (carried over or asked earlier).
    * @returns {Promise<{ entries: object[], mainState: 'ok'|'limit'|'failed'|'not_connected'|'off' }>}
    */
-  async function askQuestion({ input, prompt, existing }) {
+  async function askQuestion({ input, prompt, existing, onSecond, gradeId }) {
     const main = assistantProvider;
     const mainName = main?.name ?? 'unknown';
     const isMock = mainName === 'mock';
@@ -699,34 +738,109 @@ export function createGrader({
       }
     }
 
+    // One retry after a 429 (rate limited) or 529 (overloaded): wait what the provider asks (at most 20
+    // seconds, 5 when it says nothing), inside the same deadline. The retry is not charged again.
+    const askWithRetry = async (assistant, second, signal) => {
+      const ask = () => assistant.ask({
+        prompt,
+        signal,
+        category,
+        businessName: input.name,
+        ...(second ? {} : { consumeExtra: () => aiBudget.consume({ kind: 'grade' }).allowed === true }),
+      });
+      try {
+        return await ask();
+      } catch (err) {
+        if (!isBusy(err)) throw err;
+        const seconds = Number.isFinite(err.retryAfterSeconds) ? err.retryAfterSeconds : RETRY_DEFAULT_SECONDS;
+        log(`ai-retry provider=${assistant.name} status=${err.status}`);
+        // Claude may be asked to wait up to 20 seconds; a second opinion never waits more than 5.
+        const top = second ? SECOND_RETRY_MAX_SECONDS : RETRY_MAX_SECONDS;
+        await sleep(Math.min(Math.max(seconds, 0), top) * 1000, signal);
+        return ask();
+      }
+    };
+
     const run = async ({ assistant, second }) => {
       const started = clock.now();
       try {
-        const raw = await withDeadline(signal => assistant.ask({
-          prompt,
-          signal,
-          category,
-          businessName: input.name,
-          ...(second ? {} : { consumeExtra: () => aiBudget.consume({ kind: 'grade' }).allowed === true }),
-        }), AI_TIMEOUT_MS);
+        const raw = await withDeadline(
+          signal => askWithRetry(assistant, second, signal),
+          second ? secondOpinionTimeoutMs : AI_TIMEOUT_MS,
+        );
         const result = typeof raw === 'string' ? { answer: raw } : raw;
         if (!result || typeof result.answer !== 'string' || result.answer.trim() === '') throw coded('unparseable');
         const entry = await buildEntry({
           assistant, second, prompt, input, result, ms: Math.max(0, clock.now() - started),
         });
         if (second) noteSecond(assistant.name, true);
-        return { entry, second };
+        return { entry, second, name: assistant.name };
       } catch (err) {
-        log(second ? `second-ai-failed provider=${assistant.name} code=${codeOf(err)}` : `ai-failed code=${codeOf(err)}`);
+        // A call that ended in 429 or 529 was never served: give it back to the daily allowance.
+        const busy = isBusy(err);
+        if (busy && typeof aiBudget.refund === 'function') aiBudget.refund({ kind: 'grade' });
+        log(second
+          ? `second-ai-failed provider=${assistant.name} code=${codeOf(err)}${busy ? ' busy' : ''}`
+          : `ai-failed code=${codeOf(err)}${busy ? ' busy' : ''}`);
         if (second) noteSecond(assistant.name, false);
-        return { entry: null, second };
+        return { entry: null, second, name: assistant.name, timedOut: err?.code === 'timeout' };
       }
     };
 
-    const outcomes = await Promise.all(plans.map(run));
-    const mainRan = outcomes.find(o => !o.second);
-    if (mainRan && !mainRan.entry) mainState = 'failed';
-    return { entries: outcomes.filter(o => o.entry).map(o => o.entry), mainState };
+    // Second opinions run at the same time as the main answer, but nothing waits for them: each one is
+    // handed to `onSecond` when it ends (or when its 45 seconds are up). Without `onSecond` they are awaited.
+    const mainPlan = plans.find(p => !p.second);
+    // Remember which second opinions are still answering, so an open report can say so and refresh.
+    for (const plan of plans) if (plan.second && gradeId) trackSecond(gradeId, plan.assistant.name, true);
+    const secondRuns = plans.filter(p => p.second).map(async plan => {
+      const outcome = await run(plan);
+      if (typeof onSecond === 'function') {
+        try {
+          await onSecond({ entry: outcome.entry, name: outcome.name, timedOut: outcome.timedOut === true, prompt });
+        } catch {
+          log(`second-save-failed provider=${plan.assistant.name}`);
+        }
+      }
+      if (gradeId) trackSecond(gradeId, plan.assistant.name, false); // after it is saved
+      return outcome;
+    });
+    secondRuns.forEach(p => p.catch(() => {}));
+
+    const mainOutcome = mainPlan ? await run(mainPlan) : null;
+    if (mainOutcome && !mainOutcome.entry) mainState = 'failed';
+    const entries = mainOutcome?.entry ? [mainOutcome.entry] : [];
+    if (typeof onSecond !== 'function') {
+      for (const o of await Promise.all(secondRuns)) if (o.entry) entries.push(o.entry);
+    }
+    return { entries, mainState };
+  }
+
+  const pendingSeconds = new Map(); // Grade_Id -> assistant names of second opinions still answering
+
+  function trackSecond(id, name, on) {
+    const names = pendingSeconds.get(id) ?? new Set();
+    if (on) names.add(name);
+    else names.delete(name);
+    if (names.size > 0) pendingSeconds.set(id, names);
+    else pendingSeconds.delete(id);
+  }
+
+  /** Assistant names (such as 'chatgpt') of second opinions for this Grade that have not answered yet. */
+  const secondPending = id => [...(pendingSeconds.get(id) ?? [])];
+
+  /** Add a second opinion that arrived after the report was written (or note that it ran out of time). */
+  async function saveLateSecond(id, { entry, name, timedOut, prompt }) {
+    if (!entry && !timedOut) return;
+    await grades().update(list => {
+      const g = list.find(x => x && x.id === id);
+      if (!g) return;
+      if (entry) {
+        if (!g.ai.some(a => a.prompt === entry.prompt && a.provider === entry.provider)) g.ai = [...g.ai, entry];
+      } else {
+        const missed = Array.isArray(g.secondMissed) ? g.secondMissed : [];
+        if (!missed.some(m => m.prompt === prompt && m.provider === name)) g.secondMissed = [...missed, { provider: name, prompt }];
+      }
+    });
   }
 
   // ---- the website steps ----------------------------------------------------------------------------
@@ -850,7 +964,13 @@ export function createGrader({
     const grade = await get(id);
     if (!grade || grade.status !== 'running') return;
     const { input } = grade;
-    live.set(id, structuredClone(grade));
+    // The stale clock starts here, when the check really begins (it may have waited in line before this).
+    const startedAt = nowIso();
+    live.set(id, { ...structuredClone(grade), startedAt });
+    await grades().update(list => {
+      const g = list.find(x => x && x.id === id);
+      if (g) g.startedAt = startedAt;
+    });
     const step = (index, state, finding, ms) => recordStep(id, input, index, state, finding, ms);
 
     const website = readWebsite(input, step).catch(() => {
@@ -862,12 +982,25 @@ export function createGrader({
     // POST /grade never waits on it.
     const carried = rereadCarried(grade.ai, input).catch(() => grade.ai);
 
+    // Second opinions never hold the report up: the ones that end before the report is written go in
+    // with it; the rest are added to the stored Grade when they arrive (or noted as out of time).
+    const late = { done: false, entries: [], missed: [] };
+    const onSecond = async ({ entry, name, timedOut, prompt }) => {
+      if (late.done) {
+        await saveLateSecond(id, { entry, name, timedOut, prompt });
+      } else if (entry) {
+        late.entries.push(entry);
+      } else if (timedOut) {
+        late.missed.push({ provider: name, prompt });
+      }
+    };
+
     const aiBranch = (async () => {
       const t = clock.now();
       const prompt = freeQuestion(input);
       let outcome;
       try {
-        outcome = await askQuestion({ input, prompt, existing: grade.ai });
+        outcome = await askQuestion({ input, prompt, existing: grade.ai, onSecond, gradeId: id });
       } catch {
         log(`ai-step-failed id=${id}`);
         outcome = { entries: [], mainState: 'failed' };
@@ -908,13 +1041,17 @@ export function createGrader({
     const results = assemble(web.results, aiOut.ai, aiMain);
     const score = scoreOf(results);
     await grades().update(list => {
+      // From here on a second opinion that arrives is saved on its own (see onSecond).
+      late.done = true;
       const g = list.find(x => x && x.id === id);
       if (!g) return;
       g.status = 'done';
       g.finishedAt = nowIso();
       g.facts = storedFacts(web.facts, web.found);
       g.found = web.found;
-      g.ai = aiOut.ai;
+      const has = new Set(aiOut.ai.map(a => `${a.prompt}|${a.provider}`));
+      g.ai = [...aiOut.ai, ...late.entries.filter(a => !has.has(`${a.prompt}|${a.provider}`))];
+      if (late.missed.length > 0) g.secondMissed = late.missed;
       g.aiMain = aiMain;
       g.results = results;
       g.score = score;
@@ -933,8 +1070,32 @@ export function createGrader({
           if (g && g.status === 'running') g.status = 'failed';
         }).catch(() => {});
       })
-      .finally(() => active.delete(id));
+      .finally(() => {
+        active.delete(id);
+        startWaiting(); // a place is free: the next check in line starts
+      });
     active.set(id, p);
+  }
+
+  /** Start checks from the line, first in first out, while fewer than `maxRunning` are running. */
+  function startWaiting() {
+    while (waiting.length > 0 && active.size < maxRunning) startRun(waiting.shift());
+  }
+
+  /**
+   * A new Grade starts now, or waits in line when `maxRunning` checks are already running. A waiting
+   * Grade is shown as "in line" from memory only (like a running one), so a restart clears the line
+   * the same way it clears running checks.
+   */
+  function enqueue(id, grade) {
+    if (active.has(id) || waiting.includes(id)) return;
+    if (active.size < maxRunning && waiting.length === 0) {
+      startRun(id);
+      return;
+    }
+    waiting.push(id);
+    startWaiting();
+    if (grade && waiting.includes(id)) live.set(id, { ...structuredClone(grade), queued: true });
   }
 
   // ---- starting a Grade -----------------------------------------------------------------------------------------
@@ -996,7 +1157,7 @@ export function createGrader({
     const key = reuseKey(input);
     const copies = await reusableAnswers(key);
     const id = newId();
-    await grades().append({
+    const created = {
       id,
       status: 'running',
       input,
@@ -1017,12 +1178,13 @@ export function createGrader({
       recheckRunning: false,
       recheckFailedAt: null,
       extraAiStartedAt: null,
-    });
+    };
+    await grades().append(created);
     if (typeof store.pruneExpired === 'function') {
       await store.pruneExpired({ quotes: false, drafts: false, grades: true, leads: true })
         .catch(() => log(`prune-failed id=${id}`));
     }
-    queueMicrotask(() => startRun(id));
+    queueMicrotask(() => enqueue(id, created));
     return id;
   }
 
@@ -1032,7 +1194,10 @@ export function createGrader({
     for (const prompt of extraQuestions((await get(id)).input)) {
       const grade = await get(id);
       if (!grade) return;
-      const { entries, mainState } = await askQuestion({ input: grade.input, prompt, existing: grade.ai });
+      // Second opinions are saved as they arrive; only the main answer is waited for.
+      const { entries, mainState } = await askQuestion({
+        input: grade.input, prompt, existing: grade.ai, onSecond: details => saveLateSecond(id, details), gradeId: id,
+      });
       if (entries.length > 0) {
         await grades().update(list => {
           const g = list.find(x => x && x.id === id);
@@ -1096,23 +1261,28 @@ export function createGrader({
     };
     await leads().append(stored);
 
+    // The owner is answered at once; the email goes out in the background, under the same time limit.
+    // Nothing about the lead is logged.
     if (typeof notifier?.notifyLead === 'function') {
-      let timer;
-      try {
-        await Promise.race([
-          notifier.notifyLead({
-            business: grade.input.name,
-            score: stored.score,
-            reportUrl: `${config.baseUrl ?? ''}/grade/${id}`,
-            lead: { name: stored.name, email: stored.email, phone: stored.phone, okToContact: stored.okToContact },
-          }),
-          new Promise((_, reject) => { timer = setTimeout(() => reject(coded('timeout')), NOTIFY_TIMEOUT_MS); }),
-        ]);
-      } catch {
-        log(`lead-notice-failed id=${id}`);
-      } finally {
-        clearTimeout(timer);
-      }
+      const notice = {
+        business: grade.input.name,
+        score: stored.score,
+        reportUrl: `${config.baseUrl ?? ''}/grade/${id}`,
+        lead: { name: stored.name, email: stored.email, phone: stored.phone, okToContact: stored.okToContact },
+      };
+      background(id, 'lead-notice', async () => {
+        let timer;
+        try {
+          await Promise.race([
+            notifier.notifyLead(notice),
+            new Promise((_, reject) => { timer = setTimeout(() => reject(coded('timeout')), NOTIFY_TIMEOUT_MS); }),
+          ]);
+        } catch {
+          log(`lead-notice-failed id=${id}`);
+        } finally {
+          clearTimeout(timer);
+        }
+      });
     }
     await startExtraQuestions(id).catch(() => log(`extra-ai-failed id=${id}`));
     return stored;
@@ -1198,7 +1368,8 @@ export function createGrader({
             g.recheckFailedAt = nowIso();
             return;
           }
-          g.previousScore = g.score?.score ?? null;
+          // A partial score (no AI answer) is never put beside a full one.
+          g.previousScore = isPartialScore(g) ? null : (g.score?.score ?? null);
           g.facts = storedFacts(web.facts, web.found);
           g.found = web.found;
           g.results = assemble(web.results, g.ai, g.aiMain);
@@ -1233,6 +1404,8 @@ export function createGrader({
       found = true;
     });
     if (found) await leads().update(list => list.filter(l => l && l.gradeId !== id));
+    const inLine = waiting.indexOf(id);
+    if (inLine !== -1) waiting.splice(inLine, 1);
     live.delete(id);
     return found;
   }
@@ -1242,6 +1415,7 @@ export function createGrader({
     run: id => { startRun(id); return active.get(id) ?? Promise.resolve(); },
     get,
     peek: id => (live.has(id) ? structuredClone(live.get(id)) : undefined),
+    secondPending,
     isStale,
     recheck,
     unlock,

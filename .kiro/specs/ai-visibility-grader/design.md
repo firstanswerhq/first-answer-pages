@@ -451,6 +451,7 @@ Business facts kept on a Grade are only what the business published on its own w
 | `GRADER_LEAD_GATE` | `on` | `off` shows the Full_Report to everyone. |
 | `GRADE_AI_CALLS_PER_DAY` | `60` | Grader share of the daily AI cap. |
 | `GRADER_SECRET` | none | Signs form stamps and unlock cookies. render.yaml: `generateValue: true`. |
+| `GRADE_MAX_RUNNING` | `20` | How many checks may run at once; the rest wait in line (a positive whole number). |
 
 ## Correctness Properties
 

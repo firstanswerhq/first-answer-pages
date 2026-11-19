@@ -20,7 +20,7 @@ import {
 import { formatRunTime } from './seance-html.js';
 import { listedNames } from './name-match.js';
 import {
-  providerLabel, freeQuestion, stepNames, foundOf, isSecondOpinion, schemaHours, readableHours,
+  providerLabel, freeQuestion, stepNames, foundOf, isSecondOpinion, schemaHours, readableHours, isPartialScore,
 } from './grader.js';
 
 const ROBOTS_META = '<meta name="robots" content="noindex, nofollow">';
@@ -123,6 +123,8 @@ export function scanPage(grade) {
   const names = stepNames(grade.input);
   const done = new Map((Array.isArray(grade.steps) ? grade.steps : []).map(s => [s.name, s]));
   const firstOpen = names.findIndex(n => !done.has(n));
+  // A check waiting behind the limit on running checks shows one extra first step and nothing else working.
+  const inLine = grade.queued === true;
   const items = names.map((name, i) => {
     const step = done.get(name);
     let cls = 'waiting';
@@ -130,17 +132,21 @@ export function scanPage(grade) {
     if (step) {
       cls = step.state === 'skipped' ? 'done skipped' : step.state === 'failed' ? 'done failed' : 'done';
       mark = step.state === 'skipped' ? 'Skipped' : step.state === 'failed' ? 'Problem' : 'Done';
-    } else if (i === firstOpen || (i === 3 && firstOpen !== 4)) {
+    } else if (!inLine && (i === firstOpen || (i === 3 && firstOpen !== 4))) {
       cls = 'running';
       mark = 'Working';
     }
     return `<li class="grade-step ${cls}"><span class="step-mark">${mark}</span><span class="step-name">${h(name)}</span>${step?.finding ? `<span class="finding">${h(step.finding)}</span>` : ''}</li>`;
-  }).join('\n    ');
+  });
+  if (inLine) {
+    items.unshift('<li class="grade-step running grade-step-line"><span class="step-mark">Working</span><span class="step-name">You\'re in line. Your check starts in a moment.</span></li>');
+  }
+  const itemsHtml = items.join('\n    ');
   const body = `<section class="grade-scan" data-grade-scan data-status-url="/grade/${h(grade.id)}/status.json">
   <h1>Checking ${h(grade.input.name)}</h1>
   <p class="tagline">This takes about two minutes. You can leave this page open.</p>
   <ol class="grade-steps">
-    ${items}
+    ${itemsHtml}
   </ol>
 </section>`;
   return page(`Checking ${grade.input.name}`, body, { refresh: true });
@@ -166,6 +172,14 @@ export function failedPage(grade, { stamp = '' } = {}) {
 }
 
 // ---- pieces of the report ---------------------------------------------------------------
+
+/** Why the AI part of a partial score was left out, as the start of a sentence ending "so". */
+function partialReason(grade) {
+  const state = grade.aiMain?.state;
+  if (state === 'limit') return "the daily limit for AI checks was reached, so";
+  if (state === 'not_connected' || state === 'off') return "the AI check isn't connected yet, so";
+  return `${midSentence(grade.aiMain?.label ?? 'The assistant')} didn't answer this time, so`;
+}
 
 /** One sentence about what an answer did with the business. */
 function outcome(a) {
@@ -259,7 +273,7 @@ function askedLine(entry, now, label) {
 }
 
 /** The AI part of the free report. */
-function aiFree(grade, { googleLive, requester, now }) {
+function aiFree(grade, { googleLive, requester, now, secondPending = [] }) {
   const all = aiOf(grade);
   const prompt = freeQuestion(grade.input);
   const first = all.find(a => !isSecondOpinion(a) && a.prompt === prompt) ?? all.find(a => !isSecondOpinion(a));
@@ -297,6 +311,16 @@ function aiFree(grade, { googleLive, requester, now }) {
         parts.push(competitorList(s, grade.input), answerBlock(s));
       }
     }
+  }
+
+  // A second opinion that ran out of its 45 seconds is said so; the report never waited for it.
+  const askedPrompt = first?.prompt ?? prompt;
+  const missed = (Array.isArray(grade.secondMissed) ? grade.secondMissed : []).filter(m => m && m.prompt === askedPrompt);
+  for (const m of missed) parts.push(`<p class="hint">${h(providerLabel(m.provider))} didn't answer in time.</p>`);
+  // The script (and the no-script refresh) reloads the page while this note shows; it goes away when they arrive.
+  const waitingOn = [...new Set(secondPending.map(providerLabel))];
+  if (waitingOn.length > 0) {
+    parts.push(`<p class="notice" role="status" data-grade-rechecking>${h(`${joinAnd(waitingOn)} ${waitingOn.length === 1 ? 'is' : 'are'} still answering. This page updates by itself.`)}</p>`);
   }
 
   const google = googleLive ? `<section class="grade-ai grade-google">
@@ -553,6 +577,8 @@ export function reportPage(grade, opts = {}) {
     googleLive = false, requester = false, leadValues, leadErrors,
     // A recheck that was cut off (for example by a restart) stops counting after 4 minutes; the route works that out.
     rechecking = false,
+    // Assistant names of second opinions that have not answered yet (their 45 seconds are not up).
+    secondPending = [],
     // The current time in ms, so an answer older than 10 minutes says when it was asked.
     now,
   } = opts;
@@ -569,7 +595,12 @@ export function reportPage(grade, opts = {}) {
   const noWebsite = !i.website
     ? '<p class="notice" role="status">We could only run the AI check. Add a website to get a score. A free listing gives AI something to read about the business.</p>'
     : '';
-  const prev = Number.isInteger(grade.previousScore) && scored && grade.recheckedAt
+  // A score that leaves out the AI part is marked as partial, and never set beside an earlier score.
+  const partial = isPartialScore(grade);
+  const partialLine = partial
+    ? `<p class="hint grade-partial">${h(`Partial score: ${partialReason(grade)} the AI part isn't counted. Check again later for your full score.`)}</p>`
+    : '';
+  const prev = Number.isInteger(grade.previousScore) && scored && grade.recheckedAt && !partial
     ? `<p class="grade-prev">Your score was ${grade.previousScore} before. It is ${s.score} now.</p>`
     : '';
 
@@ -577,6 +608,7 @@ export function reportPage(grade, opts = {}) {
   <div class="grade-score">
     <p class="grade-eyebrow"><span class="grade-eyebrow-title">AI Visibility Check</span><span class="grade-eyebrow-sub">Report &middot; First Answer Pages</span></p>
     ${number}
+    ${partialLine}
     <h1>${h(i.name)}</h1>
     <p class="grade-where">${h(i.service)} in ${h(i.city)}, ${h(i.state)}</p>
     ${failedLine}
@@ -615,14 +647,14 @@ export function reportPage(grade, opts = {}) {
 
   const body = `<section class="grade-report">
 ${top}
-${aiFree(grade, { googleLive, requester, now })}
+${aiFree(grade, { googleLive, requester, now, secondPending })}
 ${claim}
 ${searchPreview(grade)}
 ${groupLines(grade)}
 ${fullPart}
 ${foot}
 </section>`;
-  return page(`AI Visibility Check for ${i.name}`, body, { refresh: rechecking });
+  return page(`AI Visibility Check for ${i.name}`, body, { refresh: rechecking || secondPending.length > 0 });
 }
 
 // ---- Google's live answer ----------------------------------------------------------------------

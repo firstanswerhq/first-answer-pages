@@ -11,6 +11,7 @@
 
 import { layout, escapeHtml } from '../lib/html.js';
 import { formatRunTime } from '../lib/seance-html.js';
+import { isPartialScore } from '../lib/grader.js';
 
 const NOTES = Object.freeze({
   deleted: 'Deleted the report and its leads.',
@@ -50,7 +51,10 @@ export function mountGradeAdmin(router, ctx, { adminNav, wantsHtml, form }) {
       const items = grades.map(g => {
         const stale = g.status === 'running' && ctx.grader.isStale(g, now());
         const status = stale ? 'failed' : String(g.status ?? '');
-        const score = Number.isInteger(g.score?.score) ? String(g.score.score) : 'not scored';
+        // A score without the AI part is marked "partial" next to the number.
+        const score = Number.isInteger(g.score?.score)
+          ? `${g.score.score}${isPartialScore(g) ? ' (partial)' : ''}`
+          : 'not scored';
         const id = String(g.id ?? '');
         const safeId = encodeURIComponent(id);
         return `<li class="pending-item">
