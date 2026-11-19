@@ -18,7 +18,9 @@ import {
   suggestedTitle, suggestedSummary, jsonLdBlock, llmsDraft, robotsLines,
 } from './fix-kit.js';
 import { formatRunTime } from './seance-html.js';
-import { providerLabel, freeQuestion, stepNames } from './grader.js';
+import {
+  providerLabel, freeQuestion, stepNames, foundOf, isSecondOpinion, schemaHours,
+} from './grader.js';
 
 const ROBOTS_META = '<meta name="robots" content="noindex, nofollow">';
 const REFRESH_NOSCRIPT = '<noscript><meta http-equiv="refresh" content="3"></noscript>';
@@ -195,8 +197,8 @@ function competitorList(a) {
 function aiFree(grade, { googleLive, requester }) {
   const all = aiOf(grade);
   const prompt = freeQuestion(grade.input);
-  const first = all.find(a => !a.second && a.prompt === prompt) ?? all.find(a => !a.second);
-  const seconds = all.filter(a => a.second && (a.prompt === (first?.prompt ?? prompt)));
+  const first = all.find(a => !isSecondOpinion(a) && a.prompt === prompt) ?? all.find(a => !isSecondOpinion(a));
+  const seconds = all.filter(a => isSecondOpinion(a) && (a.prompt === (first?.prompt ?? prompt)));
   const mainLabel = grade.aiMain?.label ?? (first ? providerLabel(first.provider) : 'The assistant');
   const parts = [];
 
@@ -247,7 +249,7 @@ function aiFree(grade, { googleLive, requester }) {
 
 function previewCard(grade) {
   const i = grade.input;
-  const found = grade.found ?? {};
+  const found = foundOf(grade);
   const hours = Array.isArray(found.hours) && found.hours.length ? found.hours.map(x => h(x)).join('; ') : blank('Add your hours');
   return `<div class="grade-preview">
     <h3>${h(i.name)}</h3>
@@ -276,7 +278,7 @@ function searchPreview(grade) {
   if (!i.website || !grade.facts) return '';
   const byId = new Map(resultsOf(grade).map(r => [r.id, r.result]));
   const good = byId.get('title-city-service') === 'pass' && byId.get('summary') === 'pass';
-  const found = grade.found ?? {};
+  const found = foundOf(grade);
   const kit = { name: i.name, service: i.service, city: i.city, state: i.state, phone: found.phone ?? '' };
   const host = hostOf(i.website);
   const now = `<div class="serp">
@@ -360,8 +362,8 @@ function allChecks(grade) {
 function answersSection(grade) {
   const all = aiOf(grade);
   if (all.length === 0) return '';
-  const main = all.filter(a => !a.second);
-  const seconds = all.filter(a => a.second);
+  const main = all.filter(a => !isSecondOpinion(a));
+  const seconds = all.filter(a => isSecondOpinion(a));
   const mainLabel = grade.aiMain?.label ?? (main[0] ? providerLabel(main[0].provider) : 'The assistant');
   const lines = [];
   if (main.length > 1) lines.push(`<p><strong>Named in ${main.filter(a => a.named).length} of ${main.length} answers.</strong></p>`);
@@ -379,7 +381,7 @@ function answersSection(grade) {
   const items = prompts.map(p => {
     const entries = all.filter(a => a.prompt === p);
     return `<li><strong>${h(p)}</strong>${entries.map(a => `
-      <p>${h(providerLabel(a.provider))}${a.second ? ' (for comparison only)' : ''}: ${h(outcome(a))}</p>
+      <p>${h(providerLabel(a.provider))}${isSecondOpinion(a) ? ' (for comparison only)' : ''}: ${h(outcome(a))}</p>
       ${answerBlock(a)}`).join('')}</li>`;
   }).join('\n    ');
   return `<section class="grade-all-answers">
@@ -393,15 +395,17 @@ function answersSection(grade) {
 
 function fixKit(grade, contactEmail) {
   const i = grade.input;
-  const found = grade.found ?? {};
+  const found = foundOf(grade);
   const kit = {
     name: i.name, service: i.service, city: i.city, state: i.state,
     phone: found.phone ?? '', website: i.website ?? '', address: found.address ?? '', hours: found.hours ?? [],
   };
+  // The business label wants schema.org's own hours format; free text like "Monday to Friday, 8 am to 5 pm" is left out of it.
+  const labelKit = { ...kit, hours: schemaHours(found.hours) };
   const items = [
     ['kit-title', 'Page title', 'Use this as your home page title.', suggestedTitle(kit)],
     ['kit-summary', 'Page summary', 'Use this as the summary Google shows under your title.', suggestedSummary(kit)],
-    ['kit-label', 'Business label for AI', 'Paste this into your home page so AI can read your name and phone.', jsonLdBlock(kit)],
+    ['kit-label', 'Business label for AI', 'Paste this into your home page so AI can read your name and phone.', jsonLdBlock(labelKit)],
     ['kit-llms', 'Info sheet for AI (llms.txt)', 'Save this as a plain text file named llms.txt on your website.', llmsDraft(kit)],
   ];
   const blocked = resultsOf(grade).find(r => r.id === 'ai-bots-allowed' && r.result === 'fail')?.blocked ?? [];
@@ -450,12 +454,12 @@ function leadForm(grade, { values = {}, errors = {} } = {}) {
 </section>`;
 }
 
-function recheckBlock(grade) {
+function recheckBlock(grade, rechecking) {
   if (!grade.input.website) {
     return '<p class="notice">You did not give a website, so there is nothing to check again. Your fix kit still has a draft you can use.</p>';
   }
   const parts = [];
-  if (grade.recheckRunning) {
+  if (rechecking) {
     parts.push('<p class="notice" role="status" data-grade-rechecking>Checking your website again. This page updates by itself.</p>');
   }
   if (grade.recheckFailedAt) {
@@ -480,6 +484,8 @@ export function reportPage(grade, opts = {}) {
   const {
     unlocked = false, leadGate = true, contactEmail = '', opened = false,
     googleLive = false, requester = false, leadValues, leadErrors,
+    // A recheck that was cut off (for example by a restart) stops counting after 4 minutes; the route works that out.
+    rechecking = false,
   } = opts;
   const i = grade.input;
   const full = !leadGate || unlocked;
@@ -533,7 +539,7 @@ export function reportPage(grade, opts = {}) {
   ${justOpened}
   ${allChecks(grade)}
   ${answersSection(grade)}
-  ${recheckBlock(grade)}
+  ${recheckBlock(grade, rechecking)}
   ${fixKit(grade, contactEmail)}
 </div>`
     : leadForm(grade, { values: leadValues, errors: leadErrors });
@@ -547,7 +553,7 @@ ${groupLines(grade)}
 ${fullPart}
 ${foot}
 </section>`;
-  return page(`AI score for ${i.name}`, body, { refresh: Boolean(grade.recheckRunning) });
+  return page(`AI score for ${i.name}`, body, { refresh: rechecking });
 }
 
 // ---- Google's live answer ----------------------------------------------------------------------

@@ -34,10 +34,35 @@ const CONNECTORS = new Set(['of', 'the', 'and', 'an', 'a', 'for', 'in', 'on', 't
 const HEADING_WORDS = new Set([
   'caveat', 'caveats', 'tip', 'tips', 'note', 'notes', 'summary', 'conclusion', 'disclaimer',
   'disclaimers', 'overview', 'recommendation', 'recommendations', 'consideration', 'considerations',
-  'pros', 'cons', 'mentions', 'takeaway', 'takeaways', 'thoughts', 'faq', 'faqs', 'verdict',
+  'mentions', 'takeaway', 'takeaways', 'thoughts', 'faq', 'faqs', 'verdict',
   'introduction', 'warning', 'warnings', 'reminder', 'reminders', 'checklist', 'questions',
   'resources', 'sources', 'references',
 ]);
+
+// "Pros" and "Cons" are headings only when they stand alone; "Plumbing Pros of Nashville" is a business.
+const HEADING_PHRASES = new Set(['pro', 'pros', 'con', 'cons', 'pros and cons', 'pros cons', 'pros vs cons']);
+
+// Offer and detail words. A nested line made only of these ("Free Estimates", "Same-Day Service
+// Available") is a detail about a business, not another business.
+const DETAIL_WORDS = new Set([
+  'free', 'estimate', 'estimates', 'quote', 'quotes', 'same', 'day', 'next', 'service', 'services',
+  'available', 'availability', 'licensed', 'insured', 'bonded', 'emergency', 'hour', 'hours', 'hr',
+  '24', '7', '247', 'open', 'call', 'now', 'today', 'warranty', 'warranties', 'guarantee', 'guaranteed',
+  'satisfaction', 'family', 'owned', 'operated', 'locally', 'local', 'years', 'year', 'experience',
+  'experienced', 'financing', 'finance', 'affordable', 'pricing', 'price', 'prices', 'rates', 'rate',
+  'upfront', 'flat', 'background', 'checked', 'certified', 'trained', 'technicians', 'technician',
+  'professional', 'fast', 'quick', 'friendly', 'reliable', 'trusted', 'top', 'rated', 'rating', 'serving',
+  'weekend', 'weekends', 'evening', 'evenings', 'appointments', 'appointment', 'online', 'booking',
+  'no', 'hidden', 'fees', 'fee', 'trip', 'charge', 'charges', 'senior', 'military', 'discounts',
+  'discount', 'specials', 'special', 'payment', 'plans', 'options', 'accepted', 'major', 'cards', 'credit',
+  'and', 'the', 'of', 'with', 'for', 'in', 'on', 'a', 'an', 'to', 'we', 'our', 'are', 'is', 'all', 'any',
+]);
+
+/** True when every word is an offer or detail word. */
+const detailOnly = text => {
+  const list = words(text);
+  return list.length > 0 && list.every(w => DETAIL_WORDS.has(w));
+};
 
 // Review sites and directories that show up in bold but are not the businesses.
 const BLOCK_WORDS = new Set([
@@ -193,6 +218,13 @@ function trimName(s) {
   return String(s).trim().replace(/[\s.,;:!?]+$/, '').trim();
 }
 
+/** No heading word, review-site word, or lone "Pros" / "Cons". */
+function notAHeading(text) {
+  const list = words(text);
+  if (HEADING_PHRASES.has(list.join(' '))) return false;
+  return !list.some(w => HEADING_WORDS.has(w) || BLOCK_WORDS.has(w));
+}
+
 /** Does this text read like a business name? Title case, no heading or review-site words. */
 function validName(text, minWords) {
   if (text.length < 2 || text.length > 60) return false;
@@ -208,7 +240,7 @@ function validName(text, minWords) {
     if (CONNECTORS.has(bare.toLowerCase().replace(/[^\p{L}]/gu, ''))) continue;
     return false;
   }
-  return !words(text).some(w => HEADING_WORDS.has(w) || BLOCK_WORDS.has(w));
+  return notAHeading(text);
 }
 
 /** Bold spans inside a line of running text. */
@@ -234,7 +266,7 @@ function looseName(text) {
   const tokens = text.split(/\s+/);
   if (tokens.length < 2 || tokens.length > 4) return false;
   if (!/[\p{Lu}\p{N}]/u.test(Array.from(tokens[0])[0])) return false;
-  return !words(text).some(w => HEADING_WORDS.has(w) || BLOCK_WORDS.has(w));
+  return notAHeading(text);
 }
 
 /** Names from the text after a list marker. `loose` is true for an unindented numbered line. */
@@ -303,7 +335,9 @@ function extractEntries(answer) {
     }
     const li = line.match(LIST_RE);
     if (li) {
-      push(fromListContent(li[3], li[1] === '' && /^\d/.test(li[2])));
+      const names = fromListContent(li[3], li[1] === '' && /^\d/.test(li[2]));
+      // An indented line made only of offer words ("Free Estimates") is a detail, not a business.
+      push(li[1] === '' ? names : names.filter(n => !detailOnly(n)));
       continue;
     }
     const sb = line.match(STANDALONE_BOLD_RE);

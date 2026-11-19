@@ -236,3 +236,34 @@ The rebuild also removed `server/lib/assistant.js`, `server/lib/name-check.js` a
   - [x] 10.3 Final checkpoint: run `node --test`; every test passes, including every test from earlier specs. Ask the user if questions arise.
     - Rebuild note: the cloud ran the whole suite with every grader file rebuilt in Kiro and it passed 1015 of 1015 (the original 1014 plus one new property test).
     - _Requirements: 17.1, 17.2, 17.4_
+
+## Review fixes
+
+From `review-2026-11-18.md` (two independent reviews of the rebuild; security clean, 1015 of 1015 passing). Each item is something the tests do not catch. Work in order; the cloud runs the tests.
+
+### A. Behavior
+
+- [x] V1. Old stored Grades keep working: fall back to `grade.facts` when `found` is missing (report and claim); never count second-opinion answers toward the score or the "named" sentence, for old and new Grades (an old entry is a second opinion when its provider is not the main assistant); accept the old `requester:` label for the `gr_` cookie; treat an old `draftId` as that browser's Draft when the cookie matches it
+- [x] V2. `POST /grade` must not wait on the Gemini name check: store the Grade first, re-read carried answers in the background in parallel, and do not re-read on every reuse just because an earlier Gemini check failed
+- [x] V3. The two extra questions run on unlock even when the free question failed or hit the daily limit (requirement 9.2); stop the extra questions once the main assistant fails, so a paid call is not wasted
+- [x] V4. `recheckRunning` expires after 4 minutes, like `isStale`, so a restart cannot leave "Checking your website again" on the report forever
+- [x] V5. A failed home page does not skip robots.txt and llms.txt: still read both, so the AI crawler check can still run
+- [x] V6. Hours: parse each comma-separated part on its own ("Mo-Fr 08:00-17:00, Sa 09:00-12:00"); when unsure leave hours blank; in the fix kit's business label do not put free text in `openingHours`
+- [x] V7. Page title check: match whole words and allow short service words ("Best Spa in Nashville" passes; "Proofers Club Nashville" does not pass for "roofers")
+- [x] V8. Claim after the owner sent the Draft for review goes back to the same Draft (requirement 10.4), not a new one
+- [x] V9. Non-UTF-8 pages: decode with the charset from the header or meta tag (at least latin1 and windows-1252); a lookup that throws synchronously rejects with a `SafeFetchError`
+- [x] V10. Competitor names: nested detail lines such as "Free Estimates" and "Same-Day Service Available" are not competitors; a name containing "Pros" is not dropped ("Plumbing Pros of Nashville" stays; a business with "Pros" in its own name keeps its place)
+- [x] V11. Count the unlock rate limit only for valid submissions; with the Grader switched off, `/grade` still sends the noindex header on its 404
+
+### B. Page wording and layout
+
+- [ ] V12. Never sound like a promise AI will name the business: leave `ai-named` out of "Fix these first"; its fix keeps "It can take days to weeks, and we can't promise AI will name you."
+- [ ] V13. Lead form: say the report opens right away on this page; bring back the phone note ("Why the phone number? ...")
+- [ ] V14. About page: write for the person who clicked "What do we read, and why?" and say everything in the review's list (what is read, user agent, the AI questions, Gemini name check, second opinions, Google's live answer, 90 days and removal)
+- [ ] V15. Google's live answer: its section on the report (heading, question asked, the note) and "Google doesn't review or endorse this report." on the answer page
+- [ ] V16. Free listing box: heading "Your free listing in our directory", the full note, compact phone-book listing look
+- [ ] V17. After 10 minutes say "We asked <assistant> on <date>" instead of "We just asked"
+- [ ] V18. Form errors red and bold, top note "Please fix the problems below.", one State hint only
+- [ ] V19. Check titles are neutral names, not claims; plain words in details
+- [ ] V20. Help for owners who are not computer people ("Not a computer person? ..." and the fix-kit intro)
+- [ ] V21. Smaller layout points: "Score by area" heading with points; "Check again" after the fix kit under "Made some changes?"; hint lines in the small hint style; plain note (not error) with no website; 404 page keeps "Reports are deleted after 90 days."

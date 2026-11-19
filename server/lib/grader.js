@@ -155,17 +155,48 @@ export function stepNames(input) {
 
 const DAY_NAMES = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 const CLOCK = String.raw`\d{1,2}(?::\d{2})?\s?(?:am|pm|a\.m\.|p\.m\.)?`;
-const TIME_RANGE_AT_END = new RegExp(String.raw`(${CLOCK}\s*(?:-|\u2013|\u2014|to)\s*${CLOCK})\s*$`, 'i');
+const TIME_RANGE_ANYWHERE = new RegExp(String.raw`${CLOCK}\s*(?:-|\u2013|\u2014|to)\s*${CLOCK}`, 'gi');
 
 function dayIndex(token) {
   const t = token.toLowerCase().replace(/\./g, '');
   return t.length < 2 ? -1 : DAY_NAMES.findIndex(d => d.startsWith(t));
 }
 
+/** The days named in a piece of text ("Mo-Fr", "Monday, Wednesday"), or null when unsure. */
+function parseDays(text) {
+  const days = text
+    .replace(/\s*(?:-|\u2013|\u2014)\s*/g, '-')
+    .replace(/\s+(?:to|through|thru)\s+/gi, '-')
+    .replace(/[:;]+/g, ' ');
+  const indexes = new Set();
+  for (const token of days.split(/[\s,&]+/).filter(Boolean)) {
+    if (/^and$/i.test(token)) continue;
+    const parts = token.split('-').filter(Boolean);
+    if (parts.length === 2) {
+      const a = dayIndex(parts[0]);
+      const b = dayIndex(parts[1]);
+      if (a === -1 || b === -1) return null;
+      for (let i = a; ; i = (i + 1) % 7) {
+        indexes.add(i);
+        if (i === b) break;
+      }
+    } else if (parts.length === 1) {
+      const i = dayIndex(parts[0]);
+      if (i === -1) return null;
+      indexes.add(i);
+    } else {
+      return null;
+    }
+  }
+  return indexes.size > 0 ? indexes : null;
+}
+
 /**
- * Turn opening-hours lines such as "Mo-Fr 08:00-17:00" or "Monday, Wednesday
- * 9am-5pm" into { monday: '08:00-17:00', ... }. A line without both days and a
- * time range is left out.
+ * Turn opening-hours lines such as "Mo-Fr 08:00-17:00", "Mo-Fr 08:00-17:00, Sa
+ * 09:00-12:00" or "Monday, Wednesday 9am-5pm" into { monday: '08:00-17:00', ... }.
+ * Each time range takes the days written just before it. A line with a part it
+ * cannot read for sure (a word that is not a day, days with no time) is left out
+ * whole, so the hours stay blank rather than wrong.
  * @param {string[] | undefined} lines
  * @returns {Record<string, string>}
  */
@@ -173,36 +204,104 @@ export function hoursToObject(lines) {
   const out = {};
   for (const line of Array.isArray(lines) ? lines : []) {
     if (typeof line !== 'string') continue;
-    const m = TIME_RANGE_AT_END.exec(line);
-    if (!m) continue;
-    const value = m[1]
-      .replace(/\s*(?:-|\u2013|\u2014|\bto\b)\s*/gi, '-')
-      .replace(/\s+(?=(?:am|pm|a\.m\.|p\.m\.))/gi, '');
-    const days = line.slice(0, m.index)
-      .replace(/\s*(?:-|\u2013|\u2014)\s*/g, '-')
-      .replace(/\s+(?:to|through|thru)\s+/gi, '-')
-      .replace(/[:;]+/g, ' ');
-    const indexes = new Set();
-    for (const token of days.split(/[\s,&]+|\band\b/i).filter(Boolean)) {
-      const parts = token.split('-').filter(Boolean);
-      if (parts.length === 2) {
-        const a = dayIndex(parts[0]);
-        const b = dayIndex(parts[1]);
-        if (a === -1 || b === -1) continue;
-        for (let i = a; ; i = (i + 1) % 7) {
-          indexes.add(i);
-          if (i === b) break;
-        }
-      } else if (parts.length === 1) {
-        const i = dayIndex(parts[0]);
-        if (i !== -1) indexes.add(i);
+    const found = [];
+    let from = 0;
+    let sure = true;
+    for (const m of line.matchAll(TIME_RANGE_ANYWHERE)) {
+      const days = parseDays(line.slice(from, m.index));
+      from = m.index + m[0].length;
+      if (!days) {
+        sure = false;
+        break;
       }
+      const value = m[0]
+        .replace(/\s*(?:-|\u2013|\u2014|\bto\b)\s*/gi, '-')
+        .replace(/\s+(?=(?:am|pm|a\.m\.|p\.m\.))/gi, '');
+      found.push({ days, value });
     }
-    for (const i of [...indexes].sort((x, y) => x - y)) {
-      if (out[DAY_NAMES[i]] === undefined) out[DAY_NAMES[i]] = value;
+    if (!sure || found.length === 0) continue;
+    for (const { days, value } of found) {
+      for (const i of [...days].sort((x, y) => x - y)) {
+        if (out[DAY_NAMES[i]] === undefined) out[DAY_NAMES[i]] = value;
+      }
     }
   }
   return out;
+}
+
+const SCHEMA_DAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
+
+/** "9am" -> "09:00", "17:30" -> "17:30"; null when the time could mean more than one thing. */
+function schemaTime(text) {
+  const m = /^(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?$/i.exec(text.trim());
+  if (!m) return null;
+  let hour = Number(m[1]);
+  const minute = m[2] === undefined ? 0 : Number(m[2]);
+  const meridiem = m[3]?.toLowerCase().replace(/\./g, '');
+  if (meridiem) {
+    if (hour < 1 || hour > 12) return null;
+    hour = (hour % 12) + (meridiem === 'pm' ? 12 : 0);
+  } else if (m[2] === undefined) {
+    return null; // "9" alone: morning or evening?
+  }
+  if (hour > 23 || minute > 59) return null;
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+}
+
+/**
+ * Opening hours in schema.org's own format ("Mo-Fr 08:00-17:00"), for the fix kit's business
+ * label. Anything that cannot be read for sure is left out.
+ * @param {string[] | undefined} lines
+ * @returns {string[]}
+ */
+export function schemaHours(lines) {
+  const byTime = new Map();
+  for (const [day, value] of Object.entries(hoursToObject(lines))) {
+    const [open, close, extra] = value.split('-');
+    const a = schemaTime(open ?? '');
+    const b = schemaTime(close ?? '');
+    if (!a || !b || extra !== undefined) continue;
+    const key = `${a}-${b}`;
+    byTime.set(key, [...(byTime.get(key) ?? []), DAY_NAMES.indexOf(day)]);
+  }
+  const out = [];
+  for (const [time, days] of byTime) {
+    const sorted = [...days].sort((x, y) => x - y);
+    const parts = [];
+    for (let i = 0; i < sorted.length;) {
+      let j = i;
+      while (j + 1 < sorted.length && sorted[j + 1] === sorted[j] + 1) j += 1;
+      parts.push(j > i ? `${SCHEMA_DAYS[sorted[i]]}-${SCHEMA_DAYS[sorted[j]]}` : SCHEMA_DAYS[sorted[i]]);
+      i = j + 1;
+    }
+    out.push(`${parts.join(',')} ${time}`);
+  }
+  return out;
+}
+
+/** Providers that are always second opinions; a stored answer from one never counts toward the score. */
+const SECOND_OPINION_PROVIDERS = new Set(['chatgpt', 'gemini', 'grok', 'perplexity']);
+
+/** True for a second-opinion answer, whether or not an older Grade marked it. */
+export const isSecondOpinion = a => Boolean(a) && (a.second === true || SECOND_OPINION_PROVIDERS.has(a.provider));
+
+/** Phone, hours and address found on the website. Grades made before `found` existed keep them in `facts`. */
+export function foundOf(grade) {
+  if (grade?.found && typeof grade.found === 'object') return grade.found;
+  const f = grade?.facts && typeof grade.facts === 'object' ? grade.facts : {};
+  return {
+    phone: typeof f.phone === 'string' ? f.phone : '',
+    hours: Array.isArray(f.hours) ? f.hours.filter(x => typeof x === 'string') : [],
+    address: typeof f.address === 'string' ? f.address : '',
+    website: grade?.input?.website || '',
+  };
+}
+
+/** True while a "check again" is really running: it stops counting after 4 minutes, like a stale Grade. */
+export function recheckIsRunning(grade, nowMs) {
+  if (!grade?.recheckRunning) return false;
+  const started = Date.parse(grade.recheckStartedAt);
+  return Number.isFinite(started) && nowMs - started <= STALE_AFTER_MS;
 }
 
 const DAY_WORD = String.raw`\b(?:mon(?:day)?|tue(?:s(?:day)?)?|wed(?:nesday)?|thu(?:r(?:s(?:day)?)?)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)\b`;
@@ -353,7 +452,7 @@ function safeSources(list) {
 
 /** The ai-named Check from the main assistant's answers. */
 function aiNamedResult(ai, aiMain) {
-  const main = ai.filter(a => !a.second);
+  const main = ai.filter(a => !isSecondOpinion(a));
   if (main.length === 0) {
     const detail = aiMain?.state === 'limit' ? AI_LIMIT_REACHED
       : aiMain?.state === 'not_connected' ? AI_NOT_CONNECTED
@@ -442,7 +541,8 @@ export function createGrader({
     } catch {
       verdict = null;
     }
-    if (!verdict || !verdict.isBusiness || !verdict.sameAs) return plain;
+    // Asked once: a failed or unreadable reply is not asked for again every time the answer is carried over.
+    if (!verdict || !verdict.isBusiness || !verdict.sameAs) return { ...plain, tried: true };
 
     const dropped = new Set();
     for (const name of names) {
@@ -468,6 +568,7 @@ export function createGrader({
       total: kept.length,
       competitors: kept.filter(e => !e.own && e.name !== added).map(e => e.name).slice(0, MAX_COMPETITORS),
       nameCheck: { by: nameChecker.name || 'gemini-decisions', dropped: dropped.size, addedNamed: added !== null },
+      tried: true,
     };
   }
 
@@ -492,6 +593,7 @@ export function createGrader({
     if (wasCut) entry.answerCut = true;
     if (second) entry.second = true;
     if (read.nameCheck) entry.nameCheck = read.nameCheck;
+    if (read.tried) entry.nameCheckTried = true;
     const sources = safeSources(result.sources);
     if (sources.length > 0) entry.sources = sources;
     return entry;
@@ -634,42 +736,43 @@ export function createGrader({
       await step(1, 'skipped', 'Nothing to read', 0);
     }
 
+    // robots.txt and llms.txt are read even when the home page could not be (a bot challenge on
+    // the home page says nothing about whether AI assistants are let in).
     let robots = null;
     let llms = null;
     let tooSlow = false;
     t = clock.now();
-    if (home && facts) {
-      if (budget.expired) {
-        tooSlow = true;
-      } else {
-        const base = home.finalUrl || input.website;
-        const fetchOne = async path => {
-          const res = await safeFetcher.fetchText(new URL(path, base).href);
-          return { status: res.status, text: res.text, contentType: res.contentType };
-        };
-        try {
-          [robots, llms] = await within(budget, Promise.all([
-            fetchOne('/robots.txt').catch(() => ({ status: 0 })),
-            fetchOne('/llms.txt').catch(() => null),
-          ]));
-        } catch {
-          tooSlow = true; // the shared deadline passed; both files count as not checked
-          robots = null;
-          llms = null;
-        }
+    if (budget.expired) {
+      tooSlow = true;
+    } else {
+      const base = home?.finalUrl || input.website;
+      const fetchOne = async path => {
+        const res = await safeFetcher.fetchText(new URL(path, base).href);
+        return { status: res.status, text: res.text, contentType: res.contentType };
+      };
+      try {
+        [robots, llms] = await within(budget, Promise.all([
+          fetchOne('/robots.txt').catch(() => ({ status: 0 })),
+          fetchOne('/llms.txt').catch(() => null),
+        ]));
+      } catch {
+        tooSlow = true; // the shared deadline passed; both files count as not checked
+        robots = null;
+        llms = null;
       }
-      if (tooSlow) failure = TOO_SLOW;
     }
+    if (tooSlow && failure === undefined) failure = TOO_SLOW;
     const results = runWebsiteChecks({ facts, robots, llms, input, failure });
+    const bots = results.find(r => r.id === 'ai-bots-allowed');
     if (tooSlow) {
       await step(2, 'failed', TOO_SLOW, clock.now() - t);
-    } else if (home && facts) {
-      const blocked = results.find(r => r.id === 'ai-bots-allowed')?.blocked ?? [];
+    } else if (bots && bots.result !== 'not_checked') {
+      const blocked = bots.blocked ?? [];
       await step(2, 'done', blocked.length
         ? `${blocked.length} AI assistant${blocked.length === 1 ? ' is' : 's are'} turned away`
         : 'No AI assistants are turned away', clock.now() - t);
     } else {
-      await step(2, 'skipped', 'Nothing to check', 0);
+      await step(2, 'failed', bots?.detail ?? "We couldn't read your robots.txt file.", clock.now() - t);
     }
 
     return { facts, found: foundFromFacts(facts, input), results, homeOk: Boolean(home && facts) };
@@ -705,6 +808,10 @@ export function createGrader({
       return { facts: null, found: foundFromFacts(null, input), results: runWebsiteChecks({ facts: null, robots: null, llms: null, input, failure: undefined }), homeOk: false };
     });
 
+    // Carried answers are read again by Gemini here, in the background and all at once, so
+    // POST /grade never waits on it.
+    const carried = rereadCarried(grade.ai, input).catch(() => grade.ai);
+
     const aiBranch = (async () => {
       const t = clock.now();
       const prompt = freeQuestion(input);
@@ -715,8 +822,8 @@ export function createGrader({
         log(`ai-step-failed id=${id}`);
         outcome = { entries: [], mainState: 'failed' };
       }
-      const ai = [...grade.ai, ...outcome.entries];
-      const main = ai.filter(a => !a.second && a.prompt === prompt);
+      const ai = [...(await carried), ...outcome.entries];
+      const main = ai.filter(a => !isSecondOpinion(a) && a.prompt === prompt);
       const reused = outcome.entries.length === 0 && main.length > 0;
       let state = 'done';
       let finding;
@@ -801,23 +908,24 @@ export function createGrader({
     return copies;
   }
 
-  /** Carried answers are read again when Gemini's name check is on now and they were not read that way before. */
-  async function rereadCarried(entries, input) {
-    if (!nameChecker) return entries;
-    const out = [];
-    for (const a of entries) {
-      if (a.answerCut || a.nameCheck || a.provider === 'mock') {
-        out.push(a);
-        continue;
-      }
+  /**
+   * Carried answers are read again, all at once, when Gemini's name check is on now and has not
+   * been asked about them before. An answer that was cut short is never read again (a late
+   * mention could be lost), and one that was already asked about is not asked about again, even
+   * when that check failed.
+   */
+  function rereadCarried(entries, input) {
+    if (!nameChecker) return Promise.resolve(entries);
+    return Promise.all(entries.map(async a => {
+      if (a.answerCut || a.nameCheck || a.nameCheckTried || a.provider === 'mock') return a;
       const read = await readAnswer(a.answer, input, a.provider);
       const next = {
         ...a, named: read.named, position: read.position, total: read.total, competitors: read.competitors,
       };
       if (read.nameCheck) next.nameCheck = read.nameCheck;
-      out.push(next);
-    }
-    return out;
+      if (read.tried) next.nameCheckTried = true;
+      return next;
+    }));
   }
 
   /**
@@ -829,7 +937,7 @@ export function createGrader({
     if (!checked.ok) throw new TypeError('Invalid grade input');
     const { input } = checked;
     const key = reuseKey(input);
-    const copies = await rereadCarried(await reusableAnswers(key), input);
+    const copies = await reusableAnswers(key);
     const id = newId();
     await grades().append({
       id,
@@ -867,15 +975,20 @@ export function createGrader({
     for (const prompt of extraQuestions((await get(id)).input)) {
       const grade = await get(id);
       if (!grade) return;
-      const { entries } = await askQuestion({ input: grade.input, prompt, existing: grade.ai });
-      if (entries.length === 0) continue;
-      await grades().update(list => {
-        const g = list.find(x => x && x.id === id);
-        if (!g) return;
-        g.ai = [...g.ai, ...entries];
-        g.results = assemble(g.results, g.ai, g.aiMain);
-        g.score = scoreOf(g.results);
-      });
+      const { entries, mainState } = await askQuestion({ input: grade.input, prompt, existing: grade.ai });
+      if (entries.length > 0) {
+        await grades().update(list => {
+          const g = list.find(x => x && x.id === id);
+          if (!g) return;
+          g.ai = [...g.ai, ...entries];
+          // The free question may have failed or hit the limit; once the main assistant answers, say so.
+          if (entries.some(e => !isSecondOpinion(e)) && g.aiMain) g.aiMain.state = 'ok';
+          g.results = assemble(g.results, g.ai, g.aiMain);
+          g.score = scoreOf(g.results);
+        });
+      }
+      // The main assistant failed: do not spend more paid calls on the next question.
+      if (mainState === 'failed') break;
     }
   }
 
@@ -886,7 +999,10 @@ export function createGrader({
    */
   async function startExtraQuestions(id) {
     const grade = await get(id);
-    if (!grade || grade.status !== 'done' || grade.extraAiStartedAt || grade.aiMain?.state !== 'ok') return false;
+    // The extra questions run even when the free question failed or hit the daily limit (requirement 9.2);
+    // only an assistant that is not connected cannot be asked.
+    const state = grade?.aiMain?.state;
+    if (!grade || grade.status !== 'done' || grade.extraAiStartedAt || state === 'not_connected' || state === 'off') return false;
     let started = false;
     await grades().update(list => {
       const g = list.find(x => x && x.id === id);
@@ -956,14 +1072,15 @@ export function createGrader({
     return store.withLock(`grade-claim:${id}`, async () => {
       const grade = await get(id);
       if (!grade) return { status: 404 };
-      if (claimedDraftId && Array.isArray(grade.draftIds) && grade.draftIds.includes(claimedDraftId)) {
+      // The browser that claimed gets its own Draft back, whatever has happened to it since (even
+      // after it was sent for review). Grades made before `draftIds` existed have only `draftId`.
+      const mine = new Set([...(Array.isArray(grade.draftIds) ? grade.draftIds : []), grade.draftId].filter(Boolean));
+      if (claimedDraftId && mine.has(claimedDraftId)) {
         const existing = await draftStore.get(claimedDraftId);
-        if (existing.status === 200 && existing.draft.status === 'draft') {
-          return { status: 303, draftId: claimedDraftId, created: false };
-        }
+        if (existing.status === 200) return { status: 303, draftId: claimedDraftId, created: false };
       }
       const { input } = grade;
-      const found = grade.found ?? foundFromFacts(null, input);
+      const found = foundOf(grade);
       const categories = store.getCategories();
       const checked = validateFields({
         name: input.name,
@@ -1003,8 +1120,10 @@ export function createGrader({
     let started = false;
     await grades().update(list => {
       const g = list.find(x => x && x.id === id);
-      if (g && !g.recheckRunning) {
+      // A recheck cut off by a restart stops counting after 4 minutes, so a new one can start.
+      if (g && !recheckIsRunning(g, clock.now())) {
         g.recheckRunning = true;
+        g.recheckStartedAt = nowIso();
         started = true;
       }
     });
@@ -1017,6 +1136,7 @@ export function createGrader({
           const g = list.find(x => x && x.id === id);
           if (!g) return;
           g.recheckRunning = false;
+          g.recheckStartedAt = null;
           if (!web.homeOk) {
             g.recheckFailedAt = nowIso();
             return;
@@ -1034,6 +1154,7 @@ export function createGrader({
           const g = list.find(x => x && x.id === id);
           if (g) {
             g.recheckRunning = false;
+            g.recheckStartedAt = null;
             g.recheckFailedAt = nowIso();
           }
         }).catch(() => {});

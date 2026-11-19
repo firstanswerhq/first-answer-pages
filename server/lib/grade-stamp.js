@@ -22,7 +22,8 @@ export const COOKIE_MAX_AGE_SECONDS = 90 * 24 * 60 * 60;
 
 const COOKIES = Object.freeze({
   unlock: { prefix: 'g', purpose: 'unlock' },
-  ran: { prefix: 'gr', purpose: 'ran' },
+  // `legacy` is the label the first build signed with; people who already ran a check keep working.
+  ran: { prefix: 'gr', purpose: 'ran', legacy: 'requester' },
   claim: { prefix: 'gc', purpose: 'claim' },
 });
 
@@ -164,5 +165,7 @@ export function readClaimedDraftId(secret, id, cookieHeader) {
 export function hasValidCookie(secret, kind, id, cookieHeader) {
   if (typeof id !== 'string' || !ID_PATTERN.test(id)) return false;
   const given = readCookie(cookieHeader, cookieName(kind, id));
-  return sameSignature(cookieValue(secret, kind, id), given);
+  if (sameSignature(cookieValue(secret, kind, id), given)) return true;
+  const { legacy } = kindOf(kind);
+  return Boolean(legacy) && sameSignature(sign(secret, `${legacy}:${id}`), given);
 }

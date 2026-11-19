@@ -155,14 +155,22 @@ function judge(id, ok, detail) {
   return ok ? pass(id) : fail(id, detail);
 }
 
+// Words in a typed service that say nothing about what the business does.
+const SERVICE_FILLER = new Set([
+  'a', 'an', 'and', 'the', 'of', 'for', 'in', 'on', 'to', 'by', 'at', 'or', 'with',
+  'service', 'services', 'company', 'companies', 'co', 'inc', 'llc', 'near', 'me',
+]);
+
+/** The title names the city and at least one word of the service, each as a whole word. */
 function titleHasCityAndService(title, input) {
   const t = ` ${norm(title)} `;
   const city = norm(input?.city);
   if (!city || !t.includes(` ${city} `)) return false;
-  const words = norm(input?.service).split(' ').filter(w => w.length >= 4);
+  const words = norm(input?.service).split(' ').filter(w => w.length >= 2 && !SERVICE_FILLER.has(w));
   return words.some(w => {
-    const singular = w.endsWith('s') && w.length > 4 ? w.slice(0, -1) : w;
-    return t.includes(w) || t.includes(singular);
+    const forms = new Set([w, `${w}s`]);
+    if (w.length > 3 && w.endsWith('s')) forms.add(w.slice(0, -1));
+    return [...forms].some(form => t.includes(` ${form} `));
   });
 }
 

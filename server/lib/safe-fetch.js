@@ -49,6 +49,28 @@ function checkUrl(raw) {
   return { url, host };
 }
 
+/** The charset named in a Content-Type header, or in a meta tag in the first 2 KiB of the page. */
+function charsetOf(buffer, contentType) {
+  const fromHeader = /charset\s*=\s*["']?([A-Za-z0-9_.:-]+)/i.exec(String(contentType ?? ''));
+  if (fromHeader) return fromHeader[1];
+  const head = buffer.subarray(0, 2048).toString('latin1');
+  const fromMeta = /<meta[^>]{0,300}?charset\s*=\s*["']?([A-Za-z0-9_.:-]+)/i.exec(head);
+  return fromMeta ? fromMeta[1] : '';
+}
+
+/** Decode a body with its declared charset (UTF-8 when none is named or the name is not known). */
+function decodeBody(buffer, contentType) {
+  const label = charsetOf(buffer, contentType).trim().toLowerCase();
+  if (label && label !== 'utf-8' && label !== 'utf8') {
+    try {
+      return new TextDecoder(label).decode(buffer);
+    } catch {
+      // An unknown charset name: fall back to UTF-8 below.
+    }
+  }
+  return buffer.toString('utf8');
+}
+
 /**
  * @param {object} [options]
  * @param {{http: Function, https: Function}} [options.request]
@@ -72,10 +94,15 @@ export function createSafeFetcher({
   };
 
   const resolveAll = host => new Promise((resolve, reject) => {
-    lookup(host, { all: true }, (err, list) => {
-      if (err) return reject(new SafeFetchError('connect_failed', 'The host name could not be found.'));
-      resolve(Array.isArray(list) ? list : []);
-    });
+    try {
+      lookup(host, { all: true }, (err, list) => {
+        if (err) return reject(new SafeFetchError('connect_failed', 'The host name could not be found.'));
+        resolve(Array.isArray(list) ? list : []);
+      });
+    } catch {
+      // A lookup that throws on the spot is a failed lookup, never a bare Error.
+      reject(new SafeFetchError('connect_failed', 'The host name could not be found.'));
+    }
   });
 
   /** Resolve and check every address for one URL. Returns the checked list. */
@@ -206,7 +233,7 @@ export function createSafeFetcher({
           status,
           finalUrl: url.href,
           contentType,
-          text: Buffer.concat(chunks).toString('utf8'),
+          text: decodeBody(Buffer.concat(chunks), contentType),
           truncated,
         };
       }

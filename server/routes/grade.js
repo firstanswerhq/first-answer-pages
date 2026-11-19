@@ -20,7 +20,7 @@ import { RULES } from '../lib/rate-limiter.js';
 import {
   signFormStamp, checkFormStamp, setCookieHeader, claimCookieHeader, readClaimedDraftId, hasValidCookie,
 } from '../lib/grade-stamp.js';
-import { normalizeGradeInput, freeQuestion } from '../lib/grader.js';
+import { normalizeGradeInput, freeQuestion, recheckIsRunning } from '../lib/grader.js';
 import { normalizeEmail, normalizePhone } from '../lib/listing-fields.js';
 import {
   gradeFormPage, scanPage, reportPage, failedPage, aboutPage, googleLivePage, messagePage, notFoundPage,
@@ -50,7 +50,11 @@ export function createGradeRouter(ctx) {
 
   // Off switch, then headers for every /grade response.
   router.use('/grade', (req, res, next) => {
-    if (ctx.config.graderEnabled === false) return next('router');
+    if (ctx.config.graderEnabled === false) {
+      // Off: fall through to the site's 404, which must still keep /grade out of search.
+      res.set({ 'X-Robots-Tag': 'noindex, nofollow', 'Referrer-Policy': 'no-referrer' });
+      return next('router');
+    }
     res.set({
       'X-Robots-Tag': 'noindex, nofollow',
       'Referrer-Policy': 'no-referrer',
@@ -110,6 +114,7 @@ export function createGradeRouter(ctx) {
     opened: req.query.opened === '1',
     googleLive: Boolean(ctx.googleLive),
     requester: hasCookie('ran', grade.id, req),
+    rechecking: recheckIsRunning(grade, now()),
     ...extra,
   });
 
@@ -157,9 +162,6 @@ export function createGradeRouter(ctx) {
       const back = `/grade/${grade.id}?opened=1#full-report`;
       if (hasCookie('unlock', grade.id, req)) return res.redirect(303, back);
 
-      const limited = ctx.rateLimiter.consume(`grade-unlock:${req.ip}`, RULES['grade-unlock']);
-      if (!limited.allowed) return tooMany(res, limited.retryAfterSeconds);
-
       const body = req.body ?? {};
       const name = cleanLine(body.name);
       const email = normalizeEmail(body.email);
@@ -175,6 +177,10 @@ export function createGradeRouter(ctx) {
           unlocked: false, leadValues: values, leadErrors: errors,
         })));
       }
+
+      // Only a form that would be accepted counts toward the limit; typos do not.
+      const limited = ctx.rateLimiter.consume(`grade-unlock:${req.ip}`, RULES['grade-unlock']);
+      if (!limited.allowed) return tooMany(res, limited.retryAfterSeconds);
 
       const stored = await ctx.grader.unlock(grade.id, { name, email, phone, okToContact });
       if (!stored) return notFound(res);
