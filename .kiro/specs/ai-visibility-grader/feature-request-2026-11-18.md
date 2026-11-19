@@ -42,3 +42,14 @@ What it should do:
 - Claim from the AI Visibility Check fills it from the website the owner typed on the check.
 - `llms.txt` and the MCP tools include the website for listings that have one.
 - Tests: example tests for valid and invalid links, the listing page link and label, the claim fill, and llms.txt. Never change or loosen existing tests.
+
+## Feature D: Let Google and Bing find the main pages (added Nov 18, 10:50 PM)
+
+Colby's goal, in his words: "We want google to find these companies when it crawls our site, and we want Bing to do the same." The site is now in Google Search Console and Bing Webmaster Tools. Listings already reach the sitemap (each approved listing and its category page) and Bing gets an IndexNow ping on approval. Two gaps remain:
+
+1. sitemap.xml lists only the home page, category pages and listings. Add the public pages that exist today: `/about`, `/verified`, `/privacy` and `/rise` (List your business free). Only pages that return 200 and are not marked noindex go in.
+2. The AI Visibility Check's start page is hidden from search today, because Requirement 9.6 keeps every `/grade` page out of the sitemap and every `/grade` response sends `X-Robots-Tag: noindex, nofollow`. Open exactly two pages to search engines: the form at `GET /grade` (no query string) and `GET /grade/about`. Each sends no noindex header or meta, has a plain title and summary for search results, and goes in sitemap.xml. Everything else under `/grade` stays exactly as it is today: every report (`/grade/:id`), the status JSON, the claim flow, every error page, the form when it is shown again with errors, and `/grade` when the grader is off (GRADER_ENABLED=off) keep `noindex, nofollow`, `no-referrer` and `no-store`, and stay out of the sitemap, llms.txt, MCP and IndexNow. Update Requirement 9.6 (and the matching design.md text) to say this, and do not change any rate limit or AI budget.
+
+Tests: the sitemap lists the four pages and `/grade` and `/grade/about`, and still lists no report, draft or admin address; `GET /grade` and `GET /grade/about` send no noindex; a report page, the status JSON, the claim pages, a form shown again with errors, and the grader-off 404 still send `noindex, nofollow`. Never change or loosen existing tests; if an existing test pins the old "every /grade page is noindex" rule, say exactly which one and why it must change.
+
+Build D after the F tasks for A, B and C. Claude will confirm with Colby before D starts.
