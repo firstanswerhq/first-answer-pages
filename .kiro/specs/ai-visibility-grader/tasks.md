@@ -295,3 +295,7 @@ From `review-2026-11-18.md` (two independent reviews of the rebuild; security cl
 ### G. Round 6 (`review-2026-11-18-round6.md`)
 
 - [x] V34. A business heading with Title Case detail bullets stays a business: a heading that matches the business itself is never a group; "Label: value" bullets ("Known For:", "Best For:", "Price Range:") are not names; a numbered heading is a group only when it does not read like one business and real business-name bullets follow it; otherwise it is one business and its bullets are details; example tests added to `test/grade-name-match.test.js`
+
+### H. Round 7 (`review-2026-11-18-round7.md`)
+
+- [x] V35. `name-match.js` passes a fixed table of 23 realistic AI answers (P1 to P6, R1 to R3, S1 to S7, F1 to F5, H1, H2): new test file `test/grade-name-match-cases.test.js` holds the table; headings are decided once per answer (if the business is a numbered heading, headings are businesses and bullets are details; if it is a bullet under headings, headings are groups); "Name: description" bullets give the name before the separator unless it is a label from a fixed list; indented bullets under a numbered name are details; plain-sentence bullets give their leading name; the business's own name is never filtered out
