@@ -257,13 +257,13 @@ From `review-2026-11-18.md` (two independent reviews of the rebuild; security cl
 
 ### B. Page wording and layout
 
-- [ ] V12. Never sound like a promise AI will name the business: leave `ai-named` out of "Fix these first"; its fix keeps "It can take days to weeks, and we can't promise AI will name you."
-- [ ] V13. Lead form: say the report opens right away on this page; bring back the phone note ("Why the phone number? ...")
-- [ ] V14. About page: write for the person who clicked "What do we read, and why?" and say everything in the review's list (what is read, user agent, the AI questions, Gemini name check, second opinions, Google's live answer, 90 days and removal)
-- [ ] V15. Google's live answer: its section on the report (heading, question asked, the note) and "Google doesn't review or endorse this report." on the answer page
-- [ ] V16. Free listing box: heading "Your free listing in our directory", the full note, compact phone-book listing look
-- [ ] V17. After 10 minutes say "We asked <assistant> on <date>" instead of "We just asked"
-- [ ] V18. Form errors red and bold, top note "Please fix the problems below.", one State hint only
-- [ ] V19. Check titles are neutral names, not claims; plain words in details
-- [ ] V20. Help for owners who are not computer people ("Not a computer person? ..." and the fix-kit intro)
-- [ ] V21. Smaller layout points: "Score by area" heading with points; "Check again" after the fix kit under "Made some changes?"; hint lines in the small hint style; plain note (not error) with no website; 404 page keeps "Reports are deleted after 90 days."
+- [x] V12. Never sound like a promise AI will name the business: leave `ai-named` out of "Fix these first"; its fix keeps "It can take days to weeks, and we can't promise AI will name you."
+- [x] V13. Lead form: say the report opens right away on this page; bring back the phone note ("Why the phone number? ...")
+- [x] V14. About page: write for the person who clicked "What do we read, and why?" and say everything in the review's list (what is read, user agent, the AI questions, Gemini name check, second opinions, Google's live answer, 90 days and removal)
+- [x] V15. Google's live answer: its section on the report (heading, question asked, the note) and "Google doesn't review or endorse this report." on the answer page
+- [x] V16. Free listing box: heading "Your free listing in our directory", the full note, compact phone-book listing look
+- [x] V17. After 10 minutes say "We asked <assistant> on <date>" instead of "We just asked"
+- [x] V18. Form errors red and bold, top note "Please fix the problems below.", one State hint only
+- [x] V19. Check titles are neutral names, not claims; plain words in details
+- [x] V20. Help for owners who are not computer people ("Not a computer person? ..." and the fix-kit intro)
+- [x] V21. Smaller layout points: "Score by area" heading with points; "Check again" after the fix kit under "Made some changes?"; hint lines in the small hint style; plain note (not error) with no website; 404 page keeps "Reports are deleted after 90 days."
