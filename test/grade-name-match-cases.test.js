@@ -509,6 +509,87 @@ const MORE_CASES = [
     ),
     named: true, position: 1, competitors: ['Volunteer Roofing'],
   },
+  // V40: advice-verb names, bare one-word bullets, and items under a "Tips" line.
+  {
+    id: 'V1', name: "Joe's Plumbing", service: 'plumbers',
+    answer: lines(
+      '1. **Check Mate Plumbing** - fast',
+      '2. **Hiller Plumbing** - big',
+      '3. **Call Today Roofing** - also does gutters',
+    ),
+    named: false, position: null, competitors: ['Check Mate Plumbing', 'Hiller Plumbing', 'Call Today Roofing'],
+  },
+  {
+    id: 'V2', name: "Joe's Plumbing", service: 'plumbers',
+    answer: lines(
+      '1. Check Mate Plumbing - fast',
+      '2. Hiller Plumbing - big',
+      '- Look Salon: color',
+      '- Get Fit Plumbing: drains',
+    ),
+    named: false, position: null, competitors: ['Check Mate Plumbing', 'Hiller Plumbing', 'Look Salon', 'Get Fit Plumbing'],
+  },
+  {
+    id: 'V4', name: 'Parlour', service: 'hair salons',
+    answer: lines(
+      '1. Parlour - color specialists',
+      '2. Overview - not a salon',
+      '3. Kinship - cuts',
+      '4. Recap - not a salon',
+      '5. Free - offer',
+      '6. Estimates - offer',
+    ),
+    named: true, position: 1, competitors: ['Kinship'],
+  },
+  {
+    id: 'V5', name: 'Parlour', service: 'hair salons',
+    answer: lines(
+      '## Our favorite salons',
+      '- Parlour',
+      '- Kinship',
+      '- Important',
+      '- Tips',
+      '## Tips',
+      '- Book early',
+      '- Bring photos',
+    ),
+    named: true, position: 1, competitors: ['Kinship'],
+  },
+  {
+    id: 'V7', name: 'Husk', service: 'restaurants',
+    answer: lines(
+      '1. Husk \u2014 Southern',
+      '2. Bastion \u2014 nachos',
+      '3. Rolf \u2014 pasta',
+      '',
+      'Tips:',
+      '1. Reserve \u2014 weekends fill fast',
+      '2. Parking \u2014 limited',
+    ),
+    named: true, position: 1, competitors: ['Bastion', 'Rolf'],
+  },
+  {
+    id: 'B1', name: 'City House', service: 'restaurants',
+    answer: lines(
+      'Top picks:',
+      '- Husk',
+      '- Bastion',
+      '- City House',
+    ),
+    named: true, position: 3, competitors: ['Husk', 'Bastion'],
+  },
+  {
+    id: 'B2', name: "Joe's Plumbing", service: 'plumbers',
+    answer: lines(
+      '1. **Hiller Plumbing**',
+      "2. **Joe's Plumbing**",
+      '',
+      'Tips:',
+      '- Ask for a written estimate',
+      '- Check Google reviews',
+    ),
+    named: true, position: 2, competitors: ['Hiller Plumbing'],
+  },
 ];
 
 for (const c of MORE_CASES) {

@@ -50,6 +50,7 @@ const HEADING_PHRASES = new Set([
 const SINGLE_STOP = new Set([
   'overview', 'summary', 'conclusion', 'tips', 'tip', 'notes', 'note', 'important', 'disclaimer', 'bottom',
   'verdict', 'recap', 'introduction', 'contents', 'faq', 'faqs', 'update', 'warning', 'caution', 'reminder',
+  'free', 'estimate', 'estimates', 'quote', 'quotes', 'offer', 'offers',
 ]);
 
 // Narrow list of verbs that start a numbered or bold advice line ("Ask For Quotes", "Check Reviews").
@@ -59,6 +60,13 @@ const ADVICE_NAME_VERBS = new Set([
 
 const startsWithAdviceVerb = text =>
   ADVICE_NAME_VERBS.has(String(text).trim().split(/\s+/)[0].toLowerCase().replace(/[^a-z]/g, ''));
+
+/** A line that starts with an advice verb but ends in a trade or legal word ("Check Mate Plumbing") is a name. */
+function endsWithTradeOrLegal(text) {
+  const list = words(text);
+  const last = list[list.length - 1];
+  return Boolean(last) && (TRADE.has(last) || LEGAL.has(last));
+}
 
 // Labels that point at a pick ("**Top pick:** Hiller Plumbing"): the name is the text after the colon.
 const PICK_LABELS = new Set([
@@ -219,6 +227,23 @@ function namesFromBullet(content, own) {
   if (sentence) return [sentence];
   const mine = ownLead(c, own);
   return mine ? [mine] : [];
+}
+
+/** Does another bullet in the same list (same indent) give a name? Used to accept a bare one-word bullet ("- Husk"). */
+function siblingHasNames(lines, i, own) {
+  const indent = lines[i].match(LIST_RE)[1];
+  const scan = step => {
+    for (let k = i + step, n = 0; k >= 0 && k < lines.length && n < 40; k += step, n += 1) {
+      const line = lines[k];
+      if (line.trim() === '') continue;
+      const li = line.match(LIST_RE);
+      if (!li || !/^[-*\u2022]/.test(li[2])) return false;
+      if (li[1] !== indent) continue;
+      if (namesFromBullet(li[3], own).length > 0) return true;
+    }
+    return false;
+  };
+  return scan(-1) || scan(1);
 }
 
 /** The names on the bullet lines right after line `i` (a heading), through blank lines. */
@@ -556,7 +581,7 @@ function extractEntries(answer, prep) {
       // A line that is only a standard offer ("Free Estimates", "24/7 Emergency Service") is not a business name.
       if (offerOnly(text) && !own(text)) continue;
       // A line that starts with an advice verb ("Ask For Quotes") is advice unless it is the business itself.
-      if (startsWithAdviceVerb(text) && !own(text)) continue;
+      if (startsWithAdviceVerb(text) && !own(text) && !endsWithTradeOrLegal(text)) continue;
       const key = normalizeForMatch(text);
       if (!key || seen.has(key)) continue;
       seen.add(key);
@@ -628,6 +653,11 @@ function extractEntries(answer, prep) {
       const indented = li[1] !== '';
       if (bullet) {
         const names = namesFromBullet(li[3], own);
+        // A bare one-word bullet ("- Husk") is a name when the other bullets in its list give names.
+        if (names.length === 0 && !underBusiness && !adviceSection && !(nestedDetails && indented)) {
+          const one = oneWordName(li[3]);
+          if (one && siblingHasNames(lines, i, own)) names.push(one);
+        }
         if (underBusiness || adviceSection || (nestedDetails && indented)) {
           push(names.filter(own)); // a detail of the name above; only the business itself can still count
           continue;
@@ -646,6 +676,12 @@ function extractEntries(answer, prep) {
         const one = oneWordName(li[3]);
         if (one) names = [one];
       }
+      // Items under a "Tips" line or heading are advice, never names (only the business itself can still count).
+      if (adviceSection) {
+        nestedDetails = false;
+        push(names.filter(own));
+        continue;
+      }
       // Indented bullets are details only under a numbered NAME. A numbered group label ("1. Best overall:",
       // "2. Best value", "3. **Emergency Plumbers**") is not a name, so the bullets under it are the names.
       const strictNames = fromListContent(li[3], false);
@@ -660,6 +696,12 @@ function extractEntries(answer, prep) {
       nestedDetails = false;
       adviceSection = isAdviceHeading(sb[1]);
       push(fromStandaloneBold(sb[1]));
+      continue;
+    }
+    // A plain label line ("Tips:", "How to choose:") starts or ends an advice section.
+    const label = line.match(/^\s*([^:*#|]{1,60}):\s*$/);
+    if (label) {
+      adviceSection = isAdviceHeading(label[1]);
       continue;
     }
     if (line.includes('**')) push(boldSpans(line));
