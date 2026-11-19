@@ -176,7 +176,7 @@ export function registeredDomain(website) {
 
 // ---- reading a list out of an answer --------------------------------------------
 
-const LIST_RE = /^(\s*)(?:\d+[.)]|[-*•])\s+(.*)$/;
+const LIST_RE = /^(\s*)(\d+[.)]|[-*•])\s+(.*)$/;
 const HEADING_RE = /^\s*#{1,6}\s+(.*)$/;
 const STANDALONE_BOLD_RE = /^\s*\*\*([^*]+)\*\*\s*:?\s*$/;
 
@@ -223,8 +223,22 @@ function boldSpans(line) {
   return out;
 }
 
-/** Names from the text after a list marker. */
-function fromListContent(content) {
+/**
+ * A plain line of a top-level numbered list that does not read as title case,
+ * such as "Before booking". The AI chose to list it, so it is read as a name; a
+ * second look (Gemini) may still drop it. Never used for bullets or nested lines.
+ */
+function looseName(text) {
+  if (text.length < 4 || text.length > 40) return false;
+  if (!/^[\p{L}\p{N}]/u.test(text)) return false;
+  const tokens = text.split(/\s+/);
+  if (tokens.length < 2 || tokens.length > 4) return false;
+  if (!/[\p{Lu}\p{N}]/u.test(Array.from(tokens[0])[0])) return false;
+  return !words(text).some(w => HEADING_WORDS.has(w) || BLOCK_WORDS.has(w));
+}
+
+/** Names from the text after a list marker. `loose` is true for an unindented numbered line. */
+function fromListContent(content, loose = false) {
   const c = content.trim();
   if (/^\*\*[^*]*:\*\*\s*\S/.test(c)) return [];
   const b = c.match(/^\*\*([^*]+)\*\*/);
@@ -237,6 +251,7 @@ function fromListContent(content) {
   }
   const plain = trimName(cutAtSeparator(stripMarkdown(c)));
   if (validName(plain, 2)) return [plain];
+  if (loose && looseName(plain)) return [plain];
   return boldSpans(c);
 }
 
@@ -288,7 +303,7 @@ function extractEntries(answer) {
     }
     const li = line.match(LIST_RE);
     if (li) {
-      push(fromListContent(li[2]));
+      push(fromListContent(li[3], li[1] === '' && /^\d/.test(li[2])));
       continue;
     }
     const sb = line.match(STANDALONE_BOLD_RE);
@@ -376,6 +391,17 @@ export function isNamed(answer, business) {
 /** The other businesses an answer lists, in answer order, at most 5. */
 export function extractCompetitors(answer, business) {
   return analyzeAnswer(answer, business).competitors;
+}
+
+/**
+ * Every name listed in an answer, in answer order, each marked with whether the
+ * Name_Matcher matches it to the business. Used to ask Gemini about the names we
+ * did not match, and to work out the business's place in the list afterwards.
+ * @returns {{ name: string, own: boolean }[]}
+ */
+export function listedNames(answer, business) {
+  const prep = prepBusiness(business);
+  return extractEntries(answer).map(name => ({ name, own: entryMatches(name, prep) }));
 }
 
 function firstIdentifyingWord(name, ctx) {

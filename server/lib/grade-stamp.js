@@ -9,7 +9,8 @@
  * Cookies, each named `<prefix>_<gradeId>`, valued `hmac(secret, '<purpose>:' + gradeId)`:
  *   unlock  g_<id>   opens the full report (set after the lead form)
  *   ran     gr_<id>  marks the browser that ran the check (Google's live answer)
- *   claim   gc_<id>  marks the browser that claimed the free page (Draft reuse)
+ *   claim   gc_<id>  carries the Draft id, signed (see claimCookieValue), so only the
+ *                    browser that claimed gets its own Draft back
  * All are HttpOnly, SameSite=Lax, Secure in production, Path=/grade/<id>, 90 days.
  */
 
@@ -26,6 +27,7 @@ const COOKIES = Object.freeze({
 });
 
 const ID_PATTERN = /^[A-Za-z0-9_-]+$/;
+const DRAFT_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 const HEX_64 = /^[0-9a-f]{64}$/;
 
 const sign = (secret, message) => createHmac('sha256', String(secret)).update(message).digest('hex');
@@ -106,6 +108,49 @@ export function readCookie(header, name) {
     if (piece.slice(0, eq).trim() === name) return piece.slice(eq + 1).trim();
   }
   return undefined;
+}
+
+/**
+ * The claim cookie `gc_<gradeId>` carries the Draft id: `<draftId>.<hmac(secret,
+ * 'claim:' + gradeId + ':' + draftId)>`. Only the browser that claimed gets its own
+ * Draft back; any other visitor gets a new one.
+ */
+export function claimCookieValue(secret, id, draftId) {
+  if (typeof draftId !== 'string' || !DRAFT_ID_PATTERN.test(draftId)) throw new TypeError('Bad draft id');
+  return `${draftId}.${sign(secret, `claim:${idOf(id)}:${draftId}`)}`;
+}
+
+/** The `Set-Cookie` header value for the claim cookie. */
+export function claimCookieHeader(secret, id, draftId, { production = false } = {}) {
+  const parts = [
+    `${cookieName('claim', id)}=${claimCookieValue(secret, id, draftId)}`,
+    'HttpOnly',
+    'SameSite=Lax',
+    `Path=/grade/${idOf(id)}`,
+    `Max-Age=${COOKIE_MAX_AGE_SECONDS}`,
+  ];
+  if (production) parts.push('Secure');
+  return parts.join('; ');
+}
+
+/**
+ * The Draft id in a correctly signed claim cookie for this Grade, or undefined for a
+ * missing, malformed or forged cookie.
+ * @param {string} secret
+ * @param {string} id the Grade id
+ * @param {string | undefined} cookieHeader the raw `Cookie` header
+ * @returns {string | undefined}
+ */
+export function readClaimedDraftId(secret, id, cookieHeader) {
+  if (typeof id !== 'string' || !ID_PATTERN.test(id)) return undefined;
+  const given = readCookie(cookieHeader, cookieName('claim', id));
+  if (typeof given !== 'string') return undefined;
+  const dot = given.lastIndexOf('.');
+  if (dot < 1) return undefined;
+  const draftId = given.slice(0, dot);
+  if (!DRAFT_ID_PATTERN.test(draftId)) return undefined;
+  const expected = sign(secret, `claim:${id}:${draftId}`);
+  return sameSignature(expected, given.slice(dot + 1)) ? draftId : undefined;
 }
 
 /**

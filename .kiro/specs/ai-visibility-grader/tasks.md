@@ -161,7 +161,7 @@ The rebuild also removed `server/lib/assistant.js`, `server/lib/name-check.js` a
   - _Design: "Unlock cookie and form stamp"; Requirements 11b and 12_
 
 - [ ] 6. The grader flow
-  - [ ] 6.1 Create `server/lib/grader.js`
+  - [x] 6.1 Create `server/lib/grader.js`
     - `createGrader({ store, assistantProvider, aiBudget, safeFetcher, notifier, clock, newId, config })`
     - `start(input)`: normalize, build the reuse key, create the Grade as `running`, copy reusable AI results (only `ai`, labeled with their original time), schedule `run(id)` once
     - `run(id)`: the website steps and the AI step started together, the five Scan_Steps listed in order, each appending a short finding and `{ name, state, ms }`; website steps share a 30-second budget; the AI step uses `aiBudget.consume({ kind: 'grade' })` and a 120-second race; a failed step marks its Checks `not_checked` and the run continues; finish as `done` with results, AI results, score, facts and finish time
