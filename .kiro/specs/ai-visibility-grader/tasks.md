@@ -160,6 +160,12 @@ The rebuild also removed `server/lib/assistant.js`, `server/lib/name-check.js` a
   - Never log a stamp, a cookie value or the secret
   - _Design: "Unlock cookie and form stamp"; Requirements 11b and 12_
 
+- [ ] R4. Share one 30-second budget across the website steps in `server/lib/grader.js`
+  - Requirement 2.8 gives the website steps 30 seconds together. Today each fetch has its own 10-second limit and robots.txt and llms.txt are fetched at the same time, so the worst case is about 20 seconds and no shared timer exists
+  - Add one deadline for `readWebsite` (an `AbortSignal.timeout(30000)` or a single timer cleared in `finally`); a step still running at the limit is ended and recorded as `failed`, its Checks `not_checked`, and the Grade still finishes `done`; never let a late fetch write a step after the deadline
+  - Not built yet; do it after the full suite passes
+  - _Requirements: 2.8_
+
 - [ ] 6. The grader flow
   - [x] 6.1 Create `server/lib/grader.js`
     - `createGrader({ store, assistantProvider, aiBudget, safeFetcher, notifier, clock, newId, config })`
@@ -175,23 +181,23 @@ The rebuild also removed `server/lib/assistant.js`, `server/lib/name-check.js` a
     - **Validates: Requirements 2.5, 2.6, 2.7, 14.3, 14.4**
 
 - [ ] 7. Pages and public routes
-  - [ ] 7.1 Create `server/lib/grade-html.js`
+  - [x] 7.1 Create `server/lib/grade-html.js`
     - `gradeFormPage({ values, errors, stamp, categories })`: headline asking whether AI can find the business, five fields, category suggestions through a `datalist`, honeypot and stamp, no email or phone field
     - `scanPage(grade)`: Scan_Steps with done, running and waiting marks; refresh meta tag
     - `reportPage(grade, { unlocked, leadGate, contactEmail, demo })`: Free_Part (score or "Not enough to score yet", "<failed> of <counted> checks failed", the AI sentence and escaped answer, Free_Page_Preview with "Add your <field>" blanks and the claim button, Google before-and-after preview, group lines, "Automated check" date in Central time, the "days to weeks" line, the removal line); Lead_Form or Full_Report (every Check with detail, points and fix; Fix_Kit in `<pre>` blocks; "Check again"; the First Answer offer line)
     - `failedPage(grade)` with a start-again button; `aboutPage()`
     - Use `layout()`, `escapeHtml` on every value, plain words, American spelling, no dollar figures
     - _Requirements: 1.1, 1.3, 1.4, 2.3, 7.5, 7.6, 7.9, 9.1, 9.2, 9.3, 9.4, 9.8, 10.1, 10.6, 11.6, 11.7, 16.1, 16.2_
-  - [ ] 7.2 Create `server/routes/grade.js` and mount it in `createApp`
+  - [x] 7.2 Create `server/routes/grade.js` and mount it in `createApp`
     - `GET /grade`, `POST /grade` (validation, website normalization to `https://<host>/`, honeypot, stamp, rate limits, 303), `GET /grade/about`, `GET /grade/:id`, `GET /grade/:id/status.json`
     - Reject malformed ids with 404 before reading the store
     - Send `X-Robots-Tag: noindex, nofollow` and `Referrer-Policy: no-referrer` on every `/grade` response
     - Return 404 for every `/grade` path when `GRADER_ENABLED` is `off`
     - _Requirements: 1.1, 1.2, 1.5, 1.6, 1.7, 2.1, 2.3, 9.5, 9.7, 14.2_
-  - [ ] 7.3 Create `public/js/grade.js`
+  - [x] 7.3 Create `public/js/grade.js`
     - Poll `status.json` at most once a second while running and swap in the report; copy buttons using `navigator.clipboard` with a select-text fallback; the page works fully without it
     - _Requirements: 2.4, 11.6_
-  - [ ] 7.4 Keep `/grade` out of `sitemap.xml`, `llms.txt`, the MCP tools and IndexNow, and add a plain link to `/grade` on the home page
+  - [x] 7.4 Keep `/grade` out of `sitemap.xml`, `llms.txt`, the MCP tools and IndexNow, and add a plain link to `/grade` on the home page
     - _Requirements: 9.6_
   - [ ]* 7.5 Write example tests for the pages and routes
     - Form 422s for each bad field, honeypot and too-fast stamp; 303 and Grade stored; refresh tag while running; report sections; noindex headers; 404 for unknown and malformed ids; sitemap and llms.txt free of `/grade`; no "Yellow Pages" or "YP" in any Grader page
@@ -201,18 +207,18 @@ The rebuild also removed `server/lib/assistant.js`, `server/lib/name-check.js` a
   - Run `node --test`, including flow tests that grade each fixture end to end through `createApp` with a fake transport serving the fixture pages and the mock AI provider. The safe fetcher's address rules are never loosened for tests or local runs. Ask the user if questions arise.
 
 - [ ] 9. Lead gate, claim, recheck and admin
-  - [ ] 9.1 Lead form and unlock
+  - [x] 9.1 Lead form and unlock
     - `POST /grade/:id/unlock`: validate name, email and phone (existing normalizers); store the Lead; set the signed `g_<id>` cookie; run the two extra AI_Questions in the background and recompute the Score; notify the site owner with business name, score and report link only; 303 to the report
     - `GRADER_LEAD_GATE=off`: show the Full_Report to all and run the extra questions on the first view, subject to the budget
     - Add `notifyLead({ business, score, reportUrl })` to the mock, console, none and Resend notifiers as designed (Resend sends to `ADMIN_EMAIL` only; never throws)
     - _Requirements: 7.2, 7.6, 8.3, 12.1, 12.2, 12.3, 12.4, 12.5, 12.6_
-  - [ ] 9.2 Claim the free listing
+  - [x] 9.2 Claim the free listing
     - `POST /grade/:id/claim`: reuse an existing Draft when `draftId` points to one; else build fields (JSON-LD first, then tel links and text; phone through `normalizePhone`; category through `mapCategory` with `other` as fallback; service as the first service; city and state from the input) and call `draftStore.create` with `missingFields`; store `draftId`; 303 to `/rise/drafts/:draftId`
     - _Requirements: 10.2, 10.3, 10.4, 10.5_
-  - [ ] 9.3 Check again
+  - [x] 9.3 Check again
     - `POST /grade/:id/recheck`: website steps only, AI results kept, `previousScore` stored, one per Grade every 2 minutes and 10 per client per hour
     - _Requirements: 13.1, 13.2, 13.3_
-  - [ ] 9.4 Admin pages
+  - [x] 9.4 Admin pages
     - `GET /admin/grades`, `GET /admin/leads` (newest 100), `POST /admin/grades/:id/delete` (Grade and its Leads), all behind `requireAdmin`
     - _Requirements: 15.1, 15.2, 15.3, 15.4_
   - [ ]* 9.5 Write example tests for unlock, claim, recheck and admin
