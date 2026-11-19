@@ -18,6 +18,7 @@ import {
   suggestedTitle, suggestedSummary, jsonLdBlock, llmsDraft, robotsLines,
 } from './fix-kit.js';
 import { formatRunTime } from './seance-html.js';
+import { listedNames } from './name-match.js';
 import {
   providerLabel, freeQuestion, stepNames, foundOf, isSecondOpinion, schemaHours, readableHours,
 } from './grader.js';
@@ -186,15 +187,63 @@ function whenText(iso) {
   return formatRunTime(iso);
 }
 
-function answerBlock(a) {
-  return `${a.provider === 'mock' ? '<p class="hint">Demo answer (no AI connected)</p>\n  ' : ''}<details><summary>See the full answer</summary><blockquote class="grade-answer seance-answer">${h(a.answer ?? '')}</blockquote></details>`;
+/**
+ * An AI answer as plain reading text, for display only. Simple formatting is removed: bold and
+ * emphasis marks, link markup (the link text stays), heading marks and citation marks. Bullets
+ * become "• "; numbered lines and line breaks stay. The stored answer is never changed. The
+ * result is still plain text and is escaped before it is shown.
+ */
+export function readableAnswer(text) {
+  let t = String(text ?? '').replace(/\r\n?/g, '\n');
+  // Citation marks: [[2]](link), [1], [web:3], [1, 2]
+  t = t.replace(/[ \t]*\[\[\s*(?:web:)?\d+\s*\]\]\([^)\n]*\)/g, '');
+  t = t.replace(/[ \t]*\[\s*(?:web:)?\d+(?:\s*[,;-]\s*(?:web:)?\d+)*\s*\](?!\()/g, '');
+  // Links: [name](link) becomes name
+  t = t.replace(/\[([^\]\n]+)\]\([^)\n]*\)/g, '$1');
+  // Heading marks at the start of a line
+  t = t.replace(/^[ \t]{0,3}#{1,6}[ \t]+/gm, '');
+  // Bullets
+  t = t.replace(/^([ \t]*)[-*\u2022][ \t]+/gm, '$1\u2022 ');
+  // Emphasis
+  t = t.replace(/\*\*([^\n]+?)\*\*/g, '$1');
+  t = t.replace(/__([^\n]+?)__/g, '$1');
+  t = t.replace(/\*(?=\S)([^*\n]+?)\*/g, '$1');
+  t = t.replace(/(^|[^\w])_(?=\S)([^_\n]+?)_(?![\w])/g, '$1$2');
+  return t;
 }
 
-function competitorList(a) {
+function answerBlock(a) {
+  return `${a.provider === 'mock' ? '<p class="hint">Demo answer (no AI connected)</p>\n  ' : ''}<details><summary>See the full answer</summary><blockquote class="grade-answer seance-answer">${h(readableAnswer(a.answer ?? ''))}</blockquote></details>`;
+}
+
+/** The business's name as the AI wrote it in the answer, or the name the owner typed. */
+function nameAsWritten(a, input) {
+  const typed = String(input?.name ?? '');
+  try {
+    const listed = listedNames(String(a.answer ?? ''), input);
+    const mine = listed[a.position - 1];
+    if (mine && mine.own && mine.name) return mine.name;
+    const any = listed.find(e => e.own);
+    if (any && any.name) return any.name;
+  } catch {
+    // fall back to the typed name
+  }
+  return typed;
+}
+
+/**
+ * The businesses an answer listed. With a position: every name in the AI's order, numbered as the AI
+ * ranked them, with the business in its place. Without one: a plain list with no numbers.
+ */
+function competitorList(a, input) {
   const list = Array.isArray(a.competitors) ? a.competitors : [];
-  return !a.named && list.length > 0
-    ? `<ol class="grade-competitors">${list.map(n => `<li>${h(n)}</li>`).join('')}</ol>`
-    : '';
+  if (a.named && Number.isInteger(a.position) && a.position >= 1 && a.position - 1 <= list.length) {
+    const items = list.map(n => `<li>${h(n)}</li>`);
+    items.splice(a.position - 1, 0, `<li class="grade-you"><strong>${h(nameAsWritten(a, input))}</strong> (you)</li>`);
+    return `<ol class="grade-competitors">${items.join('')}</ol>`;
+  }
+  if (list.length === 0) return '';
+  return `<p class="grade-others-heading">Other businesses it named:</p><ul class="grade-competitors grade-competitors-plain">${list.map(n => `<li>${h(n)}</li>`).join('')}</ul>`;
 }
 
 const JUST_ASKED_MS = 10 * 60 * 1000;
@@ -219,7 +268,7 @@ function aiFree(grade, { googleLive, requester, now }) {
 
   if (first) {
     const lead = askedLine(first, now, inline(first.provider));
-    parts.push(`<p>${lead} ${h(outcome(first))}</p>`, competitorList(first), answerBlock(first));
+    parts.push(`<p>${lead} ${h(outcome(first))}</p>`, competitorList(first, grade.input), answerBlock(first));
   } else if (seconds.length > 0) {
     parts.push(`<p>${h(mainLabel)} did not answer this time, so this check has no AI score.</p>`);
   } else {
@@ -237,14 +286,14 @@ function aiFree(grade, { googleLive, requester, now }) {
       for (const s of seconds) {
         parts.push(`<p>${h(providerLabel(s.provider))}, asked the same question: ${h(outcome(s))}</p>`);
         if (s.provider === 'gemini' && s.webSearch !== true) parts.push('<p class="hint">Gemini answered without a live web search.</p>');
-        parts.push(competitorList(s), answerBlock(s));
+        parts.push(competitorList(s, grade.input), answerBlock(s));
       }
     } else {
       parts.push('<p class="hint">These answers are for comparison only (not scored).</p>');
       for (const s of seconds) {
         parts.push(`<p>${askedLine(s, now, h(providerLabel(s.provider)))} ${h(outcome(s))}</p>`);
         if (s.provider === 'gemini' && s.webSearch !== true) parts.push('<p class="hint">Gemini answered without a live web search.</p>');
-        parts.push(competitorList(s), answerBlock(s));
+        parts.push(competitorList(s, grade.input), answerBlock(s));
       }
     }
   }
@@ -591,7 +640,7 @@ export function googleLivePage({ grade, text, sources = [], suggestionsHtml = ''
   <h1>What Google's AI says</h1>
   <p>The question we asked: ${h(freeQuestion(grade.input))}</p>
   <p class="hint">From Google's Gemini, with a live Google search. Google doesn't review or endorse this report. Only you can see this answer. We don't save it. Your score comes from ${h(midSentence(grade.aiMain?.label ?? 'Claude'))}'s answers only.</p>
-  <blockquote class="grade-answer seance-answer">${h(text)}</blockquote>
+  <blockquote class="grade-answer seance-answer">${h(readableAnswer(text))}</blockquote>
   ${links ? `<h2>Where it looked</h2><ul>${links}</ul>` : ''}
   ${suggestionsHtml ? `<div class="grade-google-suggestions">${suggestionsHtml}</div>` : ''}
   <p><a href="/grade/${h(grade.id)}">Back to your report</a></p>

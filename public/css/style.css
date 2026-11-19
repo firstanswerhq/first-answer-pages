@@ -1221,6 +1221,20 @@ details.advanced summary {
   font-weight: 600;
 }
 
+.grade-competitors .grade-you {
+  background: rgba(0, 0, 0, 0.08);
+  padding: 0.1rem 0.35rem;
+}
+
+.grade-competitors-plain {
+  list-style: disc;
+}
+
+.grade-others-heading {
+  margin: 0.75rem 0 0;
+  font-weight: 600;
+}
+
 .grade-answer {
   margin: 0.5rem 0 0;
   white-space: pre-wrap;
