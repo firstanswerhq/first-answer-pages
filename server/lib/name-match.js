@@ -74,6 +74,9 @@ function looksLikeOneBusiness(text) {
   return list.some(w => LEGAL.has(w) || (TRADE.has(w) && !GROUP_NOUNS.has(w)));
 }
 
+/** A plain "Label: value" line such as "Best For: Drain Clogs" (not a bold name followed by a colon). */
+const isLabelValue = content => /^[^*:][^:]{0,40}:\s*\S/.test(String(content).trim());
+
 /** The names on the bullet lines right after line `i` (a heading), up to a blank-line-separated end of list. */
 function bulletNamesAfter(lines, i) {
   const names = [];
@@ -82,7 +85,9 @@ function bulletNamesAfter(lines, i) {
     if (line.trim() === '') continue;
     const li = line.match(LIST_RE);
     if (!li || !/^[-*\u2022]/.test(li[2])) break;
-    names.push(...fromListContent(li[3]));
+    // "Label: value" bullets ("Known For: Tasting Menu", "Price Range: $$$$") are details, not names.
+    if (isLabelValue(li[3])) continue;
+    names.push(...fromListContent(li[3]).filter(n => !offerOnly(n)));
   }
   return names;
 }
@@ -359,9 +364,12 @@ function extractEntries(answer, prep) {
   const heading = (names, i) => {
     underBusiness = false;
     if (names.length === 0) return;
-    if (names.every(n => !looksLikeOneBusiness(n)) && bulletNamesAfter(lines, i).length > 0) return;
+    // A heading that matches the business itself is always that business, never a group.
+    const isOwn = names.some(own);
+    if (!isOwn && names.every(n => !looksLikeOneBusiness(n)) && bulletNamesAfter(lines, i).length > 0) return;
+    // One business: the bullets under it ("Known For: ...", "Neighborhood Favorite") are its details.
     push(names);
-    underBusiness = names.some(n => looksLikeOneBusiness(n));
+    underBusiness = true;
   };
 
   for (let i = 0; i < lines.length; i++) {
@@ -384,6 +392,11 @@ function extractEntries(answer, prep) {
     const li = line.match(LIST_RE);
     if (li) {
       const bullet = /^[-*\u2022]/.test(li[2]);
+      // "Known For: Tasting Menu" is a detail line, not a name (unless the part before the colon is itself a business).
+      if (bullet && isLabelValue(li[3])) {
+        const label = li[3].split(':')[0];
+        if (!looksLikeOneBusiness(label) && !own(label)) continue;
+      }
       let names = fromListContent(li[3], li[1] === '' && !bullet);
       if (underBusiness && bullet) {
         names = names.filter(n => looksLikeOneBusiness(n) || own(n));

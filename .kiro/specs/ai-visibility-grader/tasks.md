@@ -291,3 +291,7 @@ From `review-2026-11-18.md` (two independent reviews of the rebuild; security cl
 ### F. Round 5 (`review-2026-11-18-round5.md`)
 
 - [x] V33. One name for the product everywhere: "AI Visibility Check" (About page heading and title; the report's main heading is "AI Visibility Check" with "Report · First Answer Pages" under it; admin pages and the draft source label use it too; code names, routes and file names stay)
+
+### G. Round 6 (`review-2026-11-18-round6.md`)
+
+- [x] V34. A business heading with Title Case detail bullets stays a business: a heading that matches the business itself is never a group; "Label: value" bullets ("Known For:", "Best For:", "Price Range:") are not names; a numbered heading is a group only when it does not read like one business and real business-name bullets follow it; otherwise it is one business and its bullets are details; example tests added to `test/grade-name-match.test.js`

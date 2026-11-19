@@ -440,3 +440,60 @@ test('V32: a line that is only an offer is not a name, but a real name with offe
   ].join('\n');
   assert.deepEqual(extractCompetitors(answer, NOBODY), ['Acme Plumbing', 'Family Owned Roofing & Repair']);
 });
+
+// ---- Review round 6 (V34): a business heading with Title Case "Label: value" bullets stays a business ----
+
+test('V34: restaurant headings with "Label: value" bullets are the businesses, not the labels', () => {
+  const answer = [
+    '### 1. The Catbird Seat',
+    '- Known For: Tasting Menu',
+    '- Price Range: $$$$',
+    '- Must Try: Duck',
+    '### 2. Bastion Grill',
+    '- Known For: Tasting Menu',
+    '### 3. Rolf and Daughters',
+    '- Best For: Date Night',
+  ].join('\n');
+  assert.deepEqual(
+    extractCompetitors(answer, { name: 'Nobody Diner' }),
+    ['The Catbird Seat', 'Bastion Grill', 'Rolf and Daughters'],
+  );
+});
+
+test('V34: a bold numbered business with a "Best For:" bullet keeps its place and the next business', () => {
+  const answer = [
+    '**1. Mr. Rooter**',
+    '- Best For: Drain Clogs',
+    '**2. Hiller Plumbing**',
+    '- Known For: Fast Service',
+  ].join('\n');
+  const r = analyzeAnswer(answer, { name: 'Mr. Rooter', city: 'Nashville', state: 'TN', service: 'plumbers' });
+  assert.equal(r.named, true);
+  assert.equal(r.position, 1);
+  assert.equal(r.total, 2);
+  assert.deepEqual(r.competitors, ['Hiller Plumbing']);
+});
+
+test('V34: a heading that is the business itself is never read as a group', () => {
+  const business = { name: 'The Local', city: 'Nashville', state: 'TN', service: 'restaurants' };
+  const answer = [
+    '### 1. The Local',
+    '- Neighborhood Favorite',
+    '### 2. Bastion Grill',
+    '- Known For: Tasting Menu',
+  ].join('\n');
+  const r = analyzeAnswer(answer, business);
+  assert.equal(r.named, true);
+  assert.equal(r.position, 1);
+  assert.deepEqual(r.competitors, ['Bastion Grill']);
+});
+
+test('V34: "Label: value" bullets are not names, and real group headings still keep their businesses', () => {
+  const answer = [
+    '### 1. Emergency Plumbers',
+    '- Known For: Fast Response',
+    '- Hiller Plumbing',
+    '- Mr. Rooter Plumbing',
+  ].join('\n');
+  assert.deepEqual(extractCompetitors(answer, NOBODY), ['Hiller Plumbing', 'Mr. Rooter Plumbing']);
+});
