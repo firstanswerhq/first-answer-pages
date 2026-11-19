@@ -133,6 +133,23 @@ export function parseGradeMaxRunning(value, warn = console.warn) {
   return DEFAULT_GRADE_MAX_RUNNING;
 }
 
+export const DEFAULT_GRADE_NETWORK_PER_DAY = 20;
+
+/**
+ * GRADE_NETWORK_PER_DAY: how many new checks one network (an IPv4 /24 or an IPv6 /64) may start a day.
+ * A positive whole number. Unset gives 20; anything else warns (without echoing the value) and gives 20.
+ * @param {string | undefined} value
+ * @param {(msg: string) => void} [warn]
+ * @returns {number}
+ */
+export function parseGradeNetworkPerDay(value, warn = console.warn) {
+  const v = nonEmpty(value);
+  if (v === undefined) return DEFAULT_GRADE_NETWORK_PER_DAY;
+  if (/^[1-9][0-9]*$/.test(v) && Number.isSafeInteger(Number(v))) return Number(v);
+  warn(`GRADE_NETWORK_PER_DAY must be a positive whole number; using ${DEFAULT_GRADE_NETWORK_PER_DAY}.`);
+  return DEFAULT_GRADE_NETWORK_PER_DAY;
+}
+
 /** GRADER_ENABLED / GRADER_LEAD_GATE: 'off' (any case) is false; anything else is true. */
 export function parseOnOff(value) {
   return nonEmpty(value)?.toLowerCase() !== 'off';
@@ -311,6 +328,7 @@ export function configFromEnv(env = process.env, opts = {}) {
     graderLeadGate: parseOnOff(env.GRADER_LEAD_GATE),
     gradeAiCallsPerDay: parseGradeAiCalls(env.GRADE_AI_CALLS_PER_DAY, opts.warn ?? console.warn),
     gradeMaxRunning: parseGradeMaxRunning(env.GRADE_MAX_RUNNING, opts.warn ?? console.warn),
+    gradeNetworkPerDay: parseGradeNetworkPerDay(env.GRADE_NETWORK_PER_DAY, opts.warn ?? console.warn),
     // Signs form stamps and unlock cookies. Without GRADER_SECRET a random per-process key is
     // used (unlocks then reset on restart); graderSecretGenerated lets createApp warn once.
     graderSecret: nonEmpty(env.GRADER_SECRET) ?? (processGraderSecret ??= randomBytes(32).toString('hex')),

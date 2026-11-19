@@ -453,7 +453,7 @@ Approved by the owner on Nov 19, 2026. Task names: **G1 to G7** for Feature G (b
 
 ### Feature G: stop bots from running checks over and over (Requirement 25)
 
-- [ ] G1. The per-network limit
+- [x] G1. The per-network limit
   - `server/lib/network-key.js`: `networkKey(ip)` (IPv4 first three parts; IPv6 first four groups, expanded, lower case, no leading zeros; an IPv4 address inside an IPv6 one gives the IPv4 network; a non-address gives the string itself)
   - `rate-limiter.js`: `RULES['grade-network']` (20 a day); `config.js`: `gradeNetworkPerDay` from `GRADE_NETWORK_PER_DAY` (positive whole number, default 20, warns without echoing); `POST /grade` adds the network rule to the existing `consumeAll([...])` (peeking the network rule first to know which rule refused); a network refusal is 429 with `Retry-After` and its own message ("A lot of checks have come from your network today. Please try again tomorrow, or from another connection."), counted apart from an address refusal; README and `render.yaml` list the setting, and the README says that behind Cloudflare's proxy `TRUST_PROXY` must be 2
   - Tests (new `test/grade-guard.test.js`): `networkKey` examples (IPv4, IPv6, IPv4-mapped, junk); the 21st check in a day from one `/24` (and one IPv6 `/64`) is turned away with 429 and `Retry-After`, a different network is not, and the per-address limits still apply; `GRADE_NETWORK_PER_DAY` is read as described and a lower value is honored

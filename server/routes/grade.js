@@ -17,6 +17,7 @@
 
 import express, { Router } from 'express';
 import { RULES } from '../lib/rate-limiter.js';
+import { networkKey } from '../lib/network-key.js';
 import {
   signFormStamp, checkFormStamp, setCookieHeader, claimCookieHeader, readClaimedDraftId, hasValidCookie,
 } from '../lib/grade-stamp.js';
@@ -45,6 +46,11 @@ export function createGradeRouter(ctx) {
   const tooMany = (res, retryAfterSeconds) => {
     res.set('Retry-After', String(retryAfterSeconds));
     return html(res, 429, messagePage('Please slow down', 'We have had a lot of checks from your address. Please try again a little later.'));
+  };
+  // Many unrelated people can share one mobile network, so this refusal does not say "your address".
+  const tooManyNetwork = (res, retryAfterSeconds) => {
+    res.set('Retry-After', String(retryAfterSeconds));
+    return html(res, 429, messagePage('Please slow down', 'A lot of checks have come from your network today. Please try again tomorrow, or from another connection.'));
   };
   const hasCookie = (kind, id, req) => hasValidCookie(secret(), kind, id, req.headers.cookie);
 
@@ -82,11 +88,25 @@ export function createGradeRouter(ctx) {
       }
       if (!checked.ok) return formPage(res, 422, { values: checked.values, errors: checked.errors });
 
-      const limited = ctx.rateLimiter.consumeAll([
+      // Per address (5 an hour, 6 a day) and per network (20 a day by default). One refused rule counts none of them.
+      const addressRules = [
         { key: `grade:${req.ip}`, ...RULES.grade },
         { key: `grade-day:${req.ip}`, ...RULES['grade-day'] },
-      ]);
-      if (!limited.allowed) return tooMany(res, limited.retryAfterSeconds);
+      ];
+      const networkRule = {
+        key: `grade-network:${networkKey(req.ip)}`,
+        ...RULES['grade-network'],
+        limit: ctx.config.gradeNetworkPerDay ?? RULES['grade-network'].limit,
+      };
+      // Looking first (peek records nothing) tells a network refusal from an address refusal.
+      const networkFull = !ctx.rateLimiter.peek(networkRule.key, networkRule).allowed;
+      const addressFull = addressRules.some(rule => !ctx.rateLimiter.peek(rule.key, rule).allowed);
+      const limited = ctx.rateLimiter.consumeAll([...addressRules, networkRule]);
+      if (!limited.allowed) {
+        return networkFull && !addressFull
+          ? tooManyNetwork(res, limited.retryAfterSeconds)
+          : tooMany(res, limited.retryAfterSeconds);
+      }
 
       const id = await ctx.grader.start(checked.input);
       // The browser that ran the check is the only one that may ask for Google's live answer.
