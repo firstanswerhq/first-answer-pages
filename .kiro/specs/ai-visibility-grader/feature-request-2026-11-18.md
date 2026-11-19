@@ -1,4 +1,4 @@
-# Two new features for the AI Visibility Check (approved by the owner, Nov 18, 2026)
+# Three new features for the AI Visibility Check and listings (approved by the owner, Nov 18, 2026)
 
 Colby ran the live check on a real client: a window and pressure washing company in Tallahassee that goes to its customers and has no storefront, and that has 52 five-star Google reviews. Two things showed up that the check should handle for every small business. He approved both ("yes and yes"). This note is the request; Kiro writes the spec changes and builds it.
 
@@ -30,3 +30,15 @@ What it should do:
 - Scoring: it is worth points in Customer basics. Keep the total at 100. Propose the new point split in design.md, and update the score fixtures and any test that pins the old totals, listing every number that changes and why, so the reviewer can check nothing else moved.
 - The free listing gets an optional "Reviews link" field (an https link to the business's Google, Yelp, Facebook or Nextdoor reviews), shown on the listing page as "See our reviews on Google" (or Yelp, and so on). Claim fills it when the home page has such a link. Validate it as an https link to one of those sites only. The listing page shows only the link, never a star rating or review count.
 - Tests: example tests for passing and failing pages (each signal type), the fix text, the new listing field (valid and invalid links), and the claim fill.
+
+## Feature C: Link each listing to the business's own website (approved Nov 18, 10:27 PM)
+
+Listings don't store or show the business's website today, so search engines and AI that read a listing page can't connect it to the business's real site.
+
+What it should do:
+- Listings get an optional "Website" field: an https link to the business's own site (validated as a public https URL; no IP addresses, no login or tracking parameters kept).
+- The listing page shows it as a plain "Website" link, and the listing's business label (JSON-LD) adds it under `sameAs` (the label's `url` stays the listing page).
+- The owner form and the admin review page show and edit the field like the other optional fields.
+- Claim from the AI Visibility Check fills it from the website the owner typed on the check.
+- `llms.txt` and the MCP tools include the website for listings that have one.
+- Tests: example tests for valid and invalid links, the listing page link and label, the claim fill, and llms.txt. Never change or loosen existing tests.
