@@ -534,3 +534,41 @@ test('V45: a second opinion never pauses more than 5 seconds before its one retr
   assert.deepEqual(slept, [5000]);
   assert.equal(tries, 2);
 });
+
+test('V53: a provider stays on the "still answering" list until all of its pending answers have arrived', async () => {
+  // The free question is answered at once; during the extra questions ChatGPT takes 600 ms on one and 1,200 ms on the other.
+  const delays = [0, 600, 1200];
+  let asked = 0;
+  const chatgpt = {
+    name: 'chatgpt',
+    async ask() {
+      const wait = delays[Math.min(asked, delays.length - 1)];
+      asked += 1;
+      if (wait > 0) await new Promise(resolve => setTimeout(resolve, wait));
+      return answerOf('1. Ace Accounting', 'chatgpt');
+    },
+  };
+  const env = await startEnv({
+    assistantProvider: scripted(['1. Bluebird Books']),
+    extraAssistants: [chatgpt],
+    config: { graderLeadGate: false },
+    graderTiming: { secondOpinionTimeoutMs: 60 * 1000 },
+  });
+  const id = await begin(env, NO_SITE);
+  await waitDone(env, id);
+  await get(env, `/grade/${id}`); // with the gate off, the first view starts the extra questions
+
+  // The first extra answer is saved (the free one and this one are on the Grade), but the second is still coming.
+  await until(async () => (await storedGrade(env, id)).ai.filter(a => a.provider === 'chatgpt').length >= 2, 'the first extra answer');
+  assert.deepEqual(env.ctx.grader.secondPending(id), ['chatgpt'], 'still listed while its other answer is coming');
+  const waiting = await (await get(env, `/grade/${id}`)).text();
+  assert.ok(waiting.includes('ChatGPT is still answering. This page updates by itself.'));
+  assert.ok(waiting.includes('<noscript><meta http-equiv="refresh"'));
+
+  // After the last answer arrives the list is empty and every answer is on the report.
+  await until(() => env.ctx.grader.secondPending(id).length === 0, 'the last answer');
+  const grade = await storedGrade(env, id);
+  assert.equal(grade.ai.filter(a => a.provider === 'chatgpt').length, 3);
+  const done = await (await get(env, `/grade/${id}`)).text();
+  assert.equal(done.includes('still answering'), false);
+});

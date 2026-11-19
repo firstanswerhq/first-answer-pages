@@ -340,6 +340,7 @@ From a cloud load test of 20 and 50 checks at once (fake AI answers and fake web
 - [x] V45a. A second opinion never pauses more than 5 seconds before its one retry; Claude may still wait up to 20
 - [x] V47a. The two new V47 recheck tests open the full report first (the lead gate is off in those tests), since "Check again" needs the full report
 - [x] V49. The lead email goes out in the background: the lead form answers at once and the email is sent inside try/catch under the existing 5-second limit, once; nothing about the lead is logged
+- [x] V53. The "still answering" note counts pending second opinions per answer, not per provider name: `trackSecond` keeps a count for each provider, so ChatGPT stays listed (and the report keeps refreshing) until every one of its pending answers has arrived or run out of time; the note still names assistants, not calls; test in `test/grade-load.test.js` with a fake ChatGPT that takes 600 ms on one extra question and 1,200 ms on the other
 - Not in this round, for the owner to decide: the daily AI allowance (`GRADE_AI_CALLS_PER_DAY`, `MAX_AI_CALLS_PER_DAY` are Render settings and a spending decision), and the storage change (one file per report, or SQLite) that thousands of stored reports will need before real traffic
 
 ### P. Round 15 (`review-2026-11-18-round15.md`)
@@ -349,6 +350,10 @@ From a cloud load test of 20 and 50 checks at once (fake AI answers and fake web
 ### Q. Round 16 (`review-2026-11-18-round16.md`)
 
 - [x] V51. Bold names with a lowercase word at the start or end, and standalone bold names, are kept: a bold list item or bullet is the whole name when it starts and ends with a capital, or has a cue (brand styling such as "iFix", a legal word, or a trade or business word with a possessive or two capitalized words: "**Mike's plumbing**", "**iFix Hair**", "**the Hair Bar**", "**Fox and Jane salon**"); a standalone bold line (no number or bullet) is a name when it reads like one or has such a cue (the capital-at-both-ends arm is not used there, so "**Residential plumbing**" stays a label); bold text that starts like a sentence (a, an, our, your, we, you, it, this…), or is a heading, section, group, detail-label or advice text ("**Before you hire a plumber**", "**Our top picks for you**", "**a quick note on prices**") is never a name; 6 new cases (L1 to L4, G7, G8) added to `MORE_CASES`, the 75 existing cases unchanged (81 in all)
+
+### R. Round 17 (`review-2026-11-18-round17.md`)
+
+- [x] V52. "It listed N businesses" and the numbered rows come from one list: the main ranked list that holds the business (or, when it is not named, the first list); names after a lead-in line such as "Other names to check:", "Also worth a call:" or "Honorable mentions:" belong to a separate later list, are not numbered or counted, and show under the rows as a plain "Also mentioned:" list (answer order, escaped, at most 5); `splitLists` in `name-match.js` reads the lists for display, the stored `competitors`, `position` and `total` are unchanged, and `analyzeAnswer` is unchanged; when the second look dropped names only the names it kept are shown, and when the business is not found in the answer text the stored numbers are used as before; Colby's Capital City answer reads "It listed 5 businesses, and yours was 3rd" with exactly 5 rows; example tests added to `test/grade-report-list.test.js`; the 81 name-match cases are unchanged
 
 ## Owner-approved features (Nov 18)
 

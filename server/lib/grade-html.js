@@ -18,7 +18,7 @@ import {
   suggestedTitle, suggestedSummary, jsonLdBlock, llmsDraft, robotsLines,
 } from './fix-kit.js';
 import { formatRunTime } from './seance-html.js';
-import { listedNames } from './name-match.js';
+import { listedNames, splitLists } from './name-match.js';
 import {
   providerLabel, freeQuestion, stepNames, foundOf, isSecondOpinion, schemaHours, readableHours, isPartialScore,
 } from './grader.js';
@@ -181,14 +181,41 @@ function partialReason(grade) {
   return `${midSentence(grade.aiMain?.label ?? 'The assistant')} didn't answer this time, so`;
 }
 
+/**
+ * The main ranked list of a named answer, read from the answer text, with the business in it, and the names
+ * from separate later lists ("Other names to check:"). Null when the business cannot be found in the text
+ * (an empty or cut answer, or a spelling only the second look matched): the stored numbers are used then.
+ * The count and the numbered rows come from this one list. When the second look dropped some names, only
+ * the names it kept (and the business) are shown.
+ */
+function mainList(a, input) {
+  if (!a.named || !Number.isInteger(a.position)) return null;
+  try {
+    const { main, also } = splitLists(String(a.answer ?? ''), {
+      name: input?.name, city: input?.city, state: input?.state, service: input?.service, website: input?.website,
+    });
+    const at = main.findIndex(e => e.own);
+    if (at === -1) return null;
+    const kept = a.nameCheck?.dropped > 0 ? new Set(Array.isArray(a.competitors) ? a.competitors : []) : null;
+    const ok = e => !kept || kept.has(e.name ?? e);
+    const rows = main.filter(e => e.own || ok(e));
+    return { rows, position: rows.findIndex(e => e.own) + 1, also: also.filter(n => ok(n)) };
+  } catch {
+    return null;
+  }
+}
+
 /** One sentence about what an answer did with the business. */
-function outcome(a) {
+function outcome(a, input) {
   if (a.named) {
     if (Number.isInteger(a.position) && Number.isInteger(a.total) && a.total > 0) {
       const tail = a.nameCheck?.addedNamed
         ? ', but it was spelled a little differently from how you wrote it. We still counted it.'
         : '.';
-      return `It listed ${plural(a.total, 'business', 'businesses')}, and yours was ${ordinal(a.position)}${tail}`;
+      const lists = mainList(a, input);
+      const total = lists ? lists.rows.length : a.total;
+      const position = lists ? lists.position : a.position;
+      return `It listed ${plural(total, 'business', 'businesses')}, and yours was ${ordinal(position)}${tail}`;
     }
     return 'It named your business in its answer.';
   }
@@ -252,6 +279,17 @@ function nameAsWritten(a, input) {
  */
 function competitorList(a, input) {
   const list = Array.isArray(a.competitors) ? a.competitors : [];
+  // The numbered rows are the main list only, as the AI ranked it; names from a later list are listed plainly below.
+  const lists = mainList(a, input);
+  if (lists) {
+    const rows = lists.rows.map(e => (e.own
+      ? `<li class="grade-you"><strong>${h(e.name)}</strong> (you)</li>`
+      : `<li>${h(e.name)}</li>`));
+    const also = lists.also.length > 0
+      ? `<p class="grade-others-heading">Also mentioned:</p><ul class="grade-competitors grade-competitors-plain">${lists.also.slice(0, 5).map(n => `<li>${h(n)}</li>`).join('')}</ul>`
+      : '';
+    return `<ol class="grade-competitors">${rows.join('')}</ol>${also}`;
+  }
   if (a.named && Number.isInteger(a.position) && a.position >= 1 && a.position - 1 <= list.length) {
     const items = list.map(n => `<li>${h(n)}</li>`);
     items.splice(a.position - 1, 0, `<li class="grade-you"><strong>${h(nameAsWritten(a, input))}</strong> (you)</li>`);
@@ -283,7 +321,7 @@ function aiFree(grade, { googleLive, requester, now, secondPending = [] }) {
 
   if (first) {
     const lead = askedLine(first, now, inline(first.provider));
-    parts.push(`<p>${lead} ${h(outcome(first))}</p>`, competitorList(first, grade.input), answerBlock(first));
+    parts.push(`<p>${lead} ${h(outcome(first, grade.input))}</p>`, competitorList(first, grade.input), answerBlock(first));
   } else if (seconds.length > 0) {
     parts.push(`<p>${h(mainLabel)} did not answer this time, so this check has no AI score.</p>`);
   } else {
@@ -299,14 +337,14 @@ function aiFree(grade, { googleLive, requester, now, secondPending = [] }) {
     if (first) {
       parts.push('<h3>Other AI assistants, for comparison only (not scored):</h3>');
       for (const s of seconds) {
-        parts.push(`<p>${h(providerLabel(s.provider))}, asked the same question: ${h(outcome(s))}</p>`);
+        parts.push(`<p>${h(providerLabel(s.provider))}, asked the same question: ${h(outcome(s, grade.input))}</p>`);
         if (s.provider === 'gemini' && s.webSearch !== true) parts.push('<p class="hint">Gemini answered without a live web search.</p>');
         parts.push(competitorList(s, grade.input), answerBlock(s));
       }
     } else {
       parts.push('<p class="hint">These answers are for comparison only (not scored).</p>');
       for (const s of seconds) {
-        parts.push(`<p>${askedLine(s, now, h(providerLabel(s.provider)))} ${h(outcome(s))}</p>`);
+        parts.push(`<p>${askedLine(s, now, h(providerLabel(s.provider)))} ${h(outcome(s, grade.input))}</p>`);
         if (s.provider === 'gemini' && s.webSearch !== true) parts.push('<p class="hint">Gemini answered without a live web search.</p>');
         parts.push(competitorList(s, grade.input), answerBlock(s));
       }
@@ -467,7 +505,7 @@ function answersSection(grade) {
   const items = prompts.map(p => {
     const entries = all.filter(a => a.prompt === p);
     return `<li><strong>${h(p)}</strong>${entries.map(a => `
-      <p>${h(providerLabel(a.provider))}${isSecondOpinion(a) ? ' (for comparison only)' : ''}: ${h(outcome(a))}</p>
+      <p>${h(providerLabel(a.provider))}${isSecondOpinion(a) ? ' (for comparison only)' : ''}: ${h(outcome(a, grade.input))}</p>
       ${answerBlock(a)}`).join('')}</li>`;
   }).join('\n    ');
   return `<section class="grade-all-answers">

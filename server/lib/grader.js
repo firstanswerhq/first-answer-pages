@@ -815,18 +815,21 @@ export function createGrader({
     return { entries, mainState };
   }
 
-  const pendingSeconds = new Map(); // Grade_Id -> assistant names of second opinions still answering
+  // Grade_Id -> (assistant name -> how many of its answers are still coming). Counted per answer, so a
+  // provider stays listed until every one of its pending answers has arrived or run out of time.
+  const pendingSeconds = new Map();
 
   function trackSecond(id, name, on) {
-    const names = pendingSeconds.get(id) ?? new Set();
-    if (on) names.add(name);
-    else names.delete(name);
-    if (names.size > 0) pendingSeconds.set(id, names);
+    const counts = pendingSeconds.get(id) ?? new Map();
+    const next = (counts.get(name) ?? 0) + (on ? 1 : -1);
+    if (next > 0) counts.set(name, next);
+    else counts.delete(name);
+    if (counts.size > 0) pendingSeconds.set(id, counts);
     else pendingSeconds.delete(id);
   }
 
-  /** Assistant names (such as 'chatgpt') of second opinions for this Grade that have not answered yet. */
-  const secondPending = id => [...(pendingSeconds.get(id) ?? [])];
+  /** Assistant names (such as 'chatgpt') of second opinions for this Grade that have not all answered yet. */
+  const secondPending = id => [...(pendingSeconds.get(id)?.keys() ?? [])];
 
   /** Add a second opinion that arrived after the report was written (or note that it ran out of time). */
   async function saveLateSecond(id, { entry, name, timedOut, prompt }) {

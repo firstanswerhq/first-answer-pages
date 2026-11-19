@@ -128,3 +128,85 @@ test('V42: a very long line of broken link marks is read quickly, and normal lin
   assert.equal(typeof out, 'string');
   assert.equal(readableAnswer('[Parlour](https://parlournashville.com)'), 'Parlour');
 });
+
+// ---- V52: the count and the numbered rows come from the main list only ------------------------------------
+
+const CAPITAL = {
+  name: 'Capital city window and pressure cleaning', city: 'Tallahassee', state: 'FL',
+  service: 'Window cleaning and pressure cleaning', website: null,
+};
+
+// Claude's real answer from the owner's live check, with the two names that follow "Other names to check:".
+const CAPITAL_ANSWER = [
+  "This is my top 5 for businesses that do both window cleaning and pressure washing in Tallahassee. I built it from what's offered and from Yelp and directory listings, not from my own testing.",
+  '',
+  "1. **Joe Pogo's Window Cleaning.** Joe Pogorzelski has provided residential and commercial pressure washing and window cleaning in Tallahassee for more than 16 years. It has a 5.0 rating on Yelp from 3 reviews.",
+  '',
+  '2. **Cleanscapes Exterior Cleaning.** It specializes in pressure washing, soft washing, window cleaning and gutter cleaning. It has a 4.4 rating from 5 reviews on Yelp.',
+  '',
+  "3. **Capital City Window & Pressure Cleaning.** It's locally owned and operated and says it will beat or match prices. I couldn't see its star rating in the results.",
+  '',
+  "4. **College Cleaning Crew.** It leads Yelp's window-washing and pressure-washing lists. Its Yelp rating is 4.3 from 6 reviews.",
+  '',
+  '5. **Premier Pressure Washing & Window Cleaning Services.** It offers house washing, roof cleaning, window cleaning and driveway cleaning. I found little independent review data for it.',
+  '',
+  '**Other names to check:**',
+  '- Get It Done Window Washing has a 5.0 rating from 1 review.',
+  '- Cloud Nine Window Cleaning has a 5.0 rating from 2 reviews.',
+  '- Fish Window Cleaning is a national franchise with a Tallahassee location.',
+].join('\n');
+
+const capitalEntry = extra => ({
+  provider: 'anthropic', prompt: 'Who are the best window cleaning and pressure cleaning in Tallahassee, FL? Name your top 5.',
+  answer: CAPITAL_ANSWER, named: true, position: 3, total: 8,
+  competitors: [
+    "Joe Pogo's Window Cleaning", 'Cleanscapes Exterior Cleaning', 'College Cleaning Crew',
+    'Premier Pressure Washing & Window Cleaning Services', 'Get It Done Window Washing',
+  ],
+  at: '2026-11-18T12:00:00.000Z',
+  ...extra,
+});
+
+const capitalGrade = (...ai) => ({ ...gradeWith(...ai), input: CAPITAL });
+const itemsOf = html => [...(/<ol class="grade-competitors">([\s\S]*?)<\/ol>/.exec(html)?.[1] ?? '').matchAll(/<li[^>]*>([\s\S]*?)<\/li>/g)].map(x => x[1]);
+
+test('V52: the count and the rows are the main list; names from the later list go under "Also mentioned:"', () => {
+  const html = reportPage(capitalGrade(capitalEntry()), { leadGate: false });
+  assert.ok(html.includes('It listed 5 businesses, and yours was 3rd.'));
+  const rows = itemsOf(html);
+  assert.equal(rows.length, 5, 'exactly the five ranked names');
+  assert.equal(rows[0], 'Joe Pogo&#39;s Window Cleaning');
+  assert.equal(rows[2], '<strong>Capital City Window &amp; Pressure Cleaning</strong> (you)');
+  assert.equal(rows[4], 'Premier Pressure Washing &amp; Window Cleaning Services');
+  assert.ok(/<li class="grade-you">/.test(html));
+
+  const at = html.indexOf('Also mentioned:');
+  assert.ok(at > html.indexOf('</ol>'), 'listed under the numbered rows');
+  const also = [...html.slice(at, html.indexOf('</ul>', at)).matchAll(/<li>([\s\S]*?)<\/li>/g)].map(x => x[1]);
+  assert.deepEqual(also, ['Get It Done Window Washing', 'Cloud Nine Window Cleaning', 'Fish Window Cleaning']);
+});
+
+test('V52: an answer with one list renders as before, with no "Also mentioned:"', () => {
+  const html = render(entry());
+  assert.ok(html.includes('It listed 5 businesses, and yours was 3rd.'));
+  assert.equal(listOf(html)[1].match(/<li/g).length, 5);
+  assert.equal(html.includes('Also mentioned:'), false);
+});
+
+test('V52: a not-named answer with an extra list numbers nothing and shows the plain list as before', () => {
+  const answer = [
+    '1. **Hiller Plumbing** - big jobs',
+    '2. **Radiant Plumbing & Air** - upfront pricing',
+    '',
+    '**Other names to check:**',
+    '- Mr. Rooter Plumbing is a national brand.',
+  ].join('\n');
+  const html = render(entry({
+    answer, named: false, position: null, total: 3,
+    competitors: ['Hiller Plumbing', 'Radiant Plumbing & Air', 'Mr. Rooter Plumbing'],
+  }));
+  assert.equal(listOf(html), null, 'nothing is numbered');
+  assert.ok(html.includes('Other businesses it named:'));
+  assert.equal(html.includes('Also mentioned:'), false);
+  assert.ok(html.includes('Mr. Rooter Plumbing'));
+});

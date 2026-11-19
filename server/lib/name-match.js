@@ -363,6 +363,9 @@ const TWO_PART_SUFFIXES = new Set([
 
 const MAX_COMPETITORS = 5;
 
+// Words in a lead-in line that start a separate later list ("Other names to check:", "Also worth a call:").
+const ALSO_LEAD = /\b(also|other|others|additional|further|honorable|mention|mentions|runner|runners|extra|bonus|else|beyond|besides|worth)\b/;
+
 // ---- small helpers --------------------------------------------------------------
 
 function words(s) {
@@ -676,11 +679,17 @@ function tableNamesMayBeOneWord(lines, i) {
  * Every name listed in an answer, in answer order. `prep` (the business being looked for) makes sure the
  * business itself is never dropped by a filter.
  */
-function extractEntries(answer, prep) {
+function extractEntries(answer, prep, groupsOut) {
   const lines = String(answer ?? '').split(/\r?\n/);
   const entries = [];
   const seen = new Set();
   const own = text => Boolean(prep) && entryMatches(text, prep);
+  // A lead-in line such as "Other names to check:" or "Honorable mentions:" after some names starts a
+  // separate, later list. `groupsOut` (when given) gets the list number of every entry, in entry order.
+  let groupNo = 0;
+  const noteBoundary = label => {
+    if (entries.length > 0 && ALSO_LEAD.test(words(label).join(' '))) groupNo += 1;
+  };
   const push = list => {
     for (const text of list) {
       // A line that is only a standard offer ("Free Estimates", "24/7 Emergency Service") is not a business name.
@@ -691,6 +700,7 @@ function extractEntries(answer, prep) {
       if (!key || seen.has(key)) continue;
       seen.add(key);
       entries.push(text);
+      if (groupsOut) groupsOut.push(groupNo);
     }
   };
 
@@ -747,6 +757,7 @@ function extractEntries(answer, prep) {
       // An unnumbered heading ("## Best Overall", "### Tips") is never a name; a bold one ("### **Bob Plumbing:**") can be.
       underBusiness = false;
       nestedDetails = false;
+      noteBoundary(h[1]);
       adviceSection = isAdviceHeading(h[1]);
       const bold = h[1].trim().match(STANDALONE_BOLD_RE);
       if (bold) push(fromStandaloneBold(bold[1]));
@@ -804,6 +815,7 @@ function extractEntries(answer, prep) {
     if (sb) {
       underBusiness = false;
       nestedDetails = false;
+      noteBoundary(sb[1]);
       adviceSection = isAdviceHeading(sb[1]);
       push(fromStandaloneBold(sb[1]));
       continue;
@@ -811,6 +823,7 @@ function extractEntries(answer, prep) {
     // A plain label line ("Tips:", "How to choose:") starts or ends an advice section.
     const label = line.match(/^\s*([^:*#|]{1,60}):\s*$/);
     if (label) {
+      noteBoundary(label[1]);
       adviceSection = isAdviceHeading(label[1]);
       continue;
     }
@@ -905,6 +918,28 @@ export function extractCompetitors(answer, business) {
 export function listedNames(answer, business) {
   const prep = prepBusiness(business);
   return extractEntries(answer, prep).map(name => ({ name, own: entryMatches(name, prep) }));
+}
+
+/**
+ * The main ranked list of an answer and the names from separate later lists, for display. The main list
+ * is the one that holds the business (or, when it is not named, the first list); names after a lead-in line
+ * such as "Other names to check:" belong to a later list. Nothing here changes `analyzeAnswer`.
+ * @returns {{ main: { name: string, own: boolean }[], also: string[] }} `also` has at most 5 names
+ */
+export function splitLists(answer, business) {
+  const prep = prepBusiness(business);
+  const groups = [];
+  const entries = extractEntries(answer, prep, groups);
+  const mine = entries.findIndex(e => entryMatches(e, prep));
+  const mainGroup = mine === -1 ? (groups[0] ?? 0) : groups[mine];
+  const main = [];
+  const also = [];
+  entries.forEach((name, i) => {
+    const own = entryMatches(name, prep);
+    if (groups[i] === mainGroup) main.push({ name, own });
+    else if (!own) also.push(name);
+  });
+  return { main, also: also.slice(0, MAX_COMPETITORS) };
 }
 
 function firstIdentifyingWord(name, ctx) {
