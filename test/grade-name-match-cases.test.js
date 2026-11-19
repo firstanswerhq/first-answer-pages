@@ -841,6 +841,76 @@ const MORE_CASES = [
     ),
     named: true, position: 1, competitors: ['Aa Ab aAA Aa'],
   },
+  // V51: bold names with a lowercase word at the start or end, standalone bold names, and headings that stay out.
+  {
+    id: 'L1', name: "Joe's Plumbing", service: 'plumbers',
+    answer: lines(
+      "1. **Mike's plumbing** - small shop",
+      '2. **Hiller Plumbing** - big',
+      "3. **Joe's Plumbing** - honest",
+    ),
+    named: true, position: 3, competitors: ["Mike's plumbing", 'Hiller Plumbing'],
+  },
+  {
+    id: 'L2', name: 'Parlour', service: 'hair salons',
+    answer: lines(
+      '1. **iFix Hair** - cuts',
+      '2. **the Hair Bar** - blowouts',
+      '3. **Parlour** - color',
+    ),
+    named: true, position: 3, competitors: ['iFix Hair', 'the Hair Bar'],
+  },
+  {
+    id: 'L3', name: 'Parlour', service: 'hair salons',
+    answer: lines(
+      '- **Fox and Jane salon** - modern cuts',
+      '- **Parlour** - color',
+      '- **Salon Lofts** - booth rental',
+    ),
+    named: true, position: 2, competitors: ['Fox and Jane salon', 'Salon Lofts'],
+  },
+  {
+    id: 'L4', name: "Joe's Plumbing", service: 'plumbers',
+    answer: lines(
+      '**Hiller Plumbing**',
+      'The biggest shop in town.',
+      '',
+      "**Mike's mobile Plumbing**",
+      'Comes to you.',
+      '',
+      "**Joe's Plumbing**",
+      'Small and honest.',
+    ),
+    named: true, position: 3, competitors: ['Hiller Plumbing', "Mike's mobile Plumbing"],
+  },
+  {
+    id: 'G7', name: "Joe's Plumbing", service: 'plumbers',
+    answer: lines(
+      '**Hiller Plumbing**',
+      'The biggest shop in town.',
+      '',
+      "**Joe's Plumbing**",
+      'Small and honest.',
+      '',
+      '**Before you hire a plumber**',
+      'Ask for a written estimate.',
+      '',
+      '**Our top picks for you**',
+      'These are the two we trust most.',
+    ),
+    named: true, position: 2, competitors: ['Hiller Plumbing'],
+  },
+  {
+    id: 'G8', name: 'Parlour', service: 'hair salons',
+    answer: lines(
+      '1. **Parlour** - color',
+      '2. **Kinship** - cuts',
+      '',
+      '**a quick note on prices**',
+      'Prices change often.',
+    ),
+    named: true, position: 1, competitors: ['Kinship'],
+  },
 ];
 
 for (const c of MORE_CASES) {

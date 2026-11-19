@@ -527,20 +527,42 @@ function validName(text, minWords) {
   return notAHeading(text);
 }
 
+// Business words that count as a cue in bold text that is not title case ("the Hair Bar", "Fox and Jane salon").
+const BOLD_BUSINESS_WORDS = new Set([...BUSINESS_ENDINGS, 'salon', 'salons', 'bar', 'shop', 'barbershop']);
+
+// Bold text starting with one of these reads as a sentence or a heading, never a name ("Our top picks for you").
+const BOLD_NOT_FIRST = new Set(['a', 'an', 'our', 'your', 'my', 'we', 'you', 'it', 'this', 'that', 'these', 'those', 'there', 'here']);
+
 /**
- * Bold text with a lowercase word inside ("Mike's mobile Plumbing", "Sparkle drain Pros") is a whole name when
- * it starts and ends with a capital, is 2 to 6 words, and is not a heading, a detail label or advice.
- * "Water heater specialists" and "If you need it done today" end in a lowercase word, so they stay group labels.
+ * Bold text that is not plain title case is a whole name in two cases (2 to 6 words, never a heading, a
+ * detail label, a group word, advice or sentence-like text): it starts and ends with a capital ("Mike's
+ * mobile Plumbing", "Sparkle drain Pros"), or it has a cue: brand styling ("iFix Hair"), a legal word, or a
+ * trade or business word with a possessive or two capitalized words ("Mike's plumbing", "the Hair Bar").
+ * "Water heater specialists" and "If you need it done today" have neither, so they stay group labels.
+ * With `cueOnly`, the start-and-end-with-a-capital arm is not used (standalone bold lines).
  */
-function looseBoldName(text) {
+function looseBoldName(text, { cueOnly = false } = {}) {
   if (text.length < 4 || text.length > 60 || !/^[\p{L}\p{N}]/u.test(text)) return false;
   const tokens = text.split(/\s+/);
   if (tokens.length < 2 || tokens.length > 6) return false;
-  const startsUpper = t => /^[^\p{L}\p{N}]*[\p{Lu}\p{N}]/u.test(t);
-  if (!startsUpper(tokens[0]) || !startsUpper(tokens[tokens.length - 1])) return false;
-  if (!notAHeading(text) || isDetailLabel(text)) return false;
+  const lower = tokens.map(t => t.toLowerCase().replace(/[^\p{L}]/gu, ''));
+  // Text that starts like a sentence, and advice, heading, group and label text, is never a name.
+  if (BOLD_NOT_FIRST.has(lower[0])) return false;
+  if (!notAHeading(text) || isDetailLabel(text) || isAdviceHeading(text) || hasGroupWord(text)) return false;
   if (startsWithAdviceVerb(text) && !adviceNameOk(text)) return false;
-  return true;
+
+  const startsUpper = t => /^[^\p{L}\p{N}]*[\p{Lu}\p{N}]/u.test(t);
+  // Starts and ends with a capital ("Mike's mobile Plumbing"): the whole bold text is the name.
+  if (!cueOnly && startsUpper(tokens[0]) && startsUpper(tokens[tokens.length - 1])) return true;
+
+  // Otherwise the name needs a cue: brand styling ("iFix Hair"), a legal word, or a trade or business word
+  // together with a possessive or two capitalized words ("Mike's plumbing", "the Hair Bar", "Fox and Jane salon").
+  if (/^[a-z][A-Z]/.test(tokens[0])) return true;
+  const proper = tokens.filter(startsUpper).length;
+  if (lower.some(w => LEGAL.has(w))) return proper >= 1;
+  const cue = lower.some(w => TRADE.has(w) || BOLD_BUSINESS_WORDS.has(w));
+  const possessive = tokens.some(t => /['\u2019]s$/i.test(t));
+  return cue && (possessive || proper >= 2);
 }
 
 /** Bold spans inside a line of running text. */
@@ -615,7 +637,8 @@ function fromListContent(content, loose = false) {
 
 function fromStandaloneBold(inner) {
   const t = trimName(stripMarkdown(inner).replace(/^\s*\d+[.)]\s*/, ''));
-  return validName(t, 1) ? [t] : [];
+  // A standalone bold line is a name when it reads like one, or when it has a business cue ("**Mike's plumbing**").
+  return validName(t, 1) || looseBoldName(t, { cueOnly: true }) ? [t] : [];
 }
 
 function isTableSeparator(line) {
