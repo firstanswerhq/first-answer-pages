@@ -724,6 +724,123 @@ const MORE_CASES = [
     ),
     named: true, position: 2, competitors: ['Hiller Plumbing'],
   },
+  // V44: numbered lines written as sentences, and one-word names before a verb.
+  {
+    id: 'N1', name: "Joe's Plumbing", service: 'plumbers',
+    answer: lines(
+      '1. Hiller Plumbing is the biggest shop in town.',
+      '2. Radiant Plumbing & Air offers upfront pricing.',
+      "3. Joe's Plumbing has a 4.9 rating from 40 reviews.",
+    ),
+    named: true, position: 3, competitors: ['Hiller Plumbing', 'Radiant Plumbing & Air'],
+  },
+  {
+    id: 'N2', name: 'Fox & Jane', service: 'hair salons',
+    answer: lines(
+      '1. Parlour is known for color work.',
+      '2. Hair Bar Nashville offers blowouts.',
+      '3. Fox and Jane has modern cuts.',
+    ),
+    named: true, position: 3, competitors: ['Parlour', 'Hair Bar Nashville'],
+  },
+  {
+    id: 'N3', name: 'City House', service: 'restaurants',
+    answer: lines(
+      '1. Husk serves Southern food in a historic house.',
+      '2. Rolf and Daughters is known for pasta.',
+      '3. City House has wood-fired pizza.',
+    ),
+    named: true, position: 3, competitors: ['Husk', 'Rolf and Daughters'],
+  },
+  {
+    id: 'N4', name: 'Volunteer Roofing', service: 'roofers',
+    answer: lines(
+      '1. Music City Roofing, which handles storm repairs.',
+      '2. Volunteer Roofing, a smaller crew.',
+    ),
+    named: true, position: 2, competitors: ['Music City Roofing'],
+  },
+  {
+    id: 'N5', name: 'Volunteer Roofing', service: 'roofers',
+    answer: lines(
+      '1. Music City Roofing has handled storm repairs for 20 years.',
+      '2. Volunteer Roofing offers free inspections.',
+      '3. Get It Right Roofing specializes in metal roofs.',
+    ),
+    named: true, position: 2, competitors: ['Music City Roofing', 'Get It Right Roofing'],
+  },
+  {
+    id: 'N6', name: 'Husk', service: 'restaurants',
+    answer: lines(
+      '- Husk serves Southern food.',
+      '- Bastion has big bar nachos.',
+      '- City House is known for pizza.',
+    ),
+    named: true, position: 1, competitors: ['Bastion', 'City House'],
+  },
+  {
+    id: 'G5', name: "Joe's Plumbing", service: 'plumbers',
+    answer: lines(
+      '1. Hiller Plumbing is the biggest shop in town.',
+      "2. Joe's Plumbing has a 4.9 rating.",
+      '',
+      'Before you hire:',
+      '1. Ask for a written estimate before work starts.',
+      '2. Check that the license is current.',
+      '3. Get Quotes From Three Plumbers is a good idea.',
+    ),
+    named: true, position: 2, competitors: ['Hiller Plumbing'],
+  },
+  {
+    id: 'G6', name: 'Music City Roofing', service: 'roofers',
+    answer: lines(
+      '1. Music City Roofing is the busiest crew in town.',
+      '2. Volunteer Roofing has the most reviews.',
+      '3. It is also worth calling two shops before you choose.',
+    ),
+    named: true, position: 1, competitors: ['Volunteer Roofing'],
+  },
+  // V50: a bold name is the whole name, even with a lowercase word inside it.
+  {
+    id: 'K1', name: "Joe's Plumbing", service: 'plumbers',
+    answer: lines(
+      "1. **Mike's mobile Plumbing** - fast",
+      "2. **Joe's Plumbing** - small",
+    ),
+    named: true, position: 2, competitors: ["Mike's mobile Plumbing"],
+  },
+  {
+    id: 'K2', name: "Joe's Plumbing", service: 'plumbers',
+    answer: lines(
+      '1. **Sparkle drain Pros** - fast',
+      "2. **Joe's Plumbing** - small",
+    ),
+    named: true, position: 2, competitors: ['Sparkle drain Pros'],
+  },
+  {
+    id: 'K3', name: "Joe's Plumbing", service: 'plumbers',
+    answer: lines(
+      "1. **Mike's mobile Plumbing** is fast.",
+      "2. **Joe's Plumbing** is small.",
+    ),
+    named: true, position: 2, competitors: ["Mike's mobile Plumbing"],
+  },
+  {
+    id: 'K4', name: "Joe's Plumbing", service: 'plumbers',
+    answer: lines(
+      "- **Mike's mobile Plumbing**: fast",
+      "- **Joe's Plumbing**: small",
+    ),
+    named: true, position: 2, competitors: ["Mike's mobile Plumbing"],
+  },
+  {
+    id: 'K5', name: 'aA aa', service: 'plumbers',
+    answer: lines(
+      '1. **aA aa** - well reviewed',
+      '2. **Aa Ab aAA Aa** - well reviewed',
+    ),
+    named: true, position: 1, competitors: ['Aa Ab aAA Aa'],
+  },
 ];
 
 for (const c of MORE_CASES) {

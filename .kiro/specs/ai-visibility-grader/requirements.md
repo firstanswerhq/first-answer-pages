@@ -57,10 +57,11 @@ Node.js 22, plain Express, plain JavaScript ES modules, JSON files under `DATA_D
 - **AI_Budget**: The existing daily cap on paid AI calls, extended with a `grade` share.
 - **Scan_Step**: One of the named steps shown while a Grade runs.
 - **No_Storefront**: The optional Grade_Input setting `noStorefront`, ticked by a business that goes to its customers and shows no street address. Stored on the Grade only when ticked.
-- **Service_Area_Text**: Words on the home page that name the area a business serves, such as "Serving Tallahassee and nearby areas", "Service area:", "Areas we serve" or "We serve", or an `areaServed` value in the page's business label.
-- **Review_Signal**: Something on the home page that shows customer reviews in a way AI can read: review or testimonial text, a written-out rating, a link to the business's reviews on a Review_Site, or review data in the page's business label.
-- **Review_Site**: Google (google.com/maps, g.page, maps.app.goo.gl, search.google.com/local), Yelp (yelp.com/biz), Facebook or Nextdoor.
+- **Service_Area_Text**: Words on the home page that name the area a business serves, such as "Serving Tallahassee and nearby areas", "Service area:", "Areas we serve" or "We serve Tallahassee and nearby areas" (after "serving" or "we serve", the city name or an area word must follow close by), or an `areaServed` value in the page's business label.
+- **Review_Signal**: Something on the home page that shows customer reviews in a way AI can read: a review or testimonial heading, a written-out rating, a quoted customer comment with a name, a link to the business's reviews on a Review_Site, or review data in the page's business label. A bare "Reviews" menu link or footer social link is not a Review_Signal.
+- **Review_Site**: Google, Yelp, Facebook or Nextdoor. The exact addresses that count are in Requirements 19.1 (on a home page) and 20.2 (typed by an owner).
 - **Reviews_Link**: An optional listing field: an https link to the business's reviews on a Review_Site.
+- **Website_Link**: An optional listing field: a public `https` link to the business's own website, kept without its query string or `#` part.
 
 ## Requirements
 
@@ -196,7 +197,7 @@ Node.js 22, plain Express, plain JavaScript ES modules, JSON files under `DATA_D
 3. WHILE the Lead_Gate is `on` and the visitor has not unlocked this Grade, THE report SHALL show the Lead_Form in place of the Full_Report.
 4. WHEN the Full_Report is shown, THE report SHALL list every Check with its result, detail, points and fix sentence, grouped by Group, and SHALL show the Fix_Kit.
 5. THE report page SHALL send `X-Robots-Tag: noindex, nofollow` and a matching robots meta tag, and SHALL send `Referrer-Policy: no-referrer`.
-6. THE Server SHALL leave every `/grade` page out of `sitemap.xml`, `llms.txt`, the MCP tools, and IndexNow submissions.
+6. THE Server SHALL leave every `/grade` page out of `sitemap.xml`, `llms.txt`, the MCP tools, and IndexNow submissions, with one change made by Requirement 22 (not built until the owner confirms): the start form at `GET /grade` and `GET /grade/about`, with no query string, are open to search engines and listed in `sitemap.xml`. Criterion 5 and the rest of this criterion are unchanged for every other `/grade` page.
 7. IF the Grade_Id does not match a stored Grade, THEN THE Server SHALL respond with HTTP status 404.
 8. THE report SHALL include an "Ask us to remove this report" line with the site's contact email when `CONTACT_EMAIL` is set, and the contact page otherwise.
 
@@ -306,14 +307,15 @@ Node.js 22, plain Express, plain JavaScript ES modules, JSON files under `DATA_D
 #### Acceptance Criteria
 
 1. THE grade form SHALL offer one more optional checkbox, unchecked by default, labeled "We go to our customers (no storefront)", that works with JavaScript turned off. WHEN it is ticked, THE Grader SHALL store `noStorefront: true` on the Grade_Input; WHEN it is not ticked, THE Grader SHALL store nothing for it, so Grades made without it look exactly as they do today. Any other value sent for the field SHALL count as not ticked.
-2. WHILE No_Storefront is ticked, THE `address-shown` Check SHALL be shown as "Service area on your home page" and SHALL pass WHEN the home page has Service_Area_Text. It keeps the same id, group (`customer_basics`) and points as the address Check.
-3. WHILE No_Storefront is ticked, THE Check's pass text, fail text and fix SHALL talk only about the service area ("We found no service area on your home page." and a fix that tells the owner to add a line such as "Serving Tallahassee and nearby areas"), SHALL NEVER say an address is missing, and SHALL keep the fix at 160 characters or fewer. A street address on the page SHALL NOT make the Check fail or pass.
+2. WHILE No_Storefront is ticked, THE `address-shown` Check SHALL be shown as "Service area on your home page" and SHALL pass WHEN the home page has Service_Area_Text. It keeps the same id, group (`customer_basics`) and points as the address Check. Plain sentences that only mention serving something ("We serve breakfast all day") SHALL NOT pass: after "serving" or "we serve" the city name or an area word (area, areas, county, counties, surrounding, nearby, communities) must appear within 80 characters.
+3. WHILE No_Storefront is ticked, THE Check's pass text, fail text and fix SHALL talk only about the service area ("We found no service area on your home page." and a fix that tells the owner to add a line such as "Serving Nashville and nearby areas", using the Grade's own city, escaped, or "your city" when the city is empty), SHALL NEVER say an address is missing, and SHALL keep the fix at 160 characters or fewer; WHEN the example would make it longer, THE fix SHALL drop the example rather than cut words. A street address on the page SHALL NOT make the Check fail or pass.
 4. WHILE No_Storefront is ticked, THE Free_Page_Preview SHALL show the line "Serves the <city> area" in place of the address line (and SHALL NOT show "Add your address", even when the scan found a street address on the page).
 5. WHILE No_Storefront is ticked, THE Fix_Kit's business label (JSON-LD) SHALL set `areaServed` to the city and state (for example "Tallahassee, FL") and SHALL leave out `address` and `streetAddress`.
 6. WHEN a visitor claims a Grade with No_Storefront ticked, THE Draft SHALL have an empty `address` and a `serviceArea` of "<city> and nearby areas" (for example "Tallahassee and nearby areas"), and THE Draft SHALL NOT list `address` or `serviceArea` in `missingFields`. THE existing listing page, listing page business label and Draft review page SHALL read well with no address: they already treat the address as optional and show the city and the service area.
 7. THE Check, the preview and the claim SHALL read `noStorefront` from the stored Grade, so a Recheck, a reused answer, a Grade opened later and a "Start again" all keep the same mode.
 8. WHILE No_Storefront is not ticked, THE Check results, texts, points, preview, Fix_Kit and claimed Draft SHALL be exactly what Requirements 6, 10 and 11 describe.
-9. THE wording of every changed line SHALL follow the plain-wording rules of Requirement 16.2.
+9. THE wording of every changed line SHALL follow the plain-wording rules of Requirement 16.2, including the checkbox hint: "Check this box if you go to your customers and don't show a street address."
+10. THE service-area test SHALL be built from the Grade's city with every special character escaped and SHALL be matched against the page text and the city normalized the same way (so "St. Louis" matches). IT SHALL never throw and SHALL never pass a page without service-area words, for any city, including "A++", "Nash|ville", "St. Louis" and an empty city.
 
 ### Requirement 19: Reviews AI Can See
 
@@ -322,16 +324,19 @@ Node.js 22, plain Express, plain JavaScript ES modules, JSON files under `DATA_D
 #### Acceptance Criteria
 
 1. THE Grader SHALL run one more website Check, `reviews-visible`, in the `customer_basics` Group, labeled "Reviews AI can see". It SHALL pass WHEN the home page has at least one Review_Signal:
-   - review or testimonial text: the whole word "reviews" or "testimonials", or a quoted customer comment followed by a customer's name;
-   - a rating written out: "5.0 stars", "4.9 out of 5", "4.8/5", or three or more star symbols in a row;
-   - a link on the page to the business's reviews on a Review_Site (Google at google.com/maps, g.page, maps.app.goo.gl or search.google.com/local; Yelp at yelp.com/biz; Facebook; Nextdoor);
+   - review or testimonial text: the whole word "reviews" or "testimonials" inside a heading (h1 to h3) or a section title, or a heading such as "What our customers say"; the same words inside a link or a menu SHALL NOT count; or a quoted customer comment followed by a customer's name;
+   - a rating written out: "5.0 stars", "4.9 out of 5", a rating with a decimal before "/5" ("4.8/5", "5.0/5"), or three or more star symbols in a row ("Closed 1/5" and "Open 9/5" do not count);
+   - a link on the page to the business's reviews on a Review_Site: Google at google.com/maps, maps.google.com, g.page, maps.app.goo.gl, g.co/kgs, search.google.com/local (but never `search.google.com/local/writereview`, which opens a form) or a google.com/search address whose `#` part holds `lrd=` or whose query holds `ludocid=`; Yelp at yelp.com/biz; Facebook only when the link's path contains `/reviews`; Nextdoor only when the link's path starts with `/pages/`. A footer link to a business's Facebook or Nextdoor page SHALL NOT count;
    - review data in the page's business label: an `aggregateRating` or a `review` value.
 2. WHEN the page has no Review_Signal, THE Check SHALL fail with the detail "We found no customer reviews on your home page. AI assistants often can't see reviews that are only inside Google." THE pass detail SHALL be "Your home page shows customer reviews that AI can read."
 3. THE five `customer_basics` Checks SHALL have these points: `tap-to-call` 4, `hours-shown` 3, `address-shown` 3, `call-button` 2, `reviews-visible` 3. THE group SHALL still total 15, the Checks SHALL still total 100 points, and the points available for a Grade with a readable website SHALL be unchanged.
 4. THE `reviews-visible` fix SHALL read: "Put 3 or more of your real customer reviews on your home page, with each customer's first name and the date, and add a link to your Google reviews." THE fix SHALL NOT suggest writing a review, editing a review, or copying a review from anywhere without its source.
-5. WHEN no website was given, THE Check SHALL be `not_checked` with the detail "No website given"; WHEN the home page could not be read, or is script-built (Requirement 4.4), THE Check SHALL be `not_checked` with the same plain reasons as the other text-based Checks. A Grade stored before this Check existed SHALL still open, with its stored results and Score unchanged, and gains the result on its next Recheck.
+5. WHEN no website was given, THE Check SHALL be `not_checked` with the detail "No website given"; WHEN the home page could not be read, or is script-built (Requirement 4.4), THE Check SHALL be `not_checked` with the same plain reasons as the other text-based Checks. A Grade stored before this Check existed SHALL still open and SHALL simply not count the Check; it gains the result on its next Recheck. Requirement 19.8 says how its Score is shown.
 6. THE Grader SHALL never invent, copy or edit a review: THE Fix_Kit SHALL NOT add `aggregateRating` or `review` to its business label, and no page SHALL show a made-up rating or review count.
 7. THE wording SHALL NOT say or imply that showing reviews will make an AI assistant name the business; the report keeps its line that AI assistants pick up changes over days to weeks.
+8. THE report's Score, its "Score by area" lines and its Check rows SHALL always be worked out from the Grade's stored results with the current points, so one Grade never shows two different scores. A Grade stored without a `reviews-visible` result counts only the Checks it has (so an old restaurant Grade shows 40 in the headline, the area lines and the rows alike). This holds before and after the extra AI questions run.
+9. THE line "Your score was <before> before. It is <now> now." SHALL be shown only when both the earlier and the new results include `reviews-visible`, so the report never compares scores across the change in points. A Recheck of an older Grade SHALL show no "before" line.
+10. THE patterns that read the page for criterion 1 SHALL use bounded windows (for example up to 80 characters) rather than open-ended matching, and SHALL read a 1 MB page within 200 milliseconds.
 
 ### Requirement 20: Reviews Link on the Free Listing
 
@@ -340,8 +345,38 @@ Node.js 22, plain Express, plain JavaScript ES modules, JSON files under `DATA_D
 #### Acceptance Criteria
 
 1. THE listing model SHALL gain one optional field, `reviewsLink`. A listing, Draft or form without it SHALL behave exactly as today, and the field SHALL appear in validated fields only when it holds a valid link.
-2. THE field SHALL be valid only WHEN it is an `https` address of at most 300 characters, with no user name or password and no port, whose host is on this list (a leading `www.` or `m.` is ignored): `google.com` with a path starting `/maps`, `g.page`, `maps.app.goo.gl`, `search.google.com` with a path starting `/local`, `yelp.com` with a path starting `/biz`, `facebook.com`, and `nextdoor.com`. THE validator SHALL leave out any other value (an `http` link, another site, a bare word, a script address), and the review form SHALL tell the owner that the link was left out.
+2. THE field SHALL be valid only WHEN it is an `https` address of at most 300 characters, with no user name or password and no port, whose host is on this list (a leading `www.` or `m.` is ignored): `google.com` with a path starting `/maps`, or with the path `/search` when the `#` part contains `lrd=` or the query contains `ludocid=`; `maps.google.com` (any path); `g.co` with a path starting `/kgs/`; `g.page`; `maps.app.goo.gl`; `search.google.com` with a path starting `/local`; `yelp.com` with a path starting `/biz`; `facebook.com` (any page, since the owner chooses it); and `nextdoor.com` (any page). THE validator SHALL keep the query string and the `#` part of a reviews link (Google needs them), SHALL leave out any other value (an `http` link, another site, a bare word, a script address, `https://www.google.com/search?q=plumbers`), and the review form SHALL tell the owner that the link was left out.
 3. THE listing page SHALL show a "Reviews" row with a link reading "See our reviews on Google" (or "on Yelp", "on Facebook", "on Nextdoor", from the host), escaped, with `rel="noopener noreferrer"`. THE listing page SHALL show only the link: no star rating, no review count, and no review text. WHEN the field is empty, THE row SHALL not appear.
-4. WHEN a visitor claims a Grade, THE Draft SHALL fill `reviewsLink` from the first link to a Review_Site found on the home page that passes criterion 2, and SHALL leave it empty WHEN there is none. THE Draft SHALL NEVER take a link from an AI answer.
+4. WHEN a visitor claims a Grade, THE Draft SHALL fill `reviewsLink` from the home page links that count under Requirement 19.1 and also pass criterion 2, preferring a Google link, then Yelp, then Facebook or Nextdoor, and SHALL leave it empty WHEN there is none. A Google "write a review" form (`search.google.com/local/writereview`) and a plain Facebook or Nextdoor business page link SHALL never be filled in. THE Draft SHALL NEVER take a link from an AI answer.
 5. THE Draft review page and the admin Draft page SHALL show the field, and the owner SHALL be able to change or clear it before sending the Draft for approval; nothing changes about the confirmation and admin approval steps.
-6. THE Reviews_Link SHALL NOT be added to the listing's business label, the JSON API, llms.txt or the MCP tools in this version.
+6. WHEN a listing has a Reviews_Link, `llms.txt` and the MCP listing summary SHALL include it as a link labeled "Reviews", and the listing's business label (JSON-LD) SHALL add it under `sameAs` (next to the Website_Link of Requirement 21, when there is one). THE JSON API and the MCP `get_listing` tool already return every public listing field, so they show it without a change. A line SHALL be added only when the field has a value, so listings without it produce exactly the output they produce today. No page, file or tool SHALL ever show a star rating, a review count or review text for a listing.
+7. WHEN a Draft is approved and published, THE published listing SHALL keep `reviewsLink` (and `website`, Requirement 21) when it has a value, and SHALL gain no key when it does not.
+
+### Requirement 21: The Business's Own Website on the Free Listing
+
+**User Story:** As a business owner, I want my free listing to link to my own website, so that search engines and AI assistants that read the listing can connect it to my real site.
+
+#### Acceptance Criteria
+
+1. THE listing model SHALL gain one more optional field, `website`. A listing, Draft or form without it SHALL behave exactly as today, and the field SHALL appear in validated fields only when it holds a valid link. It SHALL never be in `missingFields`.
+2. THE field SHALL be valid only WHEN it is a public `https` address: it SHALL be refused when the host is an IP address (IPv4 or IPv6), `localhost` or a name ending in `.localhost`, or has no dot; when it carries a user name or password; or when it names a port. A valid value SHALL be kept as scheme, host and path only: THE query string and the `#` part SHALL be dropped, so no login or tracking parameters are kept. It SHALL be at most 300 characters after that, and any other value SHALL be left out (the review form tells the owner the link was left out). THE check SHALL not look anything up on the network.
+3. THE listing page SHALL show a plain "Website" row with a link to the site (its host as the link text), escaped, with `rel="noopener noreferrer"`. WHEN the field is empty, THE row SHALL not appear.
+4. THE listing's business label (JSON-LD) SHALL add the website under `sameAs`; the label's `url` SHALL stay the listing page's own address.
+5. THE owner's draft form (`/rise`), the Draft review page and the admin Draft page SHALL show and edit the field like the other optional fields.
+6. WHEN a visitor claims a Grade, THE Draft SHALL fill `website` from the website the owner typed on the check (`grade.input.website`), run through the same validation, and SHALL leave it empty when that value is not valid or was not given.
+7. `llms.txt` and the MCP listing summary SHALL include the website, as a link labeled "Website", for listings that have one. THE JSON API and the MCP `get_listing` tool already return every public listing field, so they show it without a change. A line SHALL be added only when the field has a value, so listings without it produce exactly the output they produce today.
+8. WHEN a Draft is approved and published, THE published listing SHALL keep `website` when it has a value (see Requirement 20.7).
+
+### Requirement 22: Let Google and Bing Find the Main Pages
+
+**Status: specified, not to be built until the owner confirms.**
+
+**User Story:** As the site owner, I want Google and Bing to find our main public pages and the check's start page, so that more people can reach the site.
+
+#### Acceptance Criteria
+
+1. THE `sitemap.xml` SHALL also list `/about`, `/verified`, `/privacy` and `/rise`, each only WHEN it returns HTTP status 200 and is not marked noindex (a page is skipped when `DEMO_MODE` marks every page noindex). Listings, category pages and the home page SHALL be listed exactly as today.
+2. THE start form at `GET /grade` and `GET /grade/about`, each requested without a query string, SHALL be open to search engines: they SHALL send no `X-Robots-Tag: noindex` header and carry no robots meta tag, SHALL have a plain title and a short summary (meta description) for search results and a canonical address, and SHALL be listed in `sitemap.xml`. They keep `Referrer-Policy: no-referrer` and `Cache-Control: no-store`.
+3. EVERY other `/grade` response SHALL stay exactly as it is today, with `X-Robots-Tag: noindex, nofollow` (and the matching meta tag on pages), `Referrer-Policy: no-referrer` and `Cache-Control: no-store`, and SHALL stay out of `sitemap.xml`, `llms.txt`, the MCP tools and IndexNow: every report (`/grade/:id`), the status JSON, the claim flow, every error page, the form when it is shown again with errors (status 422), a `/grade` request with a query string, and every `/grade` path when `GRADER_ENABLED` is `off`.
+4. NO rate limit and NO AI budget SHALL change.
+5. THE about page SHALL still say what the Grader reads and why (Requirement 16.1) and SHALL still contain no dollar figure and no banned word.

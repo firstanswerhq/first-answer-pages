@@ -83,9 +83,10 @@ function adviceNameOk(text) {
   const list = words(text);
   const last = list[list.length - 1];
   if (!last) return false;
+  // Small advice words ("Get Quotes From Three Plumbers") make it advice, before the trade-word check.
+  if (list.some(w => ADVICE_SMALL_WORDS.has(w))) return false;
   if (TRADE.has(last) || LEGAL.has(last)) return true;
-  if (!BUSINESS_ENDINGS.has(last) || list.length < 3) return false;
-  return !list.some(w => ADVICE_SMALL_WORDS.has(w));
+  return BUSINESS_ENDINGS.has(last) && list.length >= 3;
 }
 
 // Verbs that follow a business name in a sentence ("Get It Done Window Washing has a 5.0 rating").
@@ -93,7 +94,22 @@ const SENTENCE_VERBS = new Set([
   'has', 'have', 'had', 'is', 'are', 'was', 'were', 'offers', 'provides', 'does', 'serves', 'specializes',
   'handles', 'says', 'gets', 'runs', 'works', 'appears', 'leads', 'lists', 'comes', 'also', 'shows', 'boasts',
   'charges', 'earns', 'holds', 'claims', 'operates', 'focuses', 'covers', 'includes', 'ranks', 'features',
+  'sells', 'makes', 'cooks', 'delivers', 'carries',
 ]);
+
+// A sentence that starts with one of these is never a name ("It is also worth calling two shops").
+const PRONOUN_STARTS = new Set(['it', 'this', 'that', 'these', 'those', 'they', 'we', 'you', 'he', 'she', 'there', 'here', 'i']);
+
+// A one-word name before a verb ("Husk serves Southern food") must not be a section, detail or filler word.
+const SENTENCE_NOT_NAMES = new Set([
+  'parking', 'pricing', 'price', 'prices', 'cost', 'menu', 'reservations', 'delivery', 'availability', 'payment',
+  'warranty', 'financing', 'location', 'ratings', 'rating', 'reviews', 'review', 'everything', 'nothing', 'most',
+  'many', 'some', 'all', 'each', 'both', 'another', 'others', 'other', 'also', 'however', 'overall', 'finally',
+  'first', 'second', 'third', 'next', 'today', 'tomorrow', 'yes', 'no', 'note', 'tip', 'tips', 'important',
+]);
+
+// Words that start a clause after a name and a comma ("Volunteer Roofing, a smaller crew", "Husk, which serves ...").
+const CLAUSE_STARTS = new Set(['which', 'who', 'a', 'an', 'the']);
 
 // Labels that point at a pick ("**Top pick:** Hiller Plumbing"): the name is the text after the colon.
 const PICK_LABELS = new Set([
@@ -192,6 +208,9 @@ function splitLead(content) {
   return { lead: trimName(text.slice(0, m.index)), rest: text.slice(m.index + m[0].length).trim(), sep };
 }
 
+/** True when the text starts with bold marks ("**Name**" or "__Name__"). */
+const startsWithBold = text => /^\s*(\*\*|__)/.test(String(text));
+
 /** The Title Case name a plain sentence starts with ("Music City Roofing, which handles storm repairs."), or ''. */
 function sentenceLead(content) {
   const tokens = stripMarkdown(content).trim().split(/\s+/);
@@ -201,6 +220,7 @@ function sentenceLead(content) {
   const firstWord = (tokens[0] ?? '').toLowerCase().replace(/[^a-z]/g, '');
   const adviceFirst = ADVICE_VERBS.has(firstWord);
   if (adviceFirst && !ADVICE_NAME_VERBS.has(firstWord)) return '';
+  if (PRONOUN_STARTS.has(firstWord)) return '';
   const out = [];
   let lastCap = -1;
   let capped = 0;
@@ -218,13 +238,20 @@ function sentenceLead(content) {
     }
     if (/[,;:.!?]$/.test(raw) || raw.includes('(')) break; // punctuation ends the name
   }
-  if (lastCap < 0 || capped < 2) return '';
+  if (lastCap < 0) return '';
+  const next = (tokens[lastCap + 1] ?? '').toLowerCase().replace(/[^a-z]/g, '');
+  if (capped < 2) {
+    // A one-word name before a verb or a comma clause ("Husk serves Southern food", "Parlour, a salon").
+    if (adviceFirst || capped !== 1 || lastCap !== 0) return '';
+    const word = out[0];
+    const clause = /,$/.test(tokens[0]) && CLAUSE_STARTS.has(next);
+    if (!SENTENCE_VERBS.has(next) && !clause) return '';
+    if (!validName(word, 1) || isDetailLabel(word) || SENTENCE_NOT_NAMES.has(word.toLowerCase())) return '';
+    return word;
+  }
   const name = out.slice(0, lastCap + 1).join(' ');
   if (!validName(name, 2)) return '';
-  if (adviceFirst) {
-    const next = (tokens[lastCap + 1] ?? '').toLowerCase().replace(/[^a-z]/g, '');
-    if (!adviceNameOk(name) || !SENTENCE_VERBS.has(next)) return '';
-  }
+  if (adviceFirst && (!adviceNameOk(name) || !SENTENCE_VERBS.has(next))) return '';
   return name;
 }
 
@@ -259,7 +286,7 @@ function namesFromBullet(content, own) {
   const names = fromListContent(c, false);
   if (names.length > 0) return names;
   if ((sep === 'colon' || sep === 'dash') && rest && lead && !isDetailLabel(lead) && validName(lead, 1)) return [lead];
-  const sentence = sentenceLead(c);
+  const sentence = startsWithBold(c) ? '' : sentenceLead(c);
   if (sentence) return [sentence];
   const mine = ownLead(c, own);
   return mine ? [mine] : [];
@@ -500,6 +527,22 @@ function validName(text, minWords) {
   return notAHeading(text);
 }
 
+/**
+ * Bold text with a lowercase word inside ("Mike's mobile Plumbing", "Sparkle drain Pros") is a whole name when
+ * it starts and ends with a capital, is 2 to 6 words, and is not a heading, a detail label or advice.
+ * "Water heater specialists" and "If you need it done today" end in a lowercase word, so they stay group labels.
+ */
+function looseBoldName(text) {
+  if (text.length < 4 || text.length > 60 || !/^[\p{L}\p{N}]/u.test(text)) return false;
+  const tokens = text.split(/\s+/);
+  if (tokens.length < 2 || tokens.length > 6) return false;
+  const startsUpper = t => /^[^\p{L}\p{N}]*[\p{Lu}\p{N}]/u.test(t);
+  if (!startsUpper(tokens[0]) || !startsUpper(tokens[tokens.length - 1])) return false;
+  if (!notAHeading(text) || isDetailLabel(text)) return false;
+  if (startsWithAdviceVerb(text) && !adviceNameOk(text)) return false;
+  return true;
+}
+
 /** Bold spans inside a line of running text. */
 function boldSpans(line) {
   const out = [];
@@ -559,6 +602,9 @@ function fromListContent(content, loose = false) {
     const whole = trimName(cutAtSeparator(stripMarkdown(c)));
     if (whole.length > bold.length && whole.startsWith(bold) && validName(whole, 1)) return [whole];
     if (validName(bold, 1) || acronymName(bold)) return [bold];
+    // Text in bold at the start of a list item is the whole name, even with a lowercase word inside it
+    // ("**Mike's mobile Plumbing**"); it is never cut at a lowercase word.
+    if (looseBoldName(bold)) return [bold];
     return boldSpans(c);
   }
   const plain = trimName(cutAtSeparator(stripMarkdown(c)));
@@ -703,7 +749,12 @@ function extractEntries(answer, prep) {
         continue;
       }
       underBusiness = false;
-      let names = fromListContent(li[3], !indented);
+      // A numbered line written as a sentence ("Hiller Plumbing is the biggest shop in town.") gives the Title Case
+      // name before the verb, never the whole sentence.
+      // The sentence rule never applies inside bold text: a bold name is the whole name.
+      const sentence = startsWithBold(li[3]) ? '' : sentenceLead(li[3]);
+      let names = fromListContent(li[3], !indented && !sentence);
+      if (names.length === 0 && sentence) names = [sentence];
       if (names.length === 0) {
         const mine = ownLead(li[3], own);
         if (mine) names = [mine];
@@ -721,7 +772,7 @@ function extractEntries(answer, prep) {
       // Indented bullets are details only under a numbered NAME. A numbered group label ("1. Best overall:",
       // "2. Best value", "3. **Emergency Plumbers**") is not a name, so the bullets under it are the names.
       const strictNames = fromListContent(li[3], false);
-      const groupLabel = /:\s*$/.test(li[3].trim()) || strictNames.length === 0 || strictNames.some(hasGroupWord);
+      const groupLabel = /:\s*$/.test(li[3].trim()) || (strictNames.length === 0 && !sentence) || strictNames.some(hasGroupWord);
       if (!indented) nestedDetails = names.length > 0 && !groupLabel;
       push(names);
       continue;
