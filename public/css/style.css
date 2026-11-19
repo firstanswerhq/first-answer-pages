@@ -2466,3 +2466,13 @@ a.tel,
   font-size: 0.875rem;
   color: var(--color-text-muted);
 }
+
+/* The free listing card reads like one phone-book entry: tight rows */
+.grade-preview h3 {
+  margin: 0 0 0.2rem;
+}
+
+.grade-preview p {
+  margin: 0.1rem 0;
+  line-height: 1.35;
+}

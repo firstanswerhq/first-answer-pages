@@ -136,7 +136,7 @@ export function freeQuestion(input) {
 export function extraQuestions(input) {
   return [
     `I need ${input.service} in ${input.city}, ${input.state}. Which companies would you recommend?`,
-    `Which ${input.service} in ${input.city}, ${input.state} do people say is the most reliable?`,
+    `Which ${input.service} in ${input.city}, ${input.state} do people say are the most reliable?`,
   ];
 }
 
@@ -275,6 +275,56 @@ export function schemaHours(lines) {
       i = j + 1;
     }
     out.push(`${parts.join(',')} ${time}`);
+  }
+  return out;
+}
+
+const DAY_TITLES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+/** "07:00" -> "7:00 am", "9am" -> "9:00 am"; null when the time could mean more than one thing. */
+function readableTime(text) {
+  const m = /^(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?$/i.exec(text.trim());
+  if (!m) return null;
+  let hour = Number(m[1]);
+  const minute = m[2] ?? '00';
+  const meridiem = m[3]?.toLowerCase().replace(/\./g, '');
+  if (meridiem) {
+    if (hour < 1 || hour > 12) return null;
+    return `${hour}:${minute} ${meridiem}`;
+  }
+  if (m[2] === undefined || hour > 23) return null;
+  const ampm = hour >= 12 ? 'pm' : 'am';
+  hour = hour % 12 === 0 ? 12 : hour % 12;
+  return `${hour}:${minute} ${ampm}`;
+}
+
+/**
+ * Opening hours for people to read: "Monday to Friday, 7:00 am to 6:00 pm". Lines that cannot be
+ * read for sure are shown as they were found.
+ * @param {string[] | undefined} lines
+ * @returns {string[]}
+ */
+export function readableHours(lines) {
+  const found = (Array.isArray(lines) ? lines : []).filter(x => typeof x === 'string' && x.trim() !== '');
+  const byDay = hoursToObject(found);
+  const days = DAY_NAMES.filter(d => byDay[d] !== undefined);
+  if (days.length === 0) return found;
+  const out = [];
+  for (let i = 0; i < days.length;) {
+    let j = i;
+    while (
+      j + 1 < days.length
+      && DAY_NAMES.indexOf(days[j + 1]) === DAY_NAMES.indexOf(days[j]) + 1
+      && byDay[days[j + 1]] === byDay[days[i]]
+    ) j += 1;
+    const first = DAY_TITLES[DAY_NAMES.indexOf(days[i])];
+    const last = DAY_TITLES[DAY_NAMES.indexOf(days[j])];
+    const label = j === i ? first : j === i + 1 ? `${first} and ${last}` : `${first} to ${last}`;
+    const [open, close, extra] = byDay[days[i]].split('-');
+    const a = readableTime(open ?? '');
+    const b = readableTime(close ?? '');
+    out.push(`${label}, ${a && b && extra === undefined ? `${a} to ${b}` : byDay[days[i]]}`);
+    i = j + 1;
   }
   return out;
 }

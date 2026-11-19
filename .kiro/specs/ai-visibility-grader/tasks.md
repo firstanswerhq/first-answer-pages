@@ -272,3 +272,14 @@ From `review-2026-11-18.md` (two independent reviews of the rebuild; security cl
 
 - [x] V22. Re-reading a carried answer never takes away a mention: treat an answer of 4,000 or more characters as cut even when `answerCut` is missing (old Grades), and keep `named` true when the earlier read found it; a re-read may add a mention, never remove one
 - [x] V23. Competitor names under headings: bullets that sit under a numbered business heading (`### 2. Joes Plumbing`) are details of that business, not new names; a line that is only an offer ("Free Estimates", "Same Day Service", "24/7 Emergency Service") is not a business name, at the top level too
+
+### D. Round 3 (`review-2026-11-18-round3.md`)
+
+- [x] V24. Google note mid-sentence reads "the demo assistant's answers", lowercase (also on the live answer page and the answers section)
+- [x] V25. A business with no website gets its own fix-kit intro that does not assume a website
+- [x] V26. Third AI question grammar: "...do people say are the most reliable?" (fix at the source, in grader.js and requirement 7.2)
+- [x] V27. Hours on the listing card and in the info sheet draft read as "Monday to Friday, 7:00 am to 6:00 pm"
+- [x] V28. "Want help?" says who First Answer is: "First Answer, the team behind First Answer Pages"
+- [x] V29. Google's live answer page puts the answer back in the quoted-answer style
+- [x] V30. About page opens in plain words ("This is our free AI Visibility Check.") with no web address path
+- [x] V31. Free listing card rows are spaced tightly again, like one phone-book entry

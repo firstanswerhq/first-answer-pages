@@ -19,7 +19,7 @@ import {
 } from './fix-kit.js';
 import { formatRunTime } from './seance-html.js';
 import {
-  providerLabel, freeQuestion, stepNames, foundOf, isSecondOpinion, schemaHours,
+  providerLabel, freeQuestion, stepNames, foundOf, isSecondOpinion, schemaHours, readableHours,
 } from './grader.js';
 
 const ROBOTS_META = '<meta name="robots" content="noindex, nofollow">';
@@ -52,6 +52,9 @@ function joinAnd(list) {
 
 /** The assistant's name in the middle of a sentence. */
 const inline = provider => (provider === 'mock' ? 'the demo assistant' : providerLabel(provider));
+
+/** An assistant's label inside a sentence: "The demo assistant" becomes "the demo assistant". */
+const midSentence = label => (label === providerLabel('mock') ? 'the demo assistant' : label);
 
 const blank = text => `<span class="blank">${h(text)}</span>`;
 
@@ -184,7 +187,7 @@ function whenText(iso) {
 }
 
 function answerBlock(a) {
-  return `${a.provider === 'mock' ? '<p class="hint">Demo answer (no AI connected)</p>\n  ' : ''}<details><summary>See the full answer</summary><div class="grade-answer">${h(a.answer ?? '')}</div></details>`;
+  return `${a.provider === 'mock' ? '<p class="hint">Demo answer (no AI connected)</p>\n  ' : ''}<details><summary>See the full answer</summary><blockquote class="grade-answer seance-answer">${h(a.answer ?? '')}</blockquote></details>`;
 }
 
 function competitorList(a) {
@@ -249,7 +252,7 @@ function aiFree(grade, { googleLive, requester, now }) {
   const google = googleLive ? `<section class="grade-ai grade-google">
   <h2>What Google's AI says</h2>
   <p>The question we ask: ${h(prompt)}</p>
-  <p class="hint">From Google's Gemini. Google doesn't review or endorse this report. Only you can see the answer. We don't save it. Your score comes from ${h(mainLabel)}'s answers only.</p>
+  <p class="hint">From Google's Gemini. Google doesn't review or endorse this report. Only you can see the answer. We don't save it. Your score comes from ${h(midSentence(mainLabel))}'s answers only.</p>
   ${requester
     ? `<form method="post" action="/grade/${h(grade.id)}/google-live"><button type="submit" class="button">Show Google's live answer</button></form>`
     : '<p class="hint">Google\'s live answer is private to the person who ran the check, so it is not shown here.</p>'}
@@ -263,7 +266,8 @@ function aiFree(grade, { googleLive, requester, now }) {
 function previewCard(grade) {
   const i = grade.input;
   const found = foundOf(grade);
-  const hours = Array.isArray(found.hours) && found.hours.length ? found.hours.map(x => h(x)).join('; ') : blank('Add your hours');
+  const shown = readableHours(found.hours);
+  const hours = shown.length ? shown.map(x => h(x)).join('; ') : blank('Add your hours');
   return `<div class="grade-preview">
     <h3>${h(i.name)} &middot; ${found.phone ? `<span class="phone">${h(found.phone)}</span>` : blank('Add your phone number')}</h3>
     <p>${h(i.service)} in ${h(i.city)}, ${h(i.state)}</p>
@@ -382,7 +386,7 @@ function answersSection(grade) {
     } else {
       const q = main.length;
       if (q > 1) lines.push(`<p>${h(mainLabel)} named your business in ${main.filter(a => a.named).length} of its ${q} answers.</p>`);
-      lines.push(`<p>We asked ${h(joinAnd([mainLabel, ...others]))} the same ${q === 1 ? 'question' : `${q} questions`}. Only ${h(mainLabel)}'s answers count toward your score, so your score stays steady from check to check. ${others.length === 1 ? `${h(others[0])}'s answers are` : "The other assistants' answers are"} below so you can compare.</p>`);
+      lines.push(`<p>We asked ${h(joinAnd([mainLabel, ...others]))} the same ${q === 1 ? 'question' : `${q} questions`}. Only ${h(midSentence(mainLabel))}'s answers count toward your score, so your score stays steady from check to check. ${others.length === 1 ? `${h(others[0])}'s answers are` : "The other assistants' answers are"} below so you can compare.</p>`);
     }
   }
   const prompts = [...new Set(all.map(a => a.prompt))];
@@ -406,10 +410,13 @@ function fixKit(grade, contactEmail) {
   const found = foundOf(grade);
   const kit = {
     name: i.name, service: i.service, city: i.city, state: i.state,
-    phone: found.phone ?? '', website: i.website ?? '', address: found.address ?? '', hours: found.hours ?? [],
+    phone: found.phone ?? '', website: i.website ?? '', address: found.address ?? '', hours: readableHours(found.hours),
   };
   // The business label wants schema.org's own hours format; free text like "Monday to Friday, 8 am to 5 pm" is left out of it.
   const labelKit = { ...kit, hours: schemaHours(found.hours) };
+  const intro = i.website
+    ? 'Send this kit to whoever looks after your website. Each box says where it goes, and the Copy button copies it.'
+    : 'This kit is ready for when you have a website. Hand it to whoever builds it. Each box says where it goes, and the Copy button copies it.';
   const items = [
     ['kit-title', 'Page title', 'Use this as your home page title.', suggestedTitle(kit)],
     ['kit-summary', 'Page summary', 'Use this as the summary Google shows under your title.', suggestedSummary(kit)],
@@ -428,12 +435,12 @@ function fixKit(grade, contactEmail) {
     </div>`).join('\n    ');
   return `<section class="grade-kit">
   <h2>Your fix kit</h2>
-  <p>Send this kit to whoever looks after your website. Each box says where it goes, and the Copy button copies it.</p>
+  <p>${intro}</p>
   ${blocks}
 </section>
 <section class="grade-offer">
   <h2>Want help?</h2>
-  <p>Not sure how to add these? First Answer can apply the fixes for you. ${contactLink(contactEmail, 'Contact us')} and we will take a look.</p>
+  <p>Not sure how to add these? First Answer, the team behind First Answer Pages, can apply the fixes for you. ${contactLink(contactEmail, 'Contact us')} and we will take a look.</p>
 </section>`;
 }
 
@@ -583,8 +590,8 @@ export function googleLivePage({ grade, text, sources = [], suggestionsHtml = ''
   const body = `<section class="grade-ai">
   <h1>What Google's AI says</h1>
   <p>The question we asked: ${h(freeQuestion(grade.input))}</p>
-  <p class="hint">From Google's Gemini, with a live Google search. Google doesn't review or endorse this report. Only you can see this answer. We don't save it. Your score comes from ${h(grade.aiMain?.label ?? 'Claude')}'s answers only.</p>
-  <div class="grade-answer">${h(text)}</div>
+  <p class="hint">From Google's Gemini, with a live Google search. Google doesn't review or endorse this report. Only you can see this answer. We don't save it. Your score comes from ${h(midSentence(grade.aiMain?.label ?? 'Claude'))}'s answers only.</p>
+  <blockquote class="grade-answer seance-answer">${h(text)}</blockquote>
   ${links ? `<h2>Where it looked</h2><ul>${links}</ul>` : ''}
   ${suggestionsHtml ? `<div class="grade-google-suggestions">${suggestionsHtml}</div>` : ''}
   <p><a href="/grade/${h(grade.id)}">Back to your report</a></p>
@@ -610,7 +617,7 @@ export const notFoundPage = () => messagePage('Page not found', 'We could not fi
 export function aboutPage({ contactEmail = '', userAgent = '' } = {}) {
   const body = `<section class="message">
   <h1>About the AI Visibility Grader</h1>
-  <p>This is the free check at <a href="/grade">/grade</a>. Someone types in a business name, city, state and what the business does, and a website if it has one. This page says exactly what the check does, so anyone whose website was checked can see why.</p>
+  <p>This is our free <a href="/grade">AI Visibility Check</a>. Someone types in a business name, city, state and what the business does, and a website if it has one. This page says exactly what the check does, so anyone whose website was checked can see why.</p>
   <h2>What we visit</h2>
   <ul>
     <li>Our server visits the website once per check. It reads the home page, /robots.txt and /llms.txt. Each is read at most once.</li>
