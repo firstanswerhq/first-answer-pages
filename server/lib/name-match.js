@@ -43,8 +43,43 @@ const HEADING_WORDS = new Set([
 const HEADING_PHRASES = new Set([
   'pro', 'pros', 'con', 'cons', 'pros and cons', 'pros cons', 'pros vs cons',
   'bottom line', 'the bottom line', 'final thoughts', 'key takeaways', 'quick tips', 'in summary', 'final verdict',
-  'things to consider', 'how to choose', 'how to hire',
+  'things to consider', 'how to choose', 'how to hire', 'heads up', 'pro tip', 'pro tips', 'good to know',
 ]);
+
+// One-word section words are never names ("Overview", "Important", "Recap").
+const SINGLE_STOP = new Set([
+  'overview', 'summary', 'conclusion', 'tips', 'tip', 'notes', 'note', 'important', 'disclaimer', 'bottom',
+  'verdict', 'recap', 'introduction', 'contents', 'faq', 'faqs', 'update', 'warning', 'caution', 'reminder',
+]);
+
+// Narrow list of verbs that start a numbered or bold advice line ("Ask For Quotes", "Check Reviews").
+const ADVICE_NAME_VERBS = new Set([
+  'ask', 'check', 'get', 'call', 'compare', 'read', 'look', 'confirm', 'make', 'choose', 'find', 'avoid', 'book', 'verify',
+]);
+
+const startsWithAdviceVerb = text =>
+  ADVICE_NAME_VERBS.has(String(text).trim().split(/\s+/)[0].toLowerCase().replace(/[^a-z]/g, ''));
+
+// Labels that point at a pick ("**Top pick:** Hiller Plumbing"): the name is the text after the colon.
+const PICK_LABELS = new Set([
+  'top pick', 'best overall', 'best value', 'budget pick', 'runner up', 'also great', 'honorable mention',
+  'best budget', 'best choice', 'our pick', 'top choice', 'editors choice', 'great option',
+]);
+
+const isPickLabel = text => PICK_LABELS.has(normalizeForMatch(text));
+
+/** The name in the text after a pick label ("Hiller Plumbing - big jobs" gives "Hiller Plumbing"), or ''. */
+function nameAfterLabel(after) {
+  const t = trimName(cutAtSeparator(stripMarkdown(String(after)).trim()));
+  return validName(t, 1) ? t : '';
+}
+
+/** A name that starts with an acronym and has lowercase words ("ABC plumbing"); only read inside list items. */
+function acronymName(text) {
+  const tokens = String(text).split(/\s+/);
+  if (tokens.length > 5 || text.length > 60) return false;
+  return /^[A-Z]{2,4}$/.test(tokens[0]) && notAHeading(text) && !startsWithAdviceVerb(text);
+}
 
 // Lines that are only an offer, never a business name. Matched as a whole line (normalized), so a
 // real name that merely contains these words ("Family Owned Roofing & Repair", "The Local") stays.
@@ -156,6 +191,14 @@ function ownLead(text, own) {
   return lead && lead.split(/\s+/).length <= 5 && own(lead) ? lead : '';
 }
 
+/** A one-word name ("Husk") read before a separator, in places where a name is expected; '' when it is not one. */
+function oneWordName(text) {
+  const { lead } = splitLead(String(text));
+  if (!lead || lead.split(/\s+/).length !== 1) return '';
+  if (!validName(lead, 1) || isDetailLabel(lead) || startsWithAdviceVerb(lead)) return '';
+  return lead;
+}
+
 /**
  * The names a bullet gives. "Label: value" lines (Known For, Best For, Phone, ...) are details and give
  * none. "Name: description", "Name - description" and "[Name](link): description" give the name before the
@@ -164,6 +207,10 @@ function ownLead(text, own) {
 function namesFromBullet(content, own) {
   const c = String(content).trim();
   const { lead, rest, sep } = splitLead(c);
+  if (rest && isPickLabel(lead)) {
+    const n = nameAfterLabel(rest);
+    return n ? [n] : [];
+  }
   if (rest && isDetailLabel(lead)) return [];
   const names = fromListContent(c, false);
   if (names.length > 0) return names;
@@ -196,7 +243,9 @@ function numberedHeadingNames(line, own) {
     const names = fromListContent(numbered[1]);
     if (names.length > 0) return names;
     const mine = ownLead(numbered[1], own);
-    return mine ? [mine] : [];
+    if (mine) return [mine];
+    const one = oneWordName(numbered[1]);
+    return one ? [one] : [];
   }
   if (/^\s*\|/.test(line) || LIST_RE.test(line)) return null;
   const sb = line.match(STANDALONE_BOLD_RE);
@@ -378,6 +427,7 @@ function validName(text, minWords) {
   const tokens = text.split(/\s+/);
   const count = tokens.filter(t => /[\p{L}\p{N}]/u.test(t)).length;
   if (count < minWords) return false;
+  if (tokens.length === 1 && SINGLE_STOP.has(text.toLowerCase().replace(/[^\p{L}]/gu, ''))) return false;
   for (const tok of tokens) {
     const bare = tok.replace(/^[^\p{L}\p{N}]+/u, '');
     if (!bare) continue;
@@ -394,13 +444,22 @@ function boldSpans(line) {
   const out = [];
   for (const m of line.matchAll(/\*\*([^*]+?)\*\*/g)) {
     const after = line.slice(m.index + m[0].length);
-    const t = trimName(stripMarkdown(m[1]));
+    let t = trimName(stripMarkdown(m[1]));
+    // "**1. Husk** - cooking": the number is not part of the name, and a one-word name is fine.
+    const numbered = /^\d+[.)]\s+/.test(t);
+    if (numbered) t = t.replace(/^\d+[.)]\s+/, '');
     // "**Name:** text" is a name unless it is a detail label; even a one-word name counts here.
+    // "**Top pick:** Hiller Plumbing" points at a name: the name is the text after the colon.
     if (/:\s*$/.test(m[1]) && /^\s*\S/.test(after)) {
-      if (!isDetailLabel(t) && validName(t, 1)) out.push(t);
+      if (isPickLabel(t)) {
+        const picked = nameAfterLabel(after);
+        if (picked) out.push(picked);
+      } else if (!isDetailLabel(t) && validName(t, 1)) {
+        out.push(t);
+      }
       continue;
     }
-    if (validName(t, 2)) out.push(t);
+    if (validName(t, numbered ? 1 : 2)) out.push(t);
   }
   return out;
 }
@@ -427,6 +486,10 @@ function fromListContent(content, loose = false) {
   const labeled = /^\*\*([^*]*?):\*\*\s*\S/.exec(c);
   if (labeled) {
     const t = trimName(stripMarkdown(labeled[1]));
+    if (isPickLabel(t)) {
+      const picked = nameAfterLabel(c.slice(labeled[0].length - 1));
+      return picked ? [picked] : [];
+    }
     return !isDetailLabel(t) && validName(t, 1) ? [t] : [];
   }
   const b = c.match(/^\*\*([^*]+)\*\*/);
@@ -434,11 +497,11 @@ function fromListContent(content, loose = false) {
     const bold = trimName(stripMarkdown(b[1]));
     const whole = trimName(cutAtSeparator(stripMarkdown(c)));
     if (whole.length > bold.length && whole.startsWith(bold) && validName(whole, 1)) return [whole];
-    if (validName(bold, 1)) return [bold];
+    if (validName(bold, 1) || acronymName(bold)) return [bold];
     return boldSpans(c);
   }
   const plain = trimName(cutAtSeparator(stripMarkdown(c)));
-  if (validName(plain, 2)) return [plain];
+  if (validName(plain, 2) || acronymName(plain)) return [plain];
   if (loose && looseName(plain)) return [plain];
   return boldSpans(c);
 }
@@ -492,6 +555,8 @@ function extractEntries(answer, prep) {
     for (const text of list) {
       // A line that is only a standard offer ("Free Estimates", "24/7 Emergency Service") is not a business name.
       if (offerOnly(text) && !own(text)) continue;
+      // A line that starts with an advice verb ("Ask For Quotes") is advice unless it is the business itself.
+      if (startsWithAdviceVerb(text) && !own(text)) continue;
       const key = normalizeForMatch(text);
       if (!key || seen.has(key)) continue;
       seen.add(key);
@@ -576,6 +641,10 @@ function extractEntries(answer, prep) {
       if (names.length === 0) {
         const mine = ownLead(li[3], own);
         if (mine) names = [mine];
+      }
+      if (names.length === 0 && !adviceSection) {
+        const one = oneWordName(li[3]);
+        if (one) names = [one];
       }
       // Indented bullets are details only under a numbered NAME. A numbered group label ("1. Best overall:",
       // "2. Best value", "3. **Emergency Plumbers**") is not a name, so the bullets under it are the names.

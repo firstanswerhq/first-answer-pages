@@ -419,6 +419,96 @@ const MORE_CASES = [
     ),
     named: false, position: null, competitors: ['Hiller Plumbing'],
   },
+  // V37: one-word names, pick labels, notes and acronym names.
+  {
+    id: 'W1', name: 'City House', service: 'restaurants',
+    answer: lines(
+      '### 1. Husk',
+      '- Southern cooking in a historic house',
+      '### 2. Bastion',
+      '- Big bar nachos',
+      '### 3. City House',
+      '- Wood-fired pizza',
+    ),
+    named: true, position: 3, competitors: ['Husk', 'Bastion'],
+  },
+  {
+    id: 'W2', name: 'City House', service: 'restaurants',
+    answer: lines(
+      '**1. Husk** - Southern cooking',
+      '**2. Bastion** - nachos',
+      '**3. City House** - pizza',
+    ),
+    named: true, position: 3, competitors: ['Husk', 'Bastion'],
+  },
+  {
+    id: 'W3', name: 'City House', service: 'restaurants',
+    answer: lines(
+      '1. Husk - Southern cooking',
+      '2. Bastion - nachos',
+      '3. City House - pizza',
+    ),
+    named: true, position: 3, competitors: ['Husk', 'Bastion'],
+  },
+  {
+    id: 'W4', name: 'City House', service: 'restaurants',
+    answer: lines(
+      '### 1. Husk',
+      'Southern cooking in a historic house.',
+      '### 2. Bastion',
+      'Big bar nachos.',
+      '### 3. City House',
+      'Wood-fired pizza.',
+    ),
+    named: true, position: 3, competitors: ['Husk', 'Bastion'],
+  },
+  {
+    id: 'T3', name: "Joe's Plumbing", service: 'plumbers',
+    answer: lines(
+      '**Top pick:** Hiller Plumbing',
+      '**Top Pick:** Radiant Plumbing & Air',
+      "**Best Value:** Joe's Plumbing",
+      '**Runner Up:** Benjamin Franklin Plumbing',
+    ),
+    named: true, position: 3, competitors: ['Hiller Plumbing', 'Radiant Plumbing & Air', 'Benjamin Franklin Plumbing'],
+  },
+  {
+    id: 'T4', name: "Joe's Plumbing", service: 'plumbers',
+    answer: lines(
+      'Here are three strong plumbers:',
+      '1. **Hiller Plumbing**',
+      '2. **Mr. Rooter Plumbing**',
+      "3. **Joe's Plumbing**",
+      '',
+      "**Note:** I can't check live availability.",
+      '**Important:** Prices change often, so call ahead.',
+      '**Heads Up:** Weekend rates are higher.',
+      '**Disclaimer:** This is not an endorsement.',
+      '**Pro Tip:** Book early in spring.',
+    ),
+    named: true, position: 3, competitors: ['Hiller Plumbing', 'Mr. Rooter Plumbing'],
+  },
+  {
+    id: 'A1', name: "Joe's Plumbing", service: 'plumbers',
+    answer: lines(
+      '1. **ABC plumbing** - fast service',
+      '2. **Hiller Plumbing** - big jobs',
+    ),
+    named: false, position: null, competitors: ['ABC plumbing', 'Hiller Plumbing'],
+  },
+  {
+    id: 'A2', name: 'Music City Roofing', service: 'roofers',
+    answer: lines(
+      'Here are good roofers:',
+      '1. **Music City Roofing**',
+      '2. **Volunteer Roofing**',
+      '',
+      'How to choose:',
+      '**1. Ask For Quotes**',
+      '**2. Check Reviews**',
+    ),
+    named: true, position: 1, competitors: ['Volunteer Roofing'],
+  },
 ];
 
 for (const c of MORE_CASES) {

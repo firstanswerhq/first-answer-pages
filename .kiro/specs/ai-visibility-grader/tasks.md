@@ -303,3 +303,7 @@ From `review-2026-11-18.md` (two independent reviews of the rebuild; security cl
 ### I. Round 8 (`review-2026-11-18-round8.md`)
 
 - [x] V36. "**Name:** description" lines give the bold name (dropped only when the bold text is a detail label); also one-word names in `**Name:**` prose lines and in a table's name column; section headings such as "Things To Consider" and "Bottom Line" are never names; bullets under a tips or advice heading are advice, not names; sentences that start with an advice verb give no name; the 11 new cases (Y1 to Y3, X1 to X7, Z1) added to `test/grade-name-match-cases.test.js` beside the 23 existing ones
+
+### J. Round 9 (`review-2026-11-18-round9.md`)
+
+- [x] V37. One-word names (Husk, Bastion) are kept as competitors in numbered headings, numbered list items, bold numbered lines, a table's name column and `**Name:**` lines; section words (Overview, Important, Recap) are never names; "**Top pick:** Name" style labels give the name after the colon; "Note:", "Important:", "Heads Up:", "Pro Tip:" lines give none; lines that start with an advice verb ("Ask For Quotes") are not names unless they are the business; an acronym-first name with lowercase words ("ABC plumbing") is kept in list items; 8 new cases (W1 to W4, T3, T4, A1, A2) added to `MORE_CASES` in `test/grade-name-match-cases.test.js`, the 34 existing cases unchanged
