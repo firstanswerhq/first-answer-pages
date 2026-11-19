@@ -144,6 +144,8 @@ test('G1: the 21st check in a day from one IPv4 /24 is turned away, and a differ
   assert.equal(refused.status, 429);
   assert.match(refused.headers.get('retry-after') ?? '', /^\d+$/);
   assert.ok(Number(refused.headers.get('retry-after')) >= 1);
+  // More than an hour: the wait came from the daily network rule, not the hourly address rule.
+  assert.ok(Number(refused.headers.get('retry-after')) > 3600);
   const text = await refused.text();
   assert.ok(text.includes('A lot of checks have come from your network today. Please try again tomorrow, or from another connection.'));
   assert.equal(text.includes('from your address'), false, 'it does not blame one address');
@@ -191,11 +193,56 @@ test('G1: a check refused by the network limit uses none of the address counts',
   assert.equal((await startCheck(env, '203.0.113.1')).status, 303);
   // Refused by the network rule; its own address (a different one) has used nothing.
   assert.equal((await startCheck(env, '203.0.113.2')).status, 429);
-  const limiter = env.ctx.rateLimiter;
-  assert.equal(limiter.peek('grade:203.0.113.2', RULES.grade).allowed, true);
-  assert.equal(limiter.peek('grade-day:203.0.113.2', RULES['grade-day']).allowed, true);
+  const limiter = env.ctx.gradeLimiter;
+  // With the limit lowered to 1, "allowed" means the refused check recorded nothing for this address.
+  assert.equal(limiter.peek('grade:203.0.113.2', { ...RULES.grade, limit: 1 }).allowed, true);
+  assert.equal(limiter.peek('grade-day:203.0.113.2', { ...RULES['grade-day'], limit: 1 }).allowed, true);
+  // The network count is still the one accepted check: a limit of 2 still has room.
+  assert.equal(limiter.peek(`grade-network:${networkKey('203.0.113.2')}`, { ...RULES['grade-network'], limit: 2 }).allowed, true);
   // It leaves the same address's count at zero, so five more attempts from it would all be refused by the network only.
   for (let i = 0; i < 5; i += 1) assert.equal((await startCheck(env, '203.0.113.2')).status, 429);
   const text = await (await startCheck(env, '203.0.113.2')).text();
   assert.ok(text.includes('from your network today'));
+});
+
+test('V55: when the network is full, its message shows even if the address is also full', async () => {
+  const env = await startEnv();
+  // One address uses its five checks for the hour.
+  for (let i = 0; i < 5; i += 1) assert.equal((await startCheck(env, '203.0.113.7')).status, 303, `check ${i + 1}`);
+  // Fifteen other addresses on the same /24 fill the network (20 in all).
+  for (let i = 20; i < 35; i += 1) assert.equal((await startCheck(env, `203.0.113.${i}`)).status, 303, `other ${i}`);
+  env.clock.t += 10 * 60 * 1000;
+  const refused = await startCheck(env, '203.0.113.7');
+  assert.equal(refused.status, 429);
+  assert.ok(Number(refused.headers.get('retry-after')) > 3600);
+  const text = await refused.text();
+  assert.ok(text.includes('A lot of checks have come from your network today. Please try again tomorrow, or from another connection.'));
+  assert.equal(text.includes('from your address'), false);
+});
+
+test('V56: a flood of /mcp requests from one IPv6 /64 cannot push out that network count', async () => {
+  const env = await startEnv({ config: { gradeNetworkPerDay: 2 } });
+  assert.equal((await startCheck(env, '2001:db8:1:2::1')).status, 303);
+  assert.equal((await startCheck(env, '2001:db8:1:2::2')).status, 303);
+  assert.equal((await startCheck(env, '2001:db8:1:2::3')).status, 429);
+
+  // More than the limiter's key cap (10,000), each from its own address in the same /64.
+  const total = 10_050;
+  for (let start = 0; start < total; start += 150) {
+    const batch = [];
+    for (let i = start; i < Math.min(start + 150, total); i += 1) {
+      batch.push(
+        fetch(`${env.base}/mcp`, {
+          method: 'POST',
+          headers: { 'x-forwarded-for': `2001:db8:1:2:1:${(i >> 8).toString(16)}:${(i & 255).toString(16)}:1` },
+          body: 'x',
+        }).then(res => res.arrayBuffer()),
+      );
+    }
+    await Promise.all(batch);
+  }
+  assert.ok(env.ctx.rateLimiter.size() > 9_000, 'the other limiter really filled up');
+
+  // The network count survived: the same /64 is still refused.
+  assert.equal((await startCheck(env, '2001:db8:1:2::4')).status, 429);
 });

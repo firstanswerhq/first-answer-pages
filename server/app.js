@@ -53,6 +53,7 @@ const systemClock = Object.freeze({ now: () => Date.now() });
  *   assistantProvider?: object,
  *   clock?: { now(): number },
  *   rateLimiter?: object,
+ *   gradeLimiter?: object,
  *   config?: object,
  *   newId?: () => string,
  *   safeFetcher?: { fetchText: Function },
@@ -97,6 +98,9 @@ export function createApp(deps = {}) {
     assistantProvider: deps.assistantProvider ?? createAssistantProvider(config),
     clock,
     rateLimiter: deps.rateLimiter ?? createRateLimiter({ clock }),
+    // Only POST /grade uses this one (grade, grade-day, grade-network), so other routes cannot evict its keys.
+    // A test that injects only deps.rateLimiter keeps its old behavior: the grade rules use that one too.
+    gradeLimiter: deps.gradeLimiter ?? deps.rateLimiter ?? createRateLimiter({ clock }),
     config,
     // The day's count is kept in DATA_DIR/ai-budget.json (written only when a real provider call is counted).
     aiBudget: deps.aiBudget ?? createAiBudget({

@@ -5,7 +5,8 @@
  * IPv6: the first four groups of the expanded address, lower case, without leading zeros
  * ("2001:db8:1:2:aaaa::1" gives "2001:db8:1:2").
  * An IPv4 address written inside an IPv6 one ("::ffff:203.0.113.7") gives the IPv4 network.
- * Anything that is not an address gives the text itself, so unknown values are never lumped together.
+ * Anything else that is text gives the text itself, so different unknown strings stay apart.
+ * An empty or missing value gives '', which all such values share.
  */
 
 import net from 'node:net';

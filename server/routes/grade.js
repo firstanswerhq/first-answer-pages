@@ -98,12 +98,12 @@ export function createGradeRouter(ctx) {
         ...RULES['grade-network'],
         limit: ctx.config.gradeNetworkPerDay ?? RULES['grade-network'].limit,
       };
-      // Looking first (peek records nothing) tells a network refusal from an address refusal.
-      const networkFull = !ctx.rateLimiter.peek(networkRule.key, networkRule).allowed;
-      const addressFull = addressRules.some(rule => !ctx.rateLimiter.peek(rule.key, rule).allowed);
-      const limited = ctx.rateLimiter.consumeAll([...addressRules, networkRule]);
+      // These three rules use their own limiter, so busy routes such as /mcp cannot push their keys out.
+      // Looking first (peek records nothing) tells whether the network is full.
+      const networkFull = !ctx.gradeLimiter.peek(networkRule.key, networkRule).allowed;
+      const limited = ctx.gradeLimiter.consumeAll([...addressRules, networkRule]);
       if (!limited.allowed) {
-        return networkFull && !addressFull
+        return networkFull
           ? tooManyNetwork(res, limited.retryAfterSeconds)
           : tooMany(res, limited.retryAfterSeconds);
       }
