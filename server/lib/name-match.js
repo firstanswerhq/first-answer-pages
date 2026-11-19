@@ -42,27 +42,50 @@ const HEADING_WORDS = new Set([
 // "Pros" and "Cons" are headings only when they stand alone; "Plumbing Pros of Nashville" is a business.
 const HEADING_PHRASES = new Set(['pro', 'pros', 'con', 'cons', 'pros and cons', 'pros cons', 'pros vs cons']);
 
-// Offer and detail words. A nested line made only of these ("Free Estimates", "Same-Day Service
-// Available") is a detail about a business, not another business.
-const DETAIL_WORDS = new Set([
-  'free', 'estimate', 'estimates', 'quote', 'quotes', 'same', 'day', 'next', 'service', 'services',
-  'available', 'availability', 'licensed', 'insured', 'bonded', 'emergency', 'hour', 'hours', 'hr',
-  '24', '7', '247', 'open', 'call', 'now', 'today', 'warranty', 'warranties', 'guarantee', 'guaranteed',
-  'satisfaction', 'family', 'owned', 'operated', 'locally', 'local', 'years', 'year', 'experience',
-  'experienced', 'financing', 'finance', 'affordable', 'pricing', 'price', 'prices', 'rates', 'rate',
-  'upfront', 'flat', 'background', 'checked', 'certified', 'trained', 'technicians', 'technician',
-  'professional', 'fast', 'quick', 'friendly', 'reliable', 'trusted', 'top', 'rated', 'rating', 'serving',
-  'weekend', 'weekends', 'evening', 'evenings', 'appointments', 'appointment', 'online', 'booking',
-  'no', 'hidden', 'fees', 'fee', 'trip', 'charge', 'charges', 'senior', 'military', 'discounts',
-  'discount', 'specials', 'special', 'payment', 'plans', 'options', 'accepted', 'major', 'cards', 'credit',
-  'and', 'the', 'of', 'with', 'for', 'in', 'on', 'a', 'an', 'to', 'we', 'our', 'are', 'is', 'all', 'any',
+// Lines that are only an offer, never a business name. Matched as a whole line (normalized), so a
+// real name that merely contains these words ("Family Owned Roofing & Repair", "The Local") stays.
+const OFFER_LINES = new Set([
+  'free estimate', 'free estimates', 'free quote', 'free quotes', 'free consultation', 'free inspection',
+  'same day service', 'same day service available', 'same day repair', 'same day repairs',
+  '24 7 service', '24 7 emergency service', '24 7 emergency services', 'emergency service', 'emergency services',
+  'licensed and insured', 'licensed insured and bonded', 'licensed bonded and insured', 'fully insured',
+  'family owned', 'family owned and operated', 'locally owned', 'locally owned and operated',
+  'satisfaction guaranteed', 'free estimates available',
 ]);
 
-/** True when every word is an offer or detail word. */
-const detailOnly = text => {
+/** True when the whole line is a standard offer line. */
+const offerOnly = text => OFFER_LINES.has(words(text).join(' '));
+
+// Plural people and category words ("Plumbers", "Restaurants") name a group, not one business.
+const GROUP_NOUNS = new Set([
+  'plumber', 'plumbers', 'roofer', 'roofers', 'electrician', 'electricians', 'landscapers', 'cleaners',
+  'cleaner', 'painters', 'painter', 'lawyer', 'lawyers', 'attorney', 'attorneys', 'restaurant', 'restaurants',
+  'accountants', 'accountant', 'contractor', 'contractors', 'salons', 'pools', 'barber',
+]);
+
+/**
+ * Does this heading read like ONE business? It has a legal word (LLC, Inc, Co), a possessive, or a
+ * trade word that names work rather than people (Plumbing, Roofing, Heating). A group, a category or a
+ * place ("Emergency Plumbers", "Budget Picks", "Fine Dining", "Germantown") does not.
+ */
+function looksLikeOneBusiness(text) {
+  if (/['\u2019]s\b/.test(text)) return true;
   const list = words(text);
-  return list.length > 0 && list.every(w => DETAIL_WORDS.has(w));
-};
+  return list.some(w => LEGAL.has(w) || (TRADE.has(w) && !GROUP_NOUNS.has(w)));
+}
+
+/** The names on the bullet lines right after line `i` (a heading), up to a blank-line-separated end of list. */
+function bulletNamesAfter(lines, i) {
+  const names = [];
+  for (let k = i + 1; k < lines.length && k <= i + 40; k += 1) {
+    const line = lines[k];
+    if (line.trim() === '') continue;
+    const li = line.match(LIST_RE);
+    if (!li || !/^[-*\u2022]/.test(li[2])) break;
+    names.push(...fromListContent(li[3]));
+  }
+  return names;
+}
 
 // Review sites and directories that show up in bold but are not the businesses.
 const BLOCK_WORDS = new Set([
@@ -305,22 +328,40 @@ function fromTableRow(line, next) {
   return validName(t, 2) ? [t] : [];
 }
 
-function extractEntries(answer) {
+/**
+ * Every name listed in an answer, in answer order. `prep` (the business being looked for) makes sure the
+ * business itself is never dropped by a filter.
+ */
+function extractEntries(answer, prep) {
   const lines = String(answer ?? '').split(/\r?\n/);
   const entries = [];
   const seen = new Set();
-  // True right after a numbered business heading ("### 2. Joes Plumbing"): bullets that follow are
-  // details of that business, not more businesses.
+  // True right after a numbered heading that names ONE business ("### 2. Joes Plumbing"): bullets that
+  // follow are details of that business, unless they look like a business themselves.
   let underBusiness = false;
+  const own = text => Boolean(prep) && entryMatches(text, prep);
   const push = list => {
     for (const text of list) {
-      // A line that is only an offer ("Free Estimates", "24/7 Emergency Service") is never a business name.
-      if (detailOnly(text)) continue;
+      // A line that is only a standard offer ("Free Estimates", "24/7 Emergency Service") is not a business name.
+      if (offerOnly(text) && !own(text)) continue;
       const key = normalizeForMatch(text);
       if (!key || seen.has(key)) continue;
       seen.add(key);
       entries.push(text);
     }
+  };
+
+  /**
+   * A numbered heading. If it reads like a group, a category or a place ("Emergency Plumbers",
+   * "Fine Dining", "Germantown") and bullet names follow, it is a group heading: it is not a business and
+   * its bullets are the businesses. Otherwise it names a business.
+   */
+  const heading = (names, i) => {
+    underBusiness = false;
+    if (names.length === 0) return;
+    if (names.every(n => !looksLikeOneBusiness(n)) && bulletNamesAfter(lines, i).length > 0) return;
+    push(names);
+    underBusiness = names.some(n => looksLikeOneBusiness(n));
   };
 
   for (let i = 0; i < lines.length; i++) {
@@ -336,28 +377,31 @@ function extractEntries(answer) {
       const numbered = rest.match(/^\d+[.)]\s+(.*)$/);
       const bold = rest.match(STANDALONE_BOLD_RE);
       underBusiness = false;
-      if (numbered) {
-        const names = fromListContent(numbered[1]);
-        underBusiness = names.some(n => !detailOnly(n));
-        push(names);
-      } else if (bold) {
-        push(fromStandaloneBold(bold[1]));
-      }
+      if (numbered) heading(fromListContent(numbered[1]), i);
+      else if (bold) push(fromStandaloneBold(bold[1]));
       continue;
     }
     const li = line.match(LIST_RE);
     if (li) {
       const bullet = /^[-*\u2022]/.test(li[2]);
-      if (underBusiness && bullet) continue; // a detail of the business heading above
-      if (!bullet) underBusiness = false;
-      push(fromListContent(li[3], li[1] === '' && !bullet));
+      let names = fromListContent(li[3], li[1] === '' && !bullet);
+      if (underBusiness && bullet) {
+        names = names.filter(n => looksLikeOneBusiness(n) || own(n));
+      } else if (!bullet) {
+        underBusiness = false;
+      }
+      push(names);
       continue;
     }
     const sb = line.match(STANDALONE_BOLD_RE);
     if (sb) {
       const names = fromStandaloneBold(sb[1]);
-      underBusiness = names.some(n => !detailOnly(n)) && /^\s*\d+[.)]/.test(sb[1]);
-      push(names);
+      if (/^\s*\d+[.)]/.test(sb[1])) {
+        heading(names, i);
+      } else {
+        underBusiness = false;
+        push(names);
+      }
       continue;
     }
     if (line.includes('**')) push(boldSpans(line));
@@ -418,7 +462,7 @@ function entryMatches(entry, prep) {
  */
 export function analyzeAnswer(answer, business) {
   const prep = prepBusiness(business);
-  const entries = extractEntries(answer);
+  const entries = extractEntries(answer, prep);
   let position = null;
   const competitors = [];
   entries.forEach((entry, i) => {
@@ -450,7 +494,7 @@ export function extractCompetitors(answer, business) {
  */
 export function listedNames(answer, business) {
   const prep = prepBusiness(business);
-  return extractEntries(answer).map(name => ({ name, own: entryMatches(name, prep) }));
+  return extractEntries(answer, prep).map(name => ({ name, own: entryMatches(name, prep) }));
 }
 
 function firstIdentifyingWord(name, ctx) {

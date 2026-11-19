@@ -283,3 +283,7 @@ From `review-2026-11-18.md` (two independent reviews of the rebuild; security cl
 - [x] V29. Google's live answer page puts the answer back in the quoted-answer style
 - [x] V30. About page opens in plain words ("This is our free AI Visibility Check.") with no web address path
 - [x] V31. Free listing card rows are spaced tightly again, like one phone-book entry
+
+### E. Round 4 (`review-2026-11-18-round4.md`)
+
+- [x] V32. Rework V23 so it never loses real names: a numbered heading is a business heading (its bullets are details) only when it reads like ONE business (a trade word that names work, a legal word or a possessive); a group, category or place heading is not a name and its bullets are the businesses; never filter out an entry that matches the business itself; drop offer-only lines only when the whole line is one of a short list of phrases; example tests added to `test/grade-name-match.test.js`
