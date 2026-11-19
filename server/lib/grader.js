@@ -42,6 +42,8 @@ const SECOND_OPINION_PAUSE_MS = 15 * 60 * 1000;
 const MAX_TEXT_FOR_PATTERNS = 200000;
 
 const HOME_UNREADABLE = "We couldn't read your home page.";
+const TOO_SLOW = 'Your website took too long to answer.';
+const WEBSITE_BUDGET_MS = 30 * 1000; // Requirement 2.8: the website steps share 30 seconds
 
 const PROVIDER_LABELS = Object.freeze({
   anthropic: 'Claude',
@@ -277,7 +279,7 @@ function storedFacts(facts, found) {
 function failureFor(err) {
   switch (err?.code) {
     case 'blocked_address': return "We can't visit that address because it isn't a public website.";
-    case 'timeout': return 'Your website took too long to answer.';
+    case 'timeout': return TOO_SLOW;
     case 'too_large': return 'Your home page is too large to check.';
     default: return undefined;
   }
@@ -311,6 +313,29 @@ async function withDeadline(fn, ms) {
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * One shared deadline. `timeout` rejects when it passes; `expired` turns true then.
+ * `stop()` clears the timer, so a finished run leaves nothing waiting.
+ */
+function startBudget(ms) {
+  let timer;
+  let expired = false;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      expired = true;
+      reject(coded('timeout'));
+    }, ms);
+  });
+  timeout.catch(() => {}); // no unhandled rejection when nothing is racing it
+  return { timeout, get expired() { return expired; }, stop: () => clearTimeout(timer) };
+}
+
+/** Race a promise against the shared deadline; the loser's later result or error is ignored. */
+function within(budget, promise) {
+  Promise.resolve(promise).catch(() => {});
+  return Promise.race([promise, budget.timeout]);
 }
 
 const cut = (text, max) => {
@@ -373,7 +398,7 @@ function scoreOf(results) {
  */
 export function createGrader({
   store, assistantProvider, extraAssistants = [], nameChecker = null, aiBudget, safeFetcher,
-  draftStore, notifier, clock, newId, config = {},
+  draftStore, notifier, clock, newId, config = {}, websiteBudgetMs = WEBSITE_BUDGET_MS,
 }) {
   const grades = () => store.collection('grades');
   const leads = () => store.collection('leads');
@@ -559,6 +584,21 @@ export function createGrader({
    * `step(index, state, finding, ms)` is told about each step as it ends.
    */
   async function readWebsite(input, step) {
+    const budget = startBudget(websiteBudgetMs);
+    try {
+      return await readWebsiteWithin(input, step, budget);
+    } finally {
+      budget.stop();
+    }
+  }
+
+  /**
+   * The website steps share one deadline (30 seconds). A fetch still running at the limit is
+   * given up on and its step is recorded as failed; later steps are skipped. Nothing here
+   * writes a step after the limit except the flow itself, in order, so a late fetch that
+   * finishes on its own is ignored.
+   */
+  async function readWebsiteWithin(input, step, budget) {
     const nothing = { facts: null, found: foundFromFacts(null, input), results: null, homeOk: false };
     if (!input.website) {
       await step(0, 'skipped', 'No website given', 0);
@@ -571,7 +611,7 @@ export function createGrader({
     let failure;
     let t = clock.now();
     try {
-      const res = await safeFetcher.fetchText(input.website, { strictSize: true });
+      const res = await within(budget, safeFetcher.fetchText(input.website, { strictSize: true }));
       if (res.status < 200 || res.status >= 300 || !looksLikeHtml(res)) failure = HOME_UNREADABLE;
       else home = res;
     } catch (err) {
@@ -596,20 +636,34 @@ export function createGrader({
 
     let robots = null;
     let llms = null;
+    let tooSlow = false;
     t = clock.now();
     if (home && facts) {
-      const base = home.finalUrl || input.website;
-      const fetchOne = async path => {
-        const res = await safeFetcher.fetchText(new URL(path, base).href);
-        return { status: res.status, text: res.text, contentType: res.contentType };
-      };
-      [robots, llms] = await Promise.all([
-        fetchOne('/robots.txt').catch(() => ({ status: 0 })),
-        fetchOne('/llms.txt').catch(() => null),
-      ]);
+      if (budget.expired) {
+        tooSlow = true;
+      } else {
+        const base = home.finalUrl || input.website;
+        const fetchOne = async path => {
+          const res = await safeFetcher.fetchText(new URL(path, base).href);
+          return { status: res.status, text: res.text, contentType: res.contentType };
+        };
+        try {
+          [robots, llms] = await within(budget, Promise.all([
+            fetchOne('/robots.txt').catch(() => ({ status: 0 })),
+            fetchOne('/llms.txt').catch(() => null),
+          ]));
+        } catch {
+          tooSlow = true; // the shared deadline passed; both files count as not checked
+          robots = null;
+          llms = null;
+        }
+      }
+      if (tooSlow) failure = TOO_SLOW;
     }
     const results = runWebsiteChecks({ facts, robots, llms, input, failure });
-    if (home && facts) {
+    if (tooSlow) {
+      await step(2, 'failed', TOO_SLOW, clock.now() - t);
+    } else if (home && facts) {
       const blocked = results.find(r => r.id === 'ai-bots-allowed')?.blocked ?? [];
       await step(2, 'done', blocked.length
         ? `${blocked.length} AI assistant${blocked.length === 1 ? ' is' : 's are'} turned away`

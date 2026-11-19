@@ -98,7 +98,7 @@ Every task also follows the design's "Implementation notes from the code review"
   - Run `node --test`; every earlier test and every new test passes. Ask the user if questions arise.
   - Rebuild note: after task 3 the cloud ran the grade unit tests and all 66 passed; the full suite waits on the files still being rebuilt.
 
-- [ ] 5. Storage, budget and configuration
+- [x] 5. Storage, budget and configuration
   - [x] 5.1 Add `grades` and `leads` to the data store's `COLLECTIONS` allow-list, and add `grades.json` and `leads.json` to `ALLOWED_FILES` in `test/data-dir.test.js`
     - _Requirements: 14.5_
   - [x] 5.2 Extend `pruneExpired` with `grades` and `leads` options that drop records older than 90 days and keep records with a missing or invalid `createdAt`; run it at startup with the existing retention call
@@ -160,13 +160,13 @@ The rebuild also removed `server/lib/assistant.js`, `server/lib/name-check.js` a
   - Never log a stamp, a cookie value or the secret
   - _Design: "Unlock cookie and form stamp"; Requirements 11b and 12_
 
-- [ ] R4. Share one 30-second budget across the website steps in `server/lib/grader.js`
+- [x] R4. Share one 30-second budget across the website steps in `server/lib/grader.js`
   - Requirement 2.8 gives the website steps 30 seconds together. Today each fetch has its own 10-second limit and robots.txt and llms.txt are fetched at the same time, so the worst case is about 20 seconds and no shared timer exists
   - Add one deadline for `readWebsite` (an `AbortSignal.timeout(30000)` or a single timer cleared in `finally`); a step still running at the limit is ended and recorded as `failed`, its Checks `not_checked`, and the Grade still finishes `done`; never let a late fetch write a step after the deadline
-  - Not built yet; do it after the full suite passes
+  - Built after the full suite passed (1015 of 1015). `createGrader` takes an optional `websiteBudgetMs` (default 30000) so a test can use a short one; not yet run in the cloud
   - _Requirements: 2.8_
 
-- [ ] 6. The grader flow
+- [x] 6. The grader flow
   - [x] 6.1 Create `server/lib/grader.js`
     - `createGrader({ store, assistantProvider, aiBudget, safeFetcher, notifier, clock, newId, config })`
     - `start(input)`: normalize, build the reuse key, create the Grade as `running`, copy reusable AI results (only `ai`, labeled with their original time), schedule `run(id)` once
@@ -180,7 +180,7 @@ The rebuild also removed `server/lib/assistant.js`, `server/lib/name-check.js` a
     - Examples with the fixtures and the mock provider: a full run finishes `done`; an unreachable site gives `not_checked` website Checks and still a `done` Grade; an AI timeout gives `ai-named` `not_checked`; a stale Grade reads as failed
     - **Validates: Requirements 2.5, 2.6, 2.7, 14.3, 14.4**
 
-- [ ] 7. Pages and public routes
+- [x] 7. Pages and public routes
   - [x] 7.1 Create `server/lib/grade-html.js`
     - `gradeFormPage({ values, errors, stamp, categories })`: headline asking whether AI can find the business, five fields, category suggestions through a `datalist`, honeypot and stamp, no email or phone field
     - `scanPage(grade)`: Scan_Steps with done, running and waiting marks; refresh meta tag
@@ -203,10 +203,11 @@ The rebuild also removed `server/lib/assistant.js`, `server/lib/name-check.js` a
     - Form 422s for each bad field, honeypot and too-fast stamp; 303 and Grade stored; refresh tag while running; report sections; noindex headers; 404 for unknown and malformed ids; sitemap and llms.txt free of `/grade`; no "Yellow Pages" or "YP" in any Grader page
     - **Validates: Requirements 1.1 to 1.7, 2.3, 9.1 to 9.8, 16.2**
 
-- [ ] 8. Checkpoint: grade a fixture end to end
+- [x] 8. Checkpoint: grade a fixture end to end
+  - Rebuild note: with every grader file rebuilt, the cloud ran the whole suite and it passed 1015 of 1015.
   - Run `node --test`, including flow tests that grade each fixture end to end through `createApp` with a fake transport serving the fixture pages and the mock AI provider. The safe fetcher's address rules are never loosened for tests or local runs. Ask the user if questions arise.
 
-- [ ] 9. Lead gate, claim, recheck and admin
+- [x] 9. Lead gate, claim, recheck and admin
   - [x] 9.1 Lead form and unlock
     - `POST /grade/:id/unlock`: validate name, email and phone (existing normalizers); store the Lead; set the signed `g_<id>` cookie; run the two extra AI_Questions in the background and recompute the Score; notify the site owner with business name, score and report link only; 303 to the report
     - `GRADER_LEAD_GATE=off`: show the Full_Report to all and run the extra questions on the first view, subject to the budget
@@ -228,9 +229,10 @@ The rebuild also removed `server/lib/assistant.js`, `server/lib/name-check.js` a
     - Admin pages refuse without login; delete makes the report 404
     - **Validates: Requirements 10.3, 10.4, 10.5, 12.2, 12.6, 13.2, 13.3, 15.3, 15.4**
 
-- [ ] 10. Fixtures, README and final checkpoint
-  - [ ] 10.1 Add `test/fixtures/grade/` with three saved home pages (restaurant with slider headlines, roofer with JSON-LD that fails to parse, large company with several JSON-LD blocks), personal details replaced, plus expected Page_Facts and Check_Results; add example tests that read each fixture
+- [x] 10. Fixtures, README and final checkpoint
+  - [x] 10.1 Add `test/fixtures/grade/` with three saved home pages (restaurant with slider headlines, roofer with JSON-LD that fails to parse, large company with several JSON-LD blocks), personal details replaced, plus expected Page_Facts and Check_Results; add example tests that read each fixture
     - _Requirements: 17.3_
-  - [ ] 10.2 Update the README: what the Grader does, the four settings, how the AI cap is shared, how to turn the lead gate off for judges, and where leads appear
-  - [ ] 10.3 Final checkpoint: run `node --test`; every test passes, including every test from earlier specs. Ask the user if questions arise.
+  - [x] 10.2 Update the README: what the Grader does, the four settings, how the AI cap is shared, how to turn the lead gate off for judges, and where leads appear
+  - [x] 10.3 Final checkpoint: run `node --test`; every test passes, including every test from earlier specs. Ask the user if questions arise.
+    - Rebuild note: the cloud ran the whole suite with every grader file rebuilt in Kiro and it passed 1015 of 1015 (the original 1014 plus one new property test).
     - _Requirements: 17.1, 17.2, 17.4_
