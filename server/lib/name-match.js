@@ -220,7 +220,8 @@ function sentenceLead(content) {
   const firstWord = (tokens[0] ?? '').toLowerCase().replace(/[^a-z]/g, '');
   const adviceFirst = ADVICE_VERBS.has(firstWord);
   if (adviceFirst && !ADVICE_NAME_VERBS.has(firstWord)) return '';
-  if (PRONOUN_STARTS.has(firstWord)) return '';
+  // "This is a great pick" and "We recommend calling ahead" are sentences; "This Is It BBQ" and "We Taco Bout It" are names.
+  if (PRONOUN_STARTS.has(firstWord) && startsLower(tokens[1])) return '';
   const out = [];
   let lastCap = -1;
   let capped = 0;
@@ -531,9 +532,17 @@ function validName(text, minWords) {
 }
 
 // Business words that count as a cue in bold text that is not title case ("the Hair Bar", "Fox and Jane salon").
-const BOLD_BUSINESS_WORDS = new Set([...BUSINESS_ENDINGS, 'salon', 'salons', 'bar', 'shop', 'barbershop']);
+const BOLD_BUSINESS_WORDS = new Set([
+  ...BUSINESS_ENDINGS, 'salon', 'salons', 'bar', 'shop', 'barbershop',
+  // restaurants and food shops
+  'kitchen', 'grill', 'pizza', 'cafe', 'caf\u00e9', 'diner', 'bbq', 'bistro', 'tacos', 'bakery', 'deli', 'eatery', 'tavern',
+]);
+
+// True when a word starts with a lowercase letter ("is", "top"); a missing word counts as lowercase.
+const startsLower = token => token === undefined || /^[^\p{L}\p{N}]*\p{Ll}/u.test(token);
 
 // Bold text starting with one of these reads as a sentence or a heading, never a name ("Our top picks for you").
+// Only when the second word is lowercase: "Our Town Diner" and "Your Pie pizza" can be names.
 const BOLD_NOT_FIRST = new Set(['a', 'an', 'our', 'your', 'my', 'we', 'you', 'it', 'this', 'that', 'these', 'those', 'there', 'here']);
 
 /**
@@ -550,7 +559,7 @@ function looseBoldName(text, { cueOnly = false } = {}) {
   if (tokens.length < 2 || tokens.length > 6) return false;
   const lower = tokens.map(t => t.toLowerCase().replace(/[^\p{L}]/gu, ''));
   // Text that starts like a sentence, and advice, heading, group and label text, is never a name.
-  if (BOLD_NOT_FIRST.has(lower[0])) return false;
+  if (BOLD_NOT_FIRST.has(lower[0]) && startsLower(tokens[1])) return false;
   if (!notAHeading(text) || isDetailLabel(text) || isAdviceHeading(text) || hasGroupWord(text)) return false;
   if (startsWithAdviceVerb(text) && !adviceNameOk(text)) return false;
 

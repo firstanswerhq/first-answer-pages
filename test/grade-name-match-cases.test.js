@@ -911,6 +911,63 @@ const MORE_CASES = [
     ),
     named: true, position: 1, competitors: ['Kinship'],
   },
+  // V54: restaurant words, and names that start with This, Here or We.
+  {
+    id: 'P1', name: 'City House', service: 'restaurants',
+    answer: lines(
+      '1. **Husk** - Southern',
+      "2. **Mama's kitchen** - comfort food",
+      '3. **City House** - pizza',
+    ),
+    named: true, position: 3, competitors: ['Husk', "Mama's kitchen"],
+  },
+  {
+    id: 'P2', name: 'City House', service: 'restaurants',
+    answer: lines(
+      '- **Your Pie pizza**: build your own',
+      '- **Bastion**: nachos',
+      '- **City House**: pizza',
+    ),
+    named: true, position: 3, competitors: ['Your Pie pizza', 'Bastion'],
+  },
+  {
+    id: 'P3', name: 'City House', service: 'restaurants',
+    answer: lines(
+      '1. This Is It BBQ is a local favorite.',
+      '2. Here Kitchen has a great patio.',
+      '3. City House has wood-fired pizza.',
+    ),
+    named: true, position: 3, competitors: ['This Is It BBQ', 'Here Kitchen'],
+  },
+  {
+    id: 'P4', name: 'City House', service: 'restaurants',
+    answer: lines(
+      '- We Taco Bout It serves street tacos.',
+      '- City House is known for pizza.',
+    ),
+    named: true, position: 2, competitors: ['We Taco Bout It'],
+  },
+  {
+    id: 'G9', name: 'City House', service: 'restaurants',
+    answer: lines(
+      '1. Husk serves Southern food.',
+      '2. City House has wood-fired pizza.',
+      '3. This is a great pick for families.',
+      '4. We recommend calling ahead on weekends.',
+      '5. Here is a tip: go early.',
+    ),
+    named: true, position: 2, competitors: ['Husk'],
+  },
+  {
+    id: 'G10', name: 'City House', service: 'restaurants',
+    answer: lines(
+      '- **Husk**: Southern',
+      '- **City House**: pizza',
+      '- **Book a table**: weekends fill fast',
+      "- **Try the pizza**: it's the best",
+    ),
+    named: true, position: 2, competitors: ['Husk'],
+  },
 ];
 
 for (const c of MORE_CASES) {
