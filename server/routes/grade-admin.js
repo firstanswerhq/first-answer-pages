@@ -64,11 +64,11 @@ export function mountGradeAdmin(router, ctx, { adminNav, wantsHtml, form }) {
 
       const body = `<section class="admin">
   ${adminNav()}
-  <h1>AI visibility reports</h1>
+  <h1>AI Visibility Check reports</h1>
   ${noteKey ? `<p class="admin-note" role="status">${escapeHtml(NOTES[noteKey])}</p>` : ''}
   ${grades.length === 0 ? '<p>No reports yet.</p>' : `<ul class="pending-list">\n${items}\n</ul>`}
 </section>`;
-      res.type('html').send(layout({ title: 'AI visibility reports', body }));
+      res.type('html').send(layout({ title: 'AI Visibility Check reports', body }));
     } catch (err) {
       next(err);
     }
@@ -85,10 +85,10 @@ export function mountGradeAdmin(router, ctx, { adminNav, wantsHtml, form }) {
 </li>`).join('\n');
       const body = `<section class="admin">
   ${adminNav()}
-  <h1>Grader leads</h1>
+  <h1>AI Visibility Check leads</h1>
   ${leads.length === 0 ? '<p>No leads yet.</p>' : `<ul class="pending-list">\n${items}\n</ul>`}
 </section>`;
-      res.type('html').send(layout({ title: 'Grader leads', body }));
+      res.type('html').send(layout({ title: 'AI Visibility Check leads', body }));
     } catch (err) {
       next(err);
     }

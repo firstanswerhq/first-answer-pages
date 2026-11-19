@@ -287,3 +287,7 @@ From `review-2026-11-18.md` (two independent reviews of the rebuild; security cl
 ### E. Round 4 (`review-2026-11-18-round4.md`)
 
 - [x] V32. Rework V23 so it never loses real names: a numbered heading is a business heading (its bullets are details) only when it reads like ONE business (a trade word that names work, a legal word or a possessive); a group, category or place heading is not a name and its bullets are the businesses; never filter out an entry that matches the business itself; drop offer-only lines only when the whole line is one of a short list of phrases; example tests added to `test/grade-name-match.test.js`
+
+### F. Round 5 (`review-2026-11-18-round5.md`)
+
+- [x] V33. One name for the product everywhere: "AI Visibility Check" (About page heading and title; the report's main heading is "AI Visibility Check" with "Report · First Answer Pages" under it; admin pages and the draft source label use it too; code names, routes and file names stay)

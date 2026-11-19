@@ -525,7 +525,7 @@ export function reportPage(grade, opts = {}) {
 
   const top = `<div class="grade-top">
   <div class="grade-score">
-    <p class="grade-eyebrow"><span class="grade-eyebrow-title">Your AI score</span><span class="grade-eyebrow-sub">How easily AI can find and name your business</span></p>
+    <p class="grade-eyebrow"><span class="grade-eyebrow-title">AI Visibility Check</span><span class="grade-eyebrow-sub">Report &middot; First Answer Pages</span></p>
     ${number}
     <h1>${h(i.name)}</h1>
     <p class="grade-where">${h(i.service)} in ${h(i.city)}, ${h(i.state)}</p>
@@ -572,7 +572,7 @@ ${groupLines(grade)}
 ${fullPart}
 ${foot}
 </section>`;
-  return page(`AI score for ${i.name}`, body, { refresh: rechecking });
+  return page(`AI Visibility Check for ${i.name}`, body, { refresh: rechecking });
 }
 
 // ---- Google's live answer ----------------------------------------------------------------------
@@ -616,7 +616,7 @@ export const notFoundPage = () => messagePage('Page not found', 'We could not fi
 /** What the Grader reads and why. */
 export function aboutPage({ contactEmail = '', userAgent = '' } = {}) {
   const body = `<section class="message">
-  <h1>About the AI Visibility Grader</h1>
+  <h1>About the AI Visibility Check</h1>
   <p>This is our free <a href="/grade">AI Visibility Check</a>. Someone types in a business name, city, state and what the business does, and a website if it has one. This page says exactly what the check does, so anyone whose website was checked can see why.</p>
   <h2>What we visit</h2>
   <ul>
@@ -636,5 +636,5 @@ export function aboutPage({ contactEmail = '', userAgent = '' } = {}) {
   <p>Reports are not listed in search engines and are deleted after 90 days. To ask us to remove one sooner, ${contactLink(contactEmail, contactEmail ? `email ${contactEmail}` : 'use the contact details on our About page')}.</p>
   <p><a href="/grade">Check a business</a></p>
 </section>`;
-  return page('About the AI Visibility Grader', body);
+  return page('About the AI Visibility Check', body);
 }
