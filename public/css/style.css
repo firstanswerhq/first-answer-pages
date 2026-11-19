@@ -2457,3 +2457,12 @@ a.tel,
 }
 .verified-badge a { color: inherit; text-decoration: underline; }
 .founders-invite .founders-invite-deal { margin-top: 0.5rem; }
+
+/* Small print on the Grader pages: hint lines stay small, like the notes on the other forms */
+.grade-report .hint,
+.grade-start > .hint,
+.grade-scan .hint,
+.grade-ai .hint {
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+}

@@ -78,8 +78,8 @@ function field({ id, name, label, value, hint, error, attrs = '' }) {
   return `<div class="field${error ? ' missing' : ''}">
     <label for="${id}">${label}</label>
     <input type="text" id="${id}" name="${name}" value="${h(value ?? '')}"${error ? ` aria-invalid="true" aria-describedby="${id}-err"` : ''}${attrs}>
-    ${hint ? `<span class="hint">${hint}</span>` : ''}
-    ${error ? `<span class="hint" id="${id}-err" role="alert">${h(error)}</span>` : ''}
+    ${hint && !error ? `<span class="hint">${hint}</span>` : ''}
+    ${error ? `<span class="missing-note" id="${id}-err" role="alert">${h(error)}</span>` : ''}
   </div>`;
 }
 
@@ -94,7 +94,8 @@ export function gradeFormPage({ values = {}, errors = {}, stamp = '', categories
   const body = `<section class="grade-start">
   <h1>Can AI find your business?</h1>
   <p class="tagline">Get a free check in about two minutes. We ask an AI assistant who it would name, and we look at what AI can read on your website.</p>
-  ${errors.form ? `<p class="notice" role="alert">${h(errors.form)}</p>` : ''}
+  ${errors.form ? `<p class="form-error" role="alert">${h(errors.form)}</p>` : ''}
+  ${['name', 'city', 'state', 'service', 'website'].some(k => errors[k]) ? '<p class="form-error" role="alert">Please fix the problems below.</p>' : ''}
   <form class="rise-form" method="POST" action="/grade">
     ${field({ id: 'g-name', name: 'name', label: 'Business name', value: values.name, error: errors.name, attrs: ' autocomplete="organization"' })}
     ${field({ id: 'g-city', name: 'city', label: 'City', value: values.city, error: errors.city, attrs: ' autocomplete="address-level2"' })}
@@ -193,8 +194,19 @@ function competitorList(a) {
     : '';
 }
 
+const JUST_ASKED_MS = 10 * 60 * 1000;
+
+/** "We just asked Claude." for a fresh answer; "We asked Claude on <date>." once it is older or was carried over. */
+function askedLine(entry, now, label) {
+  const old = Boolean(entry.reusedFrom)
+    || (Number.isFinite(now) && Number.isFinite(Date.parse(entry.at)) && now - Date.parse(entry.at) > JUST_ASKED_MS);
+  return old
+    ? `We asked ${label} on ${h(whenText(entry.reusedFrom || entry.at))}.`
+    : `We just asked ${label}.`;
+}
+
 /** The AI part of the free report. */
-function aiFree(grade, { googleLive, requester }) {
+function aiFree(grade, { googleLive, requester, now }) {
   const all = aiOf(grade);
   const prompt = freeQuestion(grade.input);
   const first = all.find(a => !isSecondOpinion(a) && a.prompt === prompt) ?? all.find(a => !isSecondOpinion(a));
@@ -203,9 +215,7 @@ function aiFree(grade, { googleLive, requester }) {
   const parts = [];
 
   if (first) {
-    const lead = first.reusedFrom
-      ? `We asked ${inline(first.provider)} on ${h(whenText(first.reusedFrom))}.`
-      : `We just asked ${inline(first.provider)}.`;
+    const lead = askedLine(first, now, inline(first.provider));
     parts.push(`<p>${lead} ${h(outcome(first))}</p>`, competitorList(first), answerBlock(first));
   } else if (seconds.length > 0) {
     parts.push(`<p>${h(mainLabel)} did not answer this time, so this check has no AI score.</p>`);
@@ -229,22 +239,25 @@ function aiFree(grade, { googleLive, requester }) {
     } else {
       parts.push('<p class="hint">These answers are for comparison only (not scored).</p>');
       for (const s of seconds) {
-        parts.push(`<p>We just asked ${h(providerLabel(s.provider))}. ${h(outcome(s))}</p>`);
+        parts.push(`<p>${askedLine(s, now, h(providerLabel(s.provider)))} ${h(outcome(s))}</p>`);
         if (s.provider === 'gemini' && s.webSearch !== true) parts.push('<p class="hint">Gemini answered without a live web search.</p>');
         parts.push(competitorList(s), answerBlock(s));
       }
     }
   }
 
-  if (googleLive) {
-    parts.push(requester
-      ? `<form method="post" action="/grade/${h(grade.id)}/google-live"><button type="submit" class="button">Show Google's live answer</button></form>`
-      : '<p class="hint">Google\'s live answer is private to the person who ran the check, so it is not shown here.</p>');
-  }
+  const google = googleLive ? `<section class="grade-ai grade-google">
+  <h2>What Google's AI says</h2>
+  <p>The question we ask: ${h(prompt)}</p>
+  <p class="hint">From Google's Gemini. Google doesn't review or endorse this report. Only you can see the answer. We don't save it. Your score comes from ${h(mainLabel)}'s answers only.</p>
+  ${requester
+    ? `<form method="post" action="/grade/${h(grade.id)}/google-live"><button type="submit" class="button">Show Google's live answer</button></form>`
+    : '<p class="hint">Google\'s live answer is private to the person who ran the check, so it is not shown here.</p>'}
+</section>` : '';
   return `<section class="grade-ai">
   <h2>What AI says</h2>
   ${parts.filter(Boolean).join('\n  ')}
-</section>`;
+</section>${google ? `\n${google}` : ''}`;
 }
 
 function previewCard(grade) {
@@ -252,9 +265,8 @@ function previewCard(grade) {
   const found = foundOf(grade);
   const hours = Array.isArray(found.hours) && found.hours.length ? found.hours.map(x => h(x)).join('; ') : blank('Add your hours');
   return `<div class="grade-preview">
-    <h3>${h(i.name)}</h3>
+    <h3>${h(i.name)} &middot; ${found.phone ? `<span class="phone">${h(found.phone)}</span>` : blank('Add your phone number')}</h3>
     <p>${h(i.service)} in ${h(i.city)}, ${h(i.state)}</p>
-    <p>Phone: ${found.phone ? `<span class="phone">${h(found.phone)}</span>` : blank('Add your phone number')}</p>
     <p>Hours: ${hours}</p>
     <p>Address: ${found.address ? h(found.address) : blank('Add your address')}</p>
     <p>Website: ${i.website ? h(i.website) : blank('Add your website')}</p>
@@ -262,13 +274,15 @@ function previewCard(grade) {
 }
 
 function topFails(grade) {
+  // The AI answers are not something the owner can change directly, so they are never a "fix first" item.
   const fails = resultsOf(grade)
-    .filter(r => r.result === 'fail' && checkById(r.id))
+    .filter(r => r.result === 'fail' && r.id !== 'ai-named' && checkById(r.id))
     .sort((a, b) => checkById(b.id).points - checkById(a.id).points)
     .slice(0, 3);
   if (fails.length === 0) return '';
   return `<div class="grade-top-fails">
     <h2>Fix these first</h2>
+    <p class="hint">Not a computer person? Send this page to whoever built your website.</p>
     <ul>${fails.map(r => `<li><strong>${h(checkById(r.id).label)}</strong><br>${h(checkById(r.id).fix)}</li>`).join('')}</ul>
   </div>`;
 }
@@ -310,25 +324,19 @@ function searchPreview(grade) {
 
 function groupLines(grade) {
   const results = resultsOf(grade);
+  const byGroup = grade.score?.byGroup ?? {};
   const lines = [];
   for (const g of GROUPS) {
     if (g.show === false) continue;
     const ids = new Set(CHECKS.filter(c => c.group === g.id).map(c => c.id));
-    const mine = results.filter(r => ids.has(r.id));
-    if (mine.length === 0) continue;
-    let text;
-    if (g.id === 'ai_answers') {
-      text = mine[0].detail ?? '';
-    } else {
-      const counted = mine.filter(r => r.result !== 'not_checked');
-      const passed = counted.filter(r => r.result === 'pass').length;
-      text = counted.length === 0
-        ? 'Not checked'
-        : `${passed} of ${counted.length} ${counted.length === 1 ? 'check passes' : 'checks pass'}`;
-    }
+    if (!results.some(r => ids.has(r.id))) continue;
+    const area = byGroup[g.id];
+    const text = area && Number.isFinite(area.earned) && Number.isFinite(area.available) && area.available > 0
+      ? `${area.earned} of ${area.available} points`
+      : 'Not checked';
     lines.push(`<li><strong>${h(g.label)}:</strong> ${h(text)}</li>`);
   }
-  return lines.length ? `<ul class="grade-groups">${lines.join('')}</ul>` : '';
+  return lines.length ? `<section class="grade-areas">\n  <h2>Score by area</h2>\n  <ul class="grade-groups">${lines.join('')}</ul>\n</section>` : '';
 }
 
 function checkRow(r) {
@@ -420,6 +428,7 @@ function fixKit(grade, contactEmail) {
     </div>`).join('\n    ');
   return `<section class="grade-kit">
   <h2>Your fix kit</h2>
+  <p>Send this kit to whoever looks after your website. Each box says where it goes, and the Copy button copies it.</p>
   ${blocks}
 </section>
 <section class="grade-offer">
@@ -436,18 +445,19 @@ function leadForm(grade, { values = {}, errors = {} } = {}) {
     return `<div class="field${bad ? ' missing' : ''}">
         <label for="l-${k}">${label}</label>
         <input type="${type}" id="l-${k}" name="${k}" value="${h(values[k] ?? '')}"${bad ? ` aria-invalid="true" aria-describedby="l-err-${k}"` : ''} autocomplete="${auto}"${k === firstBad ? ' autofocus' : ''}>
-        ${bad ? `<span class="hint" id="l-err-${k}" role="alert">${h(errors[k])}</span>` : ''}
+        ${bad ? `<span class="missing-note" id="l-err-${k}" role="alert">${h(errors[k])}</span>` : ''}
       </div>`;
   };
   const anyError = keys.some(k => errors[k]);
   return `<section class="grade-lead" id="unlock">
   <h2>See every check and the fixes</h2>
-  <p>Tell us where to send it. You will see each check, what to change, and a fix kit you can copy and paste.</p>
-  ${anyError ? '<p class="notice" role="alert">Please fix the highlighted fields.</p>' : ''}
+  <p>Enter your name, email and phone to open the full report right away, on this page. It has every check, the fix for each one, and text you can copy and paste.</p>
+  ${anyError ? '<p class="form-error" role="alert">Please fix the highlighted fields.</p>' : ''}
   <form class="rise-form" method="POST" action="/grade/${h(grade.id)}/unlock">
       ${input('name', 'text', 'Your name', 'name')}
       ${input('email', 'email', 'Your email', 'email')}
       ${input('phone', 'tel', 'Your phone', 'tel')}
+      <p class="hint">Why the phone number? It is the fastest way to help if you want a hand with your report. We only call, text or email you if you check the box below. We never sell it.</p>
       <label class="check"><input type="checkbox" name="okToContact" value="1"${values.okToContact ? ' checked' : ''}> OK for First Answer Pages to call, text or email me about my report</label>
       <button type="submit" class="button">Show me my full report</button>
   </form>
@@ -456,7 +466,7 @@ function leadForm(grade, { values = {}, errors = {} } = {}) {
 
 function recheckBlock(grade, rechecking) {
   if (!grade.input.website) {
-    return '<p class="notice">You did not give a website, so there is nothing to check again. Your fix kit still has a draft you can use.</p>';
+    return '<p class="hint">You did not give a website, so there is nothing to check again. Your fix kit still has a draft you can use.</p>';
   }
   const parts = [];
   if (rechecking) {
@@ -467,7 +477,7 @@ function recheckBlock(grade, rechecking) {
   }
   parts.push(`<form method="POST" action="/grade/${h(grade.id)}/recheck"><button type="submit" class="button">Check again</button></form>
   <p class="hint">Fixed something? Check again to see your new score. This reads your website again and does not ask AI again.</p>`);
-  return `<section class="grade-recheck">\n  ${parts.join('\n  ')}\n</section>`;
+  return `<section class="grade-recheck">\n  <h2>Made some changes?</h2>\n  ${parts.join('\n  ')}\n</section>`;
 }
 
 // ---- the report ----------------------------------------------------------------------------
@@ -486,6 +496,8 @@ export function reportPage(grade, opts = {}) {
     googleLive = false, requester = false, leadValues, leadErrors,
     // A recheck that was cut off (for example by a restart) stops counting after 4 minutes; the route works that out.
     rechecking = false,
+    // The current time in ms, so an answer older than 10 minutes says when it was asked.
+    now,
   } = opts;
   const i = grade.input;
   const full = !leadGate || unlocked;
@@ -518,10 +530,10 @@ export function reportPage(grade, opts = {}) {
 
   const claim = `<div class="grade-fix">
   <div>
-    <h2>Your free listing</h2>
+    <h2>Your free listing in our directory</h2>
     ${previewCard(grade)}
     <form method="POST" action="/grade/${h(grade.id)}/claim"><button type="submit" class="button">Claim my free listing</button></form>
-    <p class="hint">Nothing goes live until you do.</p>
+    <p class="hint">A free listing for your business in our directory, First Answer Pages. Next you check the details and send it to us for approval. Nothing goes live until you do.</p>
   </div>
   ${topFails(grade)}
 </div>`;
@@ -539,14 +551,14 @@ export function reportPage(grade, opts = {}) {
   ${justOpened}
   ${allChecks(grade)}
   ${answersSection(grade)}
-  ${recheckBlock(grade, rechecking)}
   ${fixKit(grade, contactEmail)}
+  ${recheckBlock(grade, rechecking)}
 </div>`
     : leadForm(grade, { values: leadValues, errors: leadErrors });
 
   const body = `<section class="grade-report">
 ${top}
-${aiFree(grade, { googleLive, requester })}
+${aiFree(grade, { googleLive, requester, now })}
 ${claim}
 ${searchPreview(grade)}
 ${groupLines(grade)}
@@ -570,7 +582,8 @@ export function googleLivePage({ grade, text, sources = [], suggestionsHtml = ''
     .join('');
   const body = `<section class="grade-ai">
   <h1>What Google's AI says</h1>
-  <p class="hint">We asked Google's AI, with a live search, the same question: ${h(freeQuestion(grade.input))} This answer is shown once, only to you. We do not save it and it does not change your score.</p>
+  <p>The question we asked: ${h(freeQuestion(grade.input))}</p>
+  <p class="hint">From Google's Gemini, with a live Google search. Google doesn't review or endorse this report. Only you can see this answer. We don't save it. Your score comes from ${h(grade.aiMain?.label ?? 'Claude')}'s answers only.</p>
   <div class="grade-answer">${h(text)}</div>
   ${links ? `<h2>Where it looked</h2><ul>${links}</ul>` : ''}
   ${suggestionsHtml ? `<div class="grade-google-suggestions">${suggestionsHtml}</div>` : ''}
@@ -591,28 +604,29 @@ export function messagePage(title, message, link = { href: '/grade', text: 'Back
   return page(title, body);
 }
 
-export const notFoundPage = () => messagePage('Page not found', 'We could not find that report. It may have been removed.');
+export const notFoundPage = () => messagePage('Page not found', 'We could not find that report. It may have been removed. Reports are deleted after 90 days.');
 
 /** What the Grader reads and why. */
-export function aboutPage({ contactEmail = '' } = {}) {
+export function aboutPage({ contactEmail = '', userAgent = '' } = {}) {
   const body = `<section class="message">
   <h1>About the AI Visibility Grader</h1>
-  <p>Someone typed your website into our free check, so our bot visited it. This page says what it does.</p>
-  <h2>What it reads</h2>
+  <p>This is the free check at <a href="/grade">/grade</a>. Someone types in a business name, city, state and what the business does, and a website if it has one. This page says exactly what the check does, so anyone whose website was checked can see why.</p>
+  <h2>What we visit</h2>
   <ul>
-    <li>Your home page.</li>
-    <li>Your robots.txt file, to see which AI assistants it lets in.</li>
-    <li>Your llms.txt file, if you have one.</li>
+    <li>Our server visits the website once per check. It reads the home page, /robots.txt and /llms.txt. Each is read at most once.</li>
+    <li>It reads public pages only, on the public internet.</li>
+    <li>It does not log in, fill in forms, run scripts or send cookies.</li>
+    ${userAgent ? `<li>Its user-agent string is: <code>${h(userAgent)}</code></li>` : ''}
   </ul>
-  <h2>What it does not do</h2>
+  <h2>What we ask AI</h2>
   <ul>
-    <li>It reads each page at most once per check.</li>
-    <li>It does not run scripts on your site.</li>
-    <li>It does not log in, fill in forms or send cookies.</li>
-    <li>It only visits public websites.</li>
+    <li>We ask Claude up to three questions about the best businesses of that kind in that city. The questions name the kind of business and the city, never the business name.</li>
+    <li>Each answer, with the business name, city and state, is sent to Google's Gemini to help check whether the business is named.</li>
+    <li>When we can, ChatGPT, Gemini, Grok and Perplexity are asked the same questions so the answers can be compared. Only Claude's answers count toward the score.</li>
+    <li>The person who ran a check can see Google's live answer. It is private to them, and we never save it, score it or share it.</li>
   </ul>
-  <h2>Remove a report</h2>
-  <p>To have a report removed, ${contactLink(contactEmail, contactEmail ? `email ${contactEmail}` : 'use the contact details on our About page')}. Reports are also deleted after 90 days.</p>
+  <h2>Your report</h2>
+  <p>Reports are not listed in search engines and are deleted after 90 days. To ask us to remove one sooner, ${contactLink(contactEmail, contactEmail ? `email ${contactEmail}` : 'use the contact details on our About page')}.</p>
   <p><a href="/grade">Check a business</a></p>
 </section>`;
   return page('About the AI Visibility Grader', body);

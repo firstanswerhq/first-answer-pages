@@ -98,7 +98,7 @@ export function createGradeRouter(ctx) {
   });
 
   router.get('/grade/about', (req, res) => {
-    html(res, 200, aboutPage({ contactEmail: ctx.config.contactEmail ?? '' }));
+    html(res, 200, aboutPage({ contactEmail: ctx.config.contactEmail ?? '', userAgent: ctx.graderUserAgent ?? '' }));
   });
 
   // ---- one Grade ---------------------------------------------------------------------------
@@ -115,6 +115,7 @@ export function createGradeRouter(ctx) {
     googleLive: Boolean(ctx.googleLive),
     requester: hasCookie('ran', grade.id, req),
     rechecking: recheckIsRunning(grade, now()),
+    now: now(),
     ...extra,
   });
 
