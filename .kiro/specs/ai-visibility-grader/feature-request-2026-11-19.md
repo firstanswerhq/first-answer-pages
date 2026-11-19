@@ -48,3 +48,35 @@ The question is built from the service exactly as typed. Colby's client typed "W
 ## Feature D: now approved
 
 Colby said yes to Feature D (Google and Bing can find the main pages and the check's start page). Build F11 to F13 after F10.
+
+## Feature G: Stop bots from running checks over and over (approved Nov 19, 4:15 AM)
+
+Colby: "we need to make it where a bot can't just sit and run checks over and over". Each full check costs real money: about $0.28 to $1.05 in AI fees, more with Feature E. Grok stays on.
+
+What protects the check today:
+- a hidden honeypot field (`nickname`)
+- a signed form timer (the form must be at least 3 seconds and at most 2 hours old)
+- 5 checks an hour and 6 a day per address
+- a 7-day reuse of answers for the same business
+- the global daily AI allowance
+
+The allowance caps the spending, but a bot that rotates addresses can still use up the whole day's allowance, so real owners see "AI check limit reached for today". Add:
+
+1. **A human check on the form (Cloudflare Turnstile).** It is free and usually invisible, and it shows a box only when something looks automated.
+   - When `TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY` are set, the check form includes the Turnstile widget. The server verifies the token with Cloudflare's siteverify endpoint (through the existing outbound rules, with a 5-second timeout) before any AI call or website fetch. A failed or missing token shows the form again with "Please try again: we couldn't confirm you're a person."
+   - When the keys are not set, everything works exactly as today. Never log the token or the secret. Add both keys to the README and render.yaml (`sync: false`).
+   - Update the Content Security Policy only as far as Turnstile needs (its script and frame from challenges.cloudflare.com), and add one plain sentence to the privacy page about the human check.
+   - If Cloudflare can't be reached, let the check through and rely on the other limits below, rather than blocking real owners.
+2. **A per-network limit.** At most 20 checks a day from the same network: the same first three parts of an IPv4 address, or the same first four groups of an IPv6 address. This sits on top of the per-address limits and uses the existing rate limiter and its "try again in" page. Make it a setting, `GRADE_NETWORK_PER_DAY`, default 20.
+3. **A heads-up email to Colby.** Through the existing notifier, email `ADMIN_EMAIL` once a day when the Grader's AI allowance reaches 50% and again at 90%. The email gives the counts only: calls used, calls left and checks run. It never includes owners' details.
+4. **The admin Grades page** shows today's AI calls used and left, and how many checks were turned away by the human check and by the limits today.
+
+Tests:
+- with keys set, a missing or bad token blocks the check before any AI call or fetch, and a good token (fake verifier) runs it
+- without keys, everything behaves as today
+- Cloudflare unreachable lets the check through
+- the 21st check from one network in a day is turned away
+- the 50% and 90% emails are sent once each per day
+- nothing logs a token, a secret or an owner's details
+
+Colby will create the free Cloudflare account and paste the two keys into Render himself. Build it so it is ready and off until then.
