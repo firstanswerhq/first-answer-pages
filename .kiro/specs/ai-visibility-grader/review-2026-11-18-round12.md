@@ -4,7 +4,15 @@ Written by Claude (review notes only; Kiro writes all code).
 
 The code reviewer checked commit afd8971. V40 is fixed: "Check Mate Plumbing" and "Call Today Roofing" are kept, bare one-word bullets like "- Husk" work, "Tips:" and "How to choose:" items are no longer listed, and "Free" is gone. Keeping bold advice-verb names without a trade word dropped ("**Look Boutique**") is fine: the original drops them too. V1 to V11 and V22 hold, security is unchanged (address guard fuzz shows 0 differences, no new log lines, the ranked list escapes every name), the suite passes 1084/1084, and a 120 KB answer takes 29 ms.
 
-One gap remains, plus one small speed fix. Add a new section "M. Round 12 (`review-2026-11-18-round12.md`)" to tasks.md under "Review fixes" with V41 and V42. Add the 8 cases below to `MORE_CASES` in test/grade-name-match-cases.test.js, leaving the 49 existing cases exactly as they are, and change server/lib/name-match.js until all 57 pass. For V42 change server/lib/grade-html.js and add one test to test/grade-report-list.test.js (additions only). No shell commands; the cloud runs the tests.
+Two gaps remain, plus one small speed fix. V43 comes from the owner's own live check tonight (10:51 PM) and matters most. Add a new section "M. Round 12 (`review-2026-11-18-round12.md`)" to tasks.md under "Review fixes" with V41, V42 and V43. Add the 13 cases below to `MORE_CASES` in test/grade-name-match-cases.test.js, leaving the 49 existing cases exactly as they are, and change server/lib/name-match.js until all 62 pass. For V42 change server/lib/grade-html.js and add one test to test/grade-report-list.test.js (additions only). No shell commands; the cloud runs the tests.
+
+## V43. "and" and "&" are the same word (the owner's live check)
+
+Colby checked his client "Capital city window and pressure cleaning" on the live site. Claude's answer listed "**Capital City Window & Pressure Cleaning.**" 3rd, but the live report said "It named these 2 businesses, not yours" and scored 61 instead of about 92. The live code fails because of "and" versus "&". The rebuild gets the numbered list right (case C1 already passes for named and position), but it still fails when the AI writes the name in a sentence: an owner who types "and" is missed when the AI writes "&", and the reverse (C2 to C4).
+
+- When matching the business's own name, treat "&" and "and" between words as the same word, both in the name the owner typed and in the answer. This applies to numbered lists, bullets, headings and plain sentences.
+- In a bullet that is a sentence ("- Get It Done Window Washing has a 5.0 rating from 1 review."), the name is the Title Case words before the first lowercase verb. Apply the advice-verb rule to that name part only, so "Get It Done Window Washing" is a name (it ends in a trade word) and "- Get a written estimate before work starts." stays advice (G4).
+- A bold "**Name.**" with the period inside the bold is a name, without the period (C1 and G4 already pass; keep them passing).
 
 ## V41. Advice-verb names with other business endings
 
@@ -97,4 +105,54 @@ G3. Parlour; hair salons.
 ```
 Expected: named true, position 1, competitors ["Kinship"].
 
-Today (afd8971): E1 to E5 drop the advice-verb names (E1 shows position 2, E2 position 1, E3 position 2, E4 position 2, E5 position 1 with no competitors). G1 to G3 already pass and must keep passing.
+C1 is Claude's real answer from the owner's live check (Nov 18, 10:51 PM), up to the last line visible on his screen.
+
+C1. Capital city window and pressure cleaning; Window cleaning and pressure cleaning.
+```
+This is my top 5 for businesses that do both window cleaning and pressure washing in Tallahassee. I built it from what's offered and from Yelp and directory listings, not from my own testing. Most of these companies have only a few reviews, so treat it as a shortlist and not a definitive ranking.
+
+1. **Joe Pogo's Window Cleaning.** Joe Pogorzelski has provided residential and commercial pressure washing and window cleaning in Tallahassee for more than 16 years. It has a 5.0 rating on Yelp from 3 reviews. That long track record is why it's first.
+
+2. **Cleanscapes Exterior Cleaning.** It specializes in pressure washing, soft washing, window cleaning and gutter cleaning. It is licensed and insured and has a 4.4 rating from 5 reviews on Yelp. That's the largest review base among the highly rated options.
+
+3. **Capital City Window & Pressure Cleaning.** It's locally owned and operated and says it will beat or match prices. It appears near the top of Yelp's window-washing and pressure-washing lists. I couldn't see its star rating in the results.
+
+4. **College Cleaning Crew.** It leads Yelp's window-washing and pressure-washing lists. Its Yelp rating is 4.3 from 6 reviews. It's a good choice if you want an affordable option.
+
+5. **Premier Pressure Washing & Window Cleaning Services.** It offers house washing, roof cleaning, window cleaning and driveway cleaning and serves Tallahassee, Havana, Midway and Quincy. I found little independent review data for it, so check its reviews yourself.
+
+**Other names to check:**
+- Get It Done Window Washing has a 5.0 rating from 1 review.
+```
+Expected: named true, position 3, competitors ["Joe Pogo's Window Cleaning", "Cleanscapes Exterior Cleaning", "College Cleaning Crew", "Premier Pressure Washing & Window Cleaning Services", "Get It Done Window Washing"].
+
+C2. Capital city window and pressure cleaning; Window cleaning and pressure cleaning.
+```
+Good options include Joe Pogo's Window Cleaning and Capital City Window & Pressure Cleaning, which both do windows and pressure washing.
+```
+Expected: named true, position null, competitors [].
+
+C3. Smith and Sons Plumbing; plumbers.
+```
+For drains, try Smith & Sons Plumbing. They answer the phone fast.
+```
+Expected: named true, position null, competitors [].
+
+C4. Smith & Sons Plumbing; plumbers.
+```
+For drains, try Smith and Sons Plumbing. They answer the phone fast.
+```
+Expected: named true, position null, competitors [].
+
+G4. Joe's Plumbing; plumbers.
+```
+1. **Hiller Plumbing.** Big jobs.
+2. **Joe's Plumbing.** Small shop.
+
+**Before you call:**
+- Get a written estimate before work starts.
+- Check that the license is current.
+```
+Expected: named true, position 2, competitors ["Hiller Plumbing"].
+
+Today (afd8971): E1 to E5 drop the advice-verb names (E1 shows position 2, E2 position 1, E3 position 2, E4 position 2, E5 position 1 with no competitors). G1 to G4 already pass and must keep passing. C1 gives named true, position 3, but leaves out "Get It Done Window Washing". C2 to C4 say not named. On the live site (the original code) C1 says not named and lists "Other names to check" as a competitor, which is what the owner saw.
