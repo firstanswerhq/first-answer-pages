@@ -109,6 +109,18 @@ export const CHECKS = Object.freeze([
   },
 ]);
 
+/**
+ * The report's groups, in the order they are shown. `show: false` keeps a group out
+ * of the report (the Google check is not built in version one).
+ */
+export const GROUPS = Object.freeze([
+  { id: 'ai_answers', label: 'AI answers', show: true },
+  { id: 'ai_readable', label: 'Can AI read your website', show: true },
+  { id: 'search_basics', label: 'Search basics', show: true },
+  { id: 'customer_basics', label: 'Customer basics', show: true },
+  { id: 'google_profile', label: 'Your Google profile', show: false },
+]);
+
 /** @param {string} id */
 export function checkById(id) {
   return CHECKS.find(c => c.id === id);
