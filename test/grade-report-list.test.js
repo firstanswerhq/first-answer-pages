@@ -120,3 +120,11 @@ test('V39: the stored answer is not changed', () => {
   render(e);
   assert.equal(e.answer, before);
 });
+
+test('V42: a very long line of broken link marks is read quickly, and normal links still become the name', () => {
+  const started = Date.now();
+  const out = readableAnswer('[a'.repeat(60000));
+  assert.ok(Date.now() - started < 1000, 'finishes in under 1 second');
+  assert.equal(typeof out, 'string');
+  assert.equal(readableAnswer('[Parlour](https://parlournashville.com)'), 'Parlour');
+});

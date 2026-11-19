@@ -2,7 +2,12 @@
 // answer, where does it sit in the answer's list, and who else is listed.
 // Pure functions. Nothing here logs or stores answer text.
 
-import { normalizeForMatch } from './seance.js';
+import { normalizeForMatch as baseNormalize } from './seance.js';
+
+/** The shared normalizer, with "&" read as the word "and" so "Window & Pressure" and "Window and Pressure" match. */
+function normalizeForMatch(s) {
+  return baseNormalize(String(s ?? '').replace(/&/g, ' and '));
+}
 
 const LEGAL = new Set([
   'llc', 'inc', 'incorporated', 'co', 'company', 'corp', 'corporation', 'ltd', 'pllc', 'pc', 'lp', 'llp',
@@ -61,12 +66,34 @@ const ADVICE_NAME_VERBS = new Set([
 const startsWithAdviceVerb = text =>
   ADVICE_NAME_VERBS.has(String(text).trim().split(/\s+/)[0].toLowerCase().replace(/[^a-z]/g, ''));
 
-/** A line that starts with an advice verb but ends in a trade or legal word ("Check Mate Plumbing") is a name. */
-function endsWithTradeOrLegal(text) {
+// Other business endings ("Ask Andy Plumbing Services", "Find Your Glow Spa") that let an advice-verb line stay a name.
+const BUSINESS_ENDINGS = new Set([
+  'services', 'service', 'solutions', 'group', 'spa', 'garage', 'auto', 'movers', 'moving', 'builders', 'pest',
+  'control', 'locksmith', 'pros', 'studio',
+]);
+
+// Small words that mark a line as advice when it ends in one of the BUSINESS_ENDINGS ("Ask About Warranty Services").
+const ADVICE_SMALL_WORDS = new Set(['for', 'about', 'from', 'on', 'with', 'to', 'the', 'a', 'an', 'in', 'at']);
+
+/**
+ * A line that starts with an advice verb is a name when its last word is a trade or legal word, or a business
+ * ending with at least one word between the verb and the ending and none of the small advice words.
+ */
+function adviceNameOk(text) {
   const list = words(text);
   const last = list[list.length - 1];
-  return Boolean(last) && (TRADE.has(last) || LEGAL.has(last));
+  if (!last) return false;
+  if (TRADE.has(last) || LEGAL.has(last)) return true;
+  if (!BUSINESS_ENDINGS.has(last) || list.length < 3) return false;
+  return !list.some(w => ADVICE_SMALL_WORDS.has(w));
 }
+
+// Verbs that follow a business name in a sentence ("Get It Done Window Washing has a 5.0 rating").
+const SENTENCE_VERBS = new Set([
+  'has', 'have', 'had', 'is', 'are', 'was', 'were', 'offers', 'provides', 'does', 'serves', 'specializes',
+  'handles', 'says', 'gets', 'runs', 'works', 'appears', 'leads', 'lists', 'comes', 'also', 'shows', 'boasts',
+  'charges', 'earns', 'holds', 'claims', 'operates', 'focuses', 'covers', 'includes', 'ranks', 'features',
+]);
 
 // Labels that point at a pick ("**Top pick:** Hiller Plumbing"): the name is the text after the colon.
 const PICK_LABELS = new Set([
@@ -168,8 +195,12 @@ function splitLead(content) {
 /** The Title Case name a plain sentence starts with ("Music City Roofing, which handles storm repairs."), or ''. */
 function sentenceLead(content) {
   const tokens = stripMarkdown(content).trim().split(/\s+/);
-  // A sentence that starts with a verb is advice ("Confirm a Tennessee license"), not a business.
-  if (ADVICE_VERBS.has((tokens[0] ?? '').toLowerCase().replace(/[^a-z]/g, ''))) return '';
+  // A sentence that starts with a verb is advice ("Confirm a Tennessee license"), not a business. The one
+  // exception: a name that starts with a narrow advice verb and passes the advice-name rule, followed by a
+  // verb ("Get It Done Window Washing has a 5.0 rating").
+  const firstWord = (tokens[0] ?? '').toLowerCase().replace(/[^a-z]/g, '');
+  const adviceFirst = ADVICE_VERBS.has(firstWord);
+  if (adviceFirst && !ADVICE_NAME_VERBS.has(firstWord)) return '';
   const out = [];
   let lastCap = -1;
   let capped = 0;
@@ -189,7 +220,12 @@ function sentenceLead(content) {
   }
   if (lastCap < 0 || capped < 2) return '';
   const name = out.slice(0, lastCap + 1).join(' ');
-  return validName(name, 2) ? name : '';
+  if (!validName(name, 2)) return '';
+  if (adviceFirst) {
+    const next = (tokens[lastCap + 1] ?? '').toLowerCase().replace(/[^a-z]/g, '');
+    if (!adviceNameOk(name) || !SENTENCE_VERBS.has(next)) return '';
+  }
+  return name;
 }
 
 /** A one-word or short name that is the business itself, read from the text before a separator. */
@@ -581,7 +617,7 @@ function extractEntries(answer, prep) {
       // A line that is only a standard offer ("Free Estimates", "24/7 Emergency Service") is not a business name.
       if (offerOnly(text) && !own(text)) continue;
       // A line that starts with an advice verb ("Ask For Quotes") is advice unless it is the business itself.
-      if (startsWithAdviceVerb(text) && !own(text) && !endsWithTradeOrLegal(text)) continue;
+      if (startsWithAdviceVerb(text) && !own(text) && !adviceNameOk(text)) continue;
       const key = normalizeForMatch(text);
       if (!key || seen.has(key)) continue;
       seen.add(key);

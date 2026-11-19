@@ -196,19 +196,20 @@ function whenText(iso) {
 export function readableAnswer(text) {
   let t = String(text ?? '').replace(/\r\n?/g, '\n');
   // Citation marks: [[2]](link), [1], [web:3], [1, 2]
-  t = t.replace(/[ \t]*\[\[\s*(?:web:)?\d+\s*\]\]\([^)\n]*\)/g, '');
-  t = t.replace(/[ \t]*\[\s*(?:web:)?\d+(?:\s*[,;-]\s*(?:web:)?\d+)*\s*\](?!\()/g, '');
+  // Every pattern has a length cap, so a long line of broken markup cannot make it slow.
+  t = t.replace(/[ \t]{0,20}\[\[\s{0,5}(?:web:)?\d{1,4}\s{0,5}\]\]\([^)\n]{0,2000}\)/g, '');
+  t = t.replace(/[ \t]{0,20}\[\s{0,5}(?:web:)?\d{1,4}(?:\s{0,5}[,;-]\s{0,5}(?:web:)?\d{1,4}){0,10}\s{0,5}\](?!\()/g, '');
   // Links: [name](link) becomes name
-  t = t.replace(/\[([^\]\n]+)\]\([^)\n]*\)/g, '$1');
+  t = t.replace(/\[([^\]\n]{1,200})\]\([^)\n]{0,2000}\)/g, '$1');
   // Heading marks at the start of a line
   t = t.replace(/^[ \t]{0,3}#{1,6}[ \t]+/gm, '');
   // Bullets
-  t = t.replace(/^([ \t]*)[-*\u2022][ \t]+/gm, '$1\u2022 ');
+  t = t.replace(/^([ \t]{0,50})[-*\u2022][ \t]+/gm, '$1\u2022 ');
   // Emphasis
-  t = t.replace(/\*\*([^\n]+?)\*\*/g, '$1');
-  t = t.replace(/__([^\n]+?)__/g, '$1');
-  t = t.replace(/\*(?=\S)([^*\n]+?)\*/g, '$1');
-  t = t.replace(/(^|[^\w])_(?=\S)([^_\n]+?)_(?![\w])/g, '$1$2');
+  t = t.replace(/\*\*([^\n]{1,300}?)\*\*/g, '$1');
+  t = t.replace(/__([^\n]{1,300}?)__/g, '$1');
+  t = t.replace(/\*(?=\S)([^*\n]{1,300}?)\*/g, '$1');
+  t = t.replace(/(^|[^\w])_(?=\S)([^_\n]{1,300}?)_(?![\w])/g, '$1$2');
   return t;
 }
 

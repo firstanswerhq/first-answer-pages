@@ -75,7 +75,7 @@ sequenceDiagram
 |---|---|
 | `server/lib/ip-guard.js` | `isPublicAddress(ip)`: the range list from Requirement 3.2. |
 | `server/lib/safe-fetch.js` | `createSafeFetcher({ request, lookup, clock, timeoutMs, maxBytes, maxRedirects, userAgent })` → `fetchText(url)`. |
-| `server/lib/page-facts.js` | `readPageFacts(html)` → Page_Facts. |
+| `server/lib/page-facts.js` | `readPageFacts(html)` → Page_Facts (also `reviewLinks`, `jsonLd.business.areaServed` and `hasReviewData`); `serviceAreaPattern(city)`. |
 | `server/lib/robots.js` | `parseRobots(text)`, `mayFetchRoot(groups, agent)`. |
 | `server/lib/grade-checks.js` | `CHECKS` table and `runWebsiteChecks(facts, robots, llms, input)`. |
 | `server/lib/name-match.js` | `shortName(name)`, `isNamed(answer, { name, website })`, `extractCompetitors(answer, business)`. |
@@ -189,10 +189,11 @@ CHECKS = [
   { id: 'summary',            group: 'search_basics',   points: 4 },
   { id: 'image-descriptions', group: 'search_basics',   points: 3 },
   { id: 'share-picture',      group: 'search_basics',   points: 2 },
-  { id: 'tap-to-call',        group: 'customer_basics', points: 5 },
-  { id: 'hours-shown',        group: 'customer_basics', points: 4 },
-  { id: 'address-shown',      group: 'customer_basics', points: 3 },
-  { id: 'call-button',        group: 'customer_basics', points: 3 },
+  { id: 'tap-to-call',        group: 'customer_basics', points: 4 },   // was 5; see "Owner-approved features"
+  { id: 'hours-shown',        group: 'customer_basics', points: 3 },   // was 4
+  { id: 'address-shown',      group: 'customer_basics', points: 3 },   // unchanged; worded as a service-area Check when noStorefront
+  { id: 'call-button',        group: 'customer_basics', points: 2 },   // was 3
+  { id: 'reviews-visible',    group: 'customer_basics', points: 3 },   // new
   { id: 'ai-named',           group: 'ai_answers',      points: 30 },
   { id: 'google-profile',     group: 'google_profile',  points: 15 },
 ]
@@ -269,7 +270,103 @@ These were checked against the code and on Node 22, and they are part of the des
 - **Claim.** The draft review page shows the owner's email, so a Draft is reused only when the same browser holds a signed `gc_<id>` cookie set at claim time; any other visitor gets a new Draft. Fields go through `validateFields(fields, categories)` as `/rise/manual` does; hours are `{ monday: '…' }` style or left out; `website` is not a listing field and is dropped; the Draft's provider is `'grader'`, added to the admin page's provider labels.
 - **Name matching.** Match on normalized text padded with spaces, so "ace plumbing" does not match "space plumbing". `shortName` returns null when every remaining word is a service, city, state or generic word (for example "roofing"). The domain is matched in normalized form ("billragan com"). `isNamed` also returns the business's `position` in the extracted list when it has one.
 - **Fix kit.** The summary has no minimum length. The title may hard-cut a single word longer than 60, and lengths count code points.
-- **Smaller points.** Store `extraAiStartedAt` before the extra questions start, so repeated views cannot start them twice. Call `notifyLead` only when it exists, inside try/catch with a timeout. Serve `status.json` for running Grades from memory. Add grader leads (kept 90 days) to `/privacy`. Robots groups naming the same agent are merged. Text-based Checks are `one-headline`, `hours-shown`, `address-shown` and `call-button`. The wording ban test uses `/\bYP\b/`, since a plain substring check matches `<!DOCTYPE`.
+- **Smaller points.** Store `extraAiStartedAt` before the extra questions start, so repeated views cannot start them twice. Call `notifyLead` only when it exists, inside try/catch with a timeout. Serve `status.json` for running Grades from memory. Add grader leads (kept 90 days) to `/privacy`. Robots groups naming the same agent are merged. Text-based Checks are `one-headline`, `hours-shown`, `address-shown`, `call-button` and `reviews-visible`. The wording ban test uses `/\bYP\b/`, since a plain substring check matches `<!DOCTYPE`.
+
+## Owner-approved features (Nov 18)
+
+Requirements 18, 19 and 20. Both features are for every small business, not one client: a business that goes to its customers, and a business whose reviews live only inside Google. Nothing here changes a Grade made without the new checkbox, except that the report gains one Check (`reviews-visible`).
+
+### Feature A: No storefront (Requirement 18)
+
+**Form and input.** `grade-html.js` `gradeFormPage` gains one checkbox after the website field: `<input type="checkbox" id="g-nostorefront" name="noStorefront" value="1">` with the label "We go to our customers (no storefront)" and, in the hint style, "Tick this if you travel to customers and don't show a street address." `routes/grade.js` normalizes `noStorefront` to `true` only when the value is exactly `'1'` (or `'on'`); the normalized input gets `noStorefront: true` only then, and no key otherwise. A 422 re-render keeps the box as typed; the failed page's "Start again" form carries it as a hidden field. The reuse `key` (Requirement 14.3) is unchanged: the AI answers do not depend on the box. The value is never logged (logs hold only the Grade_Id, step names, counts and timings).
+
+**The check.** `address-shown` keeps its id, group and points. `CHECKS` entries may carry `serviceArea: { label, passText, failText, fix }`. `checkById(id, input)` (input optional) returns the entry with that variant merged in when `input.noStorefront` is true; every place that shows a label, detail or fix (report rows, "Fix these first", full report) passes the Grade's input. Variant text:
+
+- label: "Service area on your home page"
+- passText: "Your home page says what area you serve."
+- failText: "We found no service area on your home page."
+- fix: "Add a line to your home page that names the area you serve, like \"Serving Tallahassee and nearby areas\"." (under 160 characters)
+
+`runWebsiteChecks({ facts, robots, llms, input })` already receives `input`; with `input.noStorefront` it judges `address-shown` with `SERVICE_AREA_PATTERN.test(facts.text)` or `Boolean(facts.jsonLd.business?.areaServed)`, and otherwise as today (`STREET_PATTERN`). It stays a text-based Check (`not_checked` when `scriptBuilt`, "No website given" and "We couldn't reach your website." as today).
+
+`SERVICE_AREA_PATTERN` is built per Grade from the city (normalized, case-insensitive) and exported from `page-facts.js` as `serviceAreaPattern(city)`. It matches any of:
+
+- `service area` or `service areas`;
+- `areas? we serve`, `we serve`, `we proudly serve`;
+- `serving` followed within 80 characters by the city name or one of `area`, `areas`, `county`, `counties`, `surrounding`, `nearby`;
+- the city name followed by `and (the )?(surrounding|nearby|neighboring) (areas?|communities|towns|cities|counties)`.
+
+A bare "serving biscuits" does not match. Unticked Grades never use this pattern (the restaurant fixture contains "serving" and must keep its result).
+
+**Business label reading.** `readPageFacts` adds `areaServed` (text) to the first business node: a string, an object with `name`, or an array of those, joined with ", ", cut to 120 characters; empty string when absent. The key is added to the node object only; existing assertions on `name`, `telephone` and `address` are unaffected.
+
+**Preview.** `previewCard(grade)`: when `grade.input.noStorefront`, the address line is `<p>Serves the <city> area</p>` (escaped) and the "Add your address" blank is never shown, even when `found.address` is set. Otherwise unchanged.
+
+**Fix kit.** `jsonLdBlock(found)` gains `found.noStorefront`. When true: `areaServed` is `"<City>, <ST>"` (city alone when the state is empty), and `address` is left out entirely. Otherwise unchanged (`areaServed: city`, address as today). `grade-html.js` passes `noStorefront` from the Grade into the kit. The summary and llms draft never print an address, so they do not change; the summary's "Serving <City> and nearby areas." already fits.
+
+**Claim.** `grader.claim(id)` builds the Draft fields; when `grade.input.noStorefront`: `address: ''` and `serviceArea: \`${city} and nearby areas\``, passed through `validateFields` as today. `address` is optional and `serviceArea` is non-empty, so neither is in `missingFields`. In the unticked case the existing values stay (`serviceArea: city`, `address: found.address`).
+
+**Listing pages.** Checked in the existing code: `html.js` `listingDetail` already shows "City" in place of "Address" when `listing.address` is empty and always shows "Service area"; `schema.js` already leaves out `streetAddress` and keeps `addressLocality`, `addressRegion` and `areaServed` for a listing with no address (`test/schema-rich.test.js` covers it). So no change to those files; one example test renders a claimed no-storefront Draft's listing and checks both.
+
+### Feature B: Reviews AI can see (Requirement 19)
+
+**Page reading.** `readPageFacts` gains:
+
+- `reviewLinks`: the `href` of each `<a>` (after trimming, `https` only) that passes `reviewsLinkHost(href)` (below); at most 5, in page order.
+- `jsonLd.business.hasReviewData`: true when the first business node has a non-empty `aggregateRating` or `review` value.
+
+`REVIEW_TEXT_PATTERN` (case-insensitive, on `facts.text`):
+
+- `\b(reviews|testimonials)\b`;
+- a rating: `\b[1-5](\.\d)?\s*(stars?|out of 5|\/\s?5)\b`, or `[★⭐]{3,}`;
+- a quoted comment with a name: a quote of 20 to 400 characters in straight or curly quotes, followed within 40 characters by a dash and a capitalized name (`"…" - Dana R.`, `“…” — Mike T., Mar 2026`).
+
+`reviews-visible` passes when `REVIEW_TEXT_PATTERN` matches, or `facts.reviewLinks.length > 0`, or `facts.jsonLd.business?.hasReviewData`. Otherwise it fails. It is text-based (`not_checked` when `scriptBuilt`). A page can have a review link and no readable text; that still passes, since AI can follow the link.
+
+Fail detail: "We found no customer reviews on your home page. AI assistants often can't see reviews that are only inside Google." Pass detail: "Your home page shows customer reviews that AI can read." Fix (147 characters): "Put 3 or more of your real customer reviews on your home page, with each customer's first name and the date, and add a link to your Google reviews." The fix kit is unchanged by this Check: it adds no review text and no `aggregateRating` or `review` to the business label, so nothing is ever invented.
+
+**Point split for Customer basics** (the group stays 15, the Checks stay 100, and the points available for a readable Grade stay 85 before `google-profile`):
+
+| Check | Old | New | Why |
+|---|---|---|---|
+| `tap-to-call` | 5 | 4 | gives up 1 point |
+| `hours-shown` | 4 | 3 | gives up 1 point |
+| `address-shown` | 3 | 3 | unchanged, so "same points as the address check" holds for the service-area mode |
+| `call-button` | 3 | 2 | gives up 1 point |
+| `reviews-visible` | none | 3 | the new Check takes the 3 points the others gave up |
+
+Three Checks give up one point each rather than one Check giving up three, so no single basic is cut by more than a quarter. A Grade that passes all five still earns 15.
+
+**Old Grades.** A stored Grade has no `reviews-visible` result and keeps its stored `score`. The report builds its Check rows from stored results, so the new row simply is not there until a Recheck adds it; code that looks up a Check by id must tolerate a missing result. A Recheck replaces the website results and Score as usual.
+
+### Reviews link on the listing (Requirement 20)
+
+**One validator.** `reviewsLinkHost(url)` in a small shared helper (`server/lib/listing-fields.js`, exported) returns `'google' | 'yelp' | 'facebook' | 'nextdoor'` or `''`. It parses with `new URL()`; requires `protocol === 'https:'`, empty `username`, `password` and `port`, a total length of 300 or fewer, and a host (after removing a leading `www.` or `m.`) of: `google.com` with pathname starting `/maps`; `g.page`; `maps.app.goo.gl`; `search.google.com` with pathname starting `/local`; `yelp.com` with pathname starting `/biz`; `facebook.com`; `nextdoor.com`. Both `page-facts.js` (for `reviewLinks`) and `validateFields` use it, so a link found on a page and a link typed by an owner are judged the same way.
+
+**Listing field.** `normalizeFields` keeps `reviewsLink` only when `reviewsLinkHost` accepts it; the key is added to the result only when it has a value. This keeps every existing assertion on the field set valid (`test/listing-fields.test.js` allows only its model keys and passes random input that never contains this one), keeps `validateFields` idempotent, and keeps `{}` drafts as `{}`. The field is never in `missingFields`. `fieldsFromForm` in `routes/rise.js` and the draft form in `rise-html.js` gain a "Reviews link (optional)" input with the hint "A link to your reviews on Google, Yelp, Facebook or Nextdoor." When the submitted value is not empty and was left out, the review page shows "We left that link out. It must be an https link to your reviews on Google, Yelp, Facebook or Nextdoor." The admin Draft page adds a "Reviews link" row only when present.
+
+**Listing page.** `listingDetail` in `html.js` adds, after the Service area row and only when `listing.reviewsLink` passes `reviewsLinkHost` again (defense in depth for hand-edited data): `<dt>Reviews</dt><dd><a href="…" rel="noopener noreferrer">See our reviews on Google</a></dd>`, with the label from the host and everything escaped. No rating, no count, no review text. Listings without the field render byte-for-byte as today.
+
+**Claim.** `grader.claim(id)` sets `reviewsLink` to the first of the page's `reviewLinks` that passes the validator. The scan stores it as `found.reviewsLink` (empty string when none), so the claim does not need the page again; `foundOf` returns `''` for old Grades. It is never read from an AI answer.
+
+### Numbers that change in existing tests (and why)
+
+Nothing else moves. Each line is a place where a new requirement changes a number or an input, and the reason:
+
+| Where | Old | New | Why |
+|---|---|---|---|
+| `test/grade-checks.test.js`, "the checks add up to 100 points…": `CHECKS.length` | 14 | 15 | one new Check (`reviews-visible`) |
+| same test: size of the id set | 14 | 15 | same |
+| same test: points total | 100 | 100 | unchanged: the five basics still total 15 |
+| `test/grade-checks.test.js`, "a well set up site passes every website check": `Object.keys(r).length` | 13 | 14 | one new website Check |
+| same test: the `goodHtml` input | no review signal | adds one quoted comment with a name and a link to a Google reviews page | the test says every website Check passes, so its page must show reviews; no other line of the page changes |
+| `test/fixtures/grade/expected.json`, every fixture: `results` | 13 entries | adds `"reviews-visible"` | one new Check |
+| fixture `restaurant`: `score` / `failed` / `counted` | 42 / 5 / 13 | 39 / 6 / 14 | earned 36 becomes 33 (basics now 4 + 3 + 3 + 2 = 12, was 15) and `reviews-visible` fails (no review text on the page, searched); 33 of 85 rounds to 39 |
+| fixture `roofer`: `score` / `failed` / `counted` | 21 / 8 / 13 | 19 / 9 / 14 | earned 18 becomes 16 (`hours-shown` 3, `call-button` 2) and `reviews-visible` fails; 16 of 85 rounds to 19 |
+| fixture `largeCompany`: `score` / `failed` / `counted` | 65 / 1 / 13 | 65 / 1 / 14 | `large-company.html` gains a short review block (three quoted customer comments with first names and dates, and a link to a Google reviews page), so `reviews-visible` passes and earned stays 55 of 85; only `counted` changes |
+| `test/fixtures/grade/large-company.html` | no reviews | adds the review block | as above; it adds no `<h1>`, `<img>`, `tel:` link or JSON-LD block and no day-and-time or street-address wording, so every other expected fact keeps its value |
+
+Checked and unchanged: `test/grade-score.test.js` (it uses `ai-named` 30, `business-labeled` 8 and `info-sheet` 4, and a point total of 100); `test/grade-flow.test.js` "a stub AI that names the business" (the large-company fixture passes every Check, so the Score is still 100); `test/grade-lead.test.js` and `test/grade-review-fixes.test.js` (they read scores from the fixtures or the stored Grade); `test/design.test.js` (counts passed in); the roofer and restaurant fixture HTML files (no review signal, confirmed by searching them for "review", "testimonial", "rating", "stars" and review-site links; the restaurant page contains the word "serving", which only matters when the box is ticked).
 
 ## Data Models
 
@@ -278,11 +375,11 @@ These were checked against the code and on Node 22, and they are part of the des
 {
   id: 'q8Zr0…22 chars',
   status: 'running' | 'done' | 'failed',
-  input: { name, city, state, service, website: 'https://…/' | null },
+  input: { name, city, state, service, website: 'https://…/' | null, noStorefront?: true },   // noStorefront only when ticked
   key: 'normalized name|city|state|service|registered domain or -',   // reuse lookup
   createdAt: ISO, finishedAt: ISO | null,
   steps: [{ name, state: 'done' | 'skipped' | 'failed', ms }],
-  facts: { title, metaDescription, ogImage: boolean, h1s: [...], phone, hours, address, jsonLdTypes: [...] } | null,
+  facts: { title, metaDescription, ogImage: boolean, h1s: [...], phone, hours, address, reviewsLink, jsonLdTypes: [...] } | null,   // reviewsLink: '' when the page has no Review_Site link; current Grades keep it in `found`, like phone, hours and address
   results: [{ id, result: 'pass' | 'fail' | 'not_checked', detail, earned? }],
   ai: [{ prompt, provider, model, webSearch, answer, named, competitors: [...], ms, at, reusedFrom? }],
   score: { score, earned, available, failed, counted }, previousScore: number | null,

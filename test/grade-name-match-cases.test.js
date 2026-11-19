@@ -590,6 +590,140 @@ const MORE_CASES = [
     ),
     named: true, position: 2, competitors: ['Hiller Plumbing'],
   },
+  // V41: advice-verb names with other business endings. V43: "and" and "&" are the same word.
+  {
+    id: 'E1', name: "Joe's Plumbing", service: 'plumbers',
+    answer: lines(
+      '1. **Ask Andy Plumbing Services** - repairs',
+      '2. **Hiller Plumbing** - big jobs',
+      "3. **Joe's Plumbing** - small shop",
+    ),
+    named: true, position: 3, competitors: ['Ask Andy Plumbing Services', 'Hiller Plumbing'],
+  },
+  {
+    id: 'E2', name: 'Parlour', service: 'hair salons',
+    answer: lines(
+      '1. **Find Your Glow Spa** - facials and cuts',
+      '2. **Parlour** - color specialists',
+      '3. **Hair Bar Nashville** - blowouts',
+    ),
+    named: true, position: 2, competitors: ['Find Your Glow Spa', 'Hair Bar Nashville'],
+  },
+  {
+    id: 'E3', name: 'Volunteer Roofing', service: 'roofers',
+    answer: lines(
+      '1. Call Dave Roofing Solutions - storm repair',
+      '2. Music City Roofing - metal roofs',
+      '3. Volunteer Roofing - inspections',
+    ),
+    named: true, position: 3, competitors: ['Call Dave Roofing Solutions', 'Music City Roofing'],
+  },
+  {
+    id: 'E4', name: "Joe's Plumbing", service: 'plumbers',
+    answer: lines(
+      '- Check Mate Plumbing Group: drains',
+      '- Hiller Plumbing: big jobs',
+      "- Joe's Plumbing: small shop",
+    ),
+    named: true, position: 3, competitors: ['Check Mate Plumbing Group', 'Hiller Plumbing'],
+  },
+  {
+    id: 'E5', name: 'Husk', service: 'restaurants',
+    answer: lines(
+      '1. **Book It Garage** - burgers in an old garage',
+      '2. **Husk** - Southern',
+    ),
+    named: true, position: 2, competitors: ['Book It Garage'],
+  },
+  {
+    id: 'G1', name: "Joe's Plumbing", service: 'plumbers',
+    answer: lines(
+      '1. **Hiller Plumbing** - big jobs',
+      "2. **Joe's Plumbing** - small shop",
+      '',
+      'How to choose:',
+      '1. **Compare Services** - not every shop does gas lines',
+      '2. **Get Multiple Quotes** - at least two',
+      '3. **Ask About Warranty Services** - labor and parts',
+      '4. **Check Licensing** - Tennessee license',
+    ),
+    named: true, position: 2, competitors: ['Hiller Plumbing'],
+  },
+  {
+    id: 'G2', name: 'Music City Roofing', service: 'roofers',
+    answer: lines(
+      'Here are three roofers:',
+      '1. **Music City Roofing**',
+      '2. **Volunteer Roofing**',
+      '3. **Mr. Roof**',
+      '',
+      '**Book Early For Spring Services**',
+      '**Ask For References From The Company**',
+      '**Read Reviews On Google**',
+    ),
+    named: true, position: 1, competitors: ['Volunteer Roofing', 'Mr. Roof'],
+  },
+  {
+    id: 'G3', name: 'Parlour', service: 'hair salons',
+    answer: lines(
+      '- **Parlour:** color',
+      '- **Kinship:** cuts',
+      '- **Book Your Consultation:** most salons offer one free',
+      '- **Ask About Studio Policies:** cancellations vary',
+    ),
+    named: true, position: 1, competitors: ['Kinship'],
+  },
+  {
+    id: 'C1', name: 'Capital city window and pressure cleaning', service: 'Window cleaning and pressure cleaning',
+    answer: lines(
+      "This is my top 5 for businesses that do both window cleaning and pressure washing in Tallahassee. I built it from what's offered and from Yelp and directory listings, not from my own testing. Most of these companies have only a few reviews, so treat it as a shortlist and not a definitive ranking.",
+      '',
+      "1. **Joe Pogo's Window Cleaning.** Joe Pogorzelski has provided residential and commercial pressure washing and window cleaning in Tallahassee for more than 16 years. It has a 5.0 rating on Yelp from 3 reviews. That long track record is why it's first.",
+      '',
+      "2. **Cleanscapes Exterior Cleaning.** It specializes in pressure washing, soft washing, window cleaning and gutter cleaning. It is licensed and insured and has a 4.4 rating from 5 reviews on Yelp. That's the largest review base among the highly rated options.",
+      '',
+      "3. **Capital City Window & Pressure Cleaning.** It's locally owned and operated and says it will beat or match prices. It appears near the top of Yelp's window-washing and pressure-washing lists. I couldn't see its star rating in the results.",
+      '',
+      "4. **College Cleaning Crew.** It leads Yelp's window-washing and pressure-washing lists. Its Yelp rating is 4.3 from 6 reviews. It's a good choice if you want an affordable option.",
+      '',
+      '5. **Premier Pressure Washing & Window Cleaning Services.** It offers house washing, roof cleaning, window cleaning and driveway cleaning and serves Tallahassee, Havana, Midway and Quincy. I found little independent review data for it, so check its reviews yourself.',
+      '',
+      '**Other names to check:**',
+      '- Get It Done Window Washing has a 5.0 rating from 1 review.',
+    ),
+    named: true, position: 3,
+    competitors: [
+      "Joe Pogo's Window Cleaning", 'Cleanscapes Exterior Cleaning', 'College Cleaning Crew',
+      'Premier Pressure Washing & Window Cleaning Services', 'Get It Done Window Washing',
+    ],
+  },
+  {
+    id: 'C2', name: 'Capital city window and pressure cleaning', service: 'Window cleaning and pressure cleaning',
+    answer: "Good options include Joe Pogo's Window Cleaning and Capital City Window & Pressure Cleaning, which both do windows and pressure washing.",
+    named: true, position: null, competitors: [],
+  },
+  {
+    id: 'C3', name: 'Smith and Sons Plumbing', service: 'plumbers',
+    answer: 'For drains, try Smith & Sons Plumbing. They answer the phone fast.',
+    named: true, position: null, competitors: [],
+  },
+  {
+    id: 'C4', name: 'Smith & Sons Plumbing', service: 'plumbers',
+    answer: 'For drains, try Smith and Sons Plumbing. They answer the phone fast.',
+    named: true, position: null, competitors: [],
+  },
+  {
+    id: 'G4', name: "Joe's Plumbing", service: 'plumbers',
+    answer: lines(
+      '1. **Hiller Plumbing.** Big jobs.',
+      "2. **Joe's Plumbing.** Small shop.",
+      '',
+      '**Before you call:**',
+      '- Get a written estimate before work starts.',
+      '- Check that the license is current.',
+    ),
+    named: true, position: 2, competitors: ['Hiller Plumbing'],
+  },
 ];
 
 for (const c of MORE_CASES) {
