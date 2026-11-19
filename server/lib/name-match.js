@@ -40,7 +40,11 @@ const HEADING_WORDS = new Set([
 ]);
 
 // "Pros" and "Cons" are headings only when they stand alone; "Plumbing Pros of Nashville" is a business.
-const HEADING_PHRASES = new Set(['pro', 'pros', 'con', 'cons', 'pros and cons', 'pros cons', 'pros vs cons']);
+const HEADING_PHRASES = new Set([
+  'pro', 'pros', 'con', 'cons', 'pros and cons', 'pros cons', 'pros vs cons',
+  'bottom line', 'the bottom line', 'final thoughts', 'key takeaways', 'quick tips', 'in summary', 'final verdict',
+  'things to consider', 'how to choose', 'how to hire',
+]);
 
 // Lines that are only an offer, never a business name. Matched as a whole line (normalized), so a
 // real name that merely contains these words ("Family Owned Roofing & Repair", "The Local") stays.
@@ -89,6 +93,22 @@ const PLURAL_GROUP_WORDS = new Set([
   'companies', 'businesses', 'shops', 'favorites', 'recommendations',
 ]);
 
+// First words of advice lines ("Check recent reviews", "Ask for a written estimate").
+const ADVICE_VERBS = new Set([
+  'check', 'ask', 'get', 'read', 'call', 'confirm', 'compare', 'look', 'verify', 'make', 'choose', 'find', 'see',
+  'try', 'use', 'avoid', 'expect', 'request', 'hire', 'contact', 'review', 'consider', 'remember', 'keep', 'be',
+  'do', 'beware', 'watch', 'schedule', 'book', 'research', 'search', 'visit',
+]);
+
+// Words that mark a tips or advice section ("Tips before you hire:", "Things to consider"): the lines under
+// it are advice, never businesses.
+const ADVICE_WORDS = new Set([
+  'tips', 'tip', 'advice', 'consider', 'considerations', 'hire', 'hiring', 'choose', 'choosing', 'checklist',
+  'questions', 'before', 'caveats', 'notes', 'warnings', 'reminders', 'things', 'how',
+]);
+
+const isAdviceHeading = text => words(text).some(w => ADVICE_WORDS.has(w));
+
 const hasGroupWord = text => words(text).some(w => PLURAL_GROUP_WORDS.has(w));
 
 const isDetailLabel = text => DETAIL_LABELS.has(words(text).join(' '));
@@ -105,6 +125,8 @@ function splitLead(content) {
 /** The Title Case name a plain sentence starts with ("Music City Roofing, which handles storm repairs."), or ''. */
 function sentenceLead(content) {
   const tokens = stripMarkdown(content).trim().split(/\s+/);
+  // A sentence that starts with a verb is advice ("Confirm a Tennessee license"), not a business.
+  if (ADVICE_VERBS.has((tokens[0] ?? '').toLowerCase().replace(/[^a-z]/g, ''))) return '';
   const out = [];
   let lastCap = -1;
   let capped = 0;
@@ -141,7 +163,6 @@ function ownLead(text, own) {
  */
 function namesFromBullet(content, own) {
   const c = String(content).trim();
-  if (/^\*\*[^*]*:\*\*\s*\S/.test(c)) return []; // "**Best for:** emergencies"
   const { lead, rest, sep } = splitLead(c);
   if (rest && isDetailLabel(lead)) return [];
   const names = fromListContent(c, false);
@@ -343,7 +364,10 @@ function trimName(s) {
 /** No heading word, review-site word, or lone "Pros" / "Cons". */
 function notAHeading(text) {
   const list = words(text);
-  if (HEADING_PHRASES.has(list.join(' '))) return false;
+  const joined = list.join(' ');
+  if (HEADING_PHRASES.has(joined)) return false;
+  // Section headings such as "Things To Consider", "How To Choose", "Bottom Line".
+  if (/^(how to|things to|what to|questions to|tips for|tips on|ways to|steps to|why choose|when to) /.test(joined)) return false;
   return !list.some(w => HEADING_WORDS.has(w) || BLOCK_WORDS.has(w));
 }
 
@@ -370,8 +394,12 @@ function boldSpans(line) {
   const out = [];
   for (const m of line.matchAll(/\*\*([^*]+?)\*\*/g)) {
     const after = line.slice(m.index + m[0].length);
-    if (/:\s*$/.test(m[1]) && /^\s*\S/.test(after)) continue; // "**Label:** text"
     const t = trimName(stripMarkdown(m[1]));
+    // "**Name:** text" is a name unless it is a detail label; even a one-word name counts here.
+    if (/:\s*$/.test(m[1]) && /^\s*\S/.test(after)) {
+      if (!isDetailLabel(t) && validName(t, 1)) out.push(t);
+      continue;
+    }
     if (validName(t, 2)) out.push(t);
   }
   return out;
@@ -394,7 +422,13 @@ function looseName(text) {
 /** Names from the text after a list marker. `loose` is true for an unindented numbered line. */
 function fromListContent(content, loose = false) {
   const c = content.trim();
-  if (/^\*\*[^*]*:\*\*\s*\S/.test(c)) return [];
+  // "**Name:** description": the bold text before the colon is the name, unless it is a detail label
+  // ("**Best for:** emergencies", "**Price:** $$").
+  const labeled = /^\*\*([^*]*?):\*\*\s*\S/.exec(c);
+  if (labeled) {
+    const t = trimName(stripMarkdown(labeled[1]));
+    return !isDetailLabel(t) && validName(t, 1) ? [t] : [];
+  }
   const b = c.match(/^\*\*([^*]+)\*\*/);
   if (b) {
     const bold = trimName(stripMarkdown(b[1]));
@@ -418,13 +452,31 @@ function isTableSeparator(line) {
   return typeof line === 'string' && /^[\s|:-]+$/.test(line) && line.includes('-');
 }
 
-function fromTableRow(line, next) {
+function fromTableRow(line, next, oneWordOk = false) {
   if (isTableSeparator(line) || isTableSeparator(next)) return [];
   const cells = line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim());
   const cell = cells.find(c => /\p{L}/u.test(c));
   if (!cell) return [];
   const t = trimName(cutAtSeparator(stripMarkdown(cell)));
-  return validName(t, 2) ? [t] : [];
+  return validName(t, oneWordOk ? 1 : 2) ? [t] : [];
+}
+
+// Table columns that hold business names ("| Restaurant | Why go |"): a one-word cell there is a name.
+const NAME_COLUMNS = new Set([
+  'company', 'companies', 'business', 'businesses', 'name', 'restaurant', 'restaurants', 'salon', 'salons',
+  'shop', 'shops', 'plumber', 'plumbers', 'roofer', 'roofers', 'contractor', 'contractors', 'provider',
+  'providers', 'firm', 'spot', 'place', 'listing',
+]);
+
+/** True when the table that row `i` belongs to has a name column (read from its header row). */
+function tableNamesMayBeOneWord(lines, i) {
+  let k = i;
+  while (k > 0 && /^\s*\|/.test(lines[k - 1])) k -= 1;
+  // `k` is the header row when the next row is the separator.
+  if (!isTableSeparator(lines[k + 1])) return false;
+  const cells = lines[k].trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim());
+  const first = cells.find(c => /\p{L}/u.test(c));
+  return Boolean(first) && NAME_COLUMNS.has(words(stripMarkdown(first)).join(' '));
 }
 
 /**
@@ -465,10 +517,12 @@ function extractEntries(answer, prep) {
 
   let underBusiness = false; // bullets right after a business heading are its details
   let nestedDetails = false; // indented bullets right after a numbered name are its details
+  let adviceSection = false; // bullets under a tips or advice heading are advice, never names
 
   const heading = hd => {
     underBusiness = false;
     nestedDetails = false;
+    adviceSection = false;
     if (hd.names.length === 0) return;
     let group;
     if (mode === 'heading') group = false;
@@ -484,7 +538,8 @@ function extractEntries(answer, prep) {
     if (/^\s*\|/.test(line)) {
       underBusiness = false;
       nestedDetails = false;
-      push(fromTableRow(line, lines[i + 1]));
+      adviceSection = false;
+      push(fromTableRow(line, lines[i + 1], tableNamesMayBeOneWord(lines, i)));
       continue;
     }
     const hd = headAt.get(i);
@@ -497,6 +552,7 @@ function extractEntries(answer, prep) {
       // An unnumbered heading ("## Best Overall", "### Tips") is never a name; a bold one ("### **Bob Plumbing:**") can be.
       underBusiness = false;
       nestedDetails = false;
+      adviceSection = isAdviceHeading(h[1]);
       const bold = h[1].trim().match(STANDALONE_BOLD_RE);
       if (bold) push(fromStandaloneBold(bold[1]));
       continue;
@@ -507,7 +563,7 @@ function extractEntries(answer, prep) {
       const indented = li[1] !== '';
       if (bullet) {
         const names = namesFromBullet(li[3], own);
-        if (underBusiness || (nestedDetails && indented)) {
+        if (underBusiness || adviceSection || (nestedDetails && indented)) {
           push(names.filter(own)); // a detail of the name above; only the business itself can still count
           continue;
         }
@@ -533,6 +589,7 @@ function extractEntries(answer, prep) {
     if (sb) {
       underBusiness = false;
       nestedDetails = false;
+      adviceSection = isAdviceHeading(sb[1]);
       push(fromStandaloneBold(sb[1]));
       continue;
     }

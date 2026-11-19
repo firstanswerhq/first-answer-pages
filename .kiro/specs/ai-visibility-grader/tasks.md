@@ -299,3 +299,7 @@ From `review-2026-11-18.md` (two independent reviews of the rebuild; security cl
 ### H. Round 7 (`review-2026-11-18-round7.md`)
 
 - [x] V35. `name-match.js` passes a fixed table of 23 realistic AI answers (P1 to P6, R1 to R3, S1 to S7, F1 to F5, H1, H2): new test file `test/grade-name-match-cases.test.js` holds the table; headings are decided once per answer (if the business is a numbered heading, headings are businesses and bullets are details; if it is a bullet under headings, headings are groups); "Name: description" bullets give the name before the separator unless it is a label from a fixed list; indented bullets under a numbered name are details; plain-sentence bullets give their leading name; the business's own name is never filtered out
+
+### I. Round 8 (`review-2026-11-18-round8.md`)
+
+- [x] V36. "**Name:** description" lines give the bold name (dropped only when the bold text is a detail label); also one-word names in `**Name:**` prose lines and in a table's name column; section headings such as "Things To Consider" and "Bottom Line" are never names; bullets under a tips or advice heading are advice, not names; sentences that start with an advice verb give no name; the 11 new cases (Y1 to Y3, X1 to X7, Z1) added to `test/grade-name-match-cases.test.js` beside the 23 existing ones

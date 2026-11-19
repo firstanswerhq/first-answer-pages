@@ -282,3 +282,150 @@ for (const c of CASES) {
     assert.equal(r.total, c.names.length, 'total names');
   });
 }
+
+// ---- Review round 8 (V36): "**Name:** description" lines and related shapes -------------------
+// Here each case states `named`, `position` (a number or null) and `competitors` (in order) directly.
+
+const MORE_CASES = [
+  {
+    id: 'Y1', name: "Joe's Plumbing", service: 'plumbers',
+    answer: lines(
+      '1. **Hiller Plumbing:** The biggest name in town.',
+      "2. **Joe's Plumbing:** Small and honest.",
+      '3. **Radiant Plumbing & Air:** Upfront pricing.',
+    ),
+    named: true, position: 2, competitors: ['Hiller Plumbing', 'Radiant Plumbing & Air'],
+  },
+  {
+    id: 'Y2', name: 'Parlour', service: 'hair salons',
+    answer: lines(
+      '- **Parlour:** Color specialists.',
+      '- **Hair Bar Nashville:** Blowouts.',
+      '- **Fox & Jane:** Modern cuts.',
+    ),
+    named: true, position: 1, competitors: ['Hair Bar Nashville', 'Fox & Jane'],
+  },
+  {
+    id: 'Y3', name: "Joe's Plumbing", service: 'plumbers',
+    answer: lines(
+      '1. **Hiller Plumbing:** The biggest name in town.',
+      '2. **Radiant Plumbing & Air:** Upfront pricing.',
+    ),
+    named: false, position: null, competitors: ['Hiller Plumbing', 'Radiant Plumbing & Air'],
+  },
+  {
+    id: 'X1', name: 'Volunteer Roofing', service: 'roofers',
+    answer: lines(
+      '1. Music City Roofing \u2014 storm and hail repair, 20+ years',
+      '2. Volunteer Roofing \u2014 metal roofs and inspections',
+      '3. Mr. Roof \u2014 fast replacements',
+      '4. Roof Life of Nashville \u2014 family run',
+    ),
+    named: true, position: 2, competitors: ['Music City Roofing', 'Mr. Roof', 'Roof Life of Nashville'],
+  },
+  {
+    id: 'X2', name: 'Parlour', service: 'hair salons',
+    answer: lines(
+      '- [Parlour](https://parlournashville.com)',
+      '- [Hair Bar Nashville](https://hairbar.com)',
+      '- [Fox & Jane](https://foxandjane.com)',
+      '- [Salon Lofts](https://salonlofts.com)',
+    ),
+    named: true, position: 1, competitors: ['Hair Bar Nashville', 'Fox & Jane', 'Salon Lofts'],
+  },
+  {
+    id: 'X3', name: "Joe's Plumbing", service: 'plumbers',
+    answer: lines(
+      'Finding a good plumber in Nashville comes down to reviews, licensing and how fast they answer. Based on what I found, here are five that stand out.',
+      '',
+      '1. **Hiller Plumbing, Heating, Cooling & Electrical** \u2014 The biggest name in Middle Tennessee, with 24/7 service.',
+      '2. **Radiant Plumbing & Air Conditioning** \u2014 Upfront pricing and strong reviews.',
+      "3. **Joe's Plumbing** \u2014 A smaller, family-run shop known for honest quotes.",
+      '4. **Benjamin Franklin Plumbing** \u2014 Punctual, with an on-time promise.',
+      '5. **Mr. Rooter Plumbing of Nashville** \u2014 Good for drain and sewer work.',
+      '',
+      '**Tips before you hire:**',
+      '- Confirm a Tennessee plumbing license.',
+      '- Ask for a written estimate.',
+      '- Check recent Google and Yelp reviews.',
+      '',
+      'Prices and availability change, so call ahead.',
+    ),
+    named: true,
+    position: 3,
+    competitors: [
+      'Hiller Plumbing, Heating, Cooling & Electrical',
+      'Radiant Plumbing & Air Conditioning',
+      'Benjamin Franklin Plumbing',
+      'Mr. Rooter Plumbing of Nashville',
+    ],
+  },
+  {
+    id: 'X4', name: "Joe's Plumbing", service: 'plumbers',
+    answer: lines(
+      'Here are some well-reviewed plumbers in Nashville:',
+      '',
+      '1. **Hiller Plumbing**',
+      '2. **Radiant Plumbing & Air**',
+      '3. **Mr. Rooter Plumbing**',
+      '',
+      "Smaller shops like Joe's Plumbing also get good reviews for routine repairs.",
+    ),
+    named: true, position: null, competitors: ['Hiller Plumbing', 'Radiant Plumbing & Air', 'Mr. Rooter Plumbing'],
+  },
+  {
+    id: 'X5', name: 'Bastion', service: 'restaurants',
+    answer: lines(
+      '| Restaurant | Why go |',
+      '|---|---|',
+      '| The Catbird Seat | Tasting menu |',
+      '| Bastion | Big bar nachos |',
+      '| Rolf and Daughters | Pasta |',
+      '| Husk | Southern cooking |',
+    ),
+    named: true, position: 2, competitors: ['The Catbird Seat', 'Rolf and Daughters', 'Husk'],
+  },
+  {
+    id: 'X6', name: 'Parlour', service: 'hair salons',
+    answer: lines(
+      '**Parlour:** Color specialists in 12 South.',
+      '**Hair Bar Nashville:** Blowouts.',
+      '**Fox & Jane:** Modern cuts.',
+    ),
+    named: true, position: 1, competitors: ['Hair Bar Nashville', 'Fox & Jane'],
+  },
+  {
+    id: 'X7', name: "Joe's Plumbing", service: 'plumbers',
+    answer: lines(
+      '### 1. Hiller Plumbing',
+      '- 24/7 Emergency Service',
+      '- Known For: Big jobs',
+      '### 2. Radiant Plumbing & Air',
+      '- Upfront Pricing',
+      '### 3. Benjamin Franklin Plumbing',
+      '- On-Time Promise',
+    ),
+    named: false, position: null, competitors: ['Hiller Plumbing', 'Radiant Plumbing & Air', 'Benjamin Franklin Plumbing'],
+  },
+  {
+    id: 'Z1', name: "Joe's Plumbing", service: 'plumbers',
+    answer: lines(
+      '### 1. Hiller Plumbing',
+      'Big and fast.',
+      '### 2. Things To Consider',
+      'Check licenses.',
+      '### 3. Bottom Line',
+      'Call two shops.',
+    ),
+    named: false, position: null, competitors: ['Hiller Plumbing'],
+  },
+];
+
+for (const c of MORE_CASES) {
+  test(`name-match table ${c.id}: ${c.name} (${c.service})`, () => {
+    const r = analyzeAnswer(c.answer, { name: c.name, city: 'Nashville', state: 'TN', service: c.service });
+    assert.equal(r.named, c.named, 'named');
+    assert.equal(r.position, c.position, 'position');
+    assert.deepEqual(r.competitors, c.competitors, 'competitors in order');
+  });
+}
