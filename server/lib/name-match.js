@@ -309,8 +309,13 @@ function extractEntries(answer) {
   const lines = String(answer ?? '').split(/\r?\n/);
   const entries = [];
   const seen = new Set();
+  // True right after a numbered business heading ("### 2. Joes Plumbing"): bullets that follow are
+  // details of that business, not more businesses.
+  let underBusiness = false;
   const push = list => {
     for (const text of list) {
+      // A line that is only an offer ("Free Estimates", "24/7 Emergency Service") is never a business name.
+      if (detailOnly(text)) continue;
       const key = normalizeForMatch(text);
       if (!key || seen.has(key)) continue;
       seen.add(key);
@@ -321,6 +326,7 @@ function extractEntries(answer) {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     if (/^\s*\|/.test(line)) {
+      underBusiness = false;
       push(fromTableRow(line, lines[i + 1]));
       continue;
     }
@@ -329,20 +335,29 @@ function extractEntries(answer) {
       const rest = h[1].trim();
       const numbered = rest.match(/^\d+[.)]\s+(.*)$/);
       const bold = rest.match(STANDALONE_BOLD_RE);
-      if (numbered) push(fromListContent(numbered[1]));
-      else if (bold) push(fromStandaloneBold(bold[1]));
+      underBusiness = false;
+      if (numbered) {
+        const names = fromListContent(numbered[1]);
+        underBusiness = names.some(n => !detailOnly(n));
+        push(names);
+      } else if (bold) {
+        push(fromStandaloneBold(bold[1]));
+      }
       continue;
     }
     const li = line.match(LIST_RE);
     if (li) {
-      const names = fromListContent(li[3], li[1] === '' && /^\d/.test(li[2]));
-      // An indented line made only of offer words ("Free Estimates") is a detail, not a business.
-      push(li[1] === '' ? names : names.filter(n => !detailOnly(n)));
+      const bullet = /^[-*\u2022]/.test(li[2]);
+      if (underBusiness && bullet) continue; // a detail of the business heading above
+      if (!bullet) underBusiness = false;
+      push(fromListContent(li[3], li[1] === '' && !bullet));
       continue;
     }
     const sb = line.match(STANDALONE_BOLD_RE);
     if (sb) {
-      push(fromStandaloneBold(sb[1]));
+      const names = fromStandaloneBold(sb[1]);
+      underBusiness = names.some(n => !detailOnly(n)) && /^\s*\d+[.)]/.test(sb[1]);
+      push(names);
       continue;
     }
     if (line.includes('**')) push(boldSpans(line));

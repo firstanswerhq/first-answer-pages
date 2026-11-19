@@ -267,3 +267,8 @@ From `review-2026-11-18.md` (two independent reviews of the rebuild; security cl
 - [x] V19. Check titles are neutral names, not claims; plain words in details
 - [x] V20. Help for owners who are not computer people ("Not a computer person? ..." and the fix-kit intro)
 - [x] V21. Smaller layout points: "Score by area" heading with points; "Check again" after the fix kit under "Made some changes?"; hint lines in the small hint style; plain note (not error) with no website; 404 page keeps "Reports are deleted after 90 days."
+
+### C. Round 2 (`review-2026-11-18-round2.md`)
+
+- [x] V22. Re-reading a carried answer never takes away a mention: treat an answer of 4,000 or more characters as cut even when `answerCut` is missing (old Grades), and keep `named` true when the earlier read found it; a re-read may add a mention, never remove one
+- [x] V23. Competitor names under headings: bullets that sit under a numbered business heading (`### 2. Joes Plumbing`) are details of that business, not new names; a line that is only an offer ("Free Estimates", "Same Day Service", "24/7 Emergency Service") is not a business name, at the top level too

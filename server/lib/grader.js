@@ -917,11 +917,18 @@ export function createGrader({
   function rereadCarried(entries, input) {
     if (!nameChecker) return Promise.resolve(entries);
     return Promise.all(entries.map(async a => {
-      if (a.answerCut || a.nameCheck || a.nameCheckTried || a.provider === 'mock') return a;
+      // An answer stored at the 4,000-character cap was cut even if an older Grade did not say so.
+      const cutShort = a.answerCut || Array.from(String(a.answer ?? '')).length >= MAX_ANSWER_CODE_POINTS;
+      if (cutShort || a.nameCheck || a.nameCheckTried || a.provider === 'mock') return a;
       const read = await readAnswer(a.answer, input, a.provider);
-      const next = {
-        ...a, named: read.named, position: read.position, total: read.total, competitors: read.competitors,
-      };
+      const next = { ...a };
+      // A re-read may add a mention, never take one away: if the earlier read found the business and this
+      // one did not, keep the earlier result.
+      if (!(a.named && !read.named)) {
+        Object.assign(next, {
+          named: read.named, position: read.position, total: read.total, competitors: read.competitors,
+        });
+      }
       if (read.nameCheck) next.nameCheck = read.nameCheck;
       if (read.tried) next.nameCheckTried = true;
       return next;
