@@ -22,6 +22,8 @@ const SITE_KEY = 'site-key-ABC123';
 const SECRET = 'secret-key-XYZ789';
 const GOOD = 'good-token-111';
 const MESSAGE = "Please try again: we couldn't confirm you're a person.";
+// The page escapes apostrophes, so the message is compared the way it appears in the HTML.
+const escaped = text => text.replace(/'/g, '&#39;');
 const BLOCKER_LINE = 'If no box appears, turn off ad blockers or try another browser.';
 const SCRIPT = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
 const NOSCRIPT_LINE = "Turn on JavaScript to confirm you're a person.";
@@ -279,7 +281,7 @@ test('G2: a missing or bad token gives 422 with the message, keeps the entries, 
     const res = await startCheck(env, '203.0.113.5', extra, 'example.com');
     assert.equal(res.status, 422);
     const text = await res.text();
-    assert.ok(text.includes(MESSAGE));
+    assert.ok(text.includes(escaped(MESSAGE)));
     assert.ok(text.includes(BLOCKER_LINE));
     assert.ok(text.includes(`value="Shop ${service}"`), 'the entries are kept');
     assert.ok(text.includes('value="example.com"'));
@@ -362,7 +364,7 @@ for (const code of ['invalid-input-response', 'timeout-or-duplicate']) {
     const env = await startEnv({ turnstile });
     const res = await startCheck(env, '203.0.113.5', withToken(GOOD));
     assert.equal(res.status, 422);
-    assert.ok((await res.text()).includes(MESSAGE));
+    assert.ok((await res.text()).includes(escaped(MESSAGE)));
     assert.equal(env.counts.asked, 0);
   });
 }
