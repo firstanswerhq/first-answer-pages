@@ -23,6 +23,7 @@ import { createAssistantProvider, createExtraAssistants, createGeminiLive } from
 import { createNameCheck } from './lib/name-check.js';
 import { createIndexNow, indexNowOffReason } from './lib/indexnow.js';
 import { createSafeFetcher } from './lib/safe-fetch.js';
+import { createTurnstile } from './lib/turnstile.js';
 import { createGrader } from './lib/grader.js';
 import { createDraftStore } from './lib/drafts.js';
 import { createHomeRouter }     from './routes/home.js';
@@ -57,6 +58,7 @@ const systemClock = Object.freeze({ now: () => Date.now() });
  *   config?: object,
  *   newId?: () => string,
  *   safeFetcher?: { fetchText: Function },
+ *   turnstile?: { siteKey: string, verify: Function } | null,
  *   newGradeId?: () => string,
  *   a2a?: object,
  * }} [deps]
@@ -122,6 +124,10 @@ export function createApp(deps = {}) {
   }
   // Paid Verified stamp: on only when every provider key is set (tests pass their own).
   ctx.trust = deps.trust ?? createTrustProviders(config, { clock });
+  // The human check on the check form: null (off) unless both Turnstile keys are set. Tests pass a fake.
+  ctx.turnstile = deps.turnstile !== undefined
+    ? deps.turnstile
+    : createTurnstile({ siteKey: config.turnstileSiteKey, secretKey: config.turnstileSecretKey });
   ctx.safeFetcher = deps.safeFetcher ?? createSafeFetcher({ userAgent: ctx.graderUserAgent });
   // Grade ids are their own: 22 characters of URL-safe base64 from 16 random bytes.
   ctx.newGradeId = deps.newGradeId ?? (() => randomBytes(16).toString('base64url'));

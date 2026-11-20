@@ -32,6 +32,8 @@ const SECOND_OPINION_RESERVE = 12; // the day's last AI calls stay for new check
 const LIVE_TIMEOUT_MS = 60 * 1000;
 const LIVE_CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; frame-ancestors 'none'";
 
+const HUMAN_CHECK_FAILED = "Please try again: we couldn't confirm you're a person. If no box appears, turn off ad blockers or try another browser.";
+
 const cleanLine = v => String(v ?? '').replace(/\p{Cc}/gu, ' ').replace(/\s+/g, ' ').trim();
 
 /** @param {object} ctx resolved dependencies from createApp */
@@ -72,6 +74,8 @@ export function createGradeRouter(ctx) {
   // ---- the form ---------------------------------------------------------------------------
   const formPage = (res, status, { values = {}, errors = {} } = {}) => html(res, status, gradeFormPage({
     values, errors, stamp: signFormStamp(secret(), now()), categories: ctx.store.getCategories(),
+    // Empty (no widget) unless both Turnstile keys are set.
+    turnstileSiteKey: ctx.turnstile?.siteKey ?? '',
   }));
 
   router.get('/grade', (req, res) => formPage(res, 200));
@@ -87,6 +91,23 @@ export function createGradeRouter(ctx) {
         });
       }
       if (!checked.ok) return formPage(res, 422, { values: checked.values, errors: checked.errors });
+
+      // The human check: after the form checks, before any limit count, AI call or website fetch.
+      if (ctx.turnstile) {
+        let verdict;
+        try {
+          verdict = await ctx.turnstile.verify(body['cf-turnstile-response'], req.ip);
+        } catch {
+          verdict = 'unreachable';
+        }
+        if (verdict === 'failed') {
+          return formPage(res, 422, { values: checked.values, errors: { form: HUMAN_CHECK_FAILED } });
+        }
+        // A problem on Cloudflare's side or with our key must not turn real owners away; the limits still apply.
+        if (verdict === 'unreachable' || verdict === 'misconfigured') {
+          process.stderr.write(`[grader] turnstile=${verdict}\n`);
+        }
+      }
 
       // Per address (5 an hour, 6 a day) and per network (20 a day by default). One refused rule counts none of them.
       const addressRules = [
@@ -165,7 +186,10 @@ export function createGradeRouter(ctx) {
       const grade = await load(req.params.id);
       if (!grade) return notFound(res);
       if (grade.status === 'failed' || ctx.grader.isStale(grade, now())) {
-        return html(res, 200, failedPage(grade, { stamp: signFormStamp(secret(), now()) }));
+        return html(res, 200, failedPage(grade, {
+          stamp: signFormStamp(secret(), now()),
+          turnstileSiteKey: ctx.turnstile?.siteKey ?? '',
+        }));
       }
       // The in-memory copy knows whether this check is still waiting in line.
       if (grade.status === 'running') return html(res, 200, scanPage(ctx.grader.peek(grade.id) ?? grade));

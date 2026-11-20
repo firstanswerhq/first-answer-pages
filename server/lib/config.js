@@ -329,6 +329,9 @@ export function configFromEnv(env = process.env, opts = {}) {
     gradeAiCallsPerDay: parseGradeAiCalls(env.GRADE_AI_CALLS_PER_DAY, opts.warn ?? console.warn),
     gradeMaxRunning: parseGradeMaxRunning(env.GRADE_MAX_RUNNING, opts.warn ?? console.warn),
     gradeNetworkPerDay: parseGradeNetworkPerDay(env.GRADE_NETWORK_PER_DAY, opts.warn ?? console.warn),
+    // The human check on the check form (Cloudflare Turnstile). Off unless both keys are set.
+    turnstileSiteKey: nonEmpty(env.TURNSTILE_SITE_KEY) ?? '',
+    turnstileSecretKey: nonEmpty(env.TURNSTILE_SECRET_KEY) ?? '',
     // Signs form stamps and unlock cookies. Without GRADER_SECRET a random per-process key is
     // used (unlocks then reset on restart); graderSecretGenerated lets createApp warn once.
     graderSecret: nonEmpty(env.GRADER_SECRET) ?? (processGraderSecret ??= randomBytes(32).toString('hex')),
@@ -394,6 +397,7 @@ export function redactConfig(config) {
     ...config,
     adminToken: mark(config.adminToken),
     ...(config.graderSecret !== undefined && { graderSecret: mark(config.graderSecret) }),
+    ...(config.turnstileSecretKey !== undefined && { turnstileSecretKey: mark(config.turnstileSecretKey) }),
     ...(config.resend && { resend: { ...config.resend, apiKey: mark(config.resend.apiKey) } }),
     vision: { ...config.vision, ...(config.vision.apiKey !== undefined && { apiKey: mark(config.vision.apiKey) }) },
     assistant: {

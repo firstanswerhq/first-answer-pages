@@ -26,12 +26,20 @@ import {
 const ROBOTS_META = '<meta name="robots" content="noindex, nofollow">';
 const REFRESH_NOSCRIPT = '<noscript><meta http-equiv="refresh" content="3"></noscript>';
 
-function page(title, body, { refresh = false } = {}) {
+// The human check (Cloudflare Turnstile). Shown only when the site key is set.
+const TURNSTILE_SCRIPT = '<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>';
+
+function turnstileBlock(siteKey) {
+  return `<div class="cf-turnstile" data-sitekey="${h(siteKey)}"></div>
+    <noscript><p class="hint">Turn on JavaScript to confirm you're a person.</p></noscript>`;
+}
+
+function page(title, body, { refresh = false, turnstile = false } = {}) {
   return layout({
     title,
     body,
     scripts: ['/js/grade.js'],
-    head: `${ROBOTS_META}${refresh ? `\n  ${REFRESH_NOSCRIPT}` : ''}`,
+    head: `${ROBOTS_META}${refresh ? `\n  ${REFRESH_NOSCRIPT}` : ''}${turnstile ? `\n  ${TURNSTILE_SCRIPT}` : ''}`,
   });
 }
 
@@ -90,7 +98,10 @@ function field({ id, name, label, value, hint, error, attrs = '' }) {
 /**
  * @param {{ values?: object, errors?: object, stamp?: string, categories?: object[] }} [opts]
  */
-export function gradeFormPage({ values = {}, errors = {}, stamp = '', categories = [] } = {}) {
+export function gradeFormPage({
+  values = {}, errors = {}, stamp = '', categories = [], turnstileSiteKey = '',
+} = {}) {
+  const checkOn = typeof turnstileSiteKey === 'string' && turnstileSiteKey !== '';
   const options = (Array.isArray(categories) ? categories : [])
     .filter(c => c && c.slug !== 'other' && typeof c.label === 'string' && c.label !== '')
     .map(c => `<option value="${h(c.label)}"></option>`)
@@ -109,11 +120,11 @@ export function gradeFormPage({ values = {}, errors = {}, stamp = '', categories
     ${field({ id: 'g-website', name: 'website', label: 'Your website (optional)', value: values.website, hint: 'Like example.com. Leave it empty if you do not have one.', error: errors.website, attrs: ' inputmode="url" autocapitalize="none"' })}
     <p class="hp" aria-hidden="true"><label>Leave this empty <input type="text" name="nickname" value="" tabindex="-1" autocomplete="off"></label></p>
     <input type="hidden" name="t" value="${h(stamp)}">
-    <button type="submit" class="button">Check my business</button>
+    ${checkOn ? `${turnstileBlock(turnstileSiteKey)}\n    ` : ''}<button type="submit" class="button">Check my business</button>
   </form>
   <p class="hint"><a href="/grade/about">What do we read, and why?</a></p>
 </section>`;
-  return page('Can AI find your business?', body);
+  return page('Can AI find your business?', body, { turnstile: checkOn });
 }
 
 // ---- the scan -------------------------------------------------------------------------
@@ -153,7 +164,8 @@ export function scanPage(grade) {
 }
 
 /** The page for a Grade that did not finish. `stamp` lets "Start again" post the same details. */
-export function failedPage(grade, { stamp = '' } = {}) {
+export function failedPage(grade, { stamp = '', turnstileSiteKey = '' } = {}) {
+  const checkOn = typeof turnstileSiteKey === 'string' && turnstileSiteKey !== '';
   const i = grade.input ?? {};
   const hidden = ['name', 'city', 'state', 'service', 'website']
     .map(k => `<input type="hidden" name="${k}" value="${h(i[k] ?? '')}">`)
@@ -164,11 +176,11 @@ export function failedPage(grade, { stamp = '' } = {}) {
   <form method="POST" action="/grade">
     ${hidden}
     <input type="hidden" name="t" value="${h(stamp)}">
-    <button type="submit" class="button">Start again</button>
+    ${checkOn ? `${turnstileBlock(turnstileSiteKey)}\n    ` : ''}<button type="submit" class="button">Start again</button>
   </form>
   <p><a href="/grade">Change the details</a></p>
 </section>`;
-  return page("This check didn't finish", body);
+  return page("This check didn't finish", body, { turnstile: checkOn });
 }
 
 // ---- pieces of the report ---------------------------------------------------------------

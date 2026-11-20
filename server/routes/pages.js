@@ -84,6 +84,12 @@ export function createPagesRouter(ctx) {
 <p>The fee is paid on Stripe; we never see your card number. Twilio sends a code to the phone number on the listing. Stripe checks a photo ID and a selfie and holds those photos under its own privacy policy. We store only the results: paid or not, phone confirmed, ID passed, the dates, and Stripe's reference numbers.</p>
 `
       : '';
+    // Shown only when the human check on the AI visibility check form is switched on.
+    const humanCheckPrivacy = ctx.turnstile
+      ? `<h2>Human check</h2>
+<p>The form that starts an AI Visibility Check uses Cloudflare Turnstile to confirm you are a person; Cloudflare receives your address and browser details under its own privacy terms.</p>
+`
+      : '';
     const body = `<section class="message">
 <h1>Privacy</h1>
 <p>This page explains, in plain words, what ${DEFAULT_SITE_NAME} collects and what we do with it.</p>
@@ -94,7 +100,7 @@ export function createPagesRouter(ctx) {
 <li><strong>Quote requests:</strong> the name, phone or email, and job details a visitor sends to a business. They are not shown on the site.</li>
 <li><strong>AI visibility check:</strong> the business details a visitor types, what we read on that business's public website, and the AI answers we get. The questions we ask AI name the kind of business and the city, never the business name. They go to Claude and, when we can, to ChatGPT, Gemini, Grok (from xAI) and Perplexity too; each company handles them under its own privacy terms. To read the answers, we also send each answer, with the business name, city and state, to Google's Gemini, which helps us check whether the business is named. If the person who ran a check asks for Google's live answer, we send the same question to Google's Gemini with Google Search, show it only to them, and never save it. Google handles that question under its own privacy terms. If a visitor opens the full report, we also keep the name, email and phone they give us. Reports are not listed in search engines.</li>
 </ul>
-${verifiedPrivacy}<h2>Photos</h2>
+${verifiedPrivacy}${humanCheckPrivacy}<h2>Photos</h2>
 <p>If an owner lists their business with a photo, the photo is read by Anthropic's Claude to fill in the listing. We never save the photo.</p>
 <h2>How long we keep it</h2>
 <ul>
