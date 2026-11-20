@@ -449,3 +449,94 @@ test('G2: README and render.yaml list both keys, and render.yaml leaves them to 
     assert.match(yaml, new RegExp(`- key: ${key}\\s+sync: false`), key);
   }
 });
+
+// ---- review of G2 (V59 to V62) ------------------------------------------------------------------
+
+function replyWithStatus(status, body) {
+  return { ok: status >= 200 && status < 300, status, json: async () => body };
+}
+
+test('V59: a 4xx reply is read like any other: invalid-input-response is failed, invalid-input-secret is misconfigured', async () => {
+  for (const status of [400, 401, 403, 422, 429]) {
+    const failed = verifierWith(() => replyWithStatus(status, { success: false, 'error-codes': ['invalid-input-response'] }));
+    assert.equal(await failed.turnstile.verify(GOOD, '203.0.113.9'), 'failed', `status ${status}`);
+  }
+  const wrongSecret = verifierWith(() => replyWithStatus(400, { success: false, 'error-codes': ['invalid-input-secret'] }));
+  assert.equal(await wrongSecret.turnstile.verify(GOOD, '203.0.113.9'), 'misconfigured');
+  const noCodes = verifierWith(() => replyWithStatus(400, { success: false }));
+  assert.equal(await noCodes.turnstile.verify(GOOD, '203.0.113.9'), 'failed');
+});
+
+test('V59: a status of 500 or more, an unreadable body, or no true/false success is still unreachable', async () => {
+  const html = verifierWith(() => ({ ok: false, status: 503, json: async () => { throw new SyntaxError('<html>'); } }));
+  assert.equal(await html.turnstile.verify(GOOD, '203.0.113.9'), 'unreachable');
+  const serverError = verifierWith(() => replyWithStatus(500, { success: false, 'error-codes': ['invalid-input-response'] }));
+  assert.equal(await serverError.turnstile.verify(GOOD, '203.0.113.9'), 'unreachable');
+  const unreadable400 = verifierWith(() => ({ ok: false, status: 400, json: async () => { throw new SyntaxError('no'); } }));
+  assert.equal(await unreadable400.turnstile.verify(GOOD, '203.0.113.9'), 'unreachable');
+  const noSuccess = verifierWith(() => replyWithStatus(400, { 'error-codes': ['invalid-input-response'] }));
+  assert.equal(await noSuccess.turnstile.verify(GOOD, '203.0.113.9'), 'unreachable');
+});
+
+test('V59: through the route, a 400 that says the token is bad turns the check away', async () => {
+  const { turnstile } = verifierWith(() => replyWithStatus(400, { success: false, 'error-codes': ['invalid-input-response'] }));
+  const env = await startEnv({ turnstile });
+  const res = await startCheck(env, '203.0.113.5', withToken('made-up-token'));
+  assert.equal(res.status, 422);
+  assert.equal(env.counts.asked, 0);
+});
+
+test('V60: with only one key set, one startup warning names the missing key and no value', async () => {
+  const onlySite = await captureStderr(async () => {
+    await startEnv({ config: { turnstileSiteKey: SITE_KEY } });
+  });
+  assert.ok(onlySite.includes('The human check is off: TURNSTILE_SECRET_KEY is not set.'));
+  assert.equal(onlySite.includes(SITE_KEY), false);
+  assert.equal(onlySite.split('The human check is off').length - 1, 1, 'one warning');
+
+  const onlySecret = await captureStderr(async () => {
+    await startEnv({ config: { turnstileSecretKey: SECRET } });
+  });
+  assert.ok(onlySecret.includes('The human check is off: TURNSTILE_SITE_KEY is not set.'));
+  assert.equal(onlySecret.includes(SECRET), false);
+
+  for (const config of [{}, { turnstileSiteKey: SITE_KEY, turnstileSecretKey: SECRET }]) {
+    const quiet = await captureStderr(async () => {
+      await startEnv({ config });
+    });
+    assert.equal(quiet.includes('The human check is off'), false);
+  }
+});
+
+test('V61: the "couldn\'t confirm" message sits right above the widget, and other form errors stay where they are', async () => {
+  const env = await startEnv({ turnstile: fakeVerifier() });
+  const text = await (await startCheck(env, '203.0.113.5', withToken('bad'))).text();
+  const message = escaped(MESSAGE);
+  assert.equal(text.split(message).length - 1, 1, 'shown once');
+  const at = text.indexOf(message);
+  const widget = text.indexOf('<div class="cf-turnstile"');
+  assert.ok(text.indexOf('<form') < at, 'inside the form');
+  assert.ok(at < widget, 'above the widget');
+  assert.ok(widget - at < 400, 'right next to it');
+  assert.ok(text.indexOf(BLOCKER_LINE) < widget);
+  assert.ok(text.indexOf('Check my business') > widget);
+
+  // A different form error is not moved: it stays at the top, and the widget has no message.
+  const other = await (await startCheck(env, '203.0.113.5', { ...withToken(GOOD), city: '' })).text();
+  assert.equal(other.includes(message), false);
+  assert.ok(other.includes('Please fix the problems below.'));
+  assert.ok(other.indexOf('Please fix the problems below.') < other.indexOf('<form'));
+});
+
+test('V62: remoteip is sent as a plain IPv4 address', async () => {
+  const sentFor = async ip => {
+    const { turnstile, calls } = verifierWith(() => reply({ success: true }));
+    await turnstile.verify(GOOD, ip);
+    return new URLSearchParams(String(calls[0].init.body)).get('remoteip');
+  };
+  assert.equal(await sentFor('::ffff:203.0.113.7'), '203.0.113.7');
+  assert.equal(await sentFor('::FFFF:203.0.113.7'), '203.0.113.7');
+  assert.equal(await sentFor('::ffff:cb00:7107'), '203.0.113.7');
+  assert.equal(await sentFor('203.0.113.7'), '203.0.113.7');
+  assert.equal(await sentFor('2001:db8:1:2::5'), '2001:db8:1:2::5');
+});

@@ -124,6 +124,14 @@ export function createApp(deps = {}) {
   }
   // Paid Verified stamp: on only when every provider key is set (tests pass their own).
   ctx.trust = deps.trust ?? createTrustProviders(config, { clock });
+  // One key without the other leaves the check off; say which one is missing (never a value).
+  if (deps.turnstile === undefined) {
+    const hasSite = Boolean(config.turnstileSiteKey);
+    const hasSecret = Boolean(config.turnstileSecretKey);
+    if (hasSite !== hasSecret) {
+      process.stderr.write(`[grader] The human check is off: ${hasSite ? 'TURNSTILE_SECRET_KEY' : 'TURNSTILE_SITE_KEY'} is not set.\n`);
+    }
+  }
   // The human check on the check form: null (off) unless both Turnstile keys are set. Tests pass a fake.
   ctx.turnstile = deps.turnstile !== undefined
     ? deps.turnstile

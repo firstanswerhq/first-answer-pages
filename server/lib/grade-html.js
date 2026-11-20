@@ -29,8 +29,9 @@ const REFRESH_NOSCRIPT = '<noscript><meta http-equiv="refresh" content="3"></nos
 // The human check (Cloudflare Turnstile). Shown only when the site key is set.
 const TURNSTILE_SCRIPT = '<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>';
 
-function turnstileBlock(siteKey) {
-  return `<div class="cf-turnstile" data-sitekey="${h(siteKey)}"></div>
+function turnstileBlock(siteKey, message = '') {
+  // A "couldn't confirm" message sits right above the widget, where the visitor is looking.
+  return `${message ? `<p class="form-error" role="alert">${h(message)}</p>\n    ` : ''}<div class="cf-turnstile" data-sitekey="${h(siteKey)}"></div>
     <noscript><p class="hint">Turn on JavaScript to confirm you're a person.</p></noscript>`;
 }
 
@@ -120,7 +121,7 @@ export function gradeFormPage({
     ${field({ id: 'g-website', name: 'website', label: 'Your website (optional)', value: values.website, hint: 'Like example.com. Leave it empty if you do not have one.', error: errors.website, attrs: ' inputmode="url" autocapitalize="none"' })}
     <p class="hp" aria-hidden="true"><label>Leave this empty <input type="text" name="nickname" value="" tabindex="-1" autocomplete="off"></label></p>
     <input type="hidden" name="t" value="${h(stamp)}">
-    ${checkOn ? `${turnstileBlock(turnstileSiteKey)}\n    ` : ''}<button type="submit" class="button">Check my business</button>
+    ${checkOn ? `${turnstileBlock(turnstileSiteKey, errors.humanCheck)}\n    ` : ''}<button type="submit" class="button">Check my business</button>
   </form>
   <p class="hint"><a href="/grade/about">What do we read, and why?</a></p>
 </section>`;

@@ -101,7 +101,7 @@ export function createGradeRouter(ctx) {
           verdict = 'unreachable';
         }
         if (verdict === 'failed') {
-          return formPage(res, 422, { values: checked.values, errors: { form: HUMAN_CHECK_FAILED } });
+          return formPage(res, 422, { values: checked.values, errors: { humanCheck: HUMAN_CHECK_FAILED } });
         }
         // A problem on Cloudflare's side or with our key must not turn real owners away; the limits still apply.
         if (verdict === 'unreachable' || verdict === 'misconfigured') {
