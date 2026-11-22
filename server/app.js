@@ -106,7 +106,9 @@ export function createApp(deps = {}) {
     // A test that injects only deps.rateLimiter keeps its old behavior: the grade rules use that one too.
     gradeLimiter: deps.gradeLimiter ?? deps.rateLimiter ?? createRateLimiter({ clock }),
     config,
-    // The day's count is kept in DATA_DIR/ai-budget.json (written only when a real provider call is counted).
+    // The day's counts are kept in DATA_DIR/ai-budget.json. It is written when a real provider call is
+    // counted, when a Grade starts, and when a check is turned away (also in demo mode), through at most one
+    // write running and one waiting.
     aiBudget: deps.aiBudget ?? createAiBudget({
       clock,
       limit: config.maxAiCallsPerDay ?? 200,

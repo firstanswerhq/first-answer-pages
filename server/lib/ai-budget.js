@@ -114,7 +114,11 @@ export function photoShare(cap, photoLimit) {
 /**
  * @param {{ clock: { now(): number }, limit?: number, photoLimit?: number, file?: string }} opts
  */
-export function createAiBudget({ clock, limit, photoLimit, gradeLimit, file } = {}) {
+export function createAiBudget({
+  clock, limit, photoLimit, gradeLimit, file,
+  // Where a snapshot goes. Tests pass their own to count the writes.
+  save = (target, snapshot) => updateJsonFile(target, () => snapshot, { fallback: {} }),
+} = {}) {
   const cap = Number.isInteger(limit) && limit > 0 ? limit : DEFAULT_AI_LIMIT;
   const photoCap = photoShare(cap, photoLimit);
   // The Grader's own daily share (GRADE_AI_CALLS_PER_DAY); 0 turns Grader AI calls off.
@@ -127,7 +131,10 @@ export function createAiBudget({ clock, limit, photoLimit, gradeLimit, file } = 
   let grade = 0;
   // Today's other counters ("checks", "human", ...) and once-a-day flags ("once:..."), kept with the day.
   let notes = new Map();
-  let pending = Promise.resolve();
+  // Writes are coalesced: at most one running and one waiting. The waiting one writes the state as it is
+  // when it starts, so any number of counts made meanwhile cost one more write, not one each.
+  let writing = null;
+  let waiting = false;
 
   if (typeof file === 'string' && file !== '') {
     const saved = loadCounts(file);
@@ -168,17 +175,41 @@ export function createAiBudget({ clock, limit, photoLimit, gradeLimit, file } = 
     return { allowed, remaining: remainingFor(kind), ...s };
   }
 
-  /** Writes the current counts. Writes are queued; a failure logs the error name only. */
-  function persist() {
-    if (typeof file !== 'string' || file === '') return;
-    // `grade` and `notes` are written only when not empty, so existing files stay byte-identical.
+  /** The counts as they are now. `grade` and `notes` are written only when not empty, so existing files stay byte-identical. */
+  function snapshotNow() {
     const snapshot = grade > 0 ? { day: dayKey, total, photo, grade } : { day: dayKey, total, photo };
     if (notes.size > 0) snapshot.notes = Object.fromEntries(notes);
-    pending = pending
-      .then(() => updateJsonFile(file, () => snapshot, { fallback: {} }))
+    return snapshot;
+  }
+
+  function startWrite() {
+    // The state is read when the write starts, so a waiting write carries every count made while one ran.
+    const snapshot = snapshotNow();
+    writing = Promise.resolve()
+      .then(() => save(file, snapshot))
       .then(() => undefined, err => {
         process.stderr.write(`[ai-budget] save failed: ${err?.name ?? 'Error'}\n`);
+      })
+      .then(() => {
+        writing = null;
+        if (waiting) {
+          waiting = false;
+          startWrite();
+        }
       });
+  }
+
+  /**
+   * Writes the current counts: at most one write running and one waiting, however many counts are made,
+   * so a flood of refused requests cannot build a queue. A failure logs the error name only.
+   */
+  function persist() {
+    if (typeof file !== 'string' || file === '') return;
+    if (writing) {
+      waiting = true;
+      return;
+    }
+    startWrite();
   }
 
   return {
@@ -261,7 +292,9 @@ export function createAiBudget({ clock, limit, photoLimit, gradeLimit, file } = 
       persist();
       return true;
     },
-    /** Resolves when every queued write has finished. */
-    flush: () => pending,
+    /** Resolves when the write running and the one waiting (if any) have finished. */
+    async flush() {
+      while (writing) await writing;
+    },
   };
 }
