@@ -29,6 +29,35 @@ function adminTime(iso) {
 
 const newestFirst = (a, b) => String(b?.createdAt ?? '').localeCompare(String(a?.createdAt ?? ''));
 
+const whole = n => (Number.isInteger(n) && n >= 0 ? n : 0);
+
+/**
+ * How the bot protection is set up and today's counts, from the guard (the AI budget): counts only, no
+ * business name, no visitor detail. Every value goes through escapeHtml.
+ */
+function protectionBlock(ctx) {
+  const summary = ctx.gradeGuard?.summary?.() ?? {};
+  const usage = summary.usage ?? {};
+  const counts = summary.counts ?? {};
+  const humanCheck = !ctx.turnstile
+    ? 'off (no Turnstile keys)'
+    : summary.misconfigured === true
+      ? 'on, but Cloudflare reported a problem (wrong secret key or an error on its side); checks are let through'
+      : 'on';
+  const notifier = ctx.notifier;
+  const emails = notifier && notifier.name !== 'none' && typeof notifier.notifyAllowance === 'function'
+    ? 'on'
+    : 'off (no email service set)';
+  const lines = [
+    `Human check: ${humanCheck}`,
+    `Heads-up emails: ${emails}`,
+    `Today: ${whole(usage.used)} AI calls used, ${whole(usage.left)} left. ${whole(counts.checks)} checks run.`,
+    `Human check: ${whole(counts.humanPass)} passed, ${whole(counts.human)} turned away.`,
+    `Limits: ${whole(counts.limit)} turned away by the per-address limits, ${whole(counts.network)} by the per-network limit.`,
+  ];
+  return `<ul class="admin-protection">\n${lines.map(l => `    <li>${escapeHtml(l)}</li>`).join('\n')}\n  </ul>`;
+}
+
 /**
  * @param {import('express').Router} router
  * @param {object} ctx resolved dependencies from createApp
@@ -70,6 +99,7 @@ export function mountGradeAdmin(router, ctx, { adminNav, wantsHtml, form }) {
   ${adminNav()}
   <h1>AI Visibility Check reports</h1>
   ${noteKey ? `<p class="admin-note" role="status">${escapeHtml(NOTES[noteKey])}</p>` : ''}
+  ${protectionBlock(ctx)}
   ${grades.length === 0 ? '<p>No reports yet.</p>' : `<ul class="pending-list">\n${items}\n</ul>`}
 </section>`;
       res.type('html').send(layout({ title: 'AI Visibility Check reports', body }));
