@@ -63,6 +63,8 @@ Until this is on, quote requests are saved but nobody is emailed. Open `/admin/q
 3. Create a Resend API key.
 4. In Render, open **Environment** and add `NOTIFIER` = `resend` (when it isn't set, no email is sent). Fill in `RESEND_API_KEY` (the key), `NOTIFY_FROM` (for example `Quotes <quotes@your-domain.example>`) and `ADMIN_EMAIL` (where you want a copy of every quote). Save and press **Manual Deploy**.
 
+The same setting turns on short heads-up emails to `ADMIN_EMAIL` about the AI Visibility Check: one when half of the day's Grader AI calls are used, one at 90%, and one "the human check may be set up wrong" email on a day when the human check has turned away 10 or more checks and passed none. Each is sent at most once a day and holds counts only, never a business name or anyone's details. With `NOTIFIER` unset, none of these are sent.
+
 ### 7. Use your own domain
 
 1. In Render, open the service, then **Settings**, then **Custom Domains**, and add your domain. Render shows the DNS records to add.
@@ -222,7 +224,7 @@ Every number on the report is something the Grader measured. It shows no dollar 
 
 **Lead gate.** With `GRADER_LEAD_GATE=on` (the default) the free part of a report is open to anyone with the link. The full report (every check, the fix for each, and the copy-and-paste fix kit) opens after the visitor sends their name, email and phone. Opening it also runs two more AI questions, so the AI part of the score uses three answers. Set `GRADER_LEAD_GATE=off` to show the full report to everyone, for demos and contest judges. The cookie that opens a report is signed with `GRADER_SECRET`.
 
-**Where leads appear.** Log in as admin, then open `/admin/leads` for the newest 100 leads and `/admin/grades` for the newest 100 grades (with a Delete button for removal requests). With `NOTIFIER=resend`, each new lead is also emailed to `ADMIN_EMAIL` only, never to a business owner.
+**Where leads appear.** Log in as admin, then open `/admin/leads` for the newest 100 leads and `/admin/grades` for the newest 100 grades (with a Delete button for removal requests). Above the list, `/admin/grades` also shows how the protection is set up (the human check and the heads-up emails, on or off) and today's counts: AI calls used and left, checks run, human-check passes and refusals, and refusals by the per-address and per-network limits. With `NOTIFIER=resend`, each new lead is also emailed to `ADMIN_EMAIL` only, never to a business owner.
 
 **How the AI cap is shared.** Grader AI calls count against `MAX_AI_CALLS_PER_DAY`. They have their own daily share, `GRADE_AI_CALLS_PER_DAY` (default 60). Grader and photo calls together never use the quarter of the day kept for Séance runs. If the Grader's share is used up, the report says the AI check can be run again later. A second grade with the same details within 7 days reuses the earlier AI answer.
 
@@ -250,10 +252,10 @@ All are optional except in production, where `DATA_DIR` and `BASE_URL` are requi
 | `VISION_API_KEY` | unset | API key for the vision provider. Without it the mock is used. |
 | `VISION_MODEL` | unset | Model name for the vision provider. Required for a real provider. If it is missing, the app logs a warning and uses the mock. |
 | `VISION_BASE_URL` | `https://api.openai.com/v1` | Base URL for an OpenAI-compatible vision API. Only used when `VISION_PROVIDER=openai`. |
-| `NOTIFIER` | `none` | `none` saves quotes and sends no email; `/admin/quotes` shows "Emailed: no (email not set up)". `resend` emails each quote through Resend. `console` writes one JSON line per quote request (quote id and listing id only) to the console. Any other value logs a warning and uses `none`. In production, `resend` without the three settings below refuses to start; elsewhere it falls back to `none` with a warning. |
+| `NOTIFIER` | `none` | `none` saves quotes and sends no email; `/admin/quotes` shows "Emailed: no (email not set up)". `resend` emails each quote through Resend. `console` writes one JSON line per quote request (quote id and listing id only) to the console. Any other value logs a warning and uses `none`. In production, `resend` without the three settings below refuses to start; elsewhere it falls back to `none` with a warning. With `resend`, `ADMIN_EMAIL` also gets the AI Visibility Check heads-up emails (50% and 90% of the day's Grader AI calls, and "the human check may be set up wrong" on a day with 10 or more human-check refusals and no pass), counts only. When `NOTIFIER` is unset, nothing is sent. |
 | `RESEND_API_KEY` | unset | Resend API key. Needed when `NOTIFIER=resend`. Never logged. |
 | `NOTIFY_FROM` | unset | Sender address for quote emails, for example `Quotes <quotes@your-domain.example>`. Needed when `NOTIFIER=resend`. |
-| `ADMIN_EMAIL` | unset | Every quote email also goes to this address. Needed when `NOTIFIER=resend`. The listing's private owner email, if set, gets it too. |
+| `ADMIN_EMAIL` | unset | Every quote email also goes to this address. Needed when `NOTIFIER=resend`. The listing's private owner email, if set, gets it too. With `NOTIFIER=resend` this address also gets the AI Visibility Check heads-up emails: one at 50% and one at 90% of the day's Grader AI calls, and one "the human check may be set up wrong" email on a day with 10 or more human-check refusals and no pass. Each is sent at most once a day, with counts only. |
 | `SEANCE_PROVIDER` | unset | `openai` or `anthropic`. The AI assistant the Séance asks. Any other value uses the mock. |
 | `SEANCE_API_KEY` | unset | API key for the Séance provider. Without it the mock is used. |
 | `SEANCE_MODEL` | unset | Model name for the Séance provider. |
@@ -279,7 +281,7 @@ All are optional except in production, where `DATA_DIR` and `BASE_URL` are requi
 | `XAI_MODEL` | `grok-4.7` | Which xAI model answers as Grok. |
 | `PERPLEXITY_API_KEY` | none | Optional. A Perplexity API key. When set, the AI Visibility Check also asks Perplexity (with live web search) the same questions; its answers are shown for comparison and not scored. |
 | `PERPLEXITY_MODEL` | `perplexity/sonar` | Which Perplexity model answers. |
-| `GEMINI_LIVE_SEARCH` | `on` | With a `GEMINI_API_KEY`, the report offers "Show Google's live answer": Gemini with live Google Search, shown only to the browser that ran the check (Google's grounding terms), never saved, scored or logged. Each click is one paid call against the day's Grader AI calls. Set to `off` to hide it. |
+| `GEMINI_LIVE_SEARCH` | `on` | With a `GEMINI_API_KEY`, the report offers "Show Google's live answer": Gemini with live Google Search, shown only to the browser that ran the check (Google's grounding terms), never saved, scored or logged. Each click is one paid call against the day's Grader AI calls. Each report allows at most 3 live answers in total, on top of the hourly limits; after that the button is hidden. Set to `off` to hide it. |
 | `GRADER_ENABLED` | `on` | Set to `off` to hide the AI Visibility Grader at `/grade` (every `/grade` address returns 404) and its link on the home page. |
 | `GRADER_LEAD_GATE` | `on` | With `on`, the full Grader report opens after the visitor sends a short form (name, email, phone). Set to `off` to show the full report to everyone, for demos and contest judges. |
 | `GRADE_AI_CALLS_PER_DAY` | `60` | The Grader's share of the daily AI cap (`MAX_AI_CALLS_PER_DAY`). Grader and photo calls together never use the quarter of the day kept for Séance runs. Must be a whole number, 0 or more; anything else logs a warning and uses 60. |

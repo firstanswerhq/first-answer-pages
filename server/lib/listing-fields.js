@@ -164,6 +164,84 @@ export function tidyCity(text) {
     .trim();
 }
 
+// ---- review links --------------------------------------------------------------------------
+
+/** Longest review link kept, query string and `#` part included (real Google links often pass 300). */
+export const MAX_REVIEWS_LINK = 1000;
+
+/** The URL, or null: https only, no user name, password or port, at most 1,000 characters, one line. */
+function parseReviewsUrl(value) {
+  if (typeof value !== 'string') return null;
+  const text = value.trim();
+  if (text === '' || text.length > MAX_REVIEWS_LINK || /[\s\p{Cc}]/u.test(text)) return null;
+  let url;
+  try {
+    url = new URL(text);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== 'https:' || url.username !== '' || url.password !== '' || url.port !== '') return null;
+  return url;
+}
+
+/** The host without a leading "www." or "m.". */
+const bareHost = url => url.hostname.toLowerCase().replace(/^(?:www\.|m\.)/, '');
+
+/**
+ * Which review site an owner-typed link points to: 'google', 'yelp', 'facebook', 'nextdoor', or '' when it
+ * is not an https link to one of them. Never throws and fetches nothing.
+ * @param {unknown} value
+ * @returns {'google' | 'yelp' | 'facebook' | 'nextdoor' | ''}
+ */
+export function reviewsLinkHost(value) {
+  const url = parseReviewsUrl(value);
+  if (!url) return '';
+  const host = bareHost(url);
+  const p = url.pathname;
+  switch (host) {
+    case 'google.com':
+      if (p.startsWith('/maps')) return 'google';
+      // A Google search address is a business's reviews only when it names the business's own panel.
+      if (p === '/search' && (url.hash.includes('lrd=') || url.search.includes('ludocid='))) return 'google';
+      return '';
+    case 'maps.google.com':
+    case 'g.page':
+    case 'maps.app.goo.gl':
+      return 'google';
+    case 'g.co':
+      return p.startsWith('/kgs/') ? 'google' : '';
+    case 'search.google.com':
+      return p.startsWith('/local') ? 'google' : '';
+    case 'yelp.com':
+      return p.startsWith('/biz') ? 'yelp' : '';
+    case 'facebook.com':
+      return 'facebook';
+    case 'nextdoor.com':
+      return 'nextdoor';
+    default:
+      return '';
+  }
+}
+
+/**
+ * The same, for links read from a home page, which is stricter: a Facebook link counts only when its path
+ * has "/reviews", a Nextdoor link only under "/pages/", and Google's "write a review" form never counts
+ * (a footer link to a Facebook page is not a page of reviews).
+ * @param {unknown} value
+ * @returns {'google' | 'yelp' | 'facebook' | 'nextdoor' | ''}
+ */
+export function reviewsLinkOnPage(value) {
+  const site = reviewsLinkHost(value);
+  if (site === '') return '';
+  const url = parseReviewsUrl(value);
+  const host = bareHost(url);
+  const p = url.pathname;
+  if (site === 'facebook') return p.includes('/reviews') ? site : '';
+  if (site === 'nextdoor') return p.startsWith('/pages/') ? site : '';
+  if (host === 'search.google.com' && p.startsWith('/local/writereview')) return '';
+  return site;
+}
+
 function normalizeHours(raw) {
   const out = {};
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return out;
@@ -208,6 +286,10 @@ export function normalizeFields(raw, categories) {
   out.hours = normalizeHours(get('hours'));
   out.services = normalizeServices(get('services'));
   out.ownerEmail = normalizeEmail(get('ownerEmail')); // private, optional
+  // Optional link to the business's reviews: the key is added only when it has a value, so a listing
+  // without one has exactly the fields it had before.
+  const reviews = get('reviewsLink');
+  if (typeof reviews === 'string' && reviewsLinkHost(reviews) !== '') out.reviewsLink = reviews.trim();
   return out;
 }
 
