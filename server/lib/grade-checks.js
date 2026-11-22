@@ -1,8 +1,24 @@
 // The Grader's Checks and the website checks that run on a home page.
 // Pure functions: facts, robots and llms results come in, Check_Results go out.
 
-import { HOURS_PATTERN, STREET_PATTERN, CTA_PATTERN, hasReviewSignal } from './page-facts.js';
+import {
+  HOURS_PATTERN, STREET_PATTERN, CTA_PATTERN, hasReviewSignal, serviceAreaPattern, serviceAreaText,
+} from './page-facts.js';
 import { AI_AGENTS, parseRobots, mayFetchRoot } from './robots.js';
+
+const MAX_FIX = 160;
+
+/**
+ * The service-area fix, with the Grade's own city as the example ("your city" when it is empty). When the
+ * sentence would pass 160 characters, the example is dropped rather than any word cut. Text, not HTML: it is
+ * escaped where it is shown.
+ * @param {{ city?: string }} [input]
+ */
+export function serviceAreaFix(input) {
+  const city = typeof input?.city === 'string' && input.city.trim() !== '' ? input.city.trim() : 'your city';
+  const withExample = `Add a line to your home page that names the area you serve, like "Serving ${city} and nearby areas".`;
+  return Array.from(withExample).length <= MAX_FIX ? withExample : 'Add a line to your home page that names the area you serve.';
+}
 
 /**
  * Every Check. `points` add up to 100. `detail` text for a result comes from
@@ -85,6 +101,13 @@ export const CHECKS = Object.freeze([
     passText: 'Your home page shows a street address.',
     failText: 'We found no street address on your home page.',
     fix: 'Write your street address in plain text on your home page, or your service area if you travel to customers.',
+    // Used instead when the owner ticked "We go to our customers (no storefront)". Same id, group and points.
+    serviceArea: {
+      label: 'Service area on your home page',
+      passText: 'Your home page says what area you serve.',
+      failText: 'We found no service area on your home page.',
+      fix: serviceAreaFix,
+    },
   },
   {
     id: 'call-button', group: 'customer_basics', points: 2,
@@ -128,9 +151,17 @@ export const GROUPS = Object.freeze([
   { id: 'google_profile', label: 'Your Google profile', show: false },
 ]);
 
-/** @param {string} id */
-export function checkById(id) {
-  return CHECKS.find(c => c.id === id);
+/**
+ * A Check by id. With a Grade input whose `noStorefront` is true, a Check that has a service-area variant comes
+ * back with that variant's label, texts and fix (a string, built from the Grade's own city).
+ * @param {string} id
+ * @param {{ noStorefront?: boolean, city?: string }} [input]
+ */
+export function checkById(id, input) {
+  const check = CHECKS.find(c => c.id === id);
+  if (!check || !check.serviceArea || input?.noStorefront !== true) return check;
+  const v = check.serviceArea;
+  return { ...check, label: v.label, passText: v.passText, failText: v.failText, fix: v.fix(input) };
 }
 
 // Plain names for the AI crawlers, so a blocked list reads "ChatGPT (GPTBot)", not just "GPTBot".
@@ -251,8 +282,14 @@ function checkFacts(id, facts, input) {
       return judge(id, facts.telLinks.length > 0);
     case 'hours-shown':
       return judge(id, HOURS_PATTERN.test(facts.text));
-    case 'address-shown':
-      return judge(id, STREET_PATTERN.test(facts.text));
+    case 'address-shown': {
+      if (input?.noStorefront !== true) return judge(id, STREET_PATTERN.test(facts.text));
+      // No storefront: the service area counts, from the page text or the business label; a street address
+      // alone neither passes nor fails it.
+      const v = checkById(id, input);
+      const ok = serviceAreaPattern(input.city).test(serviceAreaText(facts)) || Boolean(facts.jsonLd?.business?.areaServed);
+      return ok ? result(id, 'pass', v.passText) : result(id, 'fail', v.failText);
+    }
     case 'call-button':
       return judge(id, facts.ctaLabels.some(label => CTA_PATTERN.test(label)));
     case 'reviews-visible':

@@ -111,6 +111,10 @@ export function normalizeGradeInput(raw) {
   const service = cleanText(src.service);
   const websiteText = cleanText(src.website);
   const values = { name, city, state: stateText, service, website: websiteText };
+  // "We go to our customers (no storefront)": kept only when ticked, so a Grade made without it looks as before.
+  // A browser sends "1" (or "on"); a stored input that is read again holds `true`. Anything else is not ticked.
+  const noStorefront = src.noStorefront === '1' || src.noStorefront === 'on' || src.noStorefront === true;
+  if (noStorefront) values.noStorefront = true;
   const errors = {};
   if (name === '' || codePoints(name) > 120) errors.name = MESSAGES.name;
   if (city === '' || codePoints(city) > 80) errors.city = MESSAGES.city;
@@ -119,7 +123,9 @@ export function normalizeGradeInput(raw) {
   const site = readWebsiteInput(websiteText);
   if (site.error) errors.website = site.error;
   if (Object.keys(errors).length > 0) return { ok: false, values, errors };
-  return { ok: true, values, errors, input: { name, city, state, service, website: site.value } };
+  const input = { name, city, state, service, website: site.value };
+  if (noStorefront) input.noStorefront = true;
+  return { ok: true, values, errors, input };
 }
 
 /** The key two Grades share when they are about the same business. */

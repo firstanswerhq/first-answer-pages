@@ -16,6 +16,20 @@ const MAX_HEADINGS = 40;
 const MAX_HEADING_TEXT = 120;
 const MAX_REVIEW_LINKS = 5;
 const MAX_AREA_TEXT = 120;
+const MAX_LINKS_FOR_REVIEWS = 2000;
+
+/** How much of the page text the service-area, rating and quoted-comment tests read. */
+export const MAX_PATTERN_TEXT = 200000;
+
+/** The start of the page text that those tests read (normalizing all of a 1 MB page is too slow). */
+export function textForPatterns(text) {
+  return typeof text === 'string' ? text.slice(0, MAX_PATTERN_TEXT) : '';
+}
+
+/** The page text as the service-area test reads it: the first 200,000 characters, normalized. */
+export function serviceAreaText(facts) {
+  return normalizeForMatch(textForPatterns(facts?.text));
+}
 
 /** Hours: a day word near a time, a time range, or round-the-clock wording. */
 const TIME = String.raw`\d{1,2}(?::\d{2})?\s?(?:(?:am|pm)(?![a-z])|a\.m\.|p\.m\.)`;
@@ -58,8 +72,9 @@ export function serviceAreaPattern(city) {
     const parts = [
       'service areas?',
       'areas? we serve',
-      // Bounded window: the city or an area word within 80 characters of the verb.
-      `(?:we (?:proudly )?serve|serving)${WORD_END}[^\\n]{0,80}${WORD_START}(?:${target})${WORD_END}`,
+      // Bounded window: the city or an area word within 40 characters of the verb. The normalized text has no
+      // punctuation, so a wider window would reach into the next sentence ("We serve breakfast. ... Nashville").
+      `(?:we (?:proudly )?serve|proudly serve|serving)${WORD_END}[^\\n]{0,40}${WORD_START}(?:${target})${WORD_END}`,
     ];
     if (escaped) {
       parts.push(`${escaped} and (?:the )?(?:surrounding|nearby|neighboring) (?:areas?|communities|towns|cities|counties)`);
@@ -99,7 +114,7 @@ export function hasReviewSignal(facts) {
   if (!facts || typeof facts !== 'object') return false;
   const headings = Array.isArray(facts.headings) ? facts.headings : [];
   if (headings.some(h => typeof h === 'string' && REVIEW_HEADING_PATTERN.test(h))) return true;
-  const text = typeof facts.text === 'string' ? facts.text : '';
+  const text = textForPatterns(facts.text);
   if (RATING_PATTERN.test(text) || QUOTED_REVIEW_PATTERN.test(text)) return true;
   if (Array.isArray(facts.reviewLinks) && facts.reviewLinks.length > 0) return true;
   return facts.jsonLd?.business?.hasReviewData === true;
@@ -541,6 +556,7 @@ export function readPageFacts(html) {
       if (!(readAttrs(tag, 'img').get('alt') || '').trim()) facts.imgMissingAlt += 1;
     });
 
+    let linksSeen = 0;
     const addLabel = text => {
       const label = text.slice(0, 60).trim();
       if (label && facts.ctaLabels.length < MAX_LABELS) facts.ctaLabels.push(label);
@@ -550,7 +566,13 @@ export function readPageFacts(html) {
       const href = (readAttrs(tag, 'a').get('href') || '').trim();
       if (/^tel:/i.test(href) && facts.telLinks.length < MAX_TEL) facts.telLinks.push(href);
       // Links to the business's reviews on a review site, in page order (https only, the stricter page rules).
-      if (facts.reviewLinks.length < MAX_REVIEW_LINKS && reviewsLinkOnPage(href) !== '') facts.reviewLinks.push(href);
+      // Only the first 2,000 links are looked at, and only full https addresses reach the validator, so a page
+      // made of a huge number of links stays fast.
+      linksSeen += 1;
+      if (
+        facts.reviewLinks.length < MAX_REVIEW_LINKS && linksSeen <= MAX_LINKS_FOR_REVIEWS
+        && /^https:\/\//i.test(href) && reviewsLinkOnPage(href) !== ''
+      ) facts.reviewLinks.push(href);
       addLabel(cleanText(s.slice(start, end)));
     });
 

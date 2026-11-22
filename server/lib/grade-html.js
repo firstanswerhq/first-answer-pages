@@ -120,6 +120,10 @@ export function gradeFormPage({
     ${field({ id: 'g-service', name: 'service', label: 'What you do', value: values.service, hint: 'Like roofers, plumbers or restaurants', error: errors.service, attrs: ' list="service-suggestions"' })}
     <datalist id="service-suggestions">${options}</datalist>
     ${field({ id: 'g-website', name: 'website', label: 'Your website (optional)', value: values.website, hint: 'Like example.com. Leave it empty if you do not have one.', error: errors.website, attrs: ' inputmode="url" autocapitalize="none"' })}
+    <div class="field">
+      <label class="check" for="g-nostorefront"><input type="checkbox" id="g-nostorefront" name="noStorefront" value="1"${values.noStorefront === true ? ' checked' : ''}> We go to our customers (no storefront)</label>
+      <span class="hint">${h("Check this box if you go to your customers and don't show a street address.")}</span>
+    </div>
     <p class="hp" aria-hidden="true"><label>Leave this empty <input type="text" name="nickname" value="" tabindex="-1" autocomplete="off"></label></p>
     <input type="hidden" name="t" value="${h(stamp)}">
     ${checkOn ? `${turnstileBlock(turnstileSiteKey, errors.humanCheck)}\n    ` : ''}<button type="submit" class="button">Check my business</button>
@@ -169,9 +173,11 @@ export function scanPage(grade) {
 export function failedPage(grade, { stamp = '', turnstileSiteKey = '' } = {}) {
   const checkOn = typeof turnstileSiteKey === 'string' && turnstileSiteKey !== '';
   const i = grade.input ?? {};
-  const hidden = ['name', 'city', 'state', 'service', 'website']
-    .map(k => `<input type="hidden" name="${k}" value="${h(i[k] ?? '')}">`)
-    .join('\n    ');
+  const fields = ['name', 'city', 'state', 'service', 'website']
+    .map(k => `<input type="hidden" name="${k}" value="${h(i[k] ?? '')}">`);
+  // "Start again" keeps the no-storefront mode.
+  if (i.noStorefront === true) fields.push('<input type="hidden" name="noStorefront" value="1">');
+  const hidden = fields.join('\n    ');
   const body = `<section class="message">
   <h1>This check didn't finish</h1>
   <p>Something took longer than expected, so we stopped. Nothing was lost. You can start again with the same details.</p>
@@ -398,22 +404,26 @@ function previewCard(grade) {
     <h3>${h(i.name)} &middot; ${found.phone ? `<span class="phone">${h(found.phone)}</span>` : blank('Add your phone number')}</h3>
     <p>${h(i.service)} in ${h(i.city)}, ${h(i.state)}</p>
     <p>Hours: ${hours}</p>
-    <p>Address: ${found.address ? h(found.address) : blank('Add your address')}</p>
+    ${i.noStorefront === true
+    // A business that goes to its customers shows its area, never an address, even when the page has one.
+    ? `<p>Serves the ${h(i.city)} area</p>`
+    : `<p>Address: ${found.address ? h(found.address) : blank('Add your address')}</p>`}
     <p>Website: ${i.website ? h(i.website) : blank('Add your website')}</p>
   </div>`;
 }
 
 function topFails(grade) {
   // The AI answers are not something the owner can change directly, so they are never a "fix first" item.
+  const check = id => checkById(id, grade.input);
   const fails = resultsOf(grade)
-    .filter(r => r.result === 'fail' && r.id !== 'ai-named' && checkById(r.id))
-    .sort((a, b) => checkById(b.id).points - checkById(a.id).points)
+    .filter(r => r.result === 'fail' && r.id !== 'ai-named' && check(r.id))
+    .sort((a, b) => check(b.id).points - check(a.id).points)
     .slice(0, 3);
   if (fails.length === 0) return '';
   return `<div class="grade-top-fails">
     <h2>Fix these first</h2>
     <p class="hint">Not a computer person? Send this page to whoever built your website.</p>
-    <ul>${fails.map(r => `<li><strong>${h(checkById(r.id).label)}</strong><br>${h(checkById(r.id).fix)}</li>`).join('')}</ul>
+    <ul>${fails.map(r => `<li><strong>${h(check(r.id).label)}</strong><br>${h(check(r.id).fix)}</li>`).join('')}</ul>
   </div>`;
 }
 
@@ -481,8 +491,9 @@ function groupLines(grade, score = currentScore(grade)) {
   return lines.length ? `<section class="grade-areas">\n  <h2>Score by area</h2>\n  <ul class="grade-groups">${lines.join('')}</ul>\n</section>` : '';
 }
 
-function checkRow(r) {
-  const c = checkById(r.id);
+function checkRow(r, input) {
+  // The Grade's input picks the service-area wording for a business with no storefront.
+  const c = checkById(r.id, input);
   if (!c) return '';
   const cls = r.result === 'fail' ? 'fail' : r.result === 'pass' ? 'pass' : 'not_checked';
   const word = { pass: 'Pass', fail: 'Needs work', not_checked: 'Not checked' }[cls];
@@ -498,7 +509,7 @@ function allChecks(grade) {
   const results = resultsOf(grade);
   return GROUPS.filter(g => g.show !== false).map(g => {
     const ids = new Set(CHECKS.filter(c => c.group === g.id).map(c => c.id));
-    const rows = results.filter(r => ids.has(r.id)).map(checkRow).join('\n    ');
+    const rows = results.filter(r => ids.has(r.id)).map(r => checkRow(r, grade.input)).join('\n    ');
     return rows ? `<section class="grade-group">
     <h2>${h(g.label)}</h2>
     <ul class="grade-checks">
