@@ -36,7 +36,14 @@ const whole = n => (Number.isInteger(n) && n >= 0 ? n : 0);
  * business name, no visitor detail. Every value goes through escapeHtml.
  */
 function protectionBlock(ctx) {
-  const summary = ctx.gradeGuard?.summary?.() ?? {};
+  // The counts must never be the reason this page fails: a guard that throws shows zeros.
+  let summary = {};
+  try {
+    summary = ctx.gradeGuard?.summary?.() ?? {};
+  } catch {
+    summary = {};
+  }
+  if (summary === null || typeof summary !== 'object') summary = {};
   const usage = summary.usage ?? {};
   const counts = summary.counts ?? {};
   const humanCheck = !ctx.turnstile
@@ -48,12 +55,14 @@ function protectionBlock(ctx) {
   const emails = notifier && notifier.name !== 'none' && typeof notifier.notifyAllowance === 'function'
     ? 'on'
     : 'off (no email service set)';
+  const checks = whole(counts.checks);
+  const checksRun = `${checks} ${checks === 1 ? 'check' : 'checks'}`;
   const lines = [
     `Human check: ${humanCheck}`,
     `Heads-up emails: ${emails}`,
-    `Today: ${whole(usage.used)} AI calls used, ${whole(usage.left)} left. ${whole(counts.checks)} checks run.`,
-    `Human check: ${whole(counts.humanPass)} passed, ${whole(counts.human)} turned away.`,
-    `Limits: ${whole(counts.limit)} turned away by the per-address limits, ${whole(counts.network)} by the per-network limit.`,
+    `Today: ${whole(usage.used)} AI calls used, ${whole(usage.left)} left. ${checksRun} run.`,
+    `Human check today: ${whole(counts.humanPass)} passed, ${whole(counts.human)} turned away.`,
+    `Limits today: ${whole(counts.limit)} turned away by the per-address limits, ${whole(counts.network)} by the per-network limit.`,
   ];
   return `<ul class="admin-protection">\n${lines.map(l => `    <li>${escapeHtml(l)}</li>`).join('\n')}\n  </ul>`;
 }

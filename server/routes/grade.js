@@ -30,6 +30,7 @@ import {
 const ID_PATTERN = /^[A-Za-z0-9_-]{22}$/;
 const SECOND_OPINION_RESERVE = 12; // the day's last AI calls stay for new checks
 const LIVE_TIMEOUT_MS = 60 * 1000;
+const LIVE_ANSWERS_MAX = 3;
 const LIVE_CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; frame-ancestors 'none'";
 
 const HUMAN_CHECK_FAILED = "Please try again: we couldn't confirm you're a person. If no box appears, turn off ad blockers or try another browser.";
@@ -55,6 +56,15 @@ export function createGradeRouter(ctx) {
     return html(res, 429, messagePage('Please slow down', 'A lot of checks have come from your network today. Please try again tomorrow, or from another connection.'));
   };
   const hasCookie = (kind, id, req) => hasValidCookie(secret(), kind, id, req.headers.cookie);
+
+  // Google's live answer: at most 3 per Grade in total (counted on the stored Grade as `liveAnswers`).
+  const liveAnswersUsed = g => (Number.isInteger(g?.liveAnswers) && g.liveAnswers > 0 ? g.liveAnswers : 0);
+  // The cap lasts for the life of the report, so "try again tomorrow" would not help: no Retry-After.
+  const liveCapReached = (res, id) => html(res, 429, messagePage(
+    'That is all for this report',
+    "You've seen Google's live answer 3 times for this report. Run a new check to see it again.",
+    { href: `/grade/${id}`, text: 'Back to the report' },
+  ));
 
   // Off switch, then headers for every /grade response.
   router.use('/grade', (req, res, next) => {
@@ -159,7 +169,8 @@ export function createGradeRouter(ctx) {
     leadGate: leadGate(),
     contactEmail: ctx.config.contactEmail ?? '',
     opened: req.query.opened === '1',
-    googleLive: Boolean(ctx.googleLive),
+    // The button goes away once the report's 3 live answers are used.
+    googleLive: Boolean(ctx.googleLive) && liveAnswersUsed(grade) < LIVE_ANSWERS_MAX,
     requester: hasCookie('ran', grade.id, req),
     rechecking: recheckIsRunning(grade, now()),
     // Second opinions still answering: the report says so and refreshes until they arrive.
@@ -304,6 +315,9 @@ export function createGradeRouter(ctx) {
         return html(res, 403, messagePage('Not available', "Google's live answer is private to the person who ran the check.", { href: `/grade/${grade.id}`, text: 'Back to the report' }));
       }
 
+      // A quick look first: a report that has used its 3 live answers makes no call and counts nothing.
+      if (liveAnswersUsed(grade) >= LIVE_ANSWERS_MAX) return liveCapReached(res, grade.id);
+
       const limited = ctx.rateLimiter.consumeAll([
         { key: `grade-google:${req.ip}`, ...RULES['grade-google'] },
         { key: `grade-google-grade:${grade.id}`, ...RULES['grade-google-grade'] },
@@ -314,6 +328,32 @@ export function createGradeRouter(ctx) {
       if (peek.remaining <= SECOND_OPINION_RESERVE || ctx.aiBudget.consume({ kind: 'grade' }).allowed !== true) {
         res.set('Retry-After', String(peek.retryAfterSeconds ?? 3600));
         return html(res, 429, messagePage("Not today", "We are keeping the rest of today's AI checks for new reports. Please try again tomorrow.", { href: `/grade/${grade.id}`, text: 'Back to the report' }));
+      }
+
+      // The budget accepted the call. Only now is the Grade's own count checked and raised, in one stored
+      // update, so two requests at the same moment cannot both see 2 and make 4. A call the budget refused
+      // never used one of the owner's 3; a call that then fails at Google still counts (it was paid for).
+      let outcome = 'missing';
+      try {
+        await ctx.store.collection('grades').update(list => {
+          const stored = Array.isArray(list) ? list.find(x => x && x.id === grade.id) : undefined;
+          if (!stored) return;
+          const used = liveAnswersUsed(stored);
+          if (used >= LIVE_ANSWERS_MAX) {
+            outcome = 'full';
+            return;
+          }
+          stored.liveAnswers = used + 1;
+          outcome = 'counted';
+        });
+      } catch (err) {
+        ctx.aiBudget.refund?.({ kind: 'grade' });
+        throw err;
+      }
+      if (outcome !== 'counted') {
+        // Not made: give the call back to the day's allowance.
+        ctx.aiBudget.refund?.({ kind: 'grade' });
+        return outcome === 'full' ? liveCapReached(res, grade.id) : notFound(res);
       }
 
       ctx.gradeGuard?.watch(); // the call above was counted

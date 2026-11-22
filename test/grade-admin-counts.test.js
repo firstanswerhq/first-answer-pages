@@ -149,8 +149,8 @@ test('G5: a fresh day shows zeros and the whole Grader allowance left', async ()
   const { lines } = await blockLines(env);
   assert.deepEqual(lines.slice(2), [
     'Today: 0 AI calls used, 150 left. 0 checks run.',
-    'Human check: 0 passed, 0 turned away.',
-    'Limits: 0 turned away by the per-address limits, 0 by the per-network limit.',
+    'Human check today: 0 passed, 0 turned away.',
+    'Limits today: 0 turned away by the per-address limits, 0 by the per-network limit.',
   ]);
 });
 
@@ -166,8 +166,8 @@ test('G5: the counts follow checks, a failed human check, a refused address and 
   assert.equal(lines.length, 5);
   assert.match(lines[2], TODAY);
   assert.match(lines[2], / 6 checks run\.$/);
-  assert.equal(lines[3], 'Human check: 8 passed, 1 turned away.');
-  assert.equal(lines[4], 'Limits: 1 turned away by the per-address limits, 1 by the per-network limit.');
+  assert.equal(lines[3], 'Human check today: 8 passed, 1 turned away.');
+  assert.equal(lines[4], 'Limits today: 1 turned away by the per-address limits, 1 by the per-network limit.');
 });
 
 test('G5: the AI calls used and left come from the budget', async () => {
@@ -176,17 +176,17 @@ test('G5: the AI calls used and left come from the budget', async () => {
   for (let i = 0; i < 250 && env.ctx.aiBudget.usage({ kind: 'grade' }).used === 0; i += 1) await new Promise(r => setTimeout(r, 20));
   const { used, left } = env.ctx.aiBudget.usage({ kind: 'grade' });
   assert.ok(used >= 1);
-  assert.equal((await blockLines(env)).lines[2], `Today: ${used} AI calls used, ${left} left. 1 checks run.`);
+  assert.equal((await blockLines(env)).lines[2], `Today: ${used} AI calls used, ${left} left. 1 check run.`);
 });
 
 test('G5: the counts start again at zero the next Chicago day', async () => {
   const env = await startEnv({ turnstile: verifier(), notifier: createMockNotifier() });
   await startCheck(env, '203.0.113.5', 'bad');
-  assert.equal((await blockLines(env)).lines[3], 'Human check: 0 passed, 1 turned away.');
+  assert.equal((await blockLines(env)).lines[3], 'Human check today: 0 passed, 1 turned away.');
   env.clock.t += DAY;
   const { lines } = await blockLines(env);
   assert.equal(lines[2], 'Today: 0 AI calls used, 150 left. 0 checks run.');
-  assert.equal(lines[3], 'Human check: 0 passed, 0 turned away.');
+  assert.equal(lines[3], 'Human check today: 0 passed, 0 turned away.');
 });
 
 // ---- counts only, escaped, behind the login -------------------------------------------------------------
@@ -199,7 +199,7 @@ test('G5: the block holds counts only: no business name, address or visitor deta
   for (const leak of ['Shop', 'Nashville', 'accountants', '203.0.113', 'good-token', 'site-key', TOKEN, 'test-secret']) {
     assert.equal(block.includes(leak), false, leak);
   }
-  for (const line of lines) assert.match(line, /^(Human check|Heads-up emails|Today|Limits): /);
+  for (const line of lines) assert.match(line, /^(Human check|Heads-up emails|Today|Human check today|Limits today): /);
 });
 
 test('G5: every value in the block is escaped, and a value that is not a count shows as 0', async () => {
@@ -214,8 +214,8 @@ test('G5: every value in the block is escaped, and a value that is not a count s
   const env = await startEnv({ turnstile: null, notifier: createMockNotifier(), gradeGuard });
   const { lines, text } = await blockLines(env);
   assert.equal(lines[2], 'Today: 0 AI calls used, 0 left. 0 checks run.');
-  assert.equal(lines[3], 'Human check: 0 passed, 0 turned away.');
-  assert.equal(lines[4], 'Limits: 0 turned away by the per-address limits, 0 by the per-network limit.');
+  assert.equal(lines[3], 'Human check today: 0 passed, 0 turned away.');
+  assert.equal(lines[4], 'Limits today: 0 turned away by the per-address limits, 0 by the per-network limit.');
   assert.equal(text.includes('<script>alert(1)</script>'), false);
   assert.equal(text.includes('<b>9</b>'), false);
 });
@@ -227,6 +227,44 @@ test('G5: a guard that gives nothing still shows the page', async () => {
   const env = await startEnv({ turnstile: null, notifier: createMockNotifier(), gradeGuard });
   const { lines } = await blockLines(env);
   assert.equal(lines[2], 'Today: 0 AI calls used, 0 left. 0 checks run.');
+});
+
+test('V67: a guard whose summary() throws still gives the page (200) with zeros', async () => {
+  const gradeGuard = {
+    turnedAway() {}, passed() {}, started() {}, misconfigured() {}, watch() {},
+    summary() { throw new Error('the counts are broken'); },
+  };
+  const env = await startEnv({ turnstile: null, notifier: createMockNotifier(), gradeGuard });
+  const res = await adminPage(env);
+  assert.equal(res.status, 200);
+  const text = await res.text();
+  assert.ok(text.includes('Today: 0 AI calls used, 0 left. 0 checks run.'));
+  assert.ok(text.includes('Human check today: 0 passed, 0 turned away.'));
+  assert.ok(text.includes('No reports yet.'));
+  assert.equal(text.includes('the counts are broken'), false);
+
+  const odd = await startEnv({
+    turnstile: null, notifier: createMockNotifier(), gradeGuard: { ...gradeGuard, summary: () => 'nope' },
+  });
+  assert.equal((await adminPage(odd)).status, 200);
+});
+
+test('V68: the checks line says "1 check run" for one and "checks run" for any other number', async () => {
+  const env = await startEnv({ turnstile: null, notifier: createMockNotifier() });
+  assert.match((await blockLines(env)).lines[2], / 0 checks run\.$/);
+  assert.equal((await startCheck(env, '203.0.113.5')).status, 303);
+  assert.match((await blockLines(env)).lines[2], / 1 check run\.$/);
+  assert.equal((await startCheck(env, '203.0.113.6')).status, 303);
+  assert.match((await blockLines(env)).lines[2], / 2 checks run\.$/);
+});
+
+test('V69: the two count lines start with "Human check today:" and "Limits today:", apart from the setup line', async () => {
+  const env = await startEnv({ turnstile: verifier(), notifier: createMockNotifier() });
+  const { lines } = await blockLines(env);
+  assert.ok(lines[0].startsWith('Human check: '));
+  assert.ok(lines[3].startsWith('Human check today: '));
+  assert.ok(lines[4].startsWith('Limits today: '));
+  assert.equal(lines.filter(l => l.startsWith('Human check: ')).length, 1, 'only the setup line reads "Human check:"');
 });
 
 test('G5: the block is behind the admin login like the rest of the page', async () => {

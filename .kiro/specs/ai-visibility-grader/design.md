@@ -437,7 +437,7 @@ New `server/lib/grade-guard.js`: `createGradeGuard({ aiBudget, notifier, store, 
 - "Human check: on", "off (no Turnstile keys)" or "on, but Cloudflare reported a problem (wrong secret key or an error on its side); checks are let through" (from the `misconfigured` flag; an `internal-error` can be an outage at Cloudflare and not a wrong key);
 - "Heads-up emails: on" or "off (no email service set)" (from `NOTIFIER`);
 - "Today: <used> AI calls used, <left> left. <n> checks run.";
-- "Human check: <humanPass> passed, <human> turned away. Limits: <limit> turned away by the per-address limits, <network> by the per-network limit." each on its own line.
+- "Human check today: <humanPass> passed, <human> turned away." and "Limits today: <limit> turned away by the per-address limits, <network> by the per-network limit.", each on its own line, worded so they do not read like the setup line "Human check: on". The checks count says "1 check run" for one and "<n> checks run" otherwise. If `guard.summary()` throws, the block shows zeros: the counts are never the reason the page fails.
 
 *Counting.* A pass calls `note('humanPass')`; a failed human check calls `note('human')`; a refusal by a per-address rule calls `note('limit')`; a refusal by the per-network rule calls `note('network')`; a started Grade calls `note('checks')`. The honeypot and the form timer are not counted.
 
