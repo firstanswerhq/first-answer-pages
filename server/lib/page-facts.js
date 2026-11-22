@@ -3,12 +3,19 @@
 // scanning (an unclosed tag cuts to the end), never by lazy patterns, and no
 // page script is ever run.
 
+import { reviewsLinkOnPage } from './listing-fields.js';
+import { normalizeForMatch } from './seance.js';
+
 const MAX_HTML = 2 * 1024 * 1024;
 const MAX_TAG = 4000; // longest tag text read for attributes
 const MAX_CONTENT = 2000; // longest element text read for labels and headlines
 const MAX_LABELS = 200;
 const MAX_TEL = 100;
 const MAX_H1 = 50;
+const MAX_HEADINGS = 40;
+const MAX_HEADING_TEXT = 120;
+const MAX_REVIEW_LINKS = 5;
+const MAX_AREA_TEXT = 120;
 
 /** Hours: a day word near a time, a time range, or round-the-clock wording. */
 const TIME = String.raw`\d{1,2}(?::\d{2})?\s?(?:(?:am|pm)(?![a-z])|a\.m\.|p\.m\.)`;
@@ -25,6 +32,78 @@ export const STREET_PATTERN =
 /** Call-to-action words, whole words only. */
 export const CTA_PATTERN =
   /\b(?:call|book|schedule|quote|estimate|order|reserve|reservation|appointment|get started)\b/i;
+
+// ---------- service area (no-storefront mode) ----------
+
+/** Words that, near "serving" or "we serve", say an area is meant rather than food or a product. */
+const AREA_WORDS = 'areas?|county|counties|surrounding|nearby|communities';
+// Letters and digits on either side mark a whole word; \b is not enough when a city ends in "+".
+const WORD_START = '(?<![\\p{L}\\p{N}])';
+const WORD_END = '(?![\\p{L}\\p{N}])';
+const NEVER = /(?!)/u;
+
+/**
+ * The service-area test for one Grade, matched against `normalizeForMatch(facts.text)` (lower case, punctuation
+ * gone). The city is normalized the same way and every special character is escaped. An empty city adds no
+ * city alternative (never an empty one, which would match everywhere). Never throws.
+ * @param {unknown} city
+ * @returns {RegExp}
+ */
+export function serviceAreaPattern(city) {
+  try {
+    const name = normalizeForMatch(typeof city === 'string' ? city : '').slice(0, 120);
+    // Only the characters that may be escaped under the `u` flag (a "\-" would be a syntax error there).
+    const escaped = name.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+    const target = escaped ? `${AREA_WORDS}|${escaped}` : AREA_WORDS;
+    const parts = [
+      'service areas?',
+      'areas? we serve',
+      // Bounded window: the city or an area word within 80 characters of the verb.
+      `(?:we (?:proudly )?serve|serving)${WORD_END}[^\\n]{0,80}${WORD_START}(?:${target})${WORD_END}`,
+    ];
+    if (escaped) {
+      parts.push(`${escaped} and (?:the )?(?:surrounding|nearby|neighboring) (?:areas?|communities|towns|cities|counties)`);
+    }
+    return new RegExp(`${WORD_START}(?:${parts.join('|')})${WORD_END}`, 'iu');
+  } catch {
+    return NEVER;
+  }
+}
+
+// ---------- reviews ----------
+
+/**
+ * Tested against each entry of `facts.headings` (never the page text, so a "Reviews" menu link does not count).
+ */
+export const REVIEW_HEADING_PATTERN =
+  /\b(?:reviews|testimonials)\b|\bwhat (?:our |my )?(?:customers|clients|neighbors) (?:say|are saying)\b/i;
+
+/**
+ * A rating written out: "5.0 stars", "4.9 out of 5", a decimal before the slash ("4.8/5"; "Closed 1/5" and
+ * "Open 9/5" never count), or three or more star symbols in a row.
+ */
+export const RATING_PATTERN =
+  /\b[1-5](?:\.\d)?\s{0,3}stars?\b|\b[1-5](?:\.\d)?\s{0,3}out of\s{1,3}5\b|\b[1-5]\.\d\s?\/\s?5\b|[\u2605\u2B50]{3,}/iu;
+
+/** A quoted comment of 20 to 400 characters, then within 40 characters a dash and a capitalized name. */
+export const QUOTED_REVIEW_PATTERN =
+  /["\u201C][^"\u201C\u201D\n]{20,400}["\u201D][\s,.]{0,40}[-\u2013\u2014~]\s{0,3}\p{Lu}\p{Ll}{0,30}/u;
+
+/**
+ * True when the page facts hold a review signal: a review heading, a rating or a quoted comment with a name
+ * in the text, a link to reviews on a review site, or review data in the business label.
+ * @param {object} facts Page_Facts from readPageFacts
+ * @returns {boolean}
+ */
+export function hasReviewSignal(facts) {
+  if (!facts || typeof facts !== 'object') return false;
+  const headings = Array.isArray(facts.headings) ? facts.headings : [];
+  if (headings.some(h => typeof h === 'string' && REVIEW_HEADING_PATTERN.test(h))) return true;
+  const text = typeof facts.text === 'string' ? facts.text : '';
+  if (RATING_PATTERN.test(text) || QUOTED_REVIEW_PATTERN.test(text)) return true;
+  if (Array.isArray(facts.reviewLinks) && facts.reviewLinks.length > 0) return true;
+  return facts.jsonLd?.business?.hasReviewData === true;
+}
 
 const BUSINESS_TYPES = new Set([
   'LocalBusiness', 'Restaurant', 'FoodEstablishment', 'CafeOrCoffeeShop', 'BarOrPub', 'Bakery',
@@ -48,6 +127,8 @@ function emptyFacts() {
     ogImage: '',
     hasViewport: false,
     h1s: [],
+    headings: [],
+    reviewLinks: [],
     imgCount: 0,
     imgMissingAlt: 0,
     telLinks: [],
@@ -321,7 +402,31 @@ function readBusiness(node) {
     address: readAddress(node.address),
     hours: readHours(node),
     url: str(node.url),
+    areaServed: readAreaServed(node.areaServed),
+    hasReviewData: hasValue(node.aggregateRating) || hasValue(node.review),
   };
+}
+
+/** `areaServed` as text: a string, an object with `name`, or an array of those, joined with ", ". */
+function readAreaServed(value) {
+  const parts = [];
+  for (const item of asArray(value)) {
+    const text = typeof item === 'string'
+      ? item.trim()
+      : item && typeof item === 'object' && !Array.isArray(item) ? str(item.name) : '';
+    if (text) parts.push(text);
+    if (parts.length >= 20) break;
+  }
+  return parts.join(', ').slice(0, MAX_AREA_TEXT).trim();
+}
+
+/** A value that holds something: a non-empty string, a number, a non-empty array or object. */
+function hasValue(v) {
+  if (typeof v === 'string') return v.trim() !== '';
+  if (typeof v === 'number') return Number.isFinite(v);
+  if (Array.isArray(v)) return v.some(hasValue);
+  if (v && typeof v === 'object') return Object.keys(v).length > 0;
+  return false;
 }
 
 function readJsonLd(bodies) {
@@ -348,6 +453,33 @@ function readJsonLd(bodies) {
     }
   }
   return result;
+}
+
+// ---------- headings ----------
+
+/**
+ * The text of every <h1>, <h2> and <h3>, in page order (each cut to 120 characters, at most 40). Heading text
+ * inside an <a>, or a heading inside a <nav>, is left out, so a "Reviews" menu link is never a heading.
+ * Same indexOf scanning as the rest of the file.
+ */
+function readHeadings(s) {
+  let t = removeElements(s, 'nav');
+  t = removeElements(t, 'a');
+  if (t.indexOf('<') === -1) return [];
+  const lower = toLower(t);
+  const found = [];
+  for (const name of ['h1', 'h2', 'h3']) {
+    let count = 0;
+    scan(t, lower, name, true, MAX_CONTENT, (tag, start, end) => {
+      if (count >= MAX_HEADINGS) return;
+      const text = cleanText(t.slice(start, end)).slice(0, MAX_HEADING_TEXT).trim();
+      if (!text) return;
+      count += 1;
+      found.push({ at: start, text });
+    });
+  }
+  // The first 40 of each kind always hold the first 40 overall.
+  return found.sort((a, b) => a.at - b.at).slice(0, MAX_HEADINGS).map(h => h.text);
 }
 
 // ---------- main ----------
@@ -417,6 +549,8 @@ export function readPageFacts(html) {
     scan(s, lower, 'a', true, MAX_CONTENT, (tag, start, end) => {
       const href = (readAttrs(tag, 'a').get('href') || '').trim();
       if (/^tel:/i.test(href) && facts.telLinks.length < MAX_TEL) facts.telLinks.push(href);
+      // Links to the business's reviews on a review site, in page order (https only, the stricter page rules).
+      if (facts.reviewLinks.length < MAX_REVIEW_LINKS && reviewsLinkOnPage(href) !== '') facts.reviewLinks.push(href);
       addLabel(cleanText(s.slice(start, end)));
     });
 
@@ -431,6 +565,7 @@ export function readPageFacts(html) {
     });
   }
 
+  facts.headings = readHeadings(s);
   facts.text = cleanText(removeElements(s, 'title'));
   facts.scriptBuilt = facts.text.length < 200 && scriptCount > 0;
   return facts;
