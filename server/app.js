@@ -24,6 +24,7 @@ import { createNameCheck } from './lib/name-check.js';
 import { createIndexNow, indexNowOffReason } from './lib/indexnow.js';
 import { createSafeFetcher } from './lib/safe-fetch.js';
 import { createTurnstile } from './lib/turnstile.js';
+import { createGradeGuard } from './lib/grade-guard.js';
 import { createGrader } from './lib/grader.js';
 import { createDraftStore } from './lib/drafts.js';
 import { createHomeRouter }     from './routes/home.js';
@@ -59,6 +60,7 @@ const systemClock = Object.freeze({ now: () => Date.now() });
  *   newId?: () => string,
  *   safeFetcher?: { fetchText: Function },
  *   turnstile?: { siteKey: string, verify: Function } | null,
+ *   gradeGuard?: object,
  *   newGradeId?: () => string,
  *   a2a?: object,
  * }} [deps]
@@ -141,7 +143,17 @@ export function createApp(deps = {}) {
   ctx.newGradeId = deps.newGradeId ?? (() => randomBytes(16).toString('base64url'));
   // "Google's live answer" panel: null when off.
   ctx.googleLive = deps.googleLive !== undefined ? deps.googleLive : createGeminiLive(config);
+  // The day's bot-protection counts (kept in the AI budget) and, from task G4, the heads-up emails.
+  ctx.gradeGuard = deps.gradeGuard ?? createGradeGuard({
+    aiBudget: ctx.aiBudget,
+    notifier: ctx.notifier,
+    store,
+    clock,
+    config,
+    log: line => process.stderr.write(`[grader] ${line}\n`),
+  });
   ctx.grader = createGrader({
+    guard: ctx.gradeGuard,
     store,
     assistantProvider: ctx.assistantProvider,
     extraAssistants: deps.extraAssistants ?? createExtraAssistants(config),

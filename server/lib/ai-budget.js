@@ -47,6 +47,26 @@ function nextChicagoMidnight(now) {
 
 const isCount = n => Number.isInteger(n) && n >= 0;
 
+// Names of the day counters ("checks", "humanPass") and of the once-a-day flags ("once:email50").
+const NOTE_NAME = /^[A-Za-z][A-Za-z0-9]{0,39}$/;
+const ONCE_PREFIX = 'once:';
+const MAX_NOTES = 50;
+
+/**
+ * The saved `notes`: a plain object of whole-number counts. Anything else (a string, an array, numbers that
+ * are not counts, odd names) is ignored, so a damaged `notes` can never cost the day's spending counts.
+ */
+function readNotes(value) {
+  const out = new Map();
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return out;
+  for (const [key, count] of Object.entries(value)) {
+    if (out.size >= MAX_NOTES) break;
+    const name = key.startsWith(ONCE_PREFIX) ? key.slice(ONCE_PREFIX.length) : key;
+    if (NOTE_NAME.test(name) && isCount(count)) out.set(key, count);
+  }
+  return out;
+}
+
 /** Saved counts, or null when the file is missing or unreadable. A corrupt file is removed. */
 function loadCounts(file) {
   let text;
@@ -59,7 +79,13 @@ function loadCounts(file) {
     const data = JSON.parse(text);
     if (typeof data?.day === 'string' && isCount(data.total) && isCount(data.photo)) {
       // `grade` is written only when above 0, so older files load it as 0.
-      return { day: data.day, total: data.total, photo: data.photo, grade: isCount(data.grade) ? data.grade : 0 };
+      return {
+        day: data.day,
+        total: data.total,
+        photo: data.photo,
+        grade: isCount(data.grade) ? data.grade : 0,
+        notes: readNotes(data.notes),
+      };
     }
   } catch {
     // fall through to removal
@@ -99,6 +125,8 @@ export function createAiBudget({ clock, limit, photoLimit, gradeLimit, file } = 
   let total = 0;
   let photo = 0;
   let grade = 0;
+  // Today's other counters ("checks", "human", ...) and once-a-day flags ("once:..."), kept with the day.
+  let notes = new Map();
   let pending = Promise.resolve();
 
   if (typeof file === 'string' && file !== '') {
@@ -108,6 +136,7 @@ export function createAiBudget({ clock, limit, photoLimit, gradeLimit, file } = 
       total = saved.total;
       photo = saved.photo;
       grade = saved.grade;
+      notes = saved.notes;
     }
   }
 
@@ -119,6 +148,7 @@ export function createAiBudget({ clock, limit, photoLimit, gradeLimit, file } = 
       total = 0;
       photo = 0;
       grade = 0;
+      notes = new Map();
     }
     const nextMidnight = nextChicagoMidnight(now);
     return {
@@ -141,8 +171,9 @@ export function createAiBudget({ clock, limit, photoLimit, gradeLimit, file } = 
   /** Writes the current counts. Writes are queued; a failure logs the error name only. */
   function persist() {
     if (typeof file !== 'string' || file === '') return;
-    // `grade` is written only when above 0, so existing files stay byte-identical.
+    // `grade` and `notes` are written only when not empty, so existing files stay byte-identical.
     const snapshot = grade > 0 ? { day: dayKey, total, photo, grade } : { day: dayKey, total, photo };
+    if (notes.size > 0) snapshot.notes = Object.fromEntries(notes);
     pending = pending
       .then(() => updateJsonFile(file, () => snapshot, { fallback: {} }))
       .then(() => undefined, err => {
@@ -190,6 +221,45 @@ export function createAiBudget({ clock, limit, photoLimit, gradeLimit, file } = 
     peek({ kind = 'seance' } = {}) {
       state();
       return result(remainingFor(kind) > 0, kind);
+    },
+    /**
+     * Today's use of one share: `used` calls counted, `left` calls still allowed (held down by the shared
+     * caps, so used + left can be less than the setting) and the `limit` of that share.
+     * @param {{ kind?: 'photo' | 'seance' | 'grade' }} [opts]
+     */
+    usage({ kind = 'grade' } = {}) {
+      state();
+      const used = kind === 'photo' ? photo : kind === 'grade' ? grade : total;
+      const limit = kind === 'photo' ? photoCap : kind === 'grade' ? gradeCap : cap;
+      return { used, left: remainingFor(kind), limit };
+    },
+    /** Adds one to today's count for `name` ("checks", "human", ...) and returns it. A bad name counts nothing. */
+    note(name) {
+      if (typeof name !== 'string' || !NOTE_NAME.test(name)) return 0;
+      state();
+      if (!notes.has(name) && notes.size >= MAX_NOTES) return 0;
+      const next = (notes.get(name) ?? 0) + 1;
+      notes.set(name, next);
+      persist();
+      return next;
+    },
+    /** Today's counts by name (the once-a-day flags are not included). */
+    notes() {
+      state();
+      const out = {};
+      for (const [key, count] of notes) if (!key.startsWith(ONCE_PREFIX)) out[key] = count;
+      return out;
+    },
+    /** True the first time it is called with `name` on a Chicago day, false after that (also after a restart). */
+    once(name) {
+      if (typeof name !== 'string' || !NOTE_NAME.test(name)) return false;
+      state();
+      const key = `${ONCE_PREFIX}${name}`;
+      if (notes.has(key)) return false;
+      if (notes.size >= MAX_NOTES) return false;
+      notes.set(key, 1);
+      persist();
+      return true;
     },
     /** Resolves when every queued write has finished. */
     flush: () => pending,

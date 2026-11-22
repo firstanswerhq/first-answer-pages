@@ -575,7 +575,7 @@ function scoreOf(results) {
  */
 export function createGrader({
   store, assistantProvider, extraAssistants = [], nameChecker = null, aiBudget, safeFetcher,
-  draftStore, notifier, clock, newId, config = {}, websiteBudgetMs = WEBSITE_BUDGET_MS,
+  draftStore, notifier, clock, newId, config = {}, websiteBudgetMs = WEBSITE_BUDGET_MS, guard = null,
   // Injectable so tests need no real waiting: the pause before a retry and a second opinion's time limit.
   sleep = pause, secondOpinionTimeoutMs = SECOND_OPINION_TIMEOUT_MS,
 }) {
@@ -591,6 +591,14 @@ export function createGrader({
     ? config.gradeMaxRunning
     : DEFAULT_MAX_RUNNING;
   const waiting = []; // Grade_Ids in line
+
+  const watchGuard = () => {
+    try {
+      guard?.watch?.();
+    } catch {
+      // watching the day's use must never stop a check
+    }
+  };
 
   const background = (id, label, fn) => {
     Promise.resolve().then(fn).catch(() => log(`${label}-failed id=${id}`));
@@ -717,7 +725,12 @@ export function createGrader({
     const isMock = mainName === 'mock';
     const category = mapCategory(input.service, store.getCategories()) || '';
     const have = name => existing.some(a => a.prompt === prompt && a.provider === name);
-    const consume = () => aiBudget.consume({ kind: 'grade' }).allowed === true;
+    // Every counted call is followed by a look at the day's use (the heads-up emails); it never waits or throws.
+    const consume = () => {
+      const counted = aiBudget.consume({ kind: 'grade' }).allowed === true;
+      if (counted) watchGuard();
+      return counted;
+    };
 
     let mainState = 'ok';
     const plans = [];
@@ -746,7 +759,7 @@ export function createGrader({
         signal,
         category,
         businessName: input.name,
-        ...(second ? {} : { consumeExtra: () => aiBudget.consume({ kind: 'grade' }).allowed === true }),
+        ...(second ? {} : { consumeExtra: consume }),
       });
       try {
         return await ask();

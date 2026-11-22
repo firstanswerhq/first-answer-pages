@@ -101,11 +101,15 @@ export function createGradeRouter(ctx) {
           verdict = 'unreachable';
         }
         if (verdict === 'failed') {
+          ctx.gradeGuard?.turnedAway('human');
           return formPage(res, 422, { values: checked.values, errors: { humanCheck: HUMAN_CHECK_FAILED } });
         }
+        // Only a real "ok" counts as a pass; a check let through below does not.
+        if (verdict === 'ok') ctx.gradeGuard?.passed();
         // A problem on Cloudflare's side or with our key must not turn real owners away; the limits still apply.
         if (verdict === 'unreachable' || verdict === 'misconfigured') {
           process.stderr.write(`[grader] turnstile=${verdict}\n`);
+          if (verdict === 'misconfigured') ctx.gradeGuard?.misconfigured();
         }
       }
 
@@ -124,12 +128,14 @@ export function createGradeRouter(ctx) {
       const networkFull = !ctx.gradeLimiter.peek(networkRule.key, networkRule).allowed;
       const limited = ctx.gradeLimiter.consumeAll([...addressRules, networkRule]);
       if (!limited.allowed) {
+        ctx.gradeGuard?.turnedAway(networkFull ? 'network' : 'limit');
         return networkFull
           ? tooManyNetwork(res, limited.retryAfterSeconds)
           : tooMany(res, limited.retryAfterSeconds);
       }
 
       const id = await ctx.grader.start(checked.input);
+      ctx.gradeGuard?.started();
       // The browser that ran the check is the only one that may ask for Google's live answer.
       res.append('Set-Cookie', setCookieHeader(secret(), 'ran', id, { production: production() }));
       return res.redirect(303, `/grade/${id}`);
@@ -310,6 +316,7 @@ export function createGradeRouter(ctx) {
         return html(res, 429, messagePage("Not today", "We are keeping the rest of today's AI checks for new reports. Please try again tomorrow.", { href: `/grade/${grade.id}`, text: 'Back to the report' }));
       }
 
+      ctx.gradeGuard?.watch(); // the call above was counted
       res.set({ 'Cache-Control': 'no-store', 'Content-Security-Policy': LIVE_CSP });
       let answer;
       try {
