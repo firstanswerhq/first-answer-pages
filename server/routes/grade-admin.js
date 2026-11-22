@@ -12,6 +12,7 @@
 import { layout, escapeHtml } from '../lib/html.js';
 import { formatRunTime } from '../lib/seance-html.js';
 import { isPartialScore } from '../lib/grader.js';
+import { scoreGrade } from '../lib/grade-score.js';
 
 const NOTES = Object.freeze({
   deleted: 'Deleted the report and its leads.',
@@ -90,8 +91,11 @@ export function mountGradeAdmin(router, ctx, { adminNav, wantsHtml, form }) {
         const stale = g.status === 'running' && ctx.grader.isStale(g, now());
         const status = stale ? 'failed' : String(g.status ?? '');
         // A score without the AI part is marked "partial" next to the number.
-        const score = Number.isInteger(g.score?.score)
-          ? `${g.score.score}${isPartialScore(g) ? ' (partial)' : ''}`
+        // Worked out from the stored results with the current points, like the report (never the stored Score).
+        // A Grade stored with no results at all has nothing to work out from, so it keeps its stored number.
+        const current = Array.isArray(g.results) && g.results.length > 0 ? scoreGrade(g.results).score : g.score?.score;
+        const score = Number.isInteger(current)
+          ? `${current}${isPartialScore(g) ? ' (partial)' : ''}`
           : 'not scored';
         const id = String(g.id ?? '');
         const safeId = encodeURIComponent(id);

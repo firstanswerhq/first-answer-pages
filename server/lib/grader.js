@@ -1384,8 +1384,10 @@ export function createGrader({
             g.recheckFailedAt = nowIso();
             return;
           }
-          // A partial score (no AI answer) is never put beside a full one.
-          g.previousScore = isPartialScore(g) ? null : (g.score?.score ?? null);
+          // A partial score (no AI answer) is never put beside a full one, and neither is a score from before
+          // the reviews-visible Check existed: the points changed then, so the two would not compare.
+          const hadReviewsCheck = Array.isArray(g.results) && g.results.some(r => r && r.id === 'reviews-visible');
+          g.previousScore = isPartialScore(g) || !hadReviewsCheck ? null : (g.score?.score ?? null);
           g.facts = storedFacts(web.facts, web.found);
           g.found = web.found;
           g.results = assemble(web.results, g.ai, g.aiMain);

@@ -174,6 +174,8 @@ function parseReviewsUrl(value) {
   if (typeof value !== 'string') return null;
   const text = value.trim();
   if (text === '' || text.length > MAX_REVIEWS_LINK || /[\s\p{Cc}]/u.test(text)) return null;
+  // Written out in full: "https:google.com/maps" parses, but in a page's href it points at our own site.
+  if (!/^https:\/\//i.test(text)) return null;
   let url;
   try {
     url = new URL(text);
@@ -198,13 +200,16 @@ export function reviewsLinkHost(value) {
   if (!url) return '';
   const host = bareHost(url);
   const p = url.pathname;
+  // Redirect addresses ("/url?q=…", "/biz_redir", "/l.php") are refused: the label would vouch for a link
+  // that can lead anywhere.
   switch (host) {
     case 'google.com':
-      if (p.startsWith('/maps')) return 'google';
+      if (p === '/maps' || p.startsWith('/maps/')) return 'google';
       // A Google search address is a business's reviews only when it names the business's own panel.
       if (p === '/search' && (url.hash.includes('lrd=') || url.search.includes('ludocid='))) return 'google';
       return '';
     case 'maps.google.com':
+      return p === '/url' || p.startsWith('/url/') ? '' : 'google';
     case 'g.page':
     case 'maps.app.goo.gl':
       return 'google';
@@ -213,9 +218,9 @@ export function reviewsLinkHost(value) {
     case 'search.google.com':
       return p.startsWith('/local') ? 'google' : '';
     case 'yelp.com':
-      return p.startsWith('/biz') ? 'yelp' : '';
+      return p.startsWith('/biz/') ? 'yelp' : '';
     case 'facebook.com':
-      return 'facebook';
+      return p === '/l.php' || p.startsWith('/l.php/') || p.startsWith('/flx/') ? '' : 'facebook';
     case 'nextdoor.com':
       return 'nextdoor';
     default:
@@ -236,7 +241,7 @@ export function reviewsLinkOnPage(value) {
   const url = parseReviewsUrl(value);
   const host = bareHost(url);
   const p = url.pathname;
-  if (site === 'facebook') return p.includes('/reviews') ? site : '';
+  if (site === 'facebook') return p.endsWith('/reviews') || p.includes('/reviews/') ? site : '';
   if (site === 'nextdoor') return p.startsWith('/pages/') ? site : '';
   if (host === 'search.google.com' && p.startsWith('/local/writereview')) return '';
   return site;

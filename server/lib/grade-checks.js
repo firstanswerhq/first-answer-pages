@@ -1,7 +1,7 @@
 // The Grader's Checks and the website checks that run on a home page.
 // Pure functions: facts, robots and llms results come in, Check_Results go out.
 
-import { HOURS_PATTERN, STREET_PATTERN, CTA_PATTERN } from './page-facts.js';
+import { HOURS_PATTERN, STREET_PATTERN, CTA_PATTERN, hasReviewSignal } from './page-facts.js';
 import { AI_AGENTS, parseRobots, mayFetchRoot } from './robots.js';
 
 /**
@@ -66,14 +66,14 @@ export const CHECKS = Object.freeze([
     fix: 'Add a share picture to your home page, so a link to it shows a photo when someone shares it.',
   },
   {
-    id: 'tap-to-call', group: 'customer_basics', points: 5,
+    id: 'tap-to-call', group: 'customer_basics', points: 4,
     label: 'Tap-to-call phone number',
     passText: 'Your home page has a tap-to-call phone link.',
     failText: 'We found no tap-to-call phone link.',
     fix: 'Make your phone number a tap-to-call link so people on phones can call you in one tap.',
   },
   {
-    id: 'hours-shown', group: 'customer_basics', points: 4,
+    id: 'hours-shown', group: 'customer_basics', points: 3,
     label: 'Hours on the home page',
     passText: 'Your home page shows your hours.',
     failText: 'We found no hours on your home page.',
@@ -87,11 +87,18 @@ export const CHECKS = Object.freeze([
     fix: 'Write your street address in plain text on your home page, or your service area if you travel to customers.',
   },
   {
-    id: 'call-button', group: 'customer_basics', points: 3,
+    id: 'call-button', group: 'customer_basics', points: 2,
     label: 'Call or book button on the home page',
     passText: 'Your home page has a call or book button.',
     failText: 'We found no call or book button or link.',
     fix: 'Add a clear button such as "Call now" or "Get a free estimate" near the top of your home page.',
+  },
+  {
+    id: 'reviews-visible', group: 'customer_basics', points: 3,
+    label: 'Reviews AI can see',
+    passText: 'Your home page shows customer reviews that AI can read.',
+    failText: "We found no customer reviews on your home page. AI assistants often can't see reviews that are only inside Google.",
+    fix: "Put 3 or more of your real customer reviews on your home page, with each customer's first name and the date, and add a link to your Google reviews.",
   },
   {
     id: 'ai-named', group: 'ai_answers', points: 30,
@@ -138,7 +145,7 @@ const AGENT_NAMES = Object.freeze({
   'Google-Extended': 'Google AI (Google-Extended)',
 });
 
-const TEXT_CHECKS = new Set(['one-headline', 'hours-shown', 'address-shown', 'call-button']);
+const TEXT_CHECKS = new Set(['one-headline', 'hours-shown', 'address-shown', 'call-button', 'reviews-visible']);
 const SCRIPT_BUILT_REASON = "Your page loads its words in a way this check can't read yet.";
 const NO_WEBSITE = 'No website given';
 const UNREACHED = "We couldn't reach your website.";
@@ -248,6 +255,9 @@ function checkFacts(id, facts, input) {
       return judge(id, STREET_PATTERN.test(facts.text));
     case 'call-button':
       return judge(id, facts.ctaLabels.some(label => CTA_PATTERN.test(label)));
+    case 'reviews-visible':
+      // A review heading, a written rating or quoted comment, a link to reviews, or review data in the label.
+      return judge(id, hasReviewSignal(facts));
     default:
       return notChecked(id, UNREACHED);
   }

@@ -19,6 +19,7 @@ import {
 } from './fix-kit.js';
 import { formatRunTime } from './seance-html.js';
 import { listedNames, splitLists } from './name-match.js';
+import { scoreGrade } from './grade-score.js';
 import {
   providerLabel, freeQuestion, stepNames, foundOf, isSecondOpinion, schemaHours, readableHours, isPartialScore,
 } from './grader.js';
@@ -451,9 +452,21 @@ function searchPreview(grade) {
   </section>`;
 }
 
-function groupLines(grade) {
+/** The Score worked out from the stored results with the current points (see reportPage). */
+function currentScore(grade) {
   const results = resultsOf(grade);
-  const byGroup = grade.score?.byGroup ?? {};
+  // A Grade stored with no results at all has nothing to work out from, so it keeps its stored numbers.
+  if (results.length === 0) return grade.score ?? {};
+  try {
+    return scoreGrade(results);
+  } catch {
+    return grade.score ?? {};
+  }
+}
+
+function groupLines(grade, score = currentScore(grade)) {
+  const results = resultsOf(grade);
+  const byGroup = score?.byGroup ?? {};
   const lines = [];
   for (const g of GROUPS) {
     if (g.show === false) continue;
@@ -635,7 +648,9 @@ export function reportPage(grade, opts = {}) {
   } = opts;
   const i = grade.input;
   const full = !leadGate || unlocked;
-  const s = grade.score ?? {};
+  // One rule for every number on the page: worked out once from the stored results with the current points,
+  // never read from the stored Score, so a Grade made before a change in points never shows two scores.
+  const s = currentScore(grade);
   const scored = Number.isInteger(s.score);
   const failedLine = scored && Number.isInteger(s.failed) && Number.isInteger(s.counted)
     ? `<p class="grade-failed">${s.counted === 1 ? `${s.failed} of 1 check needs work` : `${s.failed} of ${s.counted} checks need work`}</p>`
@@ -651,7 +666,9 @@ export function reportPage(grade, opts = {}) {
   const partialLine = partial
     ? `<p class="hint grade-partial">${h(`Partial score: ${partialReason(grade)} the AI part isn't counted. Check again later for your full score.`)}</p>`
     : '';
-  const prev = Number.isInteger(grade.previousScore) && scored && grade.recheckedAt && !partial
+  // Shown only when the results include reviews-visible, so scores are never compared across the change in points.
+  const hasReviewsCheck = resultsOf(grade).some(r => r && r.id === 'reviews-visible');
+  const prev = Number.isInteger(grade.previousScore) && scored && grade.recheckedAt && !partial && hasReviewsCheck
     ? `<p class="grade-prev">Your score was ${grade.previousScore} before. It is ${s.score} now.</p>`
     : '';
 
@@ -701,7 +718,7 @@ ${top}
 ${aiFree(grade, { googleLive, requester, now, secondPending })}
 ${claim}
 ${searchPreview(grade)}
-${groupLines(grade)}
+${groupLines(grade, s)}
 ${fullPart}
 ${foot}
 </section>`;

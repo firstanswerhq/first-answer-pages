@@ -11,12 +11,13 @@ const goodHtml = `<title>Acme Roofing | Roof Repair in Nashville, TN</title>
   <meta property="og:image" content="https://example.com/a.jpg">
   <script type="application/ld+json">{"@type":"RoofingContractor","name":"Acme Roofing","telephone":"(615) 555-0100"}</script>
   <h1>Nashville Roof Repair</h1><img src="a.jpg" alt="Crew on a roof">
-  <a href="tel:+16155550100">Call now</a><p>Open Mon-Fri 8am-5pm at 12 Main Street. ${'We fix roofs. '.repeat(20)}</p>`;
+  <a href="tel:+16155550100">Call now</a><p>Open Mon-Fri 8am-5pm at 12 Main Street. ${'We fix roofs. '.repeat(20)}</p>
+  <p>"They fixed our roof in one visit and cleaned up after." - Dana R.</p><a href="https://www.google.com/maps/place/Acme+Roofing">Our Google reviews</a>`;
 
 test('the checks add up to 100 points and every fix is at most 160 characters', () => {
-  assert.equal(CHECKS.length, 14);
+  assert.equal(CHECKS.length, 15);
   assert.equal(CHECKS.reduce((n, c) => n + c.points, 0), 100);
-  assert.equal(new Set(CHECKS.map(c => c.id)).size, 14);
+  assert.equal(new Set(CHECKS.map(c => c.id)).size, 15);
   for (const c of CHECKS) assert.ok(Array.from(c.fix).length <= 160, c.id);
   assert.equal(checkById('ai-named').points, 30);
 });
@@ -35,7 +36,7 @@ test('a well set up site passes every website check', () => {
   assert.equal(r['google-profile'].result, 'not_checked');
   assert.equal(r['google-profile'].detail, 'Google check coming soon');
   assert.equal(r['ai-named'], undefined);
-  assert.equal(Object.keys(r).length, 13);
+  assert.equal(Object.keys(r).length, 14);
 });
 
 test('a bare site fails with plain reasons', () => {
