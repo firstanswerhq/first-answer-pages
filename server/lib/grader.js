@@ -151,8 +151,10 @@ const KEEP_CAPITAL = new Map([
   'Brazilian', 'Ethiopian', 'Lebanese', 'Turkish', 'Peruvian', 'Tex-Mex',
 ].map(w => [w.toLowerCase(), w]));
 
-/** Last words that are food and get " restaurants" (V123). "tacos" and "burgers" end in "s" but are not a plural of a business. */
-const FOOD_RESTAURANTS = new Set(['bbq', 'barbecue', 'sushi', 'seafood', 'tacos', 'burgers', 'wings', 'ramen', 'pho', 'steak']);
+/** Last words that are food and get " restaurants" (V123, V125). */
+const FOOD_RESTAURANTS = new Set(['bbq', 'barbecue', 'sushi', 'seafood', 'taco', 'burger', 'wing', 'ramen', 'pho', 'steak']);
+/** Food words typed as plurals: they lose their final "s" before " restaurants" (V125). */
+const FOOD_PLURALS = new Set(['tacos', 'burgers', 'wings']);
 
 /** Last words that end in "s" but are not a plural of a business (V113). Any word ending in "ss" is treated the same. */
 const NOT_PLURAL_S = new Set([
@@ -251,7 +253,8 @@ export function servicePhrase(service) {
     let cased;
     if (words.length >= 2 && hasUpper(text) && !hasLower(text)) {
       // A phrase of two or more words typed all in capitals is lowered; the lists below then apply (V121).
-      cased = words.map(w => w.toLowerCase());
+      // A word that holds a digit keeps its capitals ("A1 TOWING" gives "A1 towing businesses") (V126).
+      cased = words.map(w => (/\d/.test(w) ? w : w.toLowerCase()));
     } else {
       // Title Case: every word with letters starts with a capital, not counting joining words (V115).
       const counted = words.filter(w => hasLetter(w) && !JOINING.has(w.toLowerCase()));
@@ -288,8 +291,14 @@ function foodPhrase(words) {
   }
   // A cuisine word last ("Italian", "authentic Thai").
   if (KEEP_CAPITAL.has(lw(n - 1))) return [...words, 'restaurants'];
-  // "Thai food", "Mexican food".
-  if (n >= 2 && lw(n - 1) === 'food' && KEEP_CAPITAL.has(lw(n - 2))) return [...words.slice(0, n - 1), 'restaurants'];
+  if (lw(n - 1) === 'food') {
+    // "Thai food", "Mexican food" read "Thai restaurants"; any other phrase ending in "food" ("fast food",
+    // "soul food", "health food") adds " restaurants" after it (V127).
+    if (n >= 2 && KEEP_CAPITAL.has(lw(n - 2))) return [...words.slice(0, n - 1), 'restaurants'];
+    return [...words, 'restaurants'];
+  }
+  // "tacos", "burgers", "wings" lose their final "s" ("taco restaurants"); the singular forms give the same (V125).
+  if (FOOD_PLURALS.has(lw(n - 1))) return [...words.slice(0, n - 1), words[n - 1].slice(0, -1), 'restaurants'];
   if (FOOD_RESTAURANTS.has(lw(n - 1))) return [...words, 'restaurants'];
   if (lw(n - 1) === 'pizza') return [...words, 'places'];
   return null;

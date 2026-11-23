@@ -474,6 +474,9 @@ Wording only; no scoring change.
 - [x] V122. Keep-capital words get their capital whatever was typed; Asian, Hawaiian, Brazilian, Ethiopian, Lebanese, Turkish, Peruvian and Tex-Mex added
 - [x] V123. Fixed food rules: a cuisine word last adds " restaurants", "<cuisine> food" becomes "<cuisine> restaurants", the food list adds " restaurants", "pizza places", "bar and grill restaurants"
 - [x] V124. "grocery" is off the "ies" list
+- [x] V125. Food words typed as plurals lose their final "s" before " restaurants": "tacos", "burgers", "wings" (and the singulars) give "taco restaurants", "burger restaurants", "wing restaurants"
+- [x] V126. In a phrase typed all in capitals, a word that holds a digit keeps its capitals: "A1 TOWING" gives "A1 towing businesses"
+- [x] V127. Any phrase ending in "food" whose previous word is not a cuisine word adds " restaurants" after "food" ("fast food restaurants", "soul food restaurants", "health food restaurants")
 - Tests: a new V119 to V124 table test, every keep-capital word typed four ways, and the three questions for four new cases; the older lines in `test/grade-question.test.js` that pinned results these rules change are listed in the design's table
 
 ## Owner-approved features (Nov 18)

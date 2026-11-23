@@ -118,7 +118,7 @@ test('V115: all-capitals words of 5 or more letters are lowered; shorter ones an
   assert.equal(named('ELECTRICIANS'), 'electricians');
   for (const [typed, phrase] of [['HVAC', 'HVAC businesses'], ['A/C', 'A/C businesses'], ['CPA', 'CPAs'], ['DJ', 'DJs'],
     ['IT support', 'IT support businesses'], ['BBQ', 'BBQ restaurants'], ['RV park', 'RV parks'], ['B&B', 'B&B businesses'],
-    ['BBQ catering', 'BBQ catering businesses'], ['A1 TOWING', 'a1 towing businesses']]) { // BBQ: V123; A1 TOWING: V121
+    ['BBQ catering', 'BBQ catering businesses'], ['A1 TOWING', 'A1 towing businesses']]) { // BBQ: V123; A1 TOWING: V126
     assert.equal(named(typed), phrase, typed);
   }
 });
@@ -304,10 +304,16 @@ const V119_V124 = [
   ['Italian', 'Italian restaurants'], ['authentic Thai', 'authentic Thai restaurants'], ['Thai food', 'Thai restaurants'],
   ['Mexican food', 'Mexican restaurants'], ['italian food', 'Italian restaurants'], ['BBQ', 'BBQ restaurants'],
   ['barbecue', 'barbecue restaurants'], ['sushi', 'sushi restaurants'], ['seafood', 'seafood restaurants'],
-  ['tacos', 'tacos restaurants'], ['burgers', 'burgers restaurants'], ['wings', 'wings restaurants'],
+  ['tacos', 'taco restaurants'], ['burgers', 'burger restaurants'], ['wings', 'wing restaurants'], // V125
+  ['taco', 'taco restaurants'], ['burger', 'burger restaurants'], ['wing', 'wing restaurants'],
+  ['best tacos', 'best taco restaurants'], ['Tacos', 'taco restaurants'],
+  // V126: a word that holds a digit keeps its capitals in a phrase typed all in capitals.
+  ['A1 TOWING', 'A1 towing businesses'], ['24 HOUR LOCKSMITH', '24 hour locksmiths'], ['A1', 'A1 businesses'], ['a1 towing', 'a1 towing businesses'],
+  // V127: any phrase ending in "food" without a cuisine word before it adds " restaurants".
+  ['soul food', 'soul food restaurants'], ['health food', 'health food restaurants'], ['FAST FOOD', 'fast food restaurants'],
   ['ramen', 'ramen restaurants'], ['pho', 'pho restaurants'], ['steak', 'steak restaurants'], ['pizza', 'pizza places'],
   ['Bar & Grill', 'bar and grill restaurants'], ['bar and grill', 'bar and grill restaurants'],
-  ['fast food', 'fast food businesses'], ['pizza place', 'pizza places'],
+  ['fast food', 'fast food restaurants'], ['pizza place', 'pizza places'], // fast food: V127
   // V124: grocery.
   ['grocery', 'grocery businesses'], ['grocery store', 'grocery stores'],
 ];
