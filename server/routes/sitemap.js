@@ -19,7 +19,7 @@ export const GRADE_PAGES = Object.freeze(['/grade', '/grade/about']);
  * them to search engines, and a sitemap may list only pages that are not noindex, so they stay out until then.
  * F12 turns this on together with the header change and the two existing tests the design names.
  */
-export const GRADE_PAGES_OPEN = false;
+export const GRADE_PAGES_OPEN = true;
 
 /**
  * The extra paths for the sitemap: none in demo mode (every page is noindex then); otherwise the main pages,

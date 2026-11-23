@@ -36,14 +36,30 @@ function turnstileBlock(siteKey, message = '') {
     <noscript><p class="hint">Turn on JavaScript to confirm you're a person.</p></noscript>`;
 }
 
-function page(title, body, { refresh = false, turnstile = false } = {}) {
+/**
+ * The page shell for every /grade page. `indexable` (only the plain first render of the form and of the about
+ * page) leaves out the robots meta tag and adds the canonical link and the description; every other page keeps
+ * `noindex, nofollow`.
+ */
+function page(title, body, {
+  refresh = false, turnstile = false, indexable = false, canonical = '', description = '',
+} = {}) {
+  const open = indexable === true;
+  const parts = [open ? '' : ROBOTS_META, refresh ? REFRESH_NOSCRIPT : '', turnstile ? TURNSTILE_SCRIPT : ''].filter(Boolean);
   return layout({
     title,
     body,
     scripts: ['/js/grade.js'],
-    head: `${ROBOTS_META}${refresh ? `\n  ${REFRESH_NOSCRIPT}` : ''}${turnstile ? `\n  ${TURNSTILE_SCRIPT}` : ''}`,
+    head: parts.join('\n  '),
+    ...(open ? { canonical, description } : {}),
   });
 }
+
+/** Title and summary of the check's form when it is shown to search engines (wording rules apply). */
+export const FORM_SEARCH_TITLE = 'Does AI know your business? Free check';
+export const FORM_SEARCH_DESCRIPTION = 'Find out whether AI assistants name your business when someone asks for one like it. Free, no sign-up.';
+/** Summary of the about page when it is shown to search engines. */
+export const ABOUT_SEARCH_DESCRIPTION = "What the free AI Visibility Check reads on a business's website and asks AI assistants, and why.";
 
 // ---- small helpers ---------------------------------------------------------------
 
@@ -105,8 +121,10 @@ function field({ id, name, label, value, hint, error, attrs = '' }) {
  * @param {{ values?: object, errors?: object, stamp?: string, categories?: object[] }} [opts]
  */
 export function gradeFormPage({
-  values = {}, errors = {}, stamp = '', categories = [], turnstileSiteKey = '',
+  values = {}, errors = {}, stamp = '', categories = [], turnstileSiteKey = '', indexable = false, canonical = '',
 } = {}) {
+  // Only the plain first render is shown to search engines; a form shown again with errors never is.
+  const open = indexable === true && Object.keys(errors).length === 0;
   const checkOn = typeof turnstileSiteKey === 'string' && turnstileSiteKey !== '';
   const options = (Array.isArray(categories) ? categories : [])
     .filter(c => c && c.slug !== 'other' && typeof c.label === 'string' && c.label !== '')
@@ -134,7 +152,9 @@ export function gradeFormPage({
   </form>
   <p class="hint"><a href="/grade/about">What do we read, and why?</a></p>
 </section>`;
-  return page('Can AI find your business?', body, { turnstile: checkOn });
+  return open
+    ? page(FORM_SEARCH_TITLE, body, { turnstile: checkOn, indexable: true, canonical, description: FORM_SEARCH_DESCRIPTION })
+    : page('Can AI find your business?', body, { turnstile: checkOn });
 }
 
 // ---- the scan -------------------------------------------------------------------------
@@ -779,7 +799,7 @@ export function messagePage(title, message, link = { href: '/grade', text: 'Back
 export const notFoundPage = () => messagePage('Page not found', 'We could not find that report. It may have been removed. Reports are deleted after 90 days.');
 
 /** What the Grader reads and why. */
-export function aboutPage({ contactEmail = '', userAgent = '' } = {}) {
+export function aboutPage({ contactEmail = '', userAgent = '', indexable = false, canonical = '' } = {}) {
   const body = `<section class="message">
   <h1>About the AI Visibility Check</h1>
   <p>This is our free <a href="/grade">AI Visibility Check</a>. Someone types in a business name, city, state and what the business does, and a website if it has one. This page says exactly what the check does, so anyone whose website was checked can see why.</p>
@@ -801,5 +821,7 @@ export function aboutPage({ contactEmail = '', userAgent = '' } = {}) {
   <p>Reports are not listed in search engines and are deleted after 90 days. To ask us to remove one sooner, ${contactLink(contactEmail, contactEmail ? `email ${contactEmail}` : 'use the contact details on our About page')}.</p>
   <p><a href="/grade">Check a business</a></p>
 </section>`;
-  return page('About the AI Visibility Check', body);
+  return page('About the AI Visibility Check', body, indexable === true
+    ? { indexable: true, canonical, description: ABOUT_SEARCH_DESCRIPTION }
+    : {});
 }

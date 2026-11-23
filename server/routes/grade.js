@@ -31,6 +31,8 @@ const ID_PATTERN = /^[A-Za-z0-9_-]{22}$/;
 const SECOND_OPINION_RESERVE = 12; // the day's last AI calls stay for new checks
 const LIVE_TIMEOUT_MS = 60 * 1000;
 const LIVE_ANSWERS_MAX = 3;
+// The only two /grade pages open to search engines (Requirement 22.2).
+const OPEN_PATHS = new Set(['/grade', '/grade/about']);
 const LIVE_CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; frame-ancestors 'none'";
 
 const HUMAN_CHECK_FAILED = "Please try again: we couldn't confirm you're a person. If no box appears, turn off ad blockers or try another browser.";
@@ -66,29 +68,43 @@ export function createGradeRouter(ctx) {
     { href: `/grade/${id}`, text: 'Back to the report' },
   ));
 
+  /**
+   * True only for a GET of exactly `/grade` or `/grade/about` with no query string at all, as it was sent
+   * (`originalUrl`): a bare "?", a trailing "/", any other path and any other method (HEAD included) keep
+   * `noindex, nofollow`.
+   */
+  const isOpenPage = req => req.method === 'GET' && OPEN_PATHS.has(req.originalUrl);
+
+  /** The canonical address of an open page, from the configured base address only (never the request's Host). */
+  const canonicalFor = p => {
+    const base = typeof ctx.config.baseUrl === 'string' ? ctx.config.baseUrl.trim().replace(/\/+$/, '') : '';
+    return /^https?:\/\/[^/\s]+$/i.test(base) ? `${base}${p}` : '';
+  };
+
   // Off switch, then headers for every /grade response.
   router.use('/grade', (req, res, next) => {
     if (ctx.config.graderEnabled === false) {
-      // Off: fall through to the site's 404, which must still keep /grade out of search.
-      res.set({ 'X-Robots-Tag': 'noindex, nofollow', 'Referrer-Policy': 'no-referrer' });
+      // Off: fall through to the site's 404, which must still keep /grade out of search and out of caches.
+      res.set({ 'X-Robots-Tag': 'noindex, nofollow', 'Referrer-Policy': 'no-referrer', 'Cache-Control': 'no-store' });
       return next('router');
     }
-    res.set({
-      'X-Robots-Tag': 'noindex, nofollow',
-      'Referrer-Policy': 'no-referrer',
-      'Cache-Control': 'no-store',
-    });
+    // Every /grade response sends no referrer and is never cached. Only the two open pages (see isOpenPage) are
+    // left without `noindex, nofollow`.
+    res.set({ 'Referrer-Policy': 'no-referrer', 'Cache-Control': 'no-store' });
+    if (!isOpenPage(req)) res.set('X-Robots-Tag', 'noindex, nofollow');
     return next();
   });
 
   // ---- the form ---------------------------------------------------------------------------
-  const formPage = (res, status, { values = {}, errors = {} } = {}) => html(res, status, gradeFormPage({
+  const formPage = (res, status, { values = {}, errors = {}, indexable = false } = {}) => html(res, status, gradeFormPage({
     values, errors, stamp: signFormStamp(secret(), now()), categories: ctx.store.getCategories(),
     // Empty (no widget) unless both Turnstile keys are set.
     turnstileSiteKey: ctx.turnstile?.siteKey ?? '',
+    // Only the plain first render, and only when the headers above left out noindex.
+    indexable, canonical: indexable ? canonicalFor('/grade') : '',
   }));
 
-  router.get('/grade', (req, res) => formPage(res, 200));
+  router.get('/grade', (req, res) => formPage(res, 200, { indexable: isOpenPage(req) }));
 
   router.post('/grade', form, async (req, res, next) => {
     try {
@@ -155,7 +171,11 @@ export function createGradeRouter(ctx) {
   });
 
   router.get('/grade/about', (req, res) => {
-    html(res, 200, aboutPage({ contactEmail: ctx.config.contactEmail ?? '', userAgent: ctx.graderUserAgent ?? '' }));
+    const indexable = isOpenPage(req);
+    html(res, 200, aboutPage({
+      contactEmail: ctx.config.contactEmail ?? '', userAgent: ctx.graderUserAgent ?? '',
+      indexable, canonical: indexable ? canonicalFor('/grade/about') : '',
+    }));
   });
 
   // ---- one Grade ---------------------------------------------------------------------------
