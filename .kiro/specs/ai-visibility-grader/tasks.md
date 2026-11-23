@@ -558,7 +558,7 @@ Approved by the owner on Nov 19, 2026. Task names: **G1 to G7** for Feature G (b
 
 ### Feature E: ask Claude three times (Requirement 23) — build after F1 to F13
 
-- [ ] E1. The setting and the tests' default
+- [x] E1. The setting and the tests' default
   - `config.js`: `gradeMainAsks` from `GRADE_MAIN_ASKS` (1 to 3, default 3, warns without echoing the value); README lists it; add `gradeMainAsks: 1` to the default config of `startEnv` in `test/grade-flow.test.js`, `test/grade-lead.test.js`, `test/grade-review-fixes.test.js` and `test/grade-load.test.js` (one property each, no assertion changes), and search `test/` for any other file that starts a Grade and do the same
   - Tests: the setting is read as described (unset, 1, 2, 3, 0, 4, "x")
   - _Requirements: 23.9_

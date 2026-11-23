@@ -54,7 +54,7 @@ async function startEnv({ turnstile, notifier, gradeGuard, config = {} } = {}) {
     newGradeId: () => `adm${String(++n).padStart(19, '0')}`,
     config: {
       baseUrl: 'http://example.test', graderLeadGate: true, graderSecret: 'test-secret', adminToken: TOKEN,
-      trustProxy: 1, gradeAiCallsPerDay: 150, ...config,
+      trustProxy: 1, gradeAiCallsPerDay: 150, gradeMainAsks: 1, ...config,
     },
   };
   if (turnstile !== undefined) deps.turnstile = turnstile;

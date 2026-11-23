@@ -106,7 +106,7 @@ async function startEnv({ assistantProvider, config = {}, aiBudget, safeFetcher 
     aiBudget: typeof aiBudget === 'function' ? aiBudget(clock) : aiBudget,
     safeFetcher: safeFetcher ?? fixtureFetcher(),
     newGradeId: () => `grade${String(++n).padStart(17, '0')}`,
-    config: { baseUrl: 'http://example.test', graderLeadGate: false, graderSecret: 'test-secret', ...config },
+    config: { baseUrl: 'http://example.test', graderLeadGate: false, graderSecret: 'test-secret', gradeMainAsks: 1, ...config },
   });
   const server = app.listen(0, '127.0.0.1');
   await new Promise((resolve, reject) => {

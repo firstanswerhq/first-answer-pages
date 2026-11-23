@@ -44,7 +44,7 @@ async function startEnv(config = {}, { indexNow } = {}) {
     ...(indexNow ? { indexNow } : {}),
     config: {
       baseUrl: BASE_URL, demoMode: false, production: false, graderLeadGate: true, graderSecret: 'test-secret',
-      adminToken: 'open-pages-token', gradeAiCallsPerDay: 150, ...config,
+      adminToken: 'open-pages-token', gradeAiCallsPerDay: 150, gradeMainAsks: 1, ...config,
     },
   });
   const server = app.listen(0, '127.0.0.1');

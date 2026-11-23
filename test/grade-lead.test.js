@@ -104,7 +104,7 @@ async function startEnv({ assistantProvider, extraAssistants, googleLive, nameCh
     safeFetcher: fixtureFetcher(),
     newGradeId: () => `grade${String(++n).padStart(17, '0')}`,
     config: {
-      baseUrl: 'http://example.test', graderLeadGate: true, graderSecret: 'test-secret', adminToken: ADMIN, ...config,
+      baseUrl: 'http://example.test', graderLeadGate: true, graderSecret: 'test-secret', adminToken: ADMIN, gradeMainAsks: 1, ...config,
     },
   });
   const server = app.listen(0, '127.0.0.1');

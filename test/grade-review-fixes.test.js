@@ -82,7 +82,7 @@ async function startEnv({ gate = false } = {}) {
       lookup: (host, opts, cb) => setImmediate(() => cb(null, [{ address: '93.184.216.34', family: 4 }])),
     }),
     newGradeId: () => `grade${String(++n).padStart(17, '0')}`,
-    config: { baseUrl: 'http://example.test', graderLeadGate: gate, graderSecret: 'test-secret' },
+    config: { baseUrl: 'http://example.test', graderLeadGate: gate, graderSecret: 'test-secret', gradeMainAsks: 1 },
   });
   const server = app.listen(0, '127.0.0.1');
   await new Promise(resolve => server.once('listening', resolve));

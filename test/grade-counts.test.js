@@ -271,7 +271,7 @@ async function startEnv({ turnstile, gradeGuard, config = {} } = {}) {
     newGradeId: () => `count${String(++n).padStart(17, '0')}`,
     config: {
       baseUrl: 'http://example.test', graderLeadGate: true, graderSecret: 'test-secret', adminToken: 'counts-test-token',
-      trustProxy: 1, gradeAiCallsPerDay: 150, ...config,
+      trustProxy: 1, gradeAiCallsPerDay: 150, gradeMainAsks: 1, ...config,
     },
   };
   if (turnstile !== undefined) deps.turnstile = turnstile;

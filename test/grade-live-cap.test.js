@@ -68,7 +68,7 @@ async function startEnv({
     googleLive,
     config: {
       baseUrl: 'http://example.test', graderLeadGate: true, graderSecret: 'test-secret', adminToken: 'live-cap-token',
-      trustProxy: 1, gradeAiCallsPerDay: 150, ...config,
+      trustProxy: 1, gradeAiCallsPerDay: 150, gradeMainAsks: 1, ...config,
     },
   };
   if (gradeGuard !== undefined) deps.gradeGuard = gradeGuard;

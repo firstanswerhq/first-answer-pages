@@ -116,6 +116,23 @@ export function parseGradeAiCalls(value, warn = console.warn) {
   return DEFAULT_GRADE_AI_CALLS_PER_DAY;
 }
 
+export const DEFAULT_GRADE_MAIN_ASKS = 3;
+
+/**
+ * GRADE_MAIN_ASKS: how many times the free question is asked of the main assistant (Feature E). A whole number
+ * from 1 to 3. Unset gives 3; anything else warns (without echoing the value) and gives 3.
+ * @param {string | undefined} value
+ * @param {(msg: string) => void} [warn]
+ * @returns {number}
+ */
+export function parseGradeMainAsks(value, warn = console.warn) {
+  const v = nonEmpty(value);
+  if (v === undefined) return DEFAULT_GRADE_MAIN_ASKS;
+  if (/^[1-3]$/.test(v)) return Number(v);
+  warn(`GRADE_MAIN_ASKS must be 1, 2 or 3; using ${DEFAULT_GRADE_MAIN_ASKS}.`);
+  return DEFAULT_GRADE_MAIN_ASKS;
+}
+
 export const DEFAULT_GRADE_MAX_RUNNING = 20;
 
 /**
@@ -328,6 +345,8 @@ export function configFromEnv(env = process.env, opts = {}) {
     graderLeadGate: parseOnOff(env.GRADER_LEAD_GATE),
     gradeAiCallsPerDay: parseGradeAiCalls(env.GRADE_AI_CALLS_PER_DAY, opts.warn ?? console.warn),
     gradeMaxRunning: parseGradeMaxRunning(env.GRADE_MAX_RUNNING, opts.warn ?? console.warn),
+    // How many times the free question is asked of the main assistant (1 to 3, default 3). Used from task E2.
+    gradeMainAsks: parseGradeMainAsks(env.GRADE_MAIN_ASKS, opts.warn ?? console.warn),
     gradeNetworkPerDay: parseGradeNetworkPerDay(env.GRADE_NETWORK_PER_DAY, opts.warn ?? console.warn),
     // The human check on the check form (Cloudflare Turnstile). Off unless both keys are set.
     turnstileSiteKey: nonEmpty(env.TURNSTILE_SITE_KEY) ?? '',

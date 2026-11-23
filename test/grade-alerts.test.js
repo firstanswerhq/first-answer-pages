@@ -428,7 +428,7 @@ async function startEnv({ gradeGuard, notifier, turnstile, googleLive, config = 
     newGradeId: () => `alert${String(++n).padStart(17, '0')}`,
     config: {
       baseUrl: 'http://example.test', graderLeadGate: true, graderSecret: 'test-secret', adminToken: 'alerts-test-token',
-      trustProxy: 1, gradeAiCallsPerDay: 150, ...config,
+      trustProxy: 1, gradeAiCallsPerDay: 150, gradeMainAsks: 1, ...config,
     },
   };
   if (gradeGuard !== undefined) deps.gradeGuard = gradeGuard;

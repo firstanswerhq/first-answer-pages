@@ -98,7 +98,7 @@ async function startEnv({ config = {} } = {}) {
     newGradeId: () => `guard${String(++n).padStart(17, '0')}`,
     config: {
       baseUrl: 'http://example.test', graderLeadGate: true, graderSecret: 'test-secret', adminToken: 'guard-test-token',
-      trustProxy: 1, gradeAiCallsPerDay: 150, ...config,
+      trustProxy: 1, gradeAiCallsPerDay: 150, gradeMainAsks: 1, ...config,
     },
   });
   const server = app.listen(0, '127.0.0.1');

@@ -147,7 +147,7 @@ async function startEnv(html) {
       },
     },
     newGradeId: () => `claim${String(++n).padStart(17, '0')}`,
-    config: { baseUrl: 'http://example.test', graderLeadGate: true, graderSecret: 'test-secret', adminToken: 'claim-token', gradeAiCallsPerDay: 150 },
+    config: { baseUrl: 'http://example.test', graderLeadGate: true, graderSecret: 'test-secret', adminToken: 'claim-token', gradeAiCallsPerDay: 150, gradeMainAsks: 1 },
   });
   cleanups.push(async () => {
     await app.locals.ctx.aiBudget?.flush?.();

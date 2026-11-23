@@ -83,7 +83,7 @@ async function startEnv() {
     nameChecker: null,
     safeFetcher: { async fetchText() { throw new Error('no network in tests'); } },
     newGradeId: () => `nostore${String(++n).padStart(15, '0')}`,
-    config: { baseUrl: 'http://example.test', graderLeadGate: true, graderSecret: 'test-secret', adminToken: 'ns-token', gradeAiCallsPerDay: 150 },
+    config: { baseUrl: 'http://example.test', graderLeadGate: true, graderSecret: 'test-secret', adminToken: 'ns-token', gradeAiCallsPerDay: 150, gradeMainAsks: 1 },
   });
   const server = app.listen(0, '127.0.0.1');
   await new Promise((resolve, reject) => {

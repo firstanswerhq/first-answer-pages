@@ -103,7 +103,7 @@ async function startEnv({ assistantProvider, extraAssistants, notifier, config =
     newGradeId: () => `load${String(++n).padStart(18, '0')}`,
     config: {
       baseUrl: 'http://example.test', graderLeadGate: true, graderSecret: 'test-secret', adminToken: ADMIN,
-      gradeAiCallsPerDay: DAILY, ...config,
+      gradeAiCallsPerDay: DAILY, gradeMainAsks: 1, ...config,
     },
   });
   const server = app.listen(0, '127.0.0.1');
