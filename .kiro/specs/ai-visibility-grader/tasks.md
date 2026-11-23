@@ -687,7 +687,7 @@ From `review-2026-11-23-owner-decisions.md`: the owner approved D1 to D5 ("Yes t
   - `routes/home.js`: the small `grade-link` paragraph goes; the sentence "People now ask AI who to call. List your business free so AI can find it." under the tagline; with the grader on, the button "Check if AI can find your business" (class `button`, `href="/grade"`) right under the search form; CSS for `.home-why` and `.home-check a` (full width, 3.5rem tall, no sideways scroll at 390px); the unused home `.grade-link` rules removed; with the grader off no `/grade` link anywhere on the home page, footer included, tested (V154)
   - Tests: new, as listed in the design; the existing `href="/grade"` lines in `grade-flow.test.js` still hold; look again at `design-assets.test.js` lines 57 to 59 before editing
   - _Requirements: 28.1, 28.2, 28.3, 28.4_
-- [ ] O4. D4: a listing claimed from a report pre-fills less (Requirement 29)
+- [x] O4. D4: a listing claimed from a report pre-fills less (Requirement 29)
   - `grader.js`: `claim` leaves `services` empty (listed in `missingFields`) and passes every day's hours through a new exported `formStyleHours`; `hoursToObject` is not changed; `schema.js` `parseHoursRange` also accepts "HH:MM-HH:MM" (24-hour) so listings already published get their hours in the business label (V155)
   - Tests: new, as listed in the design (both forms of hours through `parseHoursRange`); the older lines in the design's table (`grade-lead.test.js` lines 320, 356 and 357) change with their reasons
   - _Requirements: 29.1, 29.2, 29.3_

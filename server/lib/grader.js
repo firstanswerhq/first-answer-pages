@@ -442,6 +442,38 @@ export function hoursToObject(lines) {
   return out;
 }
 
+function formStyleTime(hourText, minuteText) {
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+  if (hour > 23 || minute > 59) return null;
+  const suffix = hour >= 12 ? 'pm' : 'am';
+  const h12 = hour % 12 === 0 ? 12 : hour % 12;
+  return minute === 0 ? `${h12}${suffix}` : `${h12}:${String(minute).padStart(2, '0')}${suffix}`;
+}
+
+/**
+ * "07:00-18:00" -> "7am-6pm", "08:30-17:00" -> "8:30am-5pm", the way the listing form shows hours.
+ * Any other value (already "9am-5pm", "Closed", free text, "00:00-24:00", a time out of range, or
+ * equal open and close times) is returned as found.
+ * @param {unknown} value
+ */
+export function formStyleHours(value) {
+  if (typeof value !== 'string') return value;
+  const m = /^\s*(\d{1,2}):(\d{2})\s*(?:-|\u2013|\u2014|to)\s*(\d{1,2}):(\d{2})\s*$/i.exec(value);
+  if (!m) return value;
+  const opens = formStyleTime(m[1], m[2]);
+  const closes = formStyleTime(m[3], m[4]);
+  if (!opens || !closes || opens === closes) return value;
+  return `${opens}-${closes}`;
+}
+
+/** Applies formStyleHours to every day of a { monday: '07:00-18:00', ... } object. */
+function formStyleHoursObject(hours) {
+  const out = {};
+  for (const [day, value] of Object.entries(hours ?? {})) out[day] = formStyleHours(value);
+  return out;
+}
+
 const SCHEMA_DAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 
 /** "9am" -> "09:00", "17:30" -> "17:30"; null when the time could mean more than one thing. */
@@ -1721,8 +1753,9 @@ export function createGrader({
         name: input.name,
         category: mapCategory(input.service, categories) || 'other',
         phone: found.phone,
-        hours: hoursToObject(found.hours),
-        services: [input.service],
+        hours: formStyleHoursObject(hoursToObject(found.hours)),
+        // Left blank on purpose: the owner lists the services, and confirm waits until they do.
+        services: [],
         // A business that goes to its customers lists its area and no street address, even when the page shows one.
         serviceArea: input.noStorefront === true ? `${input.city} and nearby areas` : input.city,
         city: input.city,

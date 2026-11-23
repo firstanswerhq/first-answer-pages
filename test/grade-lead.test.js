@@ -317,7 +317,8 @@ test('claim: one Draft per browser, filled from the scan, not published, other v
   assert.equal(draft.fields.name, 'Ridgeline Roofing LLC');
   assert.equal(draft.fields.phone, '(615) 555-0142');
   assert.equal(draft.fields.category, 'roofers');
-  assert.deepEqual(draft.fields.services, ['roofers']);
+  assert.deepEqual(draft.fields.services, []);
+  assert.ok(draft.missingFields.includes('services'));
   assert.equal(draft.fields.city, 'Nashville');
   assert.equal(draft.fields.state, 'TN');
   assert.equal(draft.fields.ownerEmail, '', 'no email is filled in');
@@ -353,8 +354,8 @@ test('claim fills address, phone and hours from a business label', async () => {
   assert.equal(draft.fields.category, 'hvac');
   assert.equal(draft.fields.phone, '(615) 555-0188');
   assert.equal(draft.fields.address, '400 Church Street, Franklin, TN 37064');
-  assert.equal(draft.fields.hours.monday, '07:00-18:00');
-  assert.equal(draft.fields.hours.friday, '07:00-18:00');
+  assert.equal(draft.fields.hours.monday, '7am-6pm');
+  assert.equal(draft.fields.hours.friday, '7am-6pm');
   assert.equal(draft.fields.hours.saturday, undefined);
   assert.equal(draft.missingFields.includes('phone'), false);
 });

@@ -214,7 +214,8 @@ test('F5: a no-storefront claim has no address and "<city> and nearby areas", an
 
   // Rendered as a listing with the existing listing and schema code: the city row, the service area, and a
   // business label without streetAddress.
-  const listing = { ...draft.fields, id: 'capital-city-window-nashville', description: 'We clean windows.' };
+  // D4 leaves Services for the owner, so the listing gets services as the owner would type them.
+  const listing = { ...draft.fields, id: 'capital-city-window-nashville', description: 'We clean windows.', services: ['window cleaning'] };
   const schema = buildSchema(listing, null, { baseUrl: 'https://firstanswer.example' });
   assert.equal(Object.hasOwn(schema.address, 'streetAddress'), false);
   assert.equal(schema.address.addressLocality, 'Nashville');

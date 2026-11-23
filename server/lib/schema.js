@@ -140,13 +140,32 @@ function to24(hour, minute, meridiem) {
   return `${String(base).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
-/** Parses "7:00 AM - 5:00 PM" to { opens: '07:00', closes: '17:00' }, or null. */
+const TIME_24 = '(\\d{1,2}):(\\d{2})';
+const RANGE_24 = new RegExp(`^\\s*${TIME_24}\\s*(?:-|\\u2013|\\u2014|to)\\s*${TIME_24}\\s*$`, 'i');
+
+function from24(hour, minute) {
+  const h = Number(hour);
+  const m = Number(minute);
+  if (h > 23 || m > 59) return null;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+/**
+ * Parses "7:00 AM - 5:00 PM" or "07:00-18:00" to { opens: '07:00', closes: '17:00' }, or null.
+ * The 12-hour form is tried first; when it matches but a time is invalid, the answer is null.
+ */
 export function parseHoursRange(text) {
   if (typeof text !== 'string') return null;
   const m = RANGE.exec(text);
-  if (!m) return null;
-  const opens = to24(m[1], m[2], m[3]);
-  const closes = to24(m[4], m[5], m[6]);
+  if (m) {
+    const opens = to24(m[1], m[2], m[3]);
+    const closes = to24(m[4], m[5], m[6]);
+    return opens && closes ? { opens, closes } : null;
+  }
+  const m24 = RANGE_24.exec(text);
+  if (!m24) return null;
+  const opens = from24(m24[1], m24[2]);
+  const closes = from24(m24[3], m24[4]);
   return opens && closes ? { opens, closes } : null;
 }
 
