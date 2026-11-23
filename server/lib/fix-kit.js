@@ -65,16 +65,13 @@ function place(city, state) {
 export function suggestedTitle(found) {
   const f = clean(found);
   const tries = [];
-  const words = f.service ? f.service.split(' ') : [];
-  const withService = n => {
-    const svc = capitalizeFirst(words.slice(0, n).join(' '));
-    return `${f.name} | ${svc}${f.city ? ` in ${f.city}` : ''}`;
-  };
-  if (words.length) {
-    tries.push(f.state && f.city ? `${withService(words.length)}, ${f.state}` : withService(words.length));
-    if (f.state && f.city) tries.push(withService(words.length));
-    for (let n = words.length - 1; n >= 1; n--) tries.push(withService(n));
+  // The service is shown whole or not at all, and the state stays while the city is shown (V118): a shorter
+  // try leaves the service out rather than cutting it mid-phrase ("… | Window cleaning and pressure in …").
+  if (f.service) {
+    const svc = capitalizeFirst(f.service);
+    tries.push(`${f.name} | ${svc}${f.city ? ` in ${place(f.city, f.state)}` : ''}`);
   }
+  if (f.city && f.state) tries.push(`${f.name} | ${f.city}, ${f.state}`);
   tries.push(f.city ? `${f.name} | ${f.city}` : f.name);
   for (const t of tries) if (len(t) <= TITLE_MAX) return t;
   return cutAtWord(f.name, TITLE_MAX);

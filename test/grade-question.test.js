@@ -1,6 +1,6 @@
 /**
- * The question reads naturally (Feature F, task W1; Requirement 24): the cleaned service phrase, the three
- * questions and the scan step built from it, and the typed service kept on the Grade.
+ * The question reads naturally (Feature F, task W1; Requirement 24, as revised by V111 to V117): the cleaned
+ * service phrase, the three questions and the scan step built from it, and the typed service kept on the Grade.
  */
 
 import { test, after } from 'node:test';
@@ -15,144 +15,283 @@ import { createAiBudget } from '../server/lib/ai-budget.js';
 import { servicePhrase, freeQuestion, extraQuestions, stepNames } from '../server/lib/grader.js';
 import { scanPage, reportPage } from '../server/lib/grade-html.js';
 
-// ---- every row of the design's table, in both forms ----------------------------------------------------------
+const named = service => servicePhrase(service).named;
+
+// ---- every row of the design's first table -------------------------------------------------------------------
 
 const TABLE = [
-  ['plumbers', 'plumbers', 'plumbers'],
-  ['Window cleaning and pressure cleaning', 'window cleaning and pressure cleaning businesses', 'window cleaning and pressure cleaning'],
-  ['HVAC repair', 'HVAC repair businesses', 'HVAC repair'],
-  ['hair salons', 'hair salons', 'hair salons'],
-  ['Pressure washing companies', 'pressure washing companies', 'pressure washing companies'],
-  ['roofing company', 'roofing companies', 'roofing companies'],
-  ['cleaning business', 'cleaning businesses', 'cleaning businesses'],
-  ['dentist', 'dentists', 'dentists'],
-  ['auto glass', 'auto glass businesses', 'auto glass'],
-  ['bakery', 'bakeries', 'bakeries'],
-  ['handyman', 'handymen', 'handymen'],
-  ['iPhone repair', 'iPhone repair businesses', 'iPhone repair'],
-  ['A/C repair', 'A/C repair businesses', 'A/C repair'],
-  ['Mexican restaurants', 'Mexican restaurants', 'Mexican restaurants'],
-  ['Pressure Washing Companies', 'pressure washing companies', 'pressure washing companies'],
+  ['plumbers', 'plumbers'],
+  ['Window cleaning and pressure cleaning', 'window cleaning and pressure cleaning businesses'],
+  ['HVAC repair', 'HVAC repair businesses'],
+  ['hair salons', 'hair salons'],
+  ['Pressure washing companies', 'pressure washing companies'],
+  ['roofing company', 'roofing companies'],
+  ['cleaning business', 'cleaning businesses'],
+  ['dentist', 'dentists'],
+  ['auto glass', 'auto glass businesses'],
+  ['bakery', 'bakeries'],
+  ['handyman', 'handymen'],
+  ['iPhone repair', 'iPhone repair businesses'],
+  ['A/C repair', 'A/C repair businesses'],
+  ['Mexican restaurants', 'Mexican restaurants'],
+  ['Pressure Washing Companies', 'pressure washing companies'],
 ];
 
-for (const [typed, named, plain] of TABLE) {
-  test(`W1: "${typed}" gives named "${named}" and plain "${plain}"`, () => {
-    assert.deepEqual(servicePhrase(typed), { plain, named });
+for (const [typed, phrase] of TABLE) {
+  test(`W1: "${typed}" gives "${phrase}"`, () => {
+    assert.deepEqual(servicePhrase(typed), { named: phrase });
   });
 }
 
-// ---- each rule on its own -------------------------------------------------------------------------------------
+// ---- the 30 services of the W1 review, with their exact three questions (V111 to V117) -----------------------
+
+const THIRTY = [
+  ['dentist', 'dentists'],
+  ['car wash', 'car washes'],
+  ['CPA', 'CPAs'],
+  ['DJ', 'DJs'],
+  ['gym', 'gyms'],
+  ['med spa', 'med spas'],
+  ['daycare', 'daycares'],
+  ['church', 'churches'],
+  ['24 hour locksmith', '24 hour locksmiths'],
+  ['bakery', 'bakeries'],
+  ['law firm', 'law firms'],
+  ['Roofing Company', 'roofing companies'],
+  ['Mexican restaurants', 'Mexican restaurants'],
+  ['Italian', 'Italian businesses'],
+  ['martial arts', 'martial arts businesses'],
+  ['Heating & Air', 'heating & air businesses'],
+  ['a/c repair', 'A/C repair businesses'],
+  ['PLUMBERS', 'plumbers'],
+  ['plumbers.', 'plumbers'],
+  ['Plumbers and Electricians', 'plumbers and electricians'],
+  ['Window cleaning and pressure cleaning', 'window cleaning and pressure cleaning businesses'],
+  ['HVAC repair', 'HVAC repair businesses'],
+  ['handyman', 'handymen'],
+  ['tree service', 'tree services'],
+  ['pet grooming', 'pet grooming businesses'],
+  ['real estate agent', 'real estate agents'],
+  ['IT support', 'IT support businesses'],
+  ['Thai food', 'Thai food businesses'],
+  ['nail salon', 'nail salons'],
+  ['photographer', 'photographers'],
+];
+
+const TALLAHASSEE = { name: 'Capital City Window & Pressure Cleaning', city: 'Tallahassee', state: 'FL', service: 'Window cleaning and pressure cleaning', website: null };
+
+test('V111-V117: the 30 services give their exact three questions', () => {
+  assert.equal(THIRTY.length, 30);
+  for (const [service, phrase] of THIRTY) {
+    const input = { ...TALLAHASSEE, service };
+    assert.deepEqual([freeQuestion(input), ...extraQuestions(input)], [
+      `Who are the best ${phrase} in Tallahassee, FL? Name your top 5.`,
+      `I'm looking for ${phrase} in Tallahassee, FL. Which ones would you recommend?`,
+      `Which ${phrase} in Tallahassee, FL do people recommend most?`,
+    ], service);
+  }
+  // The note's example, word for word.
+  const dentist = { ...TALLAHASSEE, service: 'dentist' };
+  assert.deepEqual([freeQuestion(dentist), ...extraQuestions(dentist)], [
+    'Who are the best dentists in Tallahassee, FL? Name your top 5.',
+    "I'm looking for dentists in Tallahassee, FL. Which ones would you recommend?",
+    'Which dentists in Tallahassee, FL do people recommend most?',
+  ]);
+});
+
+// ---- capitals (V115) -----------------------------------------------------------------------------------------
 
 test('W1: the first letter is made lower case unless the first word keeps its capitals', () => {
-  assert.equal(servicePhrase('Window cleaning').plain, 'window cleaning');
-  assert.equal(servicePhrase('A/C repair').plain, 'A/C repair', 'all capitals');
-  assert.equal(servicePhrase('HVAC repair').plain, 'HVAC repair', 'all capitals');
-  assert.equal(servicePhrase('iPhone repair').plain, 'iPhone repair', 'a capital inside it');
+  assert.equal(named('Window cleaning'), 'window cleaning businesses');
+  assert.equal(named('A/C repair'), 'A/C repair businesses', 'a slash');
+  assert.equal(named('HVAC repair'), 'HVAC repair businesses', '4 letters');
+  assert.equal(named('iPhone repair'), 'iPhone repair businesses', 'a capital inside it');
   for (const word of ['Mexican', 'Italian', 'Chinese', 'Thai', 'Japanese', 'Indian', 'Greek', 'French', 'Korean',
     'Vietnamese', 'Cuban', 'Cajun', 'Caribbean', 'Mediterranean', 'American', 'Spanish', 'German', 'Irish']) {
-    assert.equal(servicePhrase(`${word} restaurants`).plain, `${word} restaurants`, word);
+    assert.equal(named(`${word} restaurants`), `${word} restaurants`, word);
   }
 });
 
-test('W1: an all-capitalized phrase is made lower case, except the words that keep their capitals', () => {
-  assert.equal(servicePhrase('Pressure Washing Companies').plain, 'pressure washing companies');
-  assert.equal(servicePhrase('Mexican Restaurants').plain, 'Mexican restaurants');
-  assert.equal(servicePhrase('HVAC Repair').named, 'HVAC repair businesses');
-  assert.equal(servicePhrase('HVAC Repair Shop').plain, 'HVAC repair shops');
+test('V115: all-capitals words of 5 or more letters are lowered; shorter ones and ones with marks are kept', () => {
+  assert.equal(named('PLUMBERS'), 'plumbers');
+  assert.equal(named('ROOFING'), 'roofing businesses');
+  assert.equal(named('ELECTRICIANS'), 'electricians');
+  for (const [typed, phrase] of [['HVAC', 'HVAC businesses'], ['A/C', 'A/C businesses'], ['CPA', 'CPAs'], ['DJ', 'DJs'],
+    ['IT support', 'IT support businesses'], ['BBQ', 'BBQ businesses'], ['RV park', 'RV parks'], ['B&B', 'B&B businesses'],
+    ['BBQ catering', 'BBQ catering businesses'], ['A1 TOWING', 'A1 towing businesses']]) {
+    assert.equal(named(typed), phrase, typed);
+  }
 });
 
-test('W1: the owner\'s other words are kept as typed', () => {
-  assert.equal(servicePhrase('window cleaning in Downtown').named, 'window cleaning in Downtown businesses');
-  assert.equal(servicePhrase('Tree removal and Stump grinding').plain, 'tree removal and Stump grinding');
+test('V115: a phrase in Title Case is lowered word by word, except the words that keep their capitals', () => {
+  assert.equal(named('Plumbers and Electricians'), 'plumbers and electricians');
+  assert.equal(named('Heating & Air'), 'heating & air businesses');
+  assert.equal(named('Mobile Detailing'), 'mobile detailing businesses');
+  assert.equal(named('Pressure Washing Companies'), 'pressure washing companies');
+  assert.equal(named('Mexican Restaurants'), 'Mexican restaurants');
+  assert.equal(named('HVAC Repair Shop'), 'HVAC repair shops');
 });
+
+test('V115: a fixed list of abbreviations typed in lower case is raised', () => {
+  for (const [typed, phrase] of [['a/c repair', 'A/C repair businesses'], ['hvac repair', 'HVAC repair businesses'],
+    ['cpa', 'CPAs'], ['cpas', 'CPAs'], ['dj', 'DJs'], ['djs', 'DJs'], ['bbq', 'BBQ businesses'], ['rv park', 'RV parks'],
+    ['it support', 'IT support businesses'], ['it services', 'IT services']]) {
+    assert.equal(named(typed), phrase, typed);
+  }
+  // "it" is raised only as the first word before "support" or "services".
+  assert.equal(named('fix it shop'), 'fix it shops');
+  assert.equal(named('it repair'), 'it repair businesses');
+});
+
+test('W1: the owner\'s other words are kept as typed; "24 hour" and "Dr." are left as typed', () => {
+  assert.equal(named('window cleaning in Downtown'), 'window cleaning in Downtown businesses');
+  assert.equal(named('Tree removal and Stump grinding'), 'tree removal and Stump grinding businesses');
+  assert.equal(named('24 hour plumber'), '24 hour plumbers');
+  assert.equal(named('dentist Dr. Lee office'), 'dentist Dr. Lee offices');
+});
+
+// ---- spaces and punctuation (V116) ----------------------------------------------------------------------------
 
 test('W1: spaces are trimmed and collapsed', () => {
-  assert.deepEqual(servicePhrase('  hair    salons  '), { plain: 'hair salons', named: 'hair salons' });
-  assert.deepEqual(servicePhrase('\tauto \n glass '), { plain: 'auto glass', named: 'auto glass businesses' });
+  assert.deepEqual(servicePhrase('  hair    salons  '), { named: 'hair salons' });
+  assert.deepEqual(servicePhrase('\tauto \n glass '), { named: 'auto glass businesses' });
 });
 
-test('W1: "water heater" and "garage door" are not made plural by a general rule; they get "businesses"', () => {
-  assert.deepEqual(servicePhrase('water heater'), { plain: 'water heater', named: 'water heater businesses' });
-  assert.deepEqual(servicePhrase('garage door'), { plain: 'garage door', named: 'garage door businesses' });
-  assert.deepEqual(servicePhrase('computer'), { plain: 'computer', named: 'computer businesses' });
+test('V116: trailing punctuation is removed; "A/C" and "B&B" are untouched', () => {
+  for (const typed of ['plumbers.', 'plumbers,', 'plumbers!', 'plumbers?', 'plumbers:', 'plumbers;', 'plumbers...', 'plumbers. ']) {
+    assert.equal(named(typed), 'plumbers', typed);
+  }
+  assert.equal(named('dentist.'), 'dentists');
+  assert.equal(named('A/C'), 'A/C businesses');
+  assert.equal(named('B&B'), 'B&B businesses');
 });
 
-test('W1: a phrase ending in "crew" or "shop" is made plural and gets no "businesses"', () => {
-  assert.deepEqual(servicePhrase('cleaning crew'), { plain: 'cleaning crews', named: 'cleaning crews' });
-  assert.deepEqual(servicePhrase('repair shop'), { plain: 'repair shops', named: 'repair shops' });
+// ---- the last word (V112 to V114) ------------------------------------------------------------------------------
+
+test('W1: "water heater", "garage door" and "computer" are not made plural by a general rule', () => {
+  assert.equal(named('water heater'), 'water heater businesses');
+  assert.equal(named('garage door'), 'garage door businesses');
+  assert.equal(named('computer'), 'computer businesses');
 });
 
-test('W1: the last word follows the fixed list', () => {
-  assert.equal(servicePhrase('fitness').named, 'fitness businesses', 'a word ending in "ss" is not a plural');
-  assert.equal(servicePhrase('travel agency').named, 'travel agencies');
-  assert.equal(servicePhrase('divorce attorney').named, 'divorce attorneys');
+test('V112: a nationality, cuisine or other "-ian" word is never given a plural "s"', () => {
+  // Italian, Indian, Mexican and Thai keep their capital; Asian, Hawaiian and Brazilian are not on that list, so a
+  // lone one gets the usual lower-case first letter. None of them is ever made plural.
+  for (const word of ['Italian', 'Indian', 'Asian', 'Hawaiian', 'Brazilian', 'vegetarian', 'Mexican', 'Thai']) {
+    assert.equal(named(word).toLowerCase(), `${word.toLowerCase()} businesses`, word);
+    assert.equal(named(word).toLowerCase().includes(`${word.toLowerCase()}s`), false, word);
+  }
+  for (const word of ['Italian', 'Indian', 'Mexican', 'Thai']) assert.equal(named(word), `${word} businesses`, word);
+  assert.equal(named('Italian restaurants'), 'Italian restaurants');
+  for (const word of ['electrician', 'technician', 'beautician', 'optician', 'veterinarian', 'pediatrician', 'dietitian',
+    'librarian', 'guardian']) {
+    assert.equal(named(word), `${word}s`, word);
+  }
+});
+
+test('V113: last words that end in "s" but are not plurals get "businesses"', () => {
+  for (const word of ['arts', 'gas', 'bus', 'lens', 'glass', 'fitness', 'wellness', 'logistics', 'analytics',
+    'electronics', 'cosmetics', 'aesthetics', 'graphics', 'news', 'sales']) {
+    assert.equal(named(word), `${word} businesses`, word);
+  }
+  assert.equal(named('martial arts'), 'martial arts businesses');
+  assert.equal(named('car rentals'), 'car rentals', 'a plural stays');
+  assert.equal(named('tree services'), 'tree services', 'a plural stays');
+});
+
+test('V114: the fixed lists for "s", "es" and "ies", and capitals follow the word', () => {
   for (const word of ['contractor', 'shop', 'service', 'crew', 'store', 'salon', 'studio', 'clinic', 'restaurant',
     'cafe', 'firm', 'lawyer', 'doctor', 'plumber', 'roofer', 'painter', 'cleaner', 'landscaper', 'mechanic', 'barber',
-    'photographer', 'realtor', 'agent', 'groomer', 'inspector']) {
-    assert.deepEqual(servicePhrase(word), { plain: `${word}s`, named: `${word}s` }, word);
+    'photographer', 'realtor', 'agent', 'groomer', 'inspector', 'attorney', 'locksmith', 'chiropractor', 'tutor',
+    'tailor', 'jeweler', 'bookkeeper', 'vet', 'trainer', 'walker', 'builder', 'gym', 'spa', 'bar', 'hotel', 'motel',
+    'daycare', 'preschool', 'boutique', 'barbershop', 'place', 'truck', 'home', 'school', 'park', 'diner', 'pub',
+    'mover', 'caterer', 'office', 'center', 'garage', 'dealership', 'florist', 'therapist', 'dentist']) {
+    assert.equal(named(word), `${word}s`, word);
   }
-  for (const word of ['florist', 'therapist', 'electrician', 'technician']) {
-    assert.deepEqual(servicePhrase(word), { plain: `${word}s`, named: `${word}s` }, word);
+  for (const [typed, phrase] of [['dog walker', 'dog walkers'], ['dog trainer', 'dog trainers'],
+    ['personal trainer', 'personal trainers'], ['home builder', 'home builders'], ['pizza place', 'pizza places'],
+    ['food truck', 'food trucks'], ['funeral home', 'funeral homes'], ['driving school', 'driving schools'],
+    ['RV park', 'RV parks'], ['cleaning crew', 'cleaning crews'], ['repair shop', 'repair shops']]) {
+    assert.equal(named(typed), phrase, typed);
   }
+  for (const [typed, phrase] of [['church', 'churches'], ['car wash', 'car washes'], ['coach', 'coaches']]) {
+    assert.equal(named(typed), phrase, typed);
+  }
+  for (const [typed, phrase] of [['company', 'companies'], ['agency', 'agencies'], ['bakery', 'bakeries'],
+    ['brewery', 'breweries'], ['winery', 'wineries'], ['notary', 'notaries'], ['pharmacy', 'pharmacies'],
+    ['nursery', 'nurseries'], ['laundry', 'laundries'], ['grocery', 'groceries'], ['distillery', 'distilleries'],
+    ['creamery', 'creameries']]) {
+    assert.equal(named(typed), phrase, typed);
+  }
+  assert.equal(named('handyman'), 'handymen');
+  assert.equal(named('cleaning business'), 'cleaning businesses');
+  assert.equal(named('CPA'), 'CPAs');
+  assert.equal(named('DJ'), 'DJs');
+  assert.equal(named('travel agency'), 'travel agencies');
+  assert.equal(named('divorce attorney'), 'divorce attorneys');
 });
 
 // ---- the three questions and the scan step -------------------------------------------------------------------
 
-const TALLAHASSEE = { name: 'Capital City Window & Pressure Cleaning', city: 'Tallahassee', state: 'FL', service: 'Window cleaning and pressure cleaning', website: null };
-
-test('W1: the free question and the second extra question use the named form; "I need … in" uses the plain form', () => {
+test('V111: all three questions and the scan step use the named phrase', () => {
   assert.equal(freeQuestion(TALLAHASSEE), 'Who are the best window cleaning and pressure cleaning businesses in Tallahassee, FL? Name your top 5.');
   assert.deepEqual(extraQuestions(TALLAHASSEE), [
-    'I need window cleaning and pressure cleaning in Tallahassee, FL. Which companies would you recommend?',
-    'Which window cleaning and pressure cleaning businesses in Tallahassee, FL do people say are the most reliable?',
+    "I'm looking for window cleaning and pressure cleaning businesses in Tallahassee, FL. Which ones would you recommend?",
+    'Which window cleaning and pressure cleaning businesses in Tallahassee, FL do people recommend most?',
   ]);
   assert.equal(stepNames(TALLAHASSEE)[3], 'Asking AI to name the best window cleaning and pressure cleaning businesses in Tallahassee');
 });
 
-test('W1: already clean services give exactly today\'s three questions and scan step', () => {
+test('W1: already clean services give exactly today\'s free question and scan step; the extra questions read as V111', () => {
   for (const service of ['plumbers', 'roofers', 'accountants']) {
     const input = { name: 'Zephyr', city: 'Nashville', state: 'TN', service, website: null };
     assert.equal(freeQuestion(input), `Who are the best ${service} in Nashville, TN? Name your top 5.`);
     assert.deepEqual(extraQuestions(input), [
-      `I need ${service} in Nashville, TN. Which companies would you recommend?`,
-      `Which ${service} in Nashville, TN do people say are the most reliable?`,
+      `I'm looking for ${service} in Nashville, TN. Which ones would you recommend?`,
+      `Which ${service} in Nashville, TN do people recommend most?`,
     ]);
     assert.equal(stepNames(input)[3], `Asking AI to name the best ${service} in Nashville`);
   }
 });
 
-// ---- N2 (E2 code review): a repeat check typed with other capitals asks the same questions -------------------
+// ---- N2 (E2 code review) and V117: a repeat check typed differently asks the same questions -------------------
 
 const questionsFor = service => {
   const input = { name: 'Zephyr Plumbing', city: 'Nashville', state: 'TN', service, website: null };
   return [freeQuestion(input), ...extraQuestions(input)];
 };
 
-test('N2: "Plumbers", "plumbers" and " plumbers " give exactly the same three questions', () => {
+test('N2/V117: "Plumbers", "plumbers", " plumbers ", "PLUMBERS" and "plumbers." give exactly the same three questions', () => {
   const today = questionsFor('plumbers');
-  for (const service of ['Plumbers', ' plumbers ']) assert.deepEqual(questionsFor(service), today, JSON.stringify(service));
+  for (const service of ['Plumbers', ' plumbers ', 'PLUMBERS', 'plumbers.']) {
+    assert.deepEqual(questionsFor(service), today, JSON.stringify(service));
+  }
 });
 
-test('N2: "PLUMBERS" keeps its capitals under the design\'s rules, so its questions differ (reported, not bent)', () => {
-  // The rules keep an all-capitals word as typed (it could be HVAC or A/C), so "PLUMBERS" is not lowered.
-  assert.equal(servicePhrase('PLUMBERS').named, 'PLUMBERS');
-  assert.equal(questionsFor('PLUMBERS')[0], 'Who are the best PLUMBERS in Nashville, TN? Name your top 5.');
-  assert.notDeepEqual(questionsFor('PLUMBERS'), questionsFor('plumbers'));
+test('V117: "ROOFING" and "Plumbers and Electricians" come out in lower case; HVAC, A/C, CPA, DJ, IT support and BBQ keep their capitals', () => {
+  assert.equal(named('ROOFING'), 'roofing businesses');
+  assert.equal(named('Plumbers and Electricians'), 'plumbers and electricians');
+  assert.ok(named('HVAC').startsWith('HVAC'));
+  assert.ok(named('A/C').startsWith('A/C'));
+  assert.ok(named('CPA').startsWith('CPA'));
+  assert.ok(named('DJ').startsWith('DJ'));
+  assert.ok(named('IT support').startsWith('IT support'));
+  assert.ok(named('BBQ').startsWith('BBQ'));
 });
 
 // ---- odd input -------------------------------------------------------------------------------------------------
 
 test('W1: servicePhrase never throws on odd input', () => {
-  const odd = ['', '   ', '!!!', '&<>"\'', '🔧🔧', 'plumbers 🔧', '\u0000x', 'x'.repeat(10000), 'ÉLECTRICIENS', 'ß',
-    '\ud800', 'a b c d e f g h i j k l m n o p'.repeat(50), null, undefined, 42, {}, [], Symbol('s')];
+  const odd = ['', '   ', '!!!', '...', '&<>"\'', '🔧🔧', 'plumbers 🔧', '\u0000x', 'x'.repeat(10000), 'ÉLECTRICIENS', 'ß',
+    '\ud800', 'IT', 'it', 'a b c d e f g h i j k l m n o p'.repeat(50), null, undefined, 42, {}, [], Symbol('s')];
   for (const value of odd) {
     let out;
     assert.doesNotThrow(() => { out = servicePhrase(value); }, String(typeof value));
-    assert.equal(typeof out.plain, 'string');
     assert.equal(typeof out.named, 'string');
+    assert.equal(Object.hasOwn(out, 'plain'), false, 'one form only (V111)');
   }
-  assert.deepEqual(servicePhrase(''), { plain: '', named: '' });
-  assert.deepEqual(servicePhrase(null), { plain: '', named: '' });
+  assert.deepEqual(servicePhrase(''), { named: '' });
+  assert.deepEqual(servicePhrase(null), { named: '' });
 });
 
 test('W1: the phrase is still escaped where it is shown', () => {

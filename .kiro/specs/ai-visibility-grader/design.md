@@ -506,46 +506,77 @@ Claude answers a little differently every time, and one answer can swing the sco
 
 ### Feature F: The question reads naturally (Requirement 24) — approved Nov 19, 2026; build after Feature E
 
-**One helper, two forms.** `grader.js` exports `servicePhrase(service)`, which returns `{ plain, named }`:
+**One helper, one form.** `grader.js` exports `servicePhrase(service)`, which returns `{ named }`: the cleaned phrase with its last word made plural by the fixed lists below, or with " businesses" added when the last word is on none of them. It is used in all three questions and the scan step (V111; the earlier `plain` form, used only in "I need … in", is removed with its tests).
 
-- `plain` is the cleaned phrase with its last word made plural by the fixed rules below (no "businesses" added). It is used in "I need … in …", because you need the service, not businesses.
-- `named` is `plain` with " businesses" added when it does not already name people or businesses. It is used in the free question, the second extra question and the scan step.
+*Cleaning*, in this order:
 
-*Cleaning.* Trim, collapse runs of spaces. Make the first letter lower case unless the first word has no lower-case letter (HVAC, A/C), has a capital letter inside it after a lower-case one (iPhone), or is one of the nationality and cuisine words that keep their capital (Mexican, Italian, Chinese, Thai, Japanese, Indian, Greek, French, Korean, Vietnamese, Cuban, Cajun, Caribbean, Mediterranean, American, Spanish, German, Irish). When every word starts with a capital ("Pressure Washing Companies"), every word is made lower case except all-caps words, words with a capital inside them, and the words on that list ("Mexican Restaurants" keeps "Mexican"). Any other words are kept as typed.
+1. Trim and collapse runs of spaces. Remove trailing periods, commas, exclamation marks, question marks, colons and semicolons ("plumbers." reads "plumbers"; "A/C" and "B&B" are untouched) (V116).
+2. Capitals, word by word (V115):
+   - an all-capitals word (no lower-case letter) of 5 or more letters and letters only is made lower case (PLUMBERS, ROOFING, ELECTRICIANS); any other all-capitals word is kept (4 letters or fewer, or holding a slash, a digit, "&" or other marks: HVAC, A/C, CPA, DJ, IT, BBQ, RV, B&B);
+   - a word with a capital inside it after a lower-case letter (iPhone), a nationality or cuisine word (Mexican, Italian, Chinese, Thai, Japanese, Indian, Greek, French, Korean, Vietnamese, Cuban, Cajun, Caribbean, Mediterranean, American, Spanish, German, Irish) and "Dr." are kept as typed;
+   - when the phrase is in Title Case (every word that has letters starts with a capital, not counting the joining words and, or, of, the, for, in, on, at, by, to, with, a, an), every other word gets a lower-case first letter ("Plumbers and Electricians", "Heating & Air", "Pressure Washing Companies"); otherwise only the first word does, and the owner's other words are kept as typed.
+3. Raise a fixed list of abbreviations typed in lower case (V115): a/c → A/C, hvac → HVAC, cpa → CPA, cpas → CPAs, dj → DJ, djs → DJs, bbq → BBQ, rv → RV, and "it" → "IT" only as the first word when the next word is "support" or "services".
 
-*The last word* (a fixed list, not general English plural rules; no general "-er" or "-or" rule, since "water heater", "garage door" and "computer" would turn into products):
+*The last word* (fixed lists, not general English plural rules; no general "-er", "-or" or "-ian" rule, since "water heater", "garage door", "computer" and "Italian" would turn into products or people) (V112 to V114). Compared in lower case; the ending is always lower case, so capitals follow the word ("CPAs", "DJs"):
 
-- "business" becomes "businesses" (already a name for businesses, so nothing more is added);
-- a last word ending in "ss" (glass, fitness) is not a plural, so it stays and `named` adds " businesses";
-- any other last word ending in "s" is kept as is and already names them;
-- these singular words are made plural: company becomes companies, agency becomes agencies, bakery becomes bakeries, handyman becomes handymen, attorney becomes attorneys; and these take "s": contractor, shop, service, crew, store, salon, studio, clinic, restaurant, cafe, firm, lawyer, doctor, plumber, roofer, painter, cleaner, landscaper, mechanic, barber, photographer, realtor, agent, groomer, inspector; and any word ending in "ist" or "ian" (dentist, florist, therapist, electrician, technician);
-- anything else gets " businesses" in `named` only.
+- "business" becomes "businesses";
+- these end in "s" but are not a plural of a business, and get " businesses": arts, gas, bus, lens, glass, fitness, wellness, logistics, analytics, electronics, cosmetics, aesthetics, graphics, news, sales; so does any word ending in "ss";
+- any other word ending in "s" is already plural (rentals, services);
+- a nationality or cuisine word is never made plural: it gets " businesses" ("Italian businesses"; "Italian restaurants" as typed stays as typed);
+- "es": church, wash, coach;
+- "y" to "ies": company, agency, bakery, brewery, winery, notary, pharmacy, nursery, laundry, grocery, distillery, creamery;
+- handyman becomes handymen;
+- "s": contractor, shop, service, crew, store, salon, studio, clinic, restaurant, cafe, firm, lawyer, doctor, plumber, roofer, painter, cleaner, landscaper, mechanic, barber, photographer, realtor, agent, groomer, inspector, attorney, locksmith, chiropractor, tutor, tailor, jeweler, bookkeeper, vet, trainer, walker, builder, gym, spa, bar, hotel, motel, daycare, preschool, boutique, barbershop, place, truck, home, school, park, diner, pub, mover, caterer, office, center, garage, dealership, cpa, dj (the note's two-word entries, such as "dog walker", "pizza place" and "funeral home", are covered by their last word);
+- words ending in "ist" (dentist, florist, therapist) or "ician" (electrician, technician, beautician, optician), and veterinarian, pediatrician, dietitian, librarian, guardian, take "s";
+- anything else gets " businesses".
 
 `freeQuestion`, `extraQuestions` and `stepNames` call it, so the questions and the scan step read from the same phrase:
 
-| Typed | `named` (free question, 2nd extra question, scan step) | `plain` ("I need … in") |
-|---|---|---|
-| plumbers | plumbers | plumbers |
-| Window cleaning and pressure cleaning | window cleaning and pressure cleaning businesses | window cleaning and pressure cleaning |
-| HVAC repair | HVAC repair businesses | HVAC repair |
-| hair salons | hair salons | hair salons |
-| Pressure washing companies | pressure washing companies | pressure washing companies |
-| roofing company | roofing companies | roofing companies |
-| cleaning business | cleaning businesses | cleaning businesses |
-| dentist | dentists | dentists |
-| auto glass | auto glass businesses | auto glass |
-| bakery | bakeries | bakeries |
-| handyman | handymen | handymen |
-| iPhone repair | iPhone repair businesses | iPhone repair |
-| A/C repair | A/C repair businesses | A/C repair |
-| Mexican restaurants | Mexican restaurants | Mexican restaurants |
-| Pressure Washing Companies | pressure washing companies | pressure washing companies |
+| Typed | `named` |
+|---|---|
+| plumbers | plumbers |
+| Window cleaning and pressure cleaning | window cleaning and pressure cleaning businesses |
+| HVAC repair | HVAC repair businesses |
+| hair salons | hair salons |
+| Pressure washing companies | pressure washing companies |
+| roofing company | roofing companies |
+| cleaning business | cleaning businesses |
+| dentist | dentists |
+| auto glass | auto glass businesses |
+| bakery | bakeries |
+| handyman | handymen |
+| iPhone repair | iPhone repair businesses |
+| A/C repair | A/C repair businesses |
+| Mexican restaurants | Mexican restaurants |
+| Pressure Washing Companies | pressure washing companies |
 
-Already clean services ("plumbers", "roofers", "accountants") give exactly today's questions. The free question becomes "Who are the best window cleaning and pressure cleaning businesses in Tallahassee, FL? Name your top 5." The extra questions become "I need <plain> in <city>, <ST>. Which companies would you recommend?" and "Which <named> in <city>, <ST> do people say are the most reliable?". The Google live question uses `freeQuestion`, so it follows. The service as typed is still stored in `input.service` and shown on the report; the category mapping, the reuse key and the report's other texts keep using it.
+The 30 services from the W1 review (V111 to V117), each pinned with its exact three questions:
 
-**Existing tests.** Checked by searching `test/`: the only tests that pin a question or the scan step text use already clean services (`test/grade-lead.test.js` line 711 "accountants", `test/grade-flow.test.js` line 472 "plumbers"), so no existing test changes. Answers carried over from an earlier Grade have the older prompt text. They are not copied when the prompt differs (see "Reuse and old Grades" in Feature E), so the new asks stand alone and nothing is counted twice; the one-time cost is that the main assistant is asked again for that Grade.
+| Typed | `named` | Typed | `named` |
+|---|---|---|---|
+| dentist | dentists | Italian | Italian businesses |
+| car wash | car washes | martial arts | martial arts businesses |
+| CPA | CPAs | Heating & Air | heating & air businesses |
+| DJ | DJs | a/c repair | A/C repair businesses |
+| gym | gyms | PLUMBERS | plumbers |
+| med spa | med spas | plumbers. | plumbers |
+| daycare | daycares | Plumbers and Electricians | plumbers and electricians |
+| church | churches | Window cleaning and pressure cleaning | window cleaning and pressure cleaning businesses |
+| 24 hour locksmith | 24 hour locksmiths | HVAC repair | HVAC repair businesses |
+| bakery | bakeries | handyman | handymen |
+| law firm | law firms | tree service | tree services |
+| Roofing Company | roofing companies | pet grooming | pet grooming businesses |
+| Mexican restaurants | Mexican restaurants | real estate agent | real estate agents |
+| IT support | IT support businesses | Thai food | Thai food businesses |
+| nail salon | nail salons | photographer | photographers |
 
-*Tests* (new file `test/grade-question.test.js`, additions only): every row of the table above, in both forms; "A/C repair" and "iPhone repair" keep their first letter; "Mexican restaurants" keeps its capital and "Pressure Washing Companies" is all lower case; "water heater" and "garage door" are not made plural by a general rule (they get "businesses"); a phrase ending in "crew" or "shop" is made plural, not given "businesses"; spaces are trimmed and collapsed; "I need … in" uses the plain form and the other two questions and the scan step use the named form; already clean services ("plumbers", "roofers", "accountants") give exactly today's three questions; the stored input keeps the typed text.
+The three questions (V111) are "Who are the best <named> in <city>, <ST>? Name your top 5.", "I'm looking for <named> in <city>, <ST>. Which ones would you recommend?" and "Which <named> in <city>, <ST> do people recommend most?". Already clean services ("plumbers", "roofers", "accountants") give exactly today's free question and scan step; the two extra questions change for every service, which is intended. The Google live question uses `freeQuestion`, so it follows. The service as typed is still stored in `input.service` and shown on the report; the category mapping, the reuse key and the report's other texts keep using it. "Plumbers", " plumbers ", "PLUMBERS" and "plumbers." give exactly the questions of "plumbers", so a repeat check reuses its answers (V117).
+
+**Existing tests.** Checked by searching `test/`: the only tests that pin the free question or the scan step text use already clean services (`test/grade-lead.test.js` line 711 "accountants", `test/grade-flow.test.js` line 478 "plumbers"), so they do not change. No existing test outside `test/grade-question.test.js` quotes the old second or third question; the others build them with `extraQuestions(...)` and follow. Answers carried over from an earlier Grade have the older prompt text. They are not copied when the prompt differs (see "Reuse and old Grades" in Feature E), so the new asks stand alone and nothing is counted twice; the one-time cost is that the main assistant is asked again for the two extra questions of a Grade made before V111.
+
+**Fix kit title (V118).** `suggestedTitle` in `fix-kit.js` tried, in order, the title with the whole service and the state, then without the state, then the service cut to fewer and fewer words, so a long service read "Test Biz 3 | Window cleaning and pressure in Tallahassee". That cut is older than Feature F. It now tries "<name> | <Service> in <city>, <ST>", then "<name> | <city>, <ST>" (the service left out, the state kept), then "<name> | <city>", then the name; it never cuts the service or drops only the state while the service is shown.
+
+*Tests* (`test/grade-question.test.js`, additions and the W1 tests updated to one form): every row of both tables; each rule of the cleaning and of the last word, each list entry pinned; "water heater", "garage door" and "computer" get "businesses"; "Italian", "Indian", "Asian", "Hawaiian", "Brazilian" and "vegetarian" are never given a plural "s"; spaces and trailing punctuation; the three questions word for word for the 30 services; the N2 tests ("PLUMBERS" now equals "plumbers"; "ROOFING" and "Plumbers and Electricians" are lowered; HVAC, A/C, CPA, DJ, IT support and BBQ keep their capitals); never throws on odd input; the phrase is escaped where it is shown; the stored input keeps the typed text. `test/grade-fix-kit.test.js` gains one V118 test.
 
 ### Numbers that change in existing tests (and why)
 
@@ -576,6 +607,8 @@ Nothing else moves. Each line is a place where a new requirement changes a numbe
 | `test/grade-admin-counts.test.js`, `startEnv` default config | no `gradeMainAsks` | adds `gradeMainAsks: 1` | same reason (J1) |
 | `test/grade-turnstile.test.js`, `startEnv` default config | no `gradeMainAsks` | adds `gradeMainAsks: 1` | same reason (J1) |
 | `test/grade-no-storefront.test.js`, env config | no `gradeMainAsks` | adds `gradeMainAsks: 1` | same reason (J1) |
+| `test/grade-question.test.js` (W1's own file), the two tests that quote the second and third questions | "I need … Which companies would you recommend?" and "… do people say are the most reliable?" | "I'm looking for … Which ones would you recommend?" and "… do people recommend most?" | V111: all three questions use the named phrase; no older test file quotes these questions |
+| `test/grade-question.test.js`, the N2 "PLUMBERS" test | "PLUMBERS" keeps its capitals and its questions differ | "PLUMBERS" gives the questions of "plumbers" | V115 and V117 |
 | `test/grade-lead.test.js` line 277, "Every answer" count after unlocking | `'Named in 0 of 3 answers.'` | `'named your business in 0 of its 3 answers.'` | V108: the count line uses the full sentence form with or without second opinions (the accepted exception of V110) |
 
 Checked and unchanged: `test/grade-score.test.js` (it uses `ai-named` 30, `business-labeled` 8 and `info-sheet` 4, and a point total of 100); `test/grade-flow.test.js` "a stub AI that names the business" (the large-company fixture passes every Check, so the Score is still 100); `test/grade-lead.test.js` and `test/grade-review-fixes.test.js` (they read scores from the fixtures or the stored Grade); `test/design.test.js` (counts passed in); the roofer and restaurant fixture HTML files (no review signal, confirmed by searching them for "review", "testimonial", "rating", "stars" and review-site links; the restaurant page contains the word "serving", which only matters when the box is ticked).

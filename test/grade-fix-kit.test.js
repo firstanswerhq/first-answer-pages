@@ -79,6 +79,17 @@ test('examples: title shortening order, llms draft and robots lines', () => {
   assert.equal(robotsLines([]), '');
 });
 
+test('V118: a long service is shown whole or left out, never cut mid-phrase, and the state is kept', () => {
+  const title = suggestedTitle({ name: 'Test Biz 3', service: 'Window cleaning and pressure cleaning', city: 'Tallahassee', state: 'FL' });
+  assert.equal(title, 'Test Biz 3 | Tallahassee, FL');
+  assert.equal(title.includes('pressure in'), false);
+  // When it fits, the whole service and the state are shown.
+  assert.equal(
+    suggestedTitle({ name: 'Test Biz 3', service: 'Window cleaning', city: 'Tallahassee', state: 'FL' }),
+    'Test Biz 3 | Window cleaning in Tallahassee, FL',
+  );
+});
+
 test('examples: a plural or ordinary service is lower-cased in a sentence, all-caps words stay as typed', () => {
   const base = { name: 'Summit Heating', city: 'Franklin', state: 'TN' };
   assert.match(suggestedSummary({ ...base, service: 'HVAC' }), /^Summit Heating: HVAC in Franklin, TN\./);

@@ -147,70 +147,106 @@ const KEEP_CAPITAL = new Set([
   'cuban', 'cajun', 'caribbean', 'mediterranean', 'american', 'spanish', 'german', 'irish',
 ]);
 
-/** Singular last words with their own plural. */
-const PLURAL_OF = new Map([
-  ['company', 'companies'], ['agency', 'agencies'], ['bakery', 'bakeries'], ['handyman', 'handymen'], ['attorney', 'attorneys'],
+/** Last words that end in "s" but are not a plural of a business (V113). Any word ending in "ss" is treated the same. */
+const NOT_PLURAL_S = new Set([
+  'arts', 'gas', 'bus', 'lens', 'glass', 'fitness', 'wellness', 'logistics', 'analytics', 'electronics',
+  'cosmetics', 'aesthetics', 'graphics', 'news', 'sales',
 ]);
 
-/** Singular last words that take "s". A fixed list: there is no general "-er" or "-or" rule. */
+/** Last words that take "es" (V114). */
+const TAKES_ES = new Set(['church', 'wash', 'coach']);
+
+/** Last words whose "y" becomes "ies" (V114). */
+const TAKES_IES = new Set([
+  'company', 'agency', 'bakery', 'brewery', 'winery', 'notary', 'pharmacy', 'nursery', 'laundry', 'grocery',
+  'distillery', 'creamery',
+]);
+
+/** Last words that take "s". A fixed list: there is no general "-er", "-or" or "-ian" rule (V114). */
 const TAKES_S = new Set([
   'contractor', 'shop', 'service', 'crew', 'store', 'salon', 'studio', 'clinic', 'restaurant', 'cafe', 'firm',
   'lawyer', 'doctor', 'plumber', 'roofer', 'painter', 'cleaner', 'landscaper', 'mechanic', 'barber',
-  'photographer', 'realtor', 'agent', 'groomer', 'inspector',
+  'photographer', 'realtor', 'agent', 'groomer', 'inspector', 'attorney', 'locksmith', 'chiropractor', 'tutor',
+  'tailor', 'jeweler', 'bookkeeper', 'vet', 'trainer', 'walker', 'builder', 'gym', 'spa', 'bar', 'hotel', 'motel',
+  'daycare', 'preschool', 'boutique', 'barbershop', 'place', 'truck', 'home', 'school', 'park', 'diner', 'pub',
+  'mover', 'caterer', 'office', 'center', 'garage', 'dealership', 'cpa', 'dj',
 ]);
+
+/** Words ending in "ian" that take "s"; words ending in "ician" do too (V112). */
+const IAN_TAKES_S = new Set(['veterinarian', 'pediatrician', 'dietitian', 'librarian', 'guardian']);
+
+/** Abbreviations typed in lower case that are raised (V115). "it" is handled on its own. */
+const RAISE = new Map([
+  ['a/c', 'A/C'], ['hvac', 'HVAC'], ['cpa', 'CPA'], ['cpas', 'CPAs'], ['dj', 'DJ'], ['djs', 'DJs'], ['bbq', 'BBQ'], ['rv', 'RV'],
+]);
+
+/** Joining words that do not count when deciding whether a phrase is in Title Case. */
+const JOINING = new Set(['and', 'or', 'of', 'the', 'for', 'in', 'on', 'at', 'by', 'to', 'with', 'a', 'an']);
 
 const hasLower = w => /\p{Ll}/u.test(w);
 const hasUpper = w => /\p{Lu}/u.test(w);
+const hasLetter = w => /\p{L}/u.test(w);
 const startsUpper = w => /^\p{Lu}/u.test(w);
-// A word that keeps its capitals: all capitals (HVAC, A/C), a capital inside it (iPhone) or a word on the list.
-const keepsCapitals = w => !hasLower(w) || /\p{Ll}\p{Lu}/u.test(w) || KEEP_CAPITAL.has(w.toLowerCase());
 const lowerFirst = w => {
   const chars = Array.from(w);
   return chars.length === 0 ? w : chars[0].toLowerCase() + chars.slice(1).join('');
 };
-// The ending in the word's own case: "BUSINESS" gets "ES", every other word a lower-case ending.
-const ending = (w, text) => (hasUpper(w) && !hasLower(w) ? text.toUpperCase() : text);
 
-/** The last word made plural by the fixed list, and whether the phrase then names people or businesses. */
+/** One word's capitals (V115). `lower` says whether its first letter may be made lower case. */
+function caseWord(w, lower) {
+  if (hasUpper(w) && !hasLower(w)) {
+    // All capitals: lowered only when it is 5 or more letters and letters only (PLUMBERS); HVAC, A/C, CPA, B&B stay.
+    return /^\p{L}+$/u.test(w) && Array.from(w).length >= 5 ? w.toLowerCase() : w;
+  }
+  const lw = w.toLowerCase();
+  if (/\p{Ll}\p{Lu}/u.test(w) || KEEP_CAPITAL.has(lw) || lw === 'dr.') return w; // iPhone, Mexican, Dr.
+  return lower ? lowerFirst(w) : w;
+}
+
+/** The last word made plural by the fixed lists, and whether the phrase then names people or businesses. */
 function pluralLast(word) {
   const lw = word.toLowerCase();
-  if (lw === 'business') return { word: word + ending(word, 'es'), names: true };
-  if (lw.endsWith('ss')) return { word, names: false }; // glass, fitness: not a plural
+  if (lw === 'business') return { word: `${word}es`, names: true };
+  if (NOT_PLURAL_S.has(lw) || lw.endsWith('ss')) return { word, names: false }; // martial arts, auto glass
   if (lw.endsWith('s')) return { word, names: true };
-  if (PLURAL_OF.has(lw)) {
-    const plural = PLURAL_OF.get(lw);
-    // Keep the typed letters and change only the ending (company -> compan + ies, handyman -> handym + en).
-    let same = 0;
-    while (same < lw.length && lw[same] === plural[same]) same += 1;
-    return { word: word.slice(0, same) + ending(word, plural.slice(same)), names: true };
+  if (KEEP_CAPITAL.has(lw)) return { word, names: false }; // never "Italians"
+  if (TAKES_ES.has(lw)) return { word: `${word}es`, names: true };
+  if (TAKES_IES.has(lw)) return { word: `${word.slice(0, -1)}ies`, names: true };
+  if (lw === 'handyman') return { word: `${word.slice(0, -2)}en`, names: true };
+  if (TAKES_S.has(lw) || lw.endsWith('ist') || lw.endsWith('ician') || IAN_TAKES_S.has(lw)) {
+    return { word: `${word}s`, names: true }; // the ending is lower case, so capitals follow the word: CPAs, DJs
   }
-  if (TAKES_S.has(lw) || lw.endsWith('ist') || lw.endsWith('ian')) return { word: word + ending(word, 's'), names: true };
   return { word, names: false };
 }
 
 /**
- * The service as it reads in a question (Requirement 24). `plain` is the cleaned phrase with its last word made
- * plural by the fixed list ("I need … in …"); `named` adds " businesses" when the phrase does not already name
- * people or businesses (the free question, the second extra question and the scan step). The stored input keeps
- * the service as typed. Never throws: odd input gives a best-effort phrase, and every page escapes it.
+ * The service as it reads in the questions (Requirement 24): `named` is the cleaned phrase with its last word
+ * made plural by the fixed lists, or with " businesses" added. Used in all three questions and the scan step.
+ * The stored input keeps the service as typed. Never throws: odd input gives a best-effort phrase, and every page
+ * escapes it.
  */
 export function servicePhrase(service) {
-  const text = typeof service === 'string' ? service.replace(/\s+/g, ' ').trim() : '';
-  if (text === '') return { plain: '', named: '' };
+  const text = typeof service === 'string'
+    ? service.replace(/\s+/g, ' ').trim().replace(/[\s.,!?:;]+$/u, '').trim() // V116: "plumbers." reads "plumbers"
+    : '';
+  if (text === '') return { named: '' };
   try {
-    let words = text.split(' ');
-    if (words.every(startsUpper)) {
-      // "Pressure Washing Companies": every word lower case except the ones that keep their capitals.
-      words = words.map(w => (keepsCapitals(w) ? w : w.toLowerCase()));
-    } else if (!keepsCapitals(words[0])) {
-      words[0] = lowerFirst(words[0]);
-    }
-    const last = pluralLast(words[words.length - 1]);
-    words[words.length - 1] = last.word;
-    const plain = words.join(' ');
-    return { plain, named: last.names ? plain : `${plain} businesses` };
+    const words = text.split(' ');
+    // Title Case: every word with letters starts with a capital, not counting joining words (V115).
+    const counted = words.filter(w => hasLetter(w) && !JOINING.has(w.toLowerCase()));
+    const title = counted.length > 0 && counted.every(startsUpper);
+    const cased = words.map((w, i) => caseWord(w, title || i === 0));
+    const raised = cased.map((w, i) => {
+      if (RAISE.has(w)) return RAISE.get(w);
+      if (i === 0 && w === 'it' && /^(support|services)$/i.test(cased[1] ?? '')) return 'IT';
+      return w;
+    });
+    const last = pluralLast(raised[raised.length - 1]);
+    raised[raised.length - 1] = last.word;
+    const phrase = raised.join(' ');
+    return { named: last.names ? phrase : `${phrase} businesses` };
   } catch {
-    return { plain: text, named: text };
+    return { named: text };
   }
 }
 
@@ -219,12 +255,12 @@ export function freeQuestion(input) {
   return `Who are the best ${servicePhrase(input.service).named} in ${input.city}, ${input.state}? Name your top 5.`;
 }
 
-/** The two questions asked after the report is opened. */
+/** The two questions asked after the report is opened (V111: both use the named phrase). */
 export function extraQuestions(input) {
-  const { plain, named } = servicePhrase(input.service);
+  const { named } = servicePhrase(input.service);
   return [
-    `I need ${plain} in ${input.city}, ${input.state}. Which companies would you recommend?`,
-    `Which ${named} in ${input.city}, ${input.state} do people say are the most reliable?`,
+    `I'm looking for ${named} in ${input.city}, ${input.state}. Which ones would you recommend?`,
+    `Which ${named} in ${input.city}, ${input.state} do people recommend most?`,
   ];
 }
 
