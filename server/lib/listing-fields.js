@@ -204,6 +204,9 @@ export function normalizeWebsite(value) {
     if (bare === '' || net.isIP(bare) !== 0) return '';
     if (host === 'localhost' || host.endsWith('.localhost')) return '';
     if (!host.includes('.') || host.startsWith('.') || host.endsWith('.') || host.includes('..')) return '';
+    // Letters, digits, dots and hyphens only (V98): the URL parser keeps some punctuation in a host
+    // ('"', "'", '`', '{', '&', ';'). International names arrive as "xn--…", so they still pass.
+    if (!/^[a-z0-9.-]+$/.test(host)) return '';
     const clean = `https://${host}${url.pathname || '/'}`;
     return clean.length <= MAX_WEBSITE ? clean : '';
   } catch {

@@ -20,6 +20,7 @@ import { validateFields, DAYS } from '../lib/listing-fields.js';
 import { uploadPage, reviewPage, messagePage } from '../lib/rise-html.js';
 import { formatFee } from '../lib/trust.js';
 import { claimWebsite } from '../lib/grader.js';
+import { canonicalUrl } from '../lib/base-url.js';
 
 const FORM_TYPE = 'application/x-www-form-urlencoded';
 const DRAFT_FORM_LIMIT = 64 * 1024;
@@ -78,8 +79,7 @@ export function parseServices(value) {
 
 /** The canonical address of GET /rise, from the configured base address only; '' when it is not a plain site address. */
 export function riseCanonical(config) {
-  const base = typeof config?.baseUrl === 'string' ? config.baseUrl.trim().replace(/\/+$/, '') : '';
-  return /^https?:\/\/[^/\s]+$/i.test(base) ? `${base}/rise` : '';
+  return canonicalUrl(config, '/rise');
 }
 
 /** Builds raw listing fields from an urlencoded review-form body. */

@@ -18,6 +18,7 @@
 import express, { Router } from 'express';
 import { RULES } from '../lib/rate-limiter.js';
 import { networkKey } from '../lib/network-key.js';
+import { canonicalUrl } from '../lib/base-url.js';
 import {
   signFormStamp, checkFormStamp, setCookieHeader, claimCookieHeader, readClaimedDraftId, hasValidCookie,
 } from '../lib/grade-stamp.js';
@@ -76,10 +77,7 @@ export function createGradeRouter(ctx) {
   const isOpenPage = req => req.method === 'GET' && OPEN_PATHS.has(req.originalUrl);
 
   /** The canonical address of an open page, from the configured base address only (never the request's Host). */
-  const canonicalFor = p => {
-    const base = typeof ctx.config.baseUrl === 'string' ? ctx.config.baseUrl.trim().replace(/\/+$/, '') : '';
-    return /^https?:\/\/[^/\s]+$/i.test(base) ? `${base}${p}` : '';
-  };
+  const canonicalFor = p => canonicalUrl(ctx.config, p);
 
   // Off switch, then headers for every /grade response.
   router.use('/grade', (req, res, next) => {

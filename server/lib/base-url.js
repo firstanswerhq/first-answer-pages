@@ -11,6 +11,23 @@ import { DEFAULT_BASE_URL } from './config.js';
 // host, host:port, or [ipv6]:port
 const HOST_RE = /^(?:[A-Za-z0-9.-]+|\[[0-9A-Fa-f:.]+\])(?::\d{1,5})?$/;
 
+/** A plain base address: http or https, a host of letters, digits, dots and hyphens, an optional port, and at most one trailing "/". */
+const PLAIN_BASE_RE = /^https?:\/\/[a-z0-9.-]+(?::\d{1,5})?\/?$/i;
+
+/**
+ * The canonical address of `path` (such as '/rise' or '/grade'), built from the configured base address only,
+ * never from the request's Host (V99). '' when the base address is not a plain one, so no canonical link is
+ * shown. One helper for every page that has one.
+ * @param {{ baseUrl?: string }} config
+ * @param {string} path
+ * @returns {string}
+ */
+export function canonicalUrl(config, path) {
+  const base = typeof config?.baseUrl === 'string' ? config.baseUrl.trim() : '';
+  if (!PLAIN_BASE_RE.test(base)) return '';
+  return `${base.replace(/\/$/, '')}${path}`;
+}
+
 /**
  * @param {import('express').Request} req
  * @param {{ baseUrl?: string, production?: boolean }} config
