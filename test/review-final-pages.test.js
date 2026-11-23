@@ -91,7 +91,12 @@ test('V134: an address we could not reach adds "We couldn\'t reach <host>…"; t
   });
   const html = locked(withQuery);
   assert.ok(html.includes('We couldn&#39;t reach zephyr.example. Check'));
-  assert.equal(html.includes('secret=1'), false, 'never the typed address with a query');
+  // Only the reach sentence is checked: the listing preview's "Website:" line prints the test's made-up address as
+  // typed, and a real check form keeps only the site's front address (V150).
+  const reach = /<p class="hint grade-partial">We couldn&#39;t reach[^<]*<\/p>/.exec(html)?.[0] ?? '';
+  assert.ok(reach.includes('zephyr.example'), 'the reach sentence is there');
+  assert.equal(reach.includes('secret=1'), false, 'never the typed address with a query');
+  assert.equal(reach.includes('/path'), false);
 });
 
 test('V134: with no number for the score, only the reach line is shown', () => {

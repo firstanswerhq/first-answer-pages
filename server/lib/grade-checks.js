@@ -30,7 +30,7 @@ export const CHECKS = Object.freeze([
     label: 'Can AI assistants get in?',
     passText: 'Your website lets AI assistants read it.',
     failText: 'Your website tells some AI assistants to stay out.',
-    fix: 'Your website tells some AI assistants to stay out. Add the lines in your fix kit to robots.txt so they can read it.',
+    fix: 'Your website tells some AI assistants to stay out. Replace the lines that block them in robots.txt with the lines in your fix kit.',
   },
   {
     id: 'business-labeled', group: 'ai_readable', points: 8,

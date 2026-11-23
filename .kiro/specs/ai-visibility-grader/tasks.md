@@ -661,3 +661,32 @@ Approved by the owner on Nov 19, 2026. Task names: **G1 to G7** for Feature G (b
 - [x] W2. Checkpoint for Feature F
   - Search `test/` again for any test that pins a question or the scan step with a service that is not clean, and list it with its reason before changing anything (none expected); the full suite passes
   - _Requirements: 17.4, 24.5_
+
+## Owner decisions of Nov 23, 2026 (D1 to D5)
+
+From `review-2026-11-23-owner-decisions.md`: the owner approved D1 to D5 ("Yes to all"); D6 (the `/grade` title) is no change. The spec is updated first (Requirements 26 to 30, the design's "Owner decisions D1 to D5" section and its "Numbers that change in existing tests" table). Build one task at a time, in this order, then stop after each for the cloud run. No shell commands. Add tests only; change an older test only on a line the design's table names, with its reason. Follow `wording.md` and `grader-safety.md`. After O6, the cleanup list in `review-2026-11-23-final-code.md` (V146 to V149) comes next, then a final review pass.
+
+- [ ] O1. D1: the score never drops when the report opens (Requirement 26)
+  - `grader.js`: export `freeAnswersOf(ai)` and `scoredResults(grade)`; `aiNamedResult` counts the free question's answers only; `shownScore` and the lead's stored score read `scoredResults`; `runExtraQuestions` no longer sets `aiMain.state` to `ok` for an extra answer; a Recheck takes `previousScore` from `shownScore(g)`
+  - `grade-html.js`: `reportPage` draws everything from one `view` with `scoredResults`; `answersSection` counts the free answers only, adds the "On the 2 other questions, Claude named your business in 1 of 2. They are not counted toward your score." line (and its one-answer form), labels an extra-question answer "Claude (not counted toward your score)", and splits the old "Only Claude's answers count toward your score…" sentence into the two paragraphs of the design; the about page and the Google live hint say "to the first question"; `grade-admin.js` reads `scoredResults` for the Grades list; README Lead gate paragraph
+  - Tests: new `test/grade-owner-score.test.js` as listed in the design; the older lines in the design's table (the `grade-lead.test.js` lines 268, 275, 277, 538, 539, 541 and 595, and the `grade-report-asks.test.js` lines 145, 147 and 165) change with their reasons; search `test/` once more for "count toward your score", "of its" and "uses all three" before editing
+  - _Requirements: 26.1, 26.2, 26.3, 26.4, 26.5, 26.6_
+- [ ] O2. D2: "Partly" instead of "Pass" on a weak AI result (Requirement 27)
+  - `checkRow` gives `ai-named` the `partly` class and the word "Partly" when it passed with fewer than all its points; "Pass" at all 30 or with no `earned`; no stored value, score or count changes; CSS for `.grade-check.partly` in the three layers, its own icon, and the pill-position and 359px selectors
+  - Tests: new, as listed in the design; no existing test changes (search for the row word first)
+  - _Requirements: 27.1, 27.2_
+- [ ] O3. D3: the home page says why this matters (Requirement 28)
+  - `routes/home.js`: the small `grade-link` paragraph goes; the sentence "People now ask AI who to call. List your business free so AI can find it." under the tagline; with the grader on, the button "Check if AI can find your business" (class `button`, `href="/grade"`) right under the search form; CSS for `.home-why` and `.home-check a` (full width, 3.5rem tall, no sideways scroll at 390px); the unused home `.grade-link` rules removed
+  - Tests: new, as listed in the design; the existing `href="/grade"` lines in `grade-flow.test.js` still hold; look again at `design-assets.test.js` lines 57 to 59 before editing
+  - _Requirements: 28.1, 28.2, 28.3, 28.4_
+- [ ] O4. D4: a listing claimed from a report pre-fills less (Requirement 29)
+  - `grader.js`: `claim` leaves `services` empty (listed in `missingFields`) and passes every day's hours through a new exported `formStyleHours`; `hoursToObject` is not changed
+  - Tests: new, as listed in the design; the older lines in the design's table (`grade-lead.test.js` lines 320, 356 and 357) change with their reasons
+  - _Requirements: 29.1, 29.2, 29.3_
+- [ ] O5. D5: the business-label Check knows every local-business type (Requirement 30)
+  - New `server/lib/schema-types.js` with the fixed list built by hand from the schema.org type tree (release and source written at the top); `page-facts.js` builds `BUSINESS_TYPES` from it plus `CleaningService`; read the page behind `test/grade-checks.test.js` lines 55 to 58 first
+  - Tests: new `test/schema-types.test.js` and Check tests, as listed in the design; no existing line changes
+  - _Requirements: 30.1, 30.2, 30.3, 30.4_
+- [ ] O6. Checkpoint for the owner decisions
+  - Wording check of every sentence O1 to O5 added (plain words, American spelling, no promise that a score, a listing or a fix will make an AI name a business, no dollar figure); confirm the stored Grade is never rewritten by a page view; confirm every older test line that changed is in the design's table with its reason and is listed in the summary; the full suite passes
+  - _Requirements: 26.6, 27.2, 28.4, 29.3, 30.3_
