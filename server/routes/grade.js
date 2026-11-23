@@ -118,7 +118,8 @@ export function createGradeRouter(ctx) {
       if (ID_PATTERN.test(from)) {
         const earlier = await ctx.grader.get(from);
         const i = earlier?.input;
-        if (i && typeof i === 'object') {
+        // Only a finished check fills the form (done, or failed): a Grade still running gives the plain form (V168).
+        if (i && typeof i === 'object' && (earlier.status === 'done' || earlier.status === 'failed')) {
           values = {
             name: i.name, city: i.city, state: i.state, service: i.service, website: i.website ?? '',
             noStorefront: i.noStorefront === true,
@@ -263,7 +264,8 @@ export function createGradeRouter(ctx) {
       const opts = reportOptions(req, grade);
       const full = !opts.leadGate || opts.unlocked;
       // With the gate off (or an unlocked visitor whose questions never started), the first view starts the extra AI questions.
-      if (full && !grade.extraAiStartedAt) {
+      // Not after the daily limit: the extra questions are never asked then (V162), so there is nothing to start (V169).
+      if (full && !grade.extraAiStartedAt && grade.aiMain?.state !== 'limit') {
         ctx.grader.startExtraQuestions(grade.id).catch(() => {
           process.stderr.write(`[grader] extra-ai-failed id=${grade.id}\n`);
         });

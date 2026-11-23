@@ -545,6 +545,9 @@ export function readableHours(lines) {
 /** Providers that are always second opinions; a stored answer from one never counts toward the score. */
 const SECOND_OPINION_PROVIDERS = new Set(['chatgpt', 'gemini', 'grok', 'perplexity']);
 
+/** A stored answer is an object: null, text, numbers and lists are not (a hand-edited grades.json). */
+const isEntry = a => a !== null && typeof a === 'object' && !Array.isArray(a);
+
 /** True for a second-opinion answer, whether or not an older Grade marked it. */
 export const isSecondOpinion = a => Boolean(a) && (a.second === true || SECOND_OPINION_PROVIDERS.has(a.provider));
 
@@ -1043,12 +1046,13 @@ export function createGrader({
    * `existing` holds answers already on the Grade (carried over or asked earlier).
    * @returns {Promise<{ entries: object[], mainState: 'ok'|'limit'|'failed'|'not_connected'|'off' }>}
    */
-  async function askQuestion({ input, prompt, existing, onSecond, gradeId, asks = 1 }) {
+  async function askQuestion({ input, prompt, existing = [], onSecond, gradeId, asks = 1 }) {
     const main = assistantProvider;
     const mainName = main?.name ?? 'unknown';
     const isMock = mainName === 'mock';
     const category = mapCategory(input.service, store.getCategories()) || '';
-    const have = name => existing.some(a => a.prompt === prompt && a.provider === name);
+    // An entry that is not an object (a hand-edited grades.json) is skipped, so it can never stop a check (V165).
+    const have = name => (Array.isArray(existing) ? existing : []).some(a => isEntry(a) && a.prompt === prompt && a.provider === name);
     // Every counted call is followed by a look at the day's use (the heads-up emails); it never waits or throws.
     const consume = () => {
       const counted = aiBudget.consume({ kind: 'grade' }).allowed === true;
@@ -1210,7 +1214,8 @@ export function createGrader({
       const g = list.find(x => x && x.id === id);
       if (!g) return;
       if (entry) {
-        if (!g.ai.some(a => a.prompt === entry.prompt && a.provider === entry.provider)) g.ai = [...g.ai, entry];
+        const stored = Array.isArray(g.ai) ? g.ai : [];
+        if (!stored.some(a => isEntry(a) && a.prompt === entry.prompt && a.provider === entry.provider)) g.ai = [...stored, entry];
       } else {
         const missed = Array.isArray(g.secondMissed) ? g.secondMissed : [];
         if (!missed.some(m => m.prompt === prompt && m.provider === name)) g.secondMissed = [...missed, { provider: name, prompt }];
@@ -1381,7 +1386,7 @@ export function createGrader({
         log(`ai-step-failed id=${id}`);
         outcome = { entries: [], mainState: 'failed', planned: 1, asked: 0 };
       }
-      const ai = [...(await carried), ...outcome.entries];
+      const ai = [...(await carried), ...outcome.entries].filter(isEntry);
       const main = ai.filter(a => !isSecondOpinion(a) && a.prompt === prompt);
       const reused = outcome.entries.length === 0 && main.length > 0;
       let state = 'done';
@@ -1509,6 +1514,7 @@ export function createGrader({
     if (!earlier) return [];
     const copies = [];
     for (const a of earlier.ai) {
+      if (!isEntry(a)) continue;
       if (!names.has(a.provider)) continue;
       if (prompts && !prompts.has(a.prompt)) continue;
       copies.push({ ...structuredClone(a), reusedFrom: a.reusedFrom || a.at });
@@ -1522,7 +1528,9 @@ export function createGrader({
    * mention could be lost), and one that was already asked about is not asked about again, even
    * when that check failed.
    */
-  function rereadCarried(entries, input) {
+  function rereadCarried(rawEntries, input) {
+    // Only real entries are read again; anything else in a stored list is left out (V165).
+    const entries = (Array.isArray(rawEntries) ? rawEntries : []).filter(isEntry);
     if (!nameChecker) return Promise.resolve(entries);
     return Promise.all(entries.map(async a => {
       // An answer stored at the 4,000-character cap was cut even if an older Grade did not say so.
@@ -1601,7 +1609,7 @@ export function createGrader({
           if (!g) return;
           // Flagged, so nothing ever mistakes an extra-question answer for the free question's (Requirement 26).
           // They are shown in the full report and never counted, so the score is the same before and after.
-          g.ai = [...g.ai, ...entries.map(e => ({ ...e, extra: true }))];
+          g.ai = [...(Array.isArray(g.ai) ? g.ai : []), ...entries.map(e => ({ ...e, extra: true }))];
           g.results = assemble(g.results, g.ai, g.aiMain);
           g.score = scoreOf(g.results);
         });

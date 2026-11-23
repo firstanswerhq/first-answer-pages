@@ -116,13 +116,9 @@ const aiOf = grade => (Array.isArray(grade.ai) ? grade.ai.filter(a => a && typeo
  */
 function dailyLimitHit(grade) {
   if (grade.aiMain?.state === 'limit') return true;
-  try {
-    const name = stepNames(grade.input)[3];
-    const step = (Array.isArray(grade.steps) ? grade.steps : []).find(s => s && s.name === name);
-    return step?.finding === AI_LIMIT_REACHED;
-  } catch {
-    return false;
-  }
+  // The step is found by what it says, not by its name: only the AI step writes this finding, and a Grade saved
+  // before the question was reworded names that step with the service as it was typed (V164).
+  return (Array.isArray(grade.steps) ? grade.steps : []).some(s => s && s.finding === AI_LIMIT_REACHED);
 }
 
 // ---- the form ------------------------------------------------------------------------
@@ -476,7 +472,9 @@ function aiFree(grade, { googleLive, requester, now, secondPending = [] }) {
     const lead = askedLine(first, now, inline(first.provider));
     parts.push(`<p>${lead} ${h(outcome(first, grade.input))}</p>`, competitorList(first, grade.input), answerBlock(first));
   } else if (seconds.length > 0) {
-    parts.push(`<p>${h(mainLabel)} did not answer this time, so this check has no AI score.</p>`);
+    parts.push(dailyLimitHit(grade)
+      ? `<p>We couldn't ask ${h(mainLabel)} this time because today's limit for AI checks was reached, so this check has no AI score.</p>`
+      : `<p>${h(mainLabel)} did not answer this time, so this check has no AI score.</p>`);
   } else {
     if (dailyLimitHit(grade)) {
       parts.push("<p>We couldn't ask AI this time. The daily limit for AI checks was reached. You can run the check again tomorrow.</p>");
@@ -701,13 +699,18 @@ function answersSection(grade, { leadGate = true } = {}) {
   }
   // The free question got no answer, but the extra questions did (they run when it failed): say so plainly (V158).
   if (main.length > 0 && free.length === 0) {
-    lines.push(`<p>${h(mainLabel)} did not answer the first question, so this check has no AI score. The other answers are shown below but not counted toward your score.</p>`);
+    // When the daily limit was the reason, Claude is not blamed (V166).
+    lines.push(limitHit
+      ? `<p>We couldn't ask ${h(mainLabel)} the first question because today's limit for AI checks was reached, so this check has no AI score. The other answers are shown below but not counted toward your score.</p>`
+      : `<p>${h(mainLabel)} did not answer the first question, so this check has no AI score. The other answers are shown below but not counted toward your score.</p>`);
   }
   if (limitHit && otherMain.length === 0) lines.push(`<p>${QUESTIONS_NOT_ASKED}</p>`);
   if (seconds.length > 0) {
     const others = [...new Set(seconds.map(s => providerLabel(s.provider)))];
     if (main.length === 0) {
-      lines.push(`<p>${h(mainLabel)} did not answer, so this check has no AI score. The answers from ${h(joinAnd(others))} are here so you can compare.</p>`);
+      lines.push(limitHit
+        ? `<p>We couldn't ask ${h(mainLabel)} because today's limit for AI checks was reached, so this check has no AI score. The answers from ${h(joinAnd(others))} are here so you can compare.</p>`
+        : `<p>${h(mainLabel)} did not answer, so this check has no AI score. The answers from ${h(joinAnd(others))} are here so you can compare.</p>`);
     } else {
       // Count questions, not answers: the free question asked 3 times is still one question.
       // Every question that was asked, by anyone: ChatGPT answering all 3 means 3, even when Claude answered 2.
