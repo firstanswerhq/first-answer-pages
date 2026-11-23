@@ -637,6 +637,6 @@ Approved by the owner on Nov 19, 2026. Task names: **G1 to G7** for Feature G (b
   - Tests (`test/grade-question.test.js`): every row of both design tables (the 15 and the 30 services, the 30 with their exact three questions), each rule and list entry, "water heater", "garage door" and "computer" get "businesses", no "-ian" plural for Italian and the other cuisine and people words, trailing punctuation, already clean services give exactly today's free question and scan step, the N2 tests ("PLUMBERS" equals "plumbers"; HVAC, A/C, CPA, DJ, IT support, BBQ keep their capitals), and the stored input and the report show the typed text; existing tests that pin an already clean service ("plumbers", "accountants") pass unchanged
   - V118: `suggestedTitle` in `fix-kit.js` never cuts the service mid-phrase: the whole service with the state, else the city and state without the service, else the city, else the name; one test in `test/grade-fix-kit.test.js`
   - _Requirements: 24.1, 24.2, 24.3, 24.4, 24.5, 24.6_
-- [ ] W2. Checkpoint for Feature F
+- [x] W2. Checkpoint for Feature F
   - Search `test/` again for any test that pins a question or the scan step with a service that is not clean, and list it with its reason before changing anything (none expected); the full suite passes
   - _Requirements: 17.4, 24.5_
