@@ -108,9 +108,24 @@ export function createGradeRouter(ctx) {
     return next(err);
   };
 
-  router.get('/grade', (req, res, next) => {
+  router.get('/grade', async (req, res, next) => {
     try {
-      return formPage(res, 200, { indexable: isOpenPage(req) });
+      // "Run a new check" on a partial score (V157): `/grade?from=<Grade_Id>` shows the form with that business's
+      // details filled in, the same fields the form takes. Nothing is asked or spent by opening it. It has a query
+      // string, so it is never an open page (noindex), and the details are never put in the address itself.
+      const from = typeof req.query.from === 'string' ? req.query.from : '';
+      let values = {};
+      if (ID_PATTERN.test(from)) {
+        const earlier = await ctx.grader.get(from);
+        const i = earlier?.input;
+        if (i && typeof i === 'object') {
+          values = {
+            name: i.name, city: i.city, state: i.state, service: i.service, website: i.website ?? '',
+            noStorefront: i.noStorefront === true,
+          };
+        }
+      }
+      return formPage(res, 200, { values, indexable: isOpenPage(req) });
     } catch (err) {
       return closeOnError(res, next, err);
     }

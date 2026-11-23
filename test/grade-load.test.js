@@ -285,7 +285,7 @@ test('V46: a second opinion that takes too long shows "didn\'t answer in time"',
 
 // ---- V47: a check without Claude's answer is marked partial ------------------------------------------------
 
-const PARTIAL_LINE = "Partial score: Claude didn&#39;t answer this time, so the AI part isn&#39;t counted. Check again later for your full score.";
+const PARTIAL_LINE = "Partial score: Claude didn&#39;t answer this time, so the AI part isn&#39;t counted. <a href=\"/grade?from=__ID__\">Run a new check</a> later for your full score.";
 
 test('V47: a Grade with no AI answer shows the partial line, the admin list says partial, and a Recheck shows no "before" line', async () => {
   const claude = { name: 'anthropic', async ask() { throw new Error('down'); } };
@@ -298,7 +298,7 @@ test('V47: a Grade with no AI answer shows the partial line, the admin list says
   assert.ok(Number.isInteger(grade.score.score), 'the website points still give a number');
 
   const html = await (await get(env, `/grade/${id}`)).text();
-  assert.ok(html.includes(PARTIAL_LINE));
+  assert.ok(html.includes(PARTIAL_LINE.replace('__ID__', id)));
   assert.ok(html.includes(`<span class="num">${grade.score.score}</span>`), 'the number is kept');
 
   const admin = await (await get(env, '/admin/grades', { authorization: `Bearer ${ADMIN}`, accept: 'text/html' })).text();
@@ -312,7 +312,7 @@ test('V47: a Grade with no AI answer shows the partial line, the admin list says
   assert.equal(again.previousScore, null, 'a partial score is never kept as the "before" score');
   const page = await (await get(env, `/grade/${id}`)).text();
   assert.equal(page.includes('Your score was'), false);
-  assert.ok(page.includes(PARTIAL_LINE));
+  assert.ok(page.includes(PARTIAL_LINE.replace('__ID__', id)));
 });
 
 test('V47: a normal Grade shows no partial line and keeps its "before" line after a Recheck', async () => {

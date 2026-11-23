@@ -215,9 +215,9 @@ test('V139: no website and the daily limit: one clear line, and "tomorrow" in pl
 test('V139: with a website, the partial line says "tomorrow" for the daily limit and "later" otherwise', () => {
   const results = [...WEBSITE_ONLY, notChecked('ai-named', AI_LIMIT_REACHED)];
   const limit = locked(grade({ results, aiMain: { provider: 'anthropic', label: 'Claude', state: 'limit' } }));
-  assert.ok(limit.includes('Partial score: the daily limit for AI checks was reached, so the AI part isn&#39;t counted. Check again tomorrow for your full score.'));
+  assert.ok(limit.includes('Partial score: the daily limit for AI checks was reached, so the AI part isn&#39;t counted. <a href="/grade?from=finalAAAAAAAAAAAAAAAAAA">Run a new check</a> tomorrow for your full score.'));
   const failed = locked(grade({ results, aiMain: { provider: 'anthropic', label: 'Claude', state: 'failed' } }));
-  assert.ok(failed.includes('Partial score: Claude didn&#39;t answer this time, so the AI part isn&#39;t counted. Check again later for your full score.'));
+  assert.ok(failed.includes('Partial score: Claude didn&#39;t answer this time, so the AI part isn&#39;t counted. <a href="/grade?from=finalAAAAAAAAAAAAAAAAAA">Run a new check</a> later for your full score.'));
 });
 
 test('V139: with no website and no limit, the sentence is as before', () => {

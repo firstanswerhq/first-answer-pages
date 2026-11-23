@@ -814,7 +814,7 @@ export function isExtraAnswer(a) {
  * compares with today's wording of the question, so a Grade asked with older wording still has its answers.
  */
 export function freeAnswersOf(ai) {
-  const main = (Array.isArray(ai) ? ai : []).filter(a => a && typeof a === 'object' && !isSecondOpinion(a) && !isExtraAnswer(a));
+  const main = (Array.isArray(ai) ? ai : []).filter(a => a && typeof a === 'object' && !Array.isArray(a) && !isSecondOpinion(a) && !isExtraAnswer(a));
   return main.length === 0 ? [] : main.filter(a => a.prompt === main[0].prompt);
 }
 
@@ -858,7 +858,7 @@ function assemble(websiteResults, ai, aiMain) {
  */
 export function scoredResults(grade) {
   const results = Array.isArray(grade?.results) ? grade.results : [];
-  const ai = Array.isArray(grade?.ai) ? grade.ai.filter(a => a && typeof a === 'object') : [];
+  const ai = Array.isArray(grade?.ai) ? grade.ai.filter(a => a && typeof a === 'object' && !Array.isArray(a)) : [];
   const hasStored = results.some(r => r && r.id === 'ai-named');
   if (!hasStored || !ai.some(a => !isSecondOpinion(a))) return results;
   return results.map(r => (r && r.id === 'ai-named' ? aiNamedResult(ai, grade.aiMain) : r));
@@ -1618,10 +1618,11 @@ export function createGrader({
    */
   async function startExtraQuestions(id) {
     const grade = await get(id);
-    // The extra questions run even when the free question failed or hit the daily limit (requirement 9.2);
-    // only an assistant that is not connected cannot be asked.
+    // The extra questions run even when the free question failed. They are not asked when the free question hit the
+    // daily limit (they can no longer count toward the score, so they would only spend paid calls; V162), nor when
+    // the assistant is not connected. A repeat call writes nothing, so a report viewed again asks nothing either.
     const state = grade?.aiMain?.state;
-    if (!grade || grade.status !== 'done' || grade.extraAiStartedAt || state === 'not_connected' || state === 'off') return false;
+    if (!grade || grade.status !== 'done' || grade.extraAiStartedAt || state === 'not_connected' || state === 'off' || state === 'limit') return false;
     let started = false;
     await grades().update(list => {
       const g = list.find(x => x && x.id === id);
