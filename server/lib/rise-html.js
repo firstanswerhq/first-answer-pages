@@ -34,7 +34,7 @@ export const RISE_DESCRIPTION_NO_PHOTO = 'List your local business free on First
 export const WEBSITE_HINT = 'The address of your own website, like example.com';
 
 /** Shown when the owner typed a website that was left out. Plain words, like the reviews link note. */
-export const WEBSITE_LEFT_OUT = 'We left that website out. It must start with https:// and be the address of your own website, like https://example.com.';
+export const WEBSITE_LEFT_OUT = 'We left that website out. It must be the address of your own website, like example.com.';
 
 /** Help text under the reviews link box. */
 export const REVIEWS_LINK_HINT = 'A link to your reviews on Google, Yelp, Facebook or Nextdoor.';

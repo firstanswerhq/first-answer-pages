@@ -109,7 +109,7 @@ test('F9: the review form has the optional Website input and hint', () => {
 });
 
 test('F9: a left-out website is said plainly at the top and by the box, like the reviews link', () => {
-  assert.equal(WEBSITE_LEFT_OUT, 'We left that website out. It must start with https:// and be the address of your own website, like https://example.com.');
+  assert.equal(WEBSITE_LEFT_OUT, 'We left that website out. It must be the address of your own website, like example.com.');
   assert.equal(SAVED_WEBSITE_LEFT_OUT, 'Saved, but we left out your website. See below.');
   for (const text of [WEBSITE_LEFT_OUT, SAVED_WEBSITE_LEFT_OUT, SAVED_BOTH_LEFT_OUT]) {
     assert.doesNotMatch(text, /https (link|address)|public|URL/i, text);

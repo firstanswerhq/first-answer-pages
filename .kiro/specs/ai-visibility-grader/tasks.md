@@ -489,7 +489,7 @@ From `feature-request-2026-11-18.md` and `spec-review-2026-11-18.md`: Feature A,
 - [x] F9. Show, edit and publish the website
   - `listingDetail` in `server/lib/html.js`: a plain "Website" row linking to the site (host as the text, escaped, `rel="noopener noreferrer"`); nothing when the field is empty
   - `schema.js`: add `sameAs` (the website, then the reviews link, each only when present; the array only when not empty); the label's `url` stays the listing page; `llms.js` and the MCP `summarize` text: a `Website` line or link, only when present; the JSON API and the MCP `get_listing` need no code
-  - `routes/rise.js` `fieldsFromForm`, the draft form and review page in `rise-html.js`, and the admin Draft page: the optional "Website" input and row, with the note "We left that website out. It must start with https:// and be the address of your own website, like https://example.com." when a submitted value was left out
+  - `routes/rise.js` `fieldsFromForm`, the draft form and review page in `rise-html.js`, and the admin Draft page: the optional "Website" input and row, with the note "We left that website out. It must be the address of your own website, like example.com." when a submitted value was left out
   - Example tests: the listing page row and its escaping; the `sameAs` entry with the website alone, the reviews link alone, both and neither (no `sameAs` key), and `url` unchanged; llms.txt and MCP output with and without the field (the line-count properties in `test/llms.test.js` hold); the form input, the left-out note and the admin row
   - _Requirements: 21.3, 21.4, 21.5, 21.7_
 - [x] F10. Claim fills the website; checkpoint for A, B and C

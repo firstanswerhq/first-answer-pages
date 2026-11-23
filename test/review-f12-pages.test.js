@@ -159,7 +159,8 @@ test('V94: GET /rise has the description and a canonical link from the base addr
   const res = await fetch(`${env.base}/rise/manual`, { method: 'POST', redirect: 'manual' });
   const draft = await (await fetch(`${env.base}${res.headers.get('location')}`)).text();
   assert.equal(draft.includes('rel="canonical"'), false);
-  assert.equal(draft.includes('name="description"'), false);
+  // The meta tag only: the draft form has its own description box (a textarea named "description").
+  assert.equal(draft.includes('<meta name="description"'), false);
 });
 
 test('V94: the photo sentence is said only while the photo reader is open, and the canonical link needs a plain base address', () => {
