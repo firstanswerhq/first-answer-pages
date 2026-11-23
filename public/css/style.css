@@ -1161,6 +1161,12 @@ details.advanced summary {
   opacity: 0.85;
 }
 
+/* "Partly": the AI named the business in some answers, not all (an amber of its own, between pass and fail) */
+.grade-check.partly {
+  border-left-color: #B7791F;
+  background: linear-gradient(90deg, #FBF1DC 0%, var(--color-surface) 2.5rem);
+}
+
 .grade-result {
   display: inline-block;
   white-space: nowrap;
@@ -1183,6 +1189,11 @@ details.advanced summary {
 .grade-check.needs_work .grade-result {
   color: var(--color-fail);
   background: rgba(155, 44, 44, 0.1);
+}
+
+.grade-check.partly .grade-result {
+  color: #8A5300;
+  background: rgba(183, 121, 31, 0.14);
 }
 
 .grade-points {
@@ -1934,6 +1945,7 @@ summary {
 /* Check rows: icon on the left, pill on the right */
 .grade-check,
 .grade-check.pass,
+.grade-check.partly,
 .grade-check.fail,
 .grade-check.needs_work {
   position: relative;
@@ -1962,6 +1974,11 @@ summary {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='11' fill='%239B2C2C'/%3E%3Cpath d='M12 6.500v7' stroke='%23fff' stroke-width='2.6' stroke-linecap='round'/%3E%3Ccircle cx='12' cy='17.200' r='1.500' fill='%23fff'/%3E%3C/svg%3E");
 }
 
+.grade-check.partly {
+  border-left-color: #B7791F;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='11' fill='%23B7791F'/%3E%3Cpath d='M12 4a8 8 0 0 1 0 16z' fill='%23fff'/%3E%3C/svg%3E");
+}
+
 .grade-check.not_checked {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='11' fill='%238A8279'/%3E%3Cpath d='M7.500 12h9' stroke='%23fff' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E");
   opacity: 1;
@@ -1969,6 +1986,7 @@ summary {
 
 .grade-result,
 .grade-check.pass .grade-result,
+.grade-check.partly .grade-result,
 .grade-check.fail .grade-result,
 .grade-check.needs_work .grade-result {
   float: right;
@@ -2108,6 +2126,7 @@ summary {
 
 .grade-result,
 .grade-check.pass .grade-result,
+.grade-check.partly .grade-result,
 .grade-check.fail .grade-result,
 .grade-check.needs_work .grade-result {
   position: absolute;
@@ -2316,6 +2335,7 @@ h3,
 
   .grade-result,
   .grade-check.pass .grade-result,
+  .grade-check.partly .grade-result,
   .grade-check.fail .grade-result,
   .grade-check.needs_work .grade-result {
     position: static;

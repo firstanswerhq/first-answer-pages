@@ -618,14 +618,21 @@ function checkRow(r, input) {
   // The Grade's input picks the service-area wording for a business with no storefront.
   const c = checkById(r.id, input);
   if (!c) return '';
-  const cls = r.result === 'fail' ? 'fail' : r.result === 'pass' ? 'pass' : 'not_checked';
-  const word = { pass: 'Pass', fail: 'Needs work', not_checked: 'Not checked' }[cls];
+  let cls = r.result === 'fail' ? 'fail' : r.result === 'pass' ? 'pass' : 'not_checked';
+  // "Partly" (Requirement 27): the AI check passed, but it named the business in only some answers. A display
+  // label only: the stored result, the points, the score and the count of checks that need work do not change.
+  // A result stored without `earned` (an older Grade) stays "Pass".
+  const partly = r.id === 'ai-named' && cls === 'pass' && Number.isFinite(r.earned) && r.earned < c.points;
+  if (partly) cls = 'partly';
+  const word = { pass: 'Pass', partly: 'Partly', fail: 'Needs work', not_checked: 'Not checked' }[cls];
   let points = 'Not counted';
   if (cls !== 'not_checked') {
     const earned = r.id === 'ai-named' && Number.isFinite(r.earned) ? r.earned : (cls === 'pass' ? c.points : 0);
     points = `${earned} of ${c.points} points`;
   }
-  return `<li class="grade-check ${cls}"><span class="grade-result">${word}</span><strong>${h(c.label)}</strong><br><span class="grade-points">${points}</span><p>${h(r.detail ?? '')}</p>${cls === 'fail' ? `<p><strong>Fix:</strong> ${h(c.fix)}</p>` : ''}</li>`;
+  // Under "Partly" a leading "Yes. " would sit oddly beside a weak result; it is left off here, never in storage (V153).
+  const detail = partly ? String(r.detail ?? '').replace(/^Yes\.\s+/, '') : (r.detail ?? '');
+  return `<li class="grade-check ${cls}"><span class="grade-result">${word}</span><strong>${h(c.label)}</strong><br><span class="grade-points">${points}</span><p>${h(detail)}</p>${cls === 'fail' ? `<p><strong>Fix:</strong> ${h(c.fix)}</p>` : ''}</li>`;
 }
 
 function allChecks(grade) {
