@@ -3,6 +3,8 @@
  * output (pages, JSON, JSON-LD, MCP, llms.txt, sitemap).
  */
 
+import { reviewsLinkHost } from './listing-fields.js';
+
 /** Keys that exist on stored listings but must never be shown publicly. */
 export const PRIVATE_KEYS = Object.freeze(['ownerEmail']);
 
@@ -15,5 +17,7 @@ export function publicListing(listing) {
   if (listing === null || typeof listing !== 'object' || Array.isArray(listing)) return listing;
   const copy = { ...listing };
   for (const key of PRIVATE_KEYS) delete copy[key];
+  // A reviews link is public only when it is a valid one (a hand-edited bad link never leaves the site).
+  if (Object.hasOwn(copy, 'reviewsLink') && reviewsLinkHost(copy.reviewsLink) === '') delete copy.reviewsLink;
   return copy;
 }

@@ -214,7 +214,7 @@ A free check for one local business. The owner types the business name, city, st
 
 - whether an AI assistant names the business when asked for the best business like it in that city, and who it names instead;
 - whether the business's website lets AI assistants in (`robots.txt`), labels its name and phone in a way AI can read, and has an `llms.txt` info sheet;
-- whether the home page has the search and customer basics (city and service in the title, a tap-to-call phone number, hours, address, a call or book button).
+- whether the home page has the search and customer basics (city and service in the title, a tap-to-call phone number, hours, address, a call or book button, and customer reviews AI can read). A business that goes to its customers can check "We go to our customers (no storefront)", and the check then looks for the area it serves instead of a street address.
 
 Every number on the report is something the Grader measured. It shows no dollar figures. The report ends with the fix: a free listing already filled in from what the scan found, with one button to claim it. The claim uses the same draft review as `/rise`, so nothing goes live until the owner confirms it and an admin approves it. The report never promises that AI will name the business. It says AI assistants pick up changes over days to weeks.
 

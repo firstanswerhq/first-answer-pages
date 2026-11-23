@@ -98,9 +98,27 @@ export function serviceAreaPattern(city) {
   }
 }
 
-/** The page text as the service-area test reads it: the first 200,000 characters, punctuation kept. */
+/**
+ * The page text as the service-area test reads it: the first 200,000 characters, punctuation kept, and a line
+ * break wherever a block (a paragraph, heading, list item, table cell, div or line break) ends, so text split
+ * across two blocks with no period between them is never read as one sentence. Hand-built facts with only
+ * `text` are read as they are.
+ */
 export function serviceAreaSource(facts) {
-  return textForPatterns(facts?.text);
+  return typeof facts?.areaText === 'string' ? textForPatterns(facts.areaText) : textForPatterns(facts?.text);
+}
+
+/** How much of the page's HTML is read for `areaText` (the test reads at most 200,000 characters of it). */
+const MAX_AREA_HTML = 1000000;
+/** Where a block ends. Bounded: no open-ended or lazy matching. */
+const BLOCK_END = /<\/(?:p|div|li|h[1-6]|td)\s{0,20}>|<br(?:\s[^<>]{0,200})?\s{0,5}\/?>/gi;
+const BREAK_MARK = '\u0001';
+
+/** The page text with a line break at each block end (see serviceAreaSource). */
+function readAreaText(html) {
+  const marked = html.slice(0, MAX_AREA_HTML).replace(/\u0001/g, ' ').replace(BLOCK_END, BREAK_MARK);
+  const text = collapse(decode(stripTags(marked)));
+  return textForPatterns(text.replace(/ ?\u0001[ \u0001]*/g, '\n').trim());
 }
 
 // ---------- reviews ----------
@@ -162,6 +180,7 @@ function emptyFacts() {
     h1s: [],
     headings: [],
     reviewLinks: [],
+    areaText: '',
     imgCount: 0,
     imgMissingAlt: 0,
     telLinks: [],
@@ -606,7 +625,9 @@ export function readPageFacts(html) {
   }
 
   facts.headings = readHeadings(s);
-  facts.text = cleanText(removeElements(s, 'title'));
+  const withoutTitle = removeElements(s, 'title');
+  facts.text = cleanText(withoutTitle);
+  facts.areaText = readAreaText(withoutTitle);
   facts.scriptBuilt = facts.text.length < 200 && scriptCount > 0;
   return facts;
 }
