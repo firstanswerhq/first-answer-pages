@@ -456,7 +456,7 @@ Node.js 22, plain Express, plain JavaScript ES modules, JSON files under `DATA_D
 
 ### Requirement 26: The Score Does Not Drop When the Report Opens (D1)
 
-**Status: approved by the owner on Nov 23, 2026 (D1). Task O1. Not built yet.**
+**Status: approved by the owner on Nov 23, 2026 (D1). Task O1. Built.**
 
 **User Story:** As a business owner, I want my score to stay the same when I open the full report, so that giving my contact details never makes my result look worse.
 
@@ -477,7 +477,7 @@ Node.js 22, plain Express, plain JavaScript ES modules, JSON files under `DATA_D
 
 ### Requirement 27: "Partly" Instead of "Pass" on a Weak AI Result (D2)
 
-**Status: approved by the owner on Nov 23, 2026 (D2). Task O2. Not built yet.**
+**Status: approved by the owner on Nov 23, 2026 (D2). Task O2. Built.**
 
 **User Story:** As a business owner, I want a result where AI named my business in only some answers to say "Partly", so that "Pass" is not shown beside a low result.
 
@@ -488,20 +488,20 @@ Node.js 22, plain Express, plain JavaScript ES modules, JSON files under `DATA_D
 
 ### Requirement 28: The Home Page Says Why This Matters (D3)
 
-**Status: approved by the owner on Nov 23, 2026 (D3). Task O3. Not built yet.**
+**Status: approved by the owner on Nov 23, 2026 (D3). Task O3, changed by V172 to V174 (the button shows on the unfiltered home page only). Built.**
 
 **User Story:** As a visitor, I want the home page to tell me why AI matters and to let me check my own business as easily as I can search, so that I notice the check.
 
 #### Acceptance Criteria
 
 1. THE home page SHALL say, under the headline and tagline: "People now ask AI who to call. List your business free so AI can find it."
-2. WHEN the grader is on, THE home page SHALL show a button "Check if AI can find your business" linking to `/grade`, right under the search form, as large and as clear as the search button, in place of the small text link. WHEN the grader is off, neither the button nor any `/grade` link SHALL be shown anywhere on the home page, the footer included. THE sentence of criterion 1 SHALL be shown whether the grader is on or off.
+2. WHEN the grader is on AND the home page is not filtered by a category or a city, THE home page SHALL show a button "Check if AI can find your business" linking to `/grade`, right under the search form, as large and as clear as the search button (the two buttons SHALL have the same size, weight and height, and the search button SHALL NOT render smaller than before), in place of the small text link, and no wider than the search form. On a filtered view (a results page such as "Plumbers in Nashville") THE button SHALL NOT be shown, so the first result is not pushed down (V172 to V174, the owner's decision). WHEN the grader is off, neither the button nor any `/grade` link SHALL be shown anywhere on the home page, the footer included. THE sentence of criterion 1 SHALL be shown on every view, whether the grader is on or off.
 3. THE page SHALL keep the classic phone-book look, work with JavaScript off, and not scroll sideways at 390px.
 4. THE wording SHALL NOT promise that a listing will make an AI assistant name the business.
 
 ### Requirement 29: A Listing Claimed From a Report Pre-fills Less (D4)
 
-**Status: approved by the owner on Nov 23, 2026 (D4). Task O4. Not built yet.**
+**Status: approved by the owner on Nov 23, 2026 (D4). Task O4. Built.**
 
 **User Story:** As a business owner, I want the draft made from my report not to put my own words into a public sentence, so that my listing does not read "a plumber offering plumbers".
 

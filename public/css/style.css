@@ -1649,7 +1649,8 @@ summary {
 
 /* The check, as large and as clear as the search button above it; it wraps on a phone and never scrolls sideways */
 .home-check {
-  margin: 0.75rem 0 1.25rem;
+  max-width: 44rem;
+  margin: 0.75rem auto 1.25rem;
 }
 
 .home-check a.button {
@@ -1723,11 +1724,15 @@ summary {
   outline: none;
 }
 
-.filters button {
+/* [type="submit"] makes this rule outrank `main form button:not([class])`, so the search button really renders at
+   the size set here and matches the home page's check button (V173). */
+.filters button[type="submit"] {
   width: 100%;
   min-height: 3.5rem;
+  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
   font-size: 1.3rem;
   font-weight: 700;
+  line-height: 1.25;
 }
 
 .no-results {

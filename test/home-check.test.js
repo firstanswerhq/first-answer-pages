@@ -1,6 +1,6 @@
 /**
  * Owner decision D3 (task O3, Requirement 28): the home page says why this matters, and the AI Visibility Check has
- * as much weight as the search box. The sentence always shows; the button only when the grader is on; with the
+ * as much weight as the search box. The sentence always shows; the button only when the grader is on and the home page is unfiltered (V174); with the
  * grader off there is no /grade link anywhere on the page, the footer included (V154).
  */
 
@@ -74,10 +74,16 @@ test('D3: with the grader on, the check is a button right under the search, befo
   assert.ok(html.includes('<header class="home-head">'));
 });
 
-test('D3: the button is on a filtered page too', async () => {
-  const html = await home(await startEnv(), '/?category=plumbers&city=Nashville');
-  assert.ok(html.includes(BUTTON));
-  assert.ok(html.includes(`<p class="home-why">${SENTENCE}</p>`));
+test('V174: the button is on the unfiltered home page only; the sentence is on every view', async () => {
+  const base = await startEnv();
+  assert.ok((await home(base)).includes(BUTTON));
+  for (const p of ['/?category=plumbers', '/?city=Nashville', '/?category=plumbers&city=Nashville', '/?category=nonsense']) {
+    const html = await home(base, p);
+    assert.equal(html.includes('home-check'), false, `no button on ${p}`);
+    assert.equal(html.includes('Check if AI can find your business'), false, p);
+    assert.ok(html.includes(`<p class="home-why">${SENTENCE}</p>`), `the sentence stays on ${p}`);
+    assert.ok(html.includes('<button type="submit">Search Directory</button>'), p);
+  }
 });
 
 test('V154: with the grader off there is no /grade link anywhere on the home page, the footer included', async () => {
@@ -94,13 +100,17 @@ test('V154: with the grader off there is no /grade link anywhere on the home pag
   assert.equal((await fetch(`${base}/grade`)).status, 404);
 });
 
-test('D3: the sentence is plain, with no promise that AI will name the business', () => {
-  assert.equal(/guarantee|will name|will recommend|\$\d/i.test(SENTENCE), false);
+test('D3 (V176): the rendered header text is plain, with no promise that AI will name the business', async () => {
+  const html = await home(await startEnv());
+  const header = /<header class="home-head">[^]*?<\/header>/.exec(html)?.[0] ?? '';
+  const text = header.replace(/<[^>]*>/g, ' ');
+  assert.ok(text.includes(SENTENCE), 'the sentence is in the rendered header');
+  assert.equal(/guarantee|will name|will recommend|\$\d/i.test(text), false);
 });
 
 test('D3: it stays readable at phone width: the button fills the line, wraps, and nothing is fixed wider than the screen', async () => {
   const css = await fs.readFile(fileURLToPath(new URL('../public/css/style.css', import.meta.url)), 'utf8');
-  const rule = selector => new RegExp(`${selector.replace(/[.\\]/g, '\\$&')}\\s*\\{([^}]*)\\}`).exec(css)?.[1] ?? '';
+  const rule = selector => new RegExp(`${selector.replace(/[.\\[\]"()*+?^$|{}]/g, '\\$&')}\\s*\\{([^}]*)\\}`).exec(css)?.[1] ?? '';
   const button = rule('.home-check a.button');
   assert.ok(button, 'the button rule exists');
   assert.ok(/display:\s*block/.test(button));
@@ -110,6 +120,21 @@ test('D3: it stays readable at phone width: the button fills the line, wraps, an
   assert.ok(/font-size:\s*1\.3rem/.test(button), 'the search button\'s size');
   assert.equal(/white-space:\s*nowrap/.test(button), false, 'the text wraps');
   assert.equal(/(^|[^-])width:\s*\d+(\.\d+)?(px|rem|em)/.test(button), false, 'no fixed width');
+  // V172: it lines up with the 44rem search form.
+  const box = rule('.home-check');
+  assert.ok(/max-width:\s*44rem/.test(box), 'as wide as the search form at most');
+  assert.ok(/margin:\s*0\.75rem auto 1\.25rem/.test(box), 'centered like the form');
+  // V173: the search button's rule is the one that applies (it outranks `main form button:not([class])`), and
+  // the two buttons carry the same size, weight and height.
+  const search = rule('.filters button[type="submit"]');
+  assert.ok(search, 'the search button rule exists, with [type="submit"] for its specificity');
+  assert.equal(css.includes('main form button:not([class])'), true, 'the rule it has to outrank is still there');
+  for (const key of ['min-height', 'font-size', 'font-weight']) {
+    const a = new RegExp(`${key}:\\s*([^;]+);`).exec(search)?.[1];
+    const b = new RegExp(`${key}:\\s*([^;]+);`).exec(button)?.[1];
+    assert.ok(a && a === b, `${key}: search ${a}, check ${b}`);
+  }
+  assert.ok(/font-family:\s*"Fira Sans Condensed"/.test(search));
   const why = rule('.home-head .home-why');
   assert.ok(why, 'the sentence rule exists');
   assert.equal(/white-space:\s*nowrap/.test(why), false);

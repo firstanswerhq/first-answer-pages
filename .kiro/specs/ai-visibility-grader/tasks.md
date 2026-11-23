@@ -691,6 +691,10 @@ From `review-2026-11-23-owner-decisions.md`: the owner approved D1 to D5 ("Yes t
   - `grader.js`: `claim` leaves `services` empty (listed in `missingFields`) and passes every day's hours through a new exported `formStyleHours`; `hoursToObject` is not changed; `schema.js` `parseHoursRange` also accepts "HH:MM-HH:MM" (24-hour) so listings already published get their hours in the business label (V155)
   - Tests: new, as listed in the design (both forms of hours through `parseHoursRange`); the older lines in the design's table (`grade-lead.test.js` lines 320, 356 and 357) change with their reasons
   - _Requirements: 29.1, 29.2, 29.3_
+- [x] O3a. The O3 review notes V172 to V176 (before O5)
+  - `style.css`: `.home-check` gets `max-width: 44rem; margin: 0.75rem auto 1.25rem` (V172); the search button's rule becomes `.filters button[type="submit"]` so it outranks `main form button:not([class])`, with the check button's height, size, weight and font (V173); `routes/home.js`: the check button shows on the unfiltered home page only, the sentence on every view (V174, owner's decision); status lines in requirements.md and design.md updated (V175)
+  - Tests (`test/home-check.test.js`): the filtered-page test now says no button there and the sentence stays; the CSS test checks `.home-check` and the rule that really applies to the search button; the no-promise check runs on the rendered header text (V176)
+  - _Requirements: 28.2_
 - [ ] O5. D5: the business-label Check knows every local-business type (Requirement 30)
   - New `server/lib/schema-types.js` with the fixed list built by hand from the schema.org type tree (release and source written at the top); `page-facts.js` builds `BUSINESS_TYPES` from it plus `CleaningService`, strips a leading `http://schema.org/`, `https://schema.org/` or `schema:` before the lookup, counts `Organization` subtypes like `Organization` and never counts `OnlineBusiness` or `OnlineStore` (V156); read the page behind `test/grade-checks.test.js` lines 55 to 58 first
   - Tests: new `test/schema-types.test.js` and Check tests, as listed in the design; no existing line changes

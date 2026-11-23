@@ -109,7 +109,8 @@ ${group.map(l => listingCard(l, categories, { founder: founderOf(l.id), trust: t
 
     // The AI Visibility Check, as large and as clear as the search button, right under the search form (D3). With the
     // grader off there is no link to /grade anywhere on the page.
-    const graderButton = ctx.config?.graderEnabled === false
+    // The button shows on the unfiltered home page only (V174); the sentence stays on every view.
+    const graderButton = ctx.config?.graderEnabled === false || category || city
       ? ''
       : '\n<p class="home-check"><a class="button" href="/grade">Check if AI can find your business</a></p>';
     // Owners see the founders invite on the unfiltered home page only.
