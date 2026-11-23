@@ -480,6 +480,9 @@ Wording only; no scoring change.
 - [x] V128. " restaurants" follows "food" only after fast, soul, comfort, street, vegan, vegetarian or southern (or a cuisine word, V123); any other phrase ending in "food" gets " businesses" ("pet food businesses"); "food" alone gives "food businesses"
 - [x] V129. "grocery" gives "grocery stores"; deli, steakhouse, grill and house take "s"; the fixed shops list ("donut shops", "ice cream shops", "coffee shops"); breakfast, brunch, lunch and dinner give " restaurants"
 - [x] V130. AC, TV, CPR, DUI, CDL, ATV, SEO, PC, EV, HOA, CBD, MRI, ER and AV join the raise list
+- [x] V131. A phrase ending in "bed and breakfast" or "bed & breakfast", in any capitals, gives "bed and breakfasts", checked before the meals rule
+- [x] V132. "house" is made plural only after steak, pancake, waffle, coffee, tea, chop, ale, oyster, crab or fish; any other "… house" gets " businesses"
+- [x] V133. "grill" is not made plural: a phrase ending in "grill" gets " restaurants"; "bar and grill" keeps "bar and grill restaurants"
 - Tests: a new V119 to V124 table test, every keep-capital word typed four ways, and the three questions for four new cases; the older lines in `test/grade-question.test.js` that pinned results these rules change are listed in the design's table
 
 ## Owner-approved features (Nov 18)

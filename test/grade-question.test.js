@@ -320,7 +320,22 @@ const V119_V124 = [
   ['Southern food', 'southern food restaurants'], ['SOUL FOOD', 'soul food restaurants'], ['Thai food', 'Thai restaurants'],
   // V129: a few more fixed plural words.
   ['Indian grocery', 'Indian grocery stores'], ['grocery stores', 'grocery stores'], ['Asian grocery', 'Asian grocery stores'],
-  ['deli', 'delis'], ['steakhouse', 'steakhouses'], ['grill', 'grills'], ['steak house', 'steak houses'],
+  ['deli', 'delis'], ['steakhouse', 'steakhouses'], ['steak house', 'steak houses'],
+  // V131: bed and breakfast is a place to stay, never " restaurants" (checked before the meals rule).
+  ['bed and breakfast', 'bed and breakfasts'], ['bed & breakfast', 'bed and breakfasts'], ['Bed & Breakfast', 'bed and breakfasts'],
+  ['Bed And Breakfast', 'bed and breakfasts'], ['BED AND BREAKFAST', 'bed and breakfasts'], ['BED & BREAKFAST', 'bed and breakfasts'],
+  ['lakeside bed and breakfast', 'lakeside bed and breakfasts'], ['bed and breakfasts', 'bed and breakfasts'],
+  ['breakfast', 'breakfast restaurants'],
+  // V132: "house" is plural only after steak, pancake, waffle, coffee, tea, chop, ale, oyster, crab or fish.
+  ['coffee house', 'coffee houses'], ['pancake house', 'pancake houses'], ['waffle house', 'waffle houses'],
+  ['tea house', 'tea houses'], ['chop house', 'chop houses'], ['ale house', 'ale houses'], ['oyster house', 'oyster houses'],
+  ['crab house', 'crab houses'], ['fish house', 'fish houses'], ['Steak House', 'steak houses'], ['STEAK HOUSE', 'steak houses'],
+  ['open house', 'open house businesses'], ['tree house', 'tree house businesses'], ['house', 'house businesses'],
+  ['Open House', 'open house businesses'],
+  // V133: "grill" is not made plural; "bar and grill" keeps "bar and grill restaurants".
+  ['grill', 'grill restaurants'], ['GRILL', 'grill restaurants'], ['BBQ grill', 'BBQ grill restaurants'],
+  ['Brazilian grill', 'Brazilian grill restaurants'], ['Bar & Grill', 'bar and grill restaurants'],
+  ['bar and grill', 'bar and grill restaurants'], ['BAR AND GRILL', 'bar and grill restaurants'],
   ['donuts', 'donut shops'], ['doughnuts', 'doughnut shops'], ['bagels', 'bagel shops'], ['cupcakes', 'cupcake shops'],
   ['smoothies', 'smoothie shops'], ['donut', 'donut shops'], ['bagel', 'bagel shops'], ['ice cream', 'ice cream shops'],
   ['frozen yogurt', 'frozen yogurt shops'], ['Italian ice', 'Italian ice shops'], ['coffee', 'coffee shops'], ['tea', 'tea shops'],

@@ -189,8 +189,11 @@ const TAKES_S = new Set([
   'tailor', 'jeweler', 'bookkeeper', 'vet', 'trainer', 'walker', 'builder', 'gym', 'spa', 'bar', 'hotel', 'motel',
   'daycare', 'preschool', 'boutique', 'barbershop', 'place', 'truck', 'home', 'school', 'park', 'diner', 'pub',
   'mover', 'caterer', 'office', 'center', 'garage', 'dealership', 'cpa', 'dj',
-  'deli', 'steakhouse', 'grill', 'house', // V129
+  'deli', 'steakhouse', // V129. "grill" and "house" are not here: V133 and V132 give them their own rules.
 ]);
+
+/** "house" is made plural only after one of these words ("steak houses"); any other "… house" is a business (V132). */
+const HOUSE_BEFORE = new Set(['steak', 'pancake', 'waffle', 'coffee', 'tea', 'chop', 'ale', 'oyster', 'crab', 'fish']);
 
 /** Words ending in "ian" that take "s"; words ending in "ician" do too (V112). */
 const IAN_TAKES_S = new Set(['veterinarian', 'pediatrician', 'dietitian', 'librarian', 'guardian']);
@@ -299,10 +302,18 @@ export function servicePhrase(service) {
 function foodPhrase(words) {
   const n = words.length;
   const lw = i => (words[i] ?? '').toLowerCase();
+  // "bed and breakfast", "bed & breakfast": a place to stay, never " restaurants" (V131). Checked before the meals rule.
+  if (n >= 3 && lw(n - 3) === 'bed' && (lw(n - 2) === '&' || lw(n - 2) === 'and') && lw(n - 1) === 'breakfast') {
+    return [...words.slice(0, n - 2), 'and', `${words[n - 1]}s`];
+  }
   // "Bar & Grill", "bar and grill".
   if (n >= 3 && lw(n - 3) === 'bar' && (lw(n - 2) === '&' || lw(n - 2) === 'and') && lw(n - 1) === 'grill') {
     return [...words.slice(0, n - 2), 'and', words[n - 1], 'restaurants'];
   }
+  // A phrase ending in "grill" is not made plural: "grill restaurants" (V133).
+  if (lw(n - 1) === 'grill') return [...words, 'restaurants'];
+  // "steak house", "coffee house": plural only after these words; any other "… house" is a business (V132).
+  if (n >= 2 && lw(n - 1) === 'house' && HOUSE_BEFORE.has(lw(n - 2))) return [...words.slice(0, n - 1), `${words[n - 1]}s`];
   // A cuisine word last ("Italian", "authentic Thai").
   if (KEEP_CAPITAL.has(lw(n - 1))) return [...words, 'restaurants'];
   if (lw(n - 1) === 'food') {
