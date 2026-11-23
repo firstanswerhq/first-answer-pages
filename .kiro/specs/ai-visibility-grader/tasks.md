@@ -502,8 +502,9 @@ Approved to build (after F10, and after the Feature G tasks, see the build order
   - `grade-html.js` and the page shell: an `indexable` option used only for those two first renders: no robots meta tag, a canonical link, a plain title and a description (wording rules apply); the 422 re-render never sets it
   - Update only the two existing tests named in the design's Feature D table in `test/grade-flow.test.js`, each with its stated reason; add new tests: `GET /grade` and `GET /grade/about` send no noindex header or meta and have a canonical link and a description; `GET /grade?x=1`, a report, the status JSON, the claim pages, a form shown again with errors and the grader-off 404 still send `noindex, nofollow`, `no-referrer` and `no-store`; no report address, draft or admin address is in the sitemap; llms.txt, MCP and IndexNow still never see `/grade`
   - _Requirements: 9.6, 22.2, 22.3, 22.5_
-- [ ] F13. Checkpoint for Feature D
+- [x] F13. Checkpoint for Feature D
   - Banned-word check on the new titles and descriptions; no rate limit or AI budget changed; the full suite passes
+  - Done (Nov 22), by reading: the four new texts, "Does AI know your business? Free check", "Find out whether AI assistants name your business when someone asks for one like it. Free, no sign-up.", "About the AI Visibility Check" and "What the free AI Visibility Check reads on a business's website and asks AI assistants, and why.", have no British spelling, no "YP", no dollar figure, no "guarantee", and no promise that AI will name a business. Feature D changed only `server/lib/sitemap.js`, `server/routes/sitemap.js`, the header middleware and the open-page rendering in `server/routes/grade.js`, and the page shell in `server/lib/grade-html.js`; `server/lib/rate-limiter.js`, `server/lib/ai-budget.js`, every `RULES` entry and every limit or budget call are unchanged. Full suite: 1396 of 1396 in the cloud, twice, after F12 with its test fix and M1
   - _Requirements: 16.2, 17.4, 22.4_
 
 ## Owner decisions of Nov 19 (`feature-request-2026-11-19.md`)
