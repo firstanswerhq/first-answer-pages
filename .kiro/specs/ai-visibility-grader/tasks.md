@@ -478,7 +478,7 @@ From `feature-request-2026-11-18.md` and `spec-review-2026-11-18.md`: Feature A,
 - [x] F9. Show, edit and publish the website
   - `listingDetail` in `server/lib/html.js`: a plain "Website" row linking to the site (host as the text, escaped, `rel="noopener noreferrer"`); nothing when the field is empty
   - `schema.js`: add `sameAs` (the website, then the reviews link, each only when present; the array only when not empty); the label's `url` stays the listing page; `llms.js` and the MCP `summarize` text: a `Website` line or link, only when present; the JSON API and the MCP `get_listing` need no code
-  - `routes/rise.js` `fieldsFromForm`, the draft form and review page in `rise-html.js`, and the admin Draft page: the optional "Website" input and row, with the note "We left that link out. It must be a public https address, like https://example.com." when a submitted value was left out
+  - `routes/rise.js` `fieldsFromForm`, the draft form and review page in `rise-html.js`, and the admin Draft page: the optional "Website" input and row, with the note "We left that website out. It must start with https:// and be the address of your own website, like https://example.com." when a submitted value was left out
   - Example tests: the listing page row and its escaping; the `sameAs` entry with the website alone, the reviews link alone, both and neither (no `sameAs` key), and `url` unchanged; llms.txt and MCP output with and without the field (the line-count properties in `test/llms.test.js` hold); the form input, the left-out note and the admin row
   - _Requirements: 21.3, 21.4, 21.5, 21.7_
 - [x] F10. Claim fills the website; checkpoint for A, B and C
@@ -491,11 +491,13 @@ From `feature-request-2026-11-18.md` and `spec-review-2026-11-18.md`: Feature A,
 
 Approved to build (after F10, and after the Feature G tasks, see the build order below). Read `feature-request-2026-11-18.md`, Feature D, and the design section "Feature D" first.
 
-- [ ] F11. Add the main pages to the sitemap
+- [x] F11. Add the main pages to the sitemap
+  - Built (Nov 22): the four main pages are listed. `/grade` and `/grade/about` are wired in `routes/sitemap.js` behind `GRADE_PAGES_OPEN = false`, because they still send `noindex, nofollow` and the existing "/grade stays out of sitemap.xml" test in `test/grade-flow.test.js` may change only in F12; F12 turns `GRADE_PAGES_OPEN` on together with the header change and the two test lines the design names
   - `server/lib/sitemap.js`: `generateSitemap(listings, baseUrl, categories, extraPages = [])`; the default keeps every existing output; `server/routes/sitemap.js` passes `/about`, `/verified`, `/privacy` and `/rise`, plus `/grade` and `/grade/about` when the grader is on, and passes none in demo mode
   - Example tests: the sitemap lists the four pages and the two `/grade` pages and still lists no report, draft or admin address; each listed path returns 200 and no noindex header when requested; with the grader off the two `/grade` pages are not listed; in demo mode no extra pages are listed; `test/sitemap.test.js`, `test/production-samples.test.js`, `test/polish.test.js` and `test/approval.test.js` pass unchanged
   - _Requirements: 22.1, 22.4_
 - [ ] F12. Open the plain `/grade` form and `/grade/about` to search engines
+  - `server/routes/sitemap.js`: set `GRADE_PAGES_OPEN` to `true`, so the sitemap lists `/grade` and `/grade/about` when the grader is on (left off in F11 until these pages are open)
   - `server/routes/grade.js`: the header middleware leaves out `X-Robots-Tag` only for a GET of `/grade` or `/grade/about` with no query string (keeping `Referrer-Policy: no-referrer` and `Cache-Control: no-store`); every other `/grade` response keeps `noindex, nofollow`, including the 422 form, a request with a query string, reports, status JSON, the claim flow, error pages and the grader-off 404
   - `grade-html.js` and the page shell: an `indexable` option used only for those two first renders: no robots meta tag, a canonical link, a plain title and a description (wording rules apply); the 422 re-render never sets it
   - Update only the two existing tests named in the design's Feature D table in `test/grade-flow.test.js`, each with its stated reason; add new tests: `GET /grade` and `GET /grade/about` send no noindex header or meta and have a canonical link and a description; `GET /grade?x=1`, a report, the status JSON, the claim pages, a form shown again with errors and the grader-off 404 still send `noindex, nofollow`, `no-referrer` and `no-store`; no report address, draft or admin address is in the sitemap; llms.txt, MCP and IndexNow still never see `/grade`
