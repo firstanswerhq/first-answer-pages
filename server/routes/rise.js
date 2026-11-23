@@ -92,9 +92,19 @@ function fieldsFromForm(body) {
     state: str('state'),
     address: str('address'),
     ownerEmail: str('ownerEmail'),
+    reviewsLink: str('reviewsLink'),
     hours,
   };
 }
+
+/** True when the owner typed a reviews link that validation left out (the review page then says so). */
+function reviewsLinkLeftOut(body, fields) {
+  const typed = body !== null && typeof body === 'object' && typeof body.reviewsLink === 'string' ? body.reviewsLink.trim() : '';
+  return typed !== '' && !(typeof fields.reviewsLink === 'string' && fields.reviewsLink !== '');
+}
+
+/** Fixed query value for that note; the typed value is never echoed. */
+const LEFT_OUT_QUERY = 'left=reviews';
 
 /**
  * @param {object} ctx resolved dependencies from createApp
@@ -263,7 +273,10 @@ export function createRiseRouter(ctx) {
       if (found.draft.status === 'rejected') {
         return sendPage(res, 200, messagePage('Not approved', 'This listing was not approved.', HOME_LINK));
       }
-      sendPage(res, 200, reviewPage(found.draft, ctx.store.getCategories(), { saved: req.query.saved === '1' }));
+      sendPage(res, 200, reviewPage(found.draft, ctx.store.getCategories(), {
+        saved: req.query.saved === '1',
+        reviewsLeftOut: req.query.left === 'reviews',
+      }));
     } catch (err) {
       next(err);
     }
@@ -287,7 +300,8 @@ export function createRiseRouter(ctx) {
       if (result.status === 409) {
         return sendPage(res, 409, await lockedPage(req.params.id));
       }
-      res.redirect(303, `/rise/drafts/${encodeURIComponent(req.params.id)}?saved=1`);
+      const left = reviewsLinkLeftOut(req.body, fields) ? `&${LEFT_OUT_QUERY}` : '';
+      res.redirect(303, `/rise/drafts/${encodeURIComponent(req.params.id)}?saved=1${left}`);
     } catch (err) {
       next(err);
     }
@@ -319,6 +333,10 @@ export function createRiseRouter(ctx) {
         }
         if (saved.status === 409) {
           return sendPage(res, 409, await lockedPage(req.params.id));
+        }
+        // A reviews link that was left out is said so before anything is sent, so the owner can fix or clear it.
+        if (reviewsLinkLeftOut(req.body, fields)) {
+          return res.redirect(303, `/rise/drafts/${encodeURIComponent(req.params.id)}?saved=1&${LEFT_OUT_QUERY}`);
         }
       }
       const result = await ctx.store.submitDraft(req.params.id);

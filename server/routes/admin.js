@@ -288,6 +288,8 @@ export function createAdminRouter(ctx) {
           row('Service area', f.serviceArea ? escapeHtml(f.serviceArea) : 'None given'),
           ...(f.address ? [row('Address', escapeHtml(f.address))] : []),
           ...(f.website ? [row('Website', escapeHtml(f.website))] : []),
+          // Shown as text, never as a link: the admin checks it before approving.
+          ...(typeof f.reviewsLink === 'string' && f.reviewsLink !== '' ? [row('Reviews link', escapeHtml(f.reviewsLink))] : []),
           ...(f.ownerEmail ? [row('Owner email (private)', escapeHtml(f.ownerEmail))] : []),
         ].join('\n');
         return `<li class="pending-item" id="pending-${escapeHtml(e.id)}">

@@ -22,7 +22,14 @@ const FIELD_LABELS = Object.freeze({
   state: 'State',
   address: 'Street address',
   ownerEmail: 'Your email',
+  reviewsLink: 'Reviews link (optional)',
 });
+
+/** Help text under the reviews link box. */
+export const REVIEWS_LINK_HINT = 'A link to your reviews on Google, Yelp, Facebook or Nextdoor.';
+
+/** Shown when the owner typed a reviews link that was left out. */
+export const REVIEWS_LINK_LEFT_OUT = 'We left that link out. It must be an https link to your reviews on Google, Yelp, Facebook or Nextdoor.';
 
 /** Help text under the owner email box. */
 export const OWNER_EMAIL_HINT = 'Optional. Never shown publicly. We use it only to contact you about your listing and the quote requests customers send you.';
@@ -202,6 +209,10 @@ ${row('state', `<input type="text" id="f-state" name="state" value="${escapeHtml
 ${row('address', input('address', f.address), missing, fresh)}
 ${row('ownerEmail', `<input type="email" id="f-ownerEmail" name="ownerEmail" value="${escapeHtml(f.ownerEmail ?? '')}" maxlength="254" autocomplete="email" aria-describedby="f-ownerEmail-hint">
       <span class="hint" id="f-ownerEmail-hint">${escapeHtml(OWNER_EMAIL_HINT)}</span>`, missing, fresh)}
+${row('reviewsLink', `<input type="text" id="f-reviewsLink" name="reviewsLink" value="${escapeHtml(f.reviewsLink ?? '')}" maxlength="1000" inputmode="url" autocapitalize="none" autocomplete="url" aria-describedby="f-reviewsLink-hint">
+      <span class="hint" id="f-reviewsLink-hint">${escapeHtml(REVIEWS_LINK_HINT)}</span>${opts.reviewsLeftOut === true
+    ? `\n      <span class="missing-note" role="alert">${escapeHtml(REVIEWS_LINK_LEFT_OUT)}</span>`
+    : ''}`, missing, fresh)}
     <fieldset class="hours-edit">
       <legend>Hours</legend>
       <p class="hint" id="hours-hint">${escapeHtml(HOURS_HINT)}</p>

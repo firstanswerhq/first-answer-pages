@@ -38,7 +38,7 @@ import { pruneQuotes, pruneDrafts, pruneGrades, pruneLeads } from './lib/retenti
 const COLLECTIONS = new Set(['drafts', 'quotes', 'seance', 'pending', 'grades', 'leads']);
 const MODEL_KEYS = [
   'name', 'category', 'phone', 'hours', 'services', 'serviceArea',
-  'description', 'city', 'state', 'address', 'ownerEmail',
+  'description', 'city', 'state', 'address', 'ownerEmail', 'reviewsLink',
 ];
 
 const warn = msg => process.stderr.write(`[data] ${msg}\n`);
@@ -289,6 +289,8 @@ export function createDataStore({
       if (fields[key] === undefined) continue;
       if (key === 'address' && (fields.address === '' || fields.address === null)) continue;
       if (key === 'ownerEmail' && (typeof fields.ownerEmail !== 'string' || fields.ownerEmail === '')) continue;
+      // Optional: copied only when it holds a link, so a listing without one gains no key.
+      if (key === 'reviewsLink' && (typeof fields.reviewsLink !== 'string' || fields.reviewsLink === '')) continue;
       listing[key] = structuredClone(fields[key]);
     }
     return listing;

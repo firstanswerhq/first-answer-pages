@@ -6,6 +6,22 @@ import { getCategories } from '../data.js';
 import { DEFAULT_SITE_NAME } from './config.js';
 import { formatFoundersDeadline } from './founders.js';
 import { formatFee } from './trust.js';
+import { reviewsLinkHost } from './listing-fields.js';
+
+/** How each review site is named in "See our reviews on …". */
+const REVIEW_SITE_NAMES = Object.freeze({ google: 'Google', yelp: 'Yelp', facebook: 'Facebook', nextdoor: 'Nextdoor' });
+
+/**
+ * The listing's "Reviews" row: a link only, with no rating, count or review text. Empty when the stored link
+ * does not pass the reviews-link check again (defense against hand-edited data).
+ * @param {unknown} link
+ * @returns {string}
+ */
+export function reviewsRow(link) {
+  const site = reviewsLinkHost(link);
+  if (site === '') return '';
+  return `\n    <dt>Reviews</dt>\n    <dd><a href="${escapeHtml(link.trim())}" rel="noopener noreferrer">See our reviews on ${REVIEW_SITE_NAMES[site]}</a></dd>`;
+}
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -387,7 +403,7 @@ ${days.map(([day, text]) => `      <tr><th scope="row">${day}</th><td>${escapeHt
     <dt>Phone</dt>
     <dd>${telLink(listing.phone)}</dd>${addressRow}
     <dt>Service area</dt>
-    <dd>${escapeHtml(listing.serviceArea)}</dd>
+    <dd>${escapeHtml(listing.serviceArea)}</dd>${reviewsRow(listing.reviewsLink)}
     <dt>Services</dt>
     <dd>
     <ul>
