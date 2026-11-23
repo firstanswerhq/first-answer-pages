@@ -445,6 +445,16 @@ Wording and labels only; scoring and which answers are counted do not change.
 - [x] V106. `timesAsked` ignores ask numbers that are not whole numbers from 1 to 3 (tested with 99, 0, -1, 2.5 and "3")
 - Tests: new V100 to V106 tests in `test/grade-report-asks.test.js` and `test/grade-main-asks.test.js`; the E2 and E3 test lines that pinned the old sentences are updated; no older test changes
 
+### AG. Reviews of V100 to V106 (`review-2026-11-23-v100.md`)
+
+Wording only; no scoring change.
+
+- [x] V107. When today's limit cut the asks short, the grader stores `aiMain.asks = { planned, asked }` (only then) and the hint reads "AI answers change from one time to the next, so we ask the same question 3 times. Today we could ask only 2 times because we reached today's limit."; otherwise the sentence is as before
+- [x] V108. "Every answer" uses the full sentence "Claude named your business in 1 of its 4 answers." with or without second opinions; `test/grade-lead.test.js` line 277 changes to match (listed in the design's table)
+- [x] V109. The two hint lines under the lead line are one paragraph: "AI answers change from one time to the next, so we ask the same question 3 times. This list is from answer 1, the first one that named you."
+- [x] V110. Requirement 23.6 and the design name the "Every answer" count line as the one accepted exception for Grades with one answer per question
+- Tests: `test/grade-report-asks.test.js` (the hint paragraph, V107 with odd stored numbers, the count sentence) and `test/grade-main-asks.test.js` (what a cut-short, a full and a one-ask Grade store)
+
 ## Owner-approved features (Nov 18)
 
 From `feature-request-2026-11-18.md` and `spec-review-2026-11-18.md`: Feature A, a no-storefront mode for the address check (Requirement 18); Feature B, a "Reviews AI can see" check and a reviews link on the free listing (Requirements 19 and 20); Feature C, the business's own website on the listing (Requirement 21, tasks F8 to F10); and Feature D, letting Google and Bing find the main pages (Requirement 22, tasks F11 to F13). Feature D is approved too (F11 to F13). Three more features were approved on Nov 19 (`feature-request-2026-11-19.md`): bot protection (Feature G, Requirement 25, tasks G1 to G7), asking Claude three times (Feature E, Requirement 23, tasks E1 to E4) and a question that reads naturally (Feature F, Requirement 24, tasks W1 and W2; "W" for wording, so the names stay apart from F1 to F13). **Build order: the G tasks first, then F1 to F13, then E1 to E4, then W1 and W2.** Build one task at a time, in order, after the spec has been checked again. No shell commands: the cloud runs the tests and sends back failures. Add tests only. Never change or loosen an existing test, except the exact lines listed in "Numbers that change in existing tests (and why)" in the design, each with its reason. Follow `wording.md` and `grader-safety.md`: plain words, American spelling, never promise AI will name a business, never invent, copy or edit a review, escape everything, never log typed input.

@@ -207,6 +207,15 @@ test('E2: with 14 calls left 2 asks are made, and the finding says the limit cut
   assert.equal(aiFinding(grade), "Asked Claude 2 times, not 3, because we reached today's limit. Got 2 answers.");
 });
 
+test('V107: a Grade cut short by the limit stores the asks planned and made; a full one stores nothing new', async () => {
+  const cut = await runGrade(await startEnv({ assistant: fakeClaude([NAMED, NOT_NAMED]), gradeLeft: 14 }));
+  assert.deepEqual(cut.aiMain.asks, { planned: 3, asked: 2 });
+  const full = await runGrade(await startEnv({ assistant: fakeClaude([NAMED, NOT_NAMED, NOT_NAMED]), gradeLeft: 100 }));
+  assert.equal(Object.hasOwn(full.aiMain, 'asks'), false);
+  const one = await runGrade(await startEnv({ assistant: fakeClaude([NAMED]), asks: 1 }));
+  assert.equal(Object.hasOwn(one.aiMain, 'asks'), false);
+});
+
 test('E2: with 15 calls left 3 asks are made', async () => {
   const claude = fakeClaude([NAMED, NOT_NAMED, NOT_NAMED]);
   const env = await startEnv({ assistant: claude, gradeLeft: 15 });

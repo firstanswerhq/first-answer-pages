@@ -1215,6 +1215,7 @@ export function createGrader({
       const reused = outcome.entries.length === 0 && main.length > 0;
       let state = 'done';
       let finding;
+      let cut = null;
       if (outcome.mainState === 'limit' || outcome.mainState === 'not_connected' || outcome.mainState === 'off') {
         state = 'skipped';
         finding = outcome.mainState === 'limit' ? AI_LIMIT_REACHED : AI_NOT_CONNECTED;
@@ -1235,6 +1236,8 @@ export function createGrader({
         finding = outcome.asked < outcome.planned
           ? `Asked ${label} ${times(outcome.asked)}, not ${outcome.planned}, because we reached today's limit. Got ${answers(answered)}.`
           : `Asked ${label} ${times(outcome.asked)} and got ${answers(answered)}.`;
+        // The report's hint says how many were planned and how many the limit allowed (V107).
+        if (outcome.asked < outcome.planned) cut = { planned: outcome.planned, asked: outcome.asked };
       } else {
         const first = main[0];
         finding = first && first.total > 0
@@ -1242,7 +1245,7 @@ export function createGrader({
           : 'Read the AI answer';
       }
       await step(3, state, finding, clock.now() - t);
-      return { ai, mainState: outcome.mainState };
+      return { ai, mainState: outcome.mainState, cut };
     })();
 
     const [web, aiOut] = await Promise.all([website, aiBranch]);
@@ -1254,6 +1257,8 @@ export function createGrader({
       provider: assistantProvider?.name ?? 'unknown',
       label: providerLabel(assistantProvider?.name),
       state: aiOut.mainState,
+      // Only when today's limit cut the asks short; every other Grade is stored as before.
+      ...(aiOut.cut ? { asks: aiOut.cut } : {}),
     };
     const results = assemble(web.results, aiOut.ai, aiMain);
     const score = scoreOf(results);

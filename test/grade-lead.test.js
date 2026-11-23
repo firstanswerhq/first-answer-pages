@@ -274,7 +274,7 @@ test('gate on: the report shows the Lead_Form; a valid form stores one Lead, set
   assert.ok(grade.extraAiStartedAt);
   assert.match(grade.results.find(r => r.id === 'ai-named').detail, /Claude did not name your business in any of 3 answers/);
   const after = await (await get(env, `/grade/${id}`, { cookie })).text();
-  assert.ok(after.includes('Named in 0 of 3 answers.'));
+  assert.ok(after.includes('named your business in 0 of its 3 answers.'));
 });
 
 test('a forged unlock cookie does not open the report', async () => {

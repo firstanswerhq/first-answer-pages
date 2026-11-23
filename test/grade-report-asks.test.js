@@ -53,21 +53,21 @@ test('E3: the lead line says how many times Claude was asked and in how many ans
 
 test('E3: the list and outcome come from the first answer that named the business, with "This list is from answer 1, the first one that named you."', () => {
   const html = render([ANSWER_1, ANSWER_2, ANSWER_3]);
-  assert.ok(html.includes('<p class="hint">This list is from answer 1, the first one that named you.</p>'));
+  assert.ok(html.includes('<p class="hint">AI answers change from one time to the next, so we ask the same question 3 times. This list is from answer 1, the first one that named you.</p>'));
   assert.ok(html.includes('It listed 3 businesses, and yours was 1st.'));
   assert.ok(html.includes('<li class="grade-you"><strong>Zephyr Plumbing</strong> (you)</li>'));
 
   // Only the second answer named it: that one is shown, with the later list read as in V52.
   const second = answer(NAMED_SECOND_TEXT, { named: true, position: 2, total: 2, competitors: ['Other Co'], ask: 2 });
   const shown = render([answer(NOT_NAMED_TEXT, { ask: 1 }), second, answer(NOT_NAMED_TEXT, { ask: 3 })]);
-  assert.ok(shown.includes('<p class="hint">This list is from answer 2, the first one that named you.</p>'));
+  assert.ok(shown.includes('<p class="hint">AI answers change from one time to the next, so we ask the same question 3 times. This list is from answer 2, the first one that named you.</p>'));
   assert.ok(shown.includes('It listed 2 businesses, and yours was 2nd.'));
   assert.ok(shown.includes('Also mentioned:'));
   assert.ok(shown.includes('<li>Third Co Plumbing</li>'));
 
   // None named it: the first answer is shown.
   const none = render([answer(NOT_NAMED_TEXT, { ask: 1, competitors: ['Other Co'] }), answer(NOT_NAMED_TEXT, { ask: 2 })]);
-  assert.ok(none.includes('<p class="hint">This list is from answer 1.</p>'));
+  assert.ok(none.includes('<p class="hint">AI answers change from one time to the next, so we ask the same question 2 times. This list is from answer 1.</p>'));
   assert.equal(none.includes('the first one that named you'), false);
 });
 
@@ -87,7 +87,7 @@ test('E3: with ask 1 failed, the answers that came back are numbered among thems
   const three = answer(NOT_NAMED_TEXT, { ask: 3 });
   const html = render([two, three], { leadGate: false });
   assert.ok(html.includes('<p>We just asked Claude 3 times and got 2 answers. Claude named your business in 1 of the 2.</p>'));
-  assert.ok(html.includes('<p class="hint">This list is from answer 1, the first one that named you.</p>'));
+  assert.ok(html.includes('<p class="hint">AI answers change from one time to the next, so we ask the same question 3 times. This list is from answer 1, the first one that named you.</p>'));
   assert.ok(html.includes('<p>Answer 1</p>') && html.includes('<p>Answer 2</p>'));
   assert.equal(html.includes('<p>Answer 3</p>'), false);
   assert.ok(html.includes('Claude, answer 1 of 2:'));
@@ -183,24 +183,45 @@ test('V100: fewer answers than asks: "and got 2 answers", counted "of the 2"', (
   assert.equal(all.includes('of the 3'), false);
 });
 
-test('V101: one hint line under the lead line says why we ask more than once', () => {
+test('V101/V109: one hint paragraph under the lead line says why we ask more than once and which answer the list is from', () => {
   const html = render([ANSWER_1, ANSWER_2, ANSWER_3]);
-  const hint = '<p class="hint">AI answers change from one time to the next, so we ask the same question 3 times.</p>';
+  const hint = '<p class="hint">AI answers change from one time to the next, so we ask the same question 3 times. This list is from answer 1, the first one that named you.</p>';
   assert.equal(html.split(hint).length - 1, 1, 'shown once');
+  assert.equal(html.split('AI answers change from one time to the next').length - 1, 1, 'no second hint line');
   const lead = html.indexOf('We just asked Claude 3 times.');
-  assert.ok(lead !== -1 && lead < html.indexOf(hint) && html.indexOf(hint) < html.indexOf('This list is from answer'));
+  assert.ok(lead !== -1 && lead < html.indexOf(hint));
   const two = render([answer(NAMED_TEXT, { named: true, position: 1, ask: 1 }), answer(NOT_NAMED_TEXT, { ask: 2 })]);
-  assert.ok(two.includes('so we ask the same question 2 times.</p>'));
+  assert.ok(two.includes('so we ask the same question 2 times. This list is from answer 1, the first one that named you.</p>'));
 });
 
-test('V104: "Every answer" says the count once', () => {
+test('V107: when today\'s limit cut the asks short, the hint says how many we ask and how many we could', () => {
+  const ai = [answer(NAMED_TEXT, { named: true, position: 1, ask: 1 }), answer(NOT_NAMED_TEXT, { ask: 2 })];
+  const aiMain = { provider: 'anthropic', label: 'Claude', state: 'ok', asks: { planned: 3, asked: 2 } };
+  const html = reportPage(grade(ai, { aiMain }), { now: NOW });
+  assert.ok(html.includes('<p>We just asked Claude 2 times. Claude named your business in 1 of 2 answers.</p>'));
+  assert.ok(html.includes('<p class="hint">AI answers change from one time to the next, so we ask the same question 3 times. Today we could ask only 2 times because we reached today&#39;s limit. This list is from answer 1, the first one that named you.</p>')
+    || html.includes("<p class=\"hint\">AI answers change from one time to the next, so we ask the same question 3 times. Today we could ask only 2 times because we reached today's limit. This list is from answer 1, the first one that named you.</p>"));
+  // All planned asks made (no stored cut, or a cut that does not match the answers): the sentence is as it was.
+  const full = reportPage(grade(ai, { aiMain: { ...aiMain, asks: { planned: 3, asked: 3 } } }), { now: NOW });
+  assert.ok(full.includes('so we ask the same question 2 times. This list is from'));
+  assert.equal(full.includes('Today we could ask only'), false);
+  const plain = render(ai);
+  assert.equal(plain.includes('Today we could ask only'), false);
+  // Hand-edited numbers are ignored.
+  for (const asks of [{ planned: 99, asked: 2 }, { planned: 3, asked: 0 }, { planned: '3', asked: 2 }, null, 'x']) {
+    const odd = reportPage(grade(ai, { aiMain: { ...aiMain, asks } }), { now: NOW });
+    assert.equal(odd.includes('Today we could ask only'), false, JSON.stringify(asks));
+  }
+});
+
+test('V104/V108: "Every answer" says the count once, in the full sentence form', () => {
   const withSeconds = render([ANSWER_1, ANSWER_2, ANSWER_3, chatgpt(FREE)], { leadGate: false });
   assert.ok(withSeconds.includes('Claude named your business in 2 of its 3 answers.'));
   assert.equal(withSeconds.includes('Named in 2 of 3 answers.'), false);
-  // Without second opinions the one count line stays as before.
   const alone = render([ANSWER_1, ANSWER_2, ANSWER_3], { leadGate: false });
-  assert.ok(alone.includes('<p><strong>Named in 2 of 3 answers.</strong></p>'));
-  assert.equal(alone.includes('of its 3 answers'), false);
+  assert.ok(alone.includes('<p>Claude named your business in 2 of its 3 answers.</p>'));
+  assert.equal(alone.includes('Named in 2 of 3 answers.'), false);
+  assert.equal(alone.split('named your business in 2 of its 3 answers').length - 1, 1, 'said once');
 });
 
 test('V100/V104: with ask 1 failed, "Every answer" also says Claude was asked 3 times', () => {

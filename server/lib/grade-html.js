@@ -375,7 +375,7 @@ function timesAsked(answers) {
  * the ranked list and outcome from the shown answer (the first that named the business, else the first), with
  * "From answer 1 of 3", and one closed block holding every answer. Everything is escaped.
  */
-function severalAnswers(answers, input, now) {
+function severalAnswers(answers, input, now, cut = null) {
   const firstAnswer = answers[0];
   const label = inline(firstAnswer.provider);
   const subject = providerLabel(firstAnswer.provider);
@@ -403,11 +403,17 @@ function severalAnswers(answers, input, now) {
     : `This list is from answer ${shownIndex + 1}.`;
   const demo = firstAnswer.provider === 'mock' ? '<p class="hint">Demo answer (no AI connected)</p>\n  ' : '';
   const blocks = answers.map((a, i) => `<p>Answer ${i + 1}</p><blockquote class="grade-answer seance-answer">${h(readableAnswer(a.answer ?? ''))}</blockquote>`).join('');
+  // Why we ask more than once (V101). When today's limit cut the asks short, the Grade stores the number
+  // planned and the number asked, and the hint says both (V107); otherwise the number is the times asked.
+  const limited = cut && Number.isInteger(cut.planned) && Number.isInteger(cut.asked)
+    && cut.asked >= 1 && cut.asked < cut.planned && cut.planned <= 3 && cut.asked === n;
+  const why = limited
+    ? `AI answers change from one time to the next, so we ask the same question ${timesText(cut.planned)}. Today we could ask only ${timesText(cut.asked)} because we reached today's limit.`
+    : `AI answers change from one time to the next, so we ask the same question ${times}.`;
   return [
     `<p>${asked} ${h(subject)} named your business ${count}.</p>`,
-    // Why we ask more than once (V101). The Grade stores the asks made, so the number is the times asked.
-    `<p class="hint">AI answers change from one time to the next, so we ask the same question ${times}.</p>`,
-    `<p class="hint">${from}</p>`,
+    // One paragraph under the lead line (V109).
+    `<p class="hint">${why} ${from}</p>`,
     `<p>${h(outcome(shown, input))}</p>`,
     competitorList(shown, input),
     `${demo}<details><summary>${h(`See ${subject}'s answers`)}</summary>${blocks}</details>`,
@@ -428,7 +434,7 @@ function aiFree(grade, { googleLive, requester, now, secondPending = [] }) {
   const parts = [];
 
   if (first && mainAnswers.length > 1) {
-    parts.push(...severalAnswers(mainAnswers, grade.input, now));
+    parts.push(...severalAnswers(mainAnswers, grade.input, now, grade.aiMain?.asks ?? null));
   } else if (first) {
     const lead = askedLine(first, now, inline(first.provider));
     parts.push(`<p>${lead} ${h(outcome(first, grade.input))}</p>`, competitorList(first, grade.input), answerBlock(first));
@@ -617,15 +623,13 @@ function answersSection(grade) {
   const seconds = all.filter(a => isSecondOpinion(a));
   const mainLabel = grade.aiMain?.label ?? (main[0] ? providerLabel(main[0].provider) : 'The assistant');
   const lines = [];
-  // The count is said once (V104): the full sentence below when there are second opinions, else this line.
-  if (main.length > 1 && seconds.length === 0) lines.push(`<p><strong>Named in ${main.filter(a => a.named).length} of ${main.length} answers.</strong></p>`);
+  // The count is said once, in one form whether or not there are second opinions (V104, V108).
+  if (main.length > 1) lines.push(`<p>${h(mainLabel)} named your business in ${main.filter(a => a.named).length} of its ${main.length} answers.</p>`);
   if (seconds.length > 0) {
     const others = [...new Set(seconds.map(s => providerLabel(s.provider)))];
     if (main.length === 0) {
       lines.push(`<p>${h(mainLabel)} did not answer, so this check has no AI score. The answers from ${h(joinAnd(others))} are here so you can compare.</p>`);
     } else {
-      const answersCount = main.length;
-      if (answersCount > 1) lines.push(`<p>${h(mainLabel)} named your business in ${main.filter(a => a.named).length} of its ${answersCount} answers.</p>`);
       // Count questions, not answers: the free question asked 3 times is still one question.
       const questions = [...new Set(main.map(a => a.prompt))];
       const q = questions.length;
