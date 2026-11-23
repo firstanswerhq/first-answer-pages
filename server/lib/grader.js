@@ -152,9 +152,18 @@ const KEEP_CAPITAL = new Map([
 ].map(w => [w.toLowerCase(), w]));
 
 /** Last words that are food and get " restaurants" (V123, V125). */
-const FOOD_RESTAURANTS = new Set(['bbq', 'barbecue', 'sushi', 'seafood', 'taco', 'burger', 'wing', 'ramen', 'pho', 'steak']);
+const FOOD_RESTAURANTS = new Set([
+  'bbq', 'barbecue', 'sushi', 'seafood', 'taco', 'burger', 'wing', 'ramen', 'pho', 'steak',
+  'breakfast', 'brunch', 'lunch', 'dinner', // V129
+]);
 /** Food words typed as plurals: they lose their final "s" before " restaurants" (V125). */
 const FOOD_PLURALS = new Set(['tacos', 'burgers', 'wings']);
+/** The word before "food" that makes the phrase a kind of restaurant (V128). Any other "… food" is a business. */
+const FOOD_BEFORE = new Set(['fast', 'soul', 'comfort', 'street', 'vegan', 'vegetarian', 'southern']);
+/** Shop words (V129): the plural ones lose their final "s" before " shops"; the others add " shops". */
+const SHOP_PLURALS = new Set(['donuts', 'doughnuts', 'bagels', 'cupcakes', 'smoothies']);
+const SHOP_WORDS = new Set(['donut', 'doughnut', 'bagel', 'cupcake', 'smoothie', 'coffee', 'tea', 'boba']);
+const SHOP_PAIRS = new Set(['ice cream', 'frozen yogurt', 'italian ice']);
 
 /** Last words that end in "s" but are not a plural of a business (V113). Any word ending in "ss" is treated the same. */
 const NOT_PLURAL_S = new Set([
@@ -166,7 +175,7 @@ const NOT_PLURAL_S = new Set([
 const TAKES_ES = new Set(['church', 'wash', 'coach']);
 
 /** Last words whose "y" becomes "ies" (V114). */
-// "grocery" is not on it: "grocery businesses", while "grocery store" gives "grocery stores" (V124).
+// "grocery" is not on it (V124): it gets "stores" by its own rule (V129), "grocery stores".
 const TAKES_IES = new Set([
   'company', 'agency', 'bakery', 'brewery', 'winery', 'notary', 'pharmacy', 'nursery', 'laundry',
   'distillery', 'creamery',
@@ -180,6 +189,7 @@ const TAKES_S = new Set([
   'tailor', 'jeweler', 'bookkeeper', 'vet', 'trainer', 'walker', 'builder', 'gym', 'spa', 'bar', 'hotel', 'motel',
   'daycare', 'preschool', 'boutique', 'barbershop', 'place', 'truck', 'home', 'school', 'park', 'diner', 'pub',
   'mover', 'caterer', 'office', 'center', 'garage', 'dealership', 'cpa', 'dj',
+  'deli', 'steakhouse', 'grill', 'house', // V129
 ]);
 
 /** Words ending in "ian" that take "s"; words ending in "ician" do too (V112). */
@@ -191,6 +201,9 @@ const IAN_TAKES_S = new Set(['veterinarian', 'pediatrician', 'dietitian', 'libra
  */
 const RAISE = new Map([
   ['a/c', 'A/C'], ['hvac', 'HVAC'], ['cpa', 'CPA'], ['dj', 'DJ'], ['bbq', 'BBQ'], ['rv', 'RV'], ['b&b', 'B&B'],
+  // V130: short abbreviations are capitals however typed ("ac repair" gives "AC repair"). UPS is a brand: left out.
+  ['ac', 'AC'], ['tv', 'TV'], ['cpr', 'CPR'], ['dui', 'DUI'], ['cdl', 'CDL'], ['atv', 'ATV'], ['seo', 'SEO'],
+  ['pc', 'PC'], ['ev', 'EV'], ['hoa', 'HOA'], ['cbd', 'CBD'], ['mri', 'MRI'], ['er', 'ER'], ['av', 'AV'],
 ]);
 const raised = lw => {
   if (RAISE.has(lw)) return RAISE.get(lw);
@@ -267,6 +280,7 @@ export function servicePhrase(service) {
       const lw = w.toLowerCase();
       if (JOINING.has(lw)) return lw;
       if (KEEP_CAPITAL.has(lw)) return KEEP_CAPITAL.get(lw);
+      if (lw === 'food') return 'food'; // "FOOD" alone gives "food businesses" (V128)
       return raised(lw) ?? w;
     });
     if (fixed[0] === 'it' && /^(support|services)$/i.test(fixed[1] ?? '')) fixed[0] = 'IT';
@@ -292,11 +306,18 @@ function foodPhrase(words) {
   // A cuisine word last ("Italian", "authentic Thai").
   if (KEEP_CAPITAL.has(lw(n - 1))) return [...words, 'restaurants'];
   if (lw(n - 1) === 'food') {
-    // "Thai food", "Mexican food" read "Thai restaurants"; any other phrase ending in "food" ("fast food",
-    // "soul food", "health food") adds " restaurants" after it (V127).
+    // "Thai food", "Mexican food" read "Thai restaurants". After fast, soul, comfort, street, vegan, vegetarian or
+    // southern, " restaurants" follows "food". Any other phrase ending in "food" ("pet food", "food") is not food
+    // to eat out: it goes on to the normal rules and gets " businesses" (V128).
     if (n >= 2 && KEEP_CAPITAL.has(lw(n - 2))) return [...words.slice(0, n - 1), 'restaurants'];
-    return [...words, 'restaurants'];
+    if (n >= 2 && FOOD_BEFORE.has(lw(n - 2))) return [...words, 'restaurants'];
+    return null;
   }
+  // "grocery" and a phrase ending in "grocery" ("Indian grocery") give "… grocery stores" (V129).
+  if (lw(n - 1) === 'grocery') return [...words, 'stores'];
+  // Shops (V129): "donuts" gives "donut shops", "ice cream" gives "ice cream shops".
+  if (SHOP_PLURALS.has(lw(n - 1))) return [...words.slice(0, n - 1), words[n - 1].slice(0, -1), 'shops'];
+  if (SHOP_WORDS.has(lw(n - 1)) || (n >= 2 && SHOP_PAIRS.has(`${lw(n - 2)} ${lw(n - 1)}`))) return [...words, 'shops'];
   // "tacos", "burgers", "wings" lose their final "s" ("taco restaurants"); the singular forms give the same (V125).
   if (FOOD_PLURALS.has(lw(n - 1))) return [...words.slice(0, n - 1), words[n - 1].slice(0, -1), 'restaurants'];
   if (FOOD_RESTAURANTS.has(lw(n - 1))) return [...words, 'restaurants'];

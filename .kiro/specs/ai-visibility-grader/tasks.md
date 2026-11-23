@@ -476,7 +476,10 @@ Wording only; no scoring change.
 - [x] V124. "grocery" is off the "ies" list
 - [x] V125. Food words typed as plurals lose their final "s" before " restaurants": "tacos", "burgers", "wings" (and the singulars) give "taco restaurants", "burger restaurants", "wing restaurants"
 - [x] V126. In a phrase typed all in capitals, a word that holds a digit keeps its capitals: "A1 TOWING" gives "A1 towing businesses"
-- [x] V127. Any phrase ending in "food" whose previous word is not a cuisine word adds " restaurants" after "food" ("fast food restaurants", "soul food restaurants", "health food restaurants")
+- [x] V127. Any phrase ending in "food" whose previous word is not a cuisine word adds " restaurants" after "food" (narrowed by V128)
+- [x] V128. " restaurants" follows "food" only after fast, soul, comfort, street, vegan, vegetarian or southern (or a cuisine word, V123); any other phrase ending in "food" gets " businesses" ("pet food businesses"); "food" alone gives "food businesses"
+- [x] V129. "grocery" gives "grocery stores"; deli, steakhouse, grill and house take "s"; the fixed shops list ("donut shops", "ice cream shops", "coffee shops"); breakfast, brunch, lunch and dinner give " restaurants"
+- [x] V130. AC, TV, CPR, DUI, CDL, ATV, SEO, PC, EV, HOA, CBD, MRI, ER and AV join the raise list
 - Tests: a new V119 to V124 table test, every keep-capital word typed four ways, and the three questions for four new cases; the older lines in `test/grade-question.test.js` that pinned results these rules change are listed in the design's table
 
 ## Owner-approved features (Nov 18)

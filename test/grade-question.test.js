@@ -310,12 +310,35 @@ const V119_V124 = [
   // V126: a word that holds a digit keeps its capitals in a phrase typed all in capitals.
   ['A1 TOWING', 'A1 towing businesses'], ['24 HOUR LOCKSMITH', '24 hour locksmiths'], ['A1', 'A1 businesses'], ['a1 towing', 'a1 towing businesses'],
   // V127: any phrase ending in "food" without a cuisine word before it adds " restaurants".
-  ['soul food', 'soul food restaurants'], ['health food', 'health food restaurants'], ['FAST FOOD', 'fast food restaurants'],
+  ['soul food', 'soul food restaurants'], ['FAST FOOD', 'fast food restaurants'],
+  // V128 (replaces the V127 "any phrase" rule): only after fast, soul, comfort, street, vegan, vegetarian, southern.
+  ['health food', 'health food businesses'], ['pet food', 'pet food businesses'], ['dog food', 'dog food businesses'],
+  ['cat food', 'cat food businesses'], ['baby food', 'baby food businesses'], ['frozen food', 'frozen food businesses'],
+  ['organic food', 'organic food businesses'], ['food', 'food businesses'], ['FOOD', 'food businesses'], ['Food', 'food businesses'],
+  ['comfort food', 'comfort food restaurants'], ['street food', 'street food restaurants'], ['vegan food', 'vegan food restaurants'],
+  ['vegetarian food', 'vegetarian food restaurants'], ['southern food', 'southern food restaurants'],
+  ['Southern food', 'southern food restaurants'], ['SOUL FOOD', 'soul food restaurants'], ['Thai food', 'Thai restaurants'],
+  // V129: a few more fixed plural words.
+  ['Indian grocery', 'Indian grocery stores'], ['grocery stores', 'grocery stores'], ['Asian grocery', 'Asian grocery stores'],
+  ['deli', 'delis'], ['steakhouse', 'steakhouses'], ['grill', 'grills'], ['steak house', 'steak houses'],
+  ['donuts', 'donut shops'], ['doughnuts', 'doughnut shops'], ['bagels', 'bagel shops'], ['cupcakes', 'cupcake shops'],
+  ['smoothies', 'smoothie shops'], ['donut', 'donut shops'], ['bagel', 'bagel shops'], ['ice cream', 'ice cream shops'],
+  ['frozen yogurt', 'frozen yogurt shops'], ['Italian ice', 'Italian ice shops'], ['coffee', 'coffee shops'], ['tea', 'tea shops'],
+  ['boba', 'boba shops'], ['bubble tea', 'bubble tea shops'], ['coffee shop', 'coffee shops'],
+  ['breakfast', 'breakfast restaurants'], ['brunch', 'brunch restaurants'], ['lunch', 'lunch restaurants'],
+  ['dinner', 'dinner restaurants'], ['Sunday brunch', 'sunday brunch restaurants'],
+  // V130: short abbreviations are capitals however typed.
+  ['AC REPAIR', 'AC repair businesses'], ['ac repair', 'AC repair businesses'], ['TV REPAIR', 'TV repair businesses'],
+  ['CPR TRAINING', 'CPR training businesses'], ['DUI LAWYER', 'DUI lawyers'], ['dui lawyer', 'DUI lawyers'],
+  ['CDL training', 'CDL training businesses'], ['atv repair', 'ATV repair businesses'], ['seo', 'SEO businesses'],
+  ['pc repair', 'PC repair businesses'], ['pcs', 'PCs'], ['ev charging', 'EV charging businesses'], ['hoa management', 'HOA management businesses'],
+  ['cbd', 'CBD businesses'], ['mri center', 'MRI centers'], ['er doctor', 'ER doctors'], ['av installation', 'AV installation businesses'],
+  ['tvs', 'TVs'], ['Ac Repair', 'AC repair businesses'],
   ['ramen', 'ramen restaurants'], ['pho', 'pho restaurants'], ['steak', 'steak restaurants'], ['pizza', 'pizza places'],
   ['Bar & Grill', 'bar and grill restaurants'], ['bar and grill', 'bar and grill restaurants'],
   ['fast food', 'fast food restaurants'], ['pizza place', 'pizza places'], // fast food: V127
   // V124: grocery.
-  ['grocery', 'grocery businesses'], ['grocery store', 'grocery stores'],
+  ['grocery', 'grocery stores'], ['grocery store', 'grocery stores'], // grocery: V129 (V124 had "grocery businesses")
 ];
 
 test('V119-V124: every case gives its phrase', () => {
@@ -331,8 +354,26 @@ test('V122: every keep-capital word gets its capital, typed in lower case, in ca
   }
 });
 
+test('V128: no "… food restaurants" for pet, dog, cat, baby, frozen, organic or health food', () => {
+  for (const kind of ['pet', 'dog', 'cat', 'baby', 'frozen', 'organic', 'health']) {
+    assert.equal(named(`${kind} food`), `${kind} food businesses`, kind);
+    assert.equal(named(`${kind.toUpperCase()} FOOD`), `${kind} food businesses`, kind);
+  }
+});
+
+test('V130: every short abbreviation is capitals however typed, with or without a final "s"', () => {
+  for (const abbr of ['AC', 'TV', 'CPR', 'DUI', 'CDL', 'ATV', 'SEO', 'PC', 'EV', 'HOA', 'CBD', 'MRI', 'ER', 'AV']) {
+    assert.ok(named(`${abbr.toLowerCase()} repair`).startsWith(`${abbr} repair`), abbr);
+    assert.ok(named(`${abbr} repair`).startsWith(`${abbr} repair`), abbr);
+    assert.ok(named(`${abbr} REPAIR`).startsWith(`${abbr} repair`), abbr);
+    assert.ok(named(`best ${abbr.toLowerCase()}s`).startsWith(`best ${abbr}s`), abbr);
+  }
+  assert.ok(named('ups store').startsWith('ups store'), 'UPS is a brand and is left out');
+});
+
 test('V119-V124: the three questions for a few of the new cases', () => {
-  for (const [service, phrase] of [['CPAs', 'CPAs'], ['LAWN CARE', 'lawn care businesses'], ['Thai food', 'Thai restaurants'], ['pizza', 'pizza places']]) {
+  for (const [service, phrase] of [['CPAs', 'CPAs'], ['LAWN CARE', 'lawn care businesses'], ['Thai food', 'Thai restaurants'], ['pizza', 'pizza places'],
+    ['pet food', 'pet food businesses'], ['Indian grocery', 'Indian grocery stores'], ['ice cream', 'ice cream shops'], ['AC REPAIR', 'AC repair businesses']]) {
     const input = { ...TALLAHASSEE, service };
     assert.deepEqual([freeQuestion(input), ...extraQuestions(input)], [
       `Who are the best ${phrase} in Tallahassee, FL? Name your top 5.`,
