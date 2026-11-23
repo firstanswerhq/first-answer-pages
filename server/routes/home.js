@@ -107,9 +107,11 @@ ${group.map(l => listingCard(l, categories, { founder: founderOf(l.id), trust: t
       results = `<div class="directory">\n${title}${sections.join('\n')}\n</div>`;
     }
 
-    const graderLink = ctx.config?.graderEnabled === false
+    // The AI Visibility Check, as large and as clear as the search button, right under the search form (D3). With the
+    // grader off there is no link to /grade anywhere on the page.
+    const graderButton = ctx.config?.graderEnabled === false
       ? ''
-      : '\n<p class="grade-link"><a href="/grade">Can AI find your business? Get a free check.</a></p>';
+      : '\n<p class="home-check"><a class="button" href="/grade">Check if AI can find your business</a></p>';
     // Owners see the founders invite on the unfiltered home page only.
     const inviteHtml = !category && !city && typeof store.getFoundersStatus === 'function'
       ? foundersInvite(store.getFoundersStatus(), { link: true, fees: ctx.trust ? ctx.config?.trust : undefined })
@@ -117,9 +119,10 @@ ${group.map(l => listingCard(l, categories, { founder: founderOf(l.id), trust: t
     const invite = inviteHtml ? `\n${inviteHtml}` : '';
     const body = `<header class="home-head">
 <h1>Local Business Directory</h1>
-<p class="tagline">The phone book is back, and AI can read it.</p>${graderLink}
+<p class="tagline">The phone book is back, and AI can read it.</p>
+<p class="home-why">People now ask AI who to call. List your business free so AI can find it.</p>
 </header>
-${filterForm}${invite}
+${filterForm}${graderButton}${invite}
 ${results}`;
 
     // Category pages: "Plumbers in Nashville | First Answer Pages". The default site

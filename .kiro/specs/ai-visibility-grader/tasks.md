@@ -679,7 +679,7 @@ From `review-2026-11-23-owner-decisions.md`: the owner approved D1 to D5 ("Yes t
   - `checkRow` gives `ai-named` the `partly` class and the word "Partly" when it passed with fewer than all its points, showing the detail without its leading "Yes. " (V153; "1 of 3" is 10 of 30); "Pass" at all 30 or with no `earned`; no stored value, score or count changes; CSS for `.grade-check.partly` in the three layers, its own icon, and the pill-position and 359px selectors
   - Tests: new, as listed in the design; no existing test changes (search for the row word first)
   - _Requirements: 27.1, 27.2_
-- [ ] O3. D3: the home page says why this matters (Requirement 28)
+- [x] O3. D3: the home page says why this matters (Requirement 28)
   - `routes/home.js`: the small `grade-link` paragraph goes; the sentence "People now ask AI who to call. List your business free so AI can find it." under the tagline; with the grader on, the button "Check if AI can find your business" (class `button`, `href="/grade"`) right under the search form; CSS for `.home-why` and `.home-check a` (full width, 3.5rem tall, no sideways scroll at 390px); the unused home `.grade-link` rules removed; with the grader off no `/grade` link anywhere on the home page, footer included, tested (V154)
   - Tests: new, as listed in the design; the existing `href="/grade"` lines in `grade-flow.test.js` still hold; look again at `design-assets.test.js` lines 57 to 59 before editing
   - _Requirements: 28.1, 28.2, 28.3, 28.4_

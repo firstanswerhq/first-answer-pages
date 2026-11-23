@@ -989,11 +989,6 @@ details.advanced summary {
   overflow: hidden;
 }
 
-.grade-link {
-  margin: 0.25rem 0 1rem;
-  font-weight: 600;
-}
-
 .grade-start .tagline,
 .grade-scan .tagline {
   margin-bottom: 1.25rem;
@@ -1636,10 +1631,34 @@ summary {
   background: var(--color-ink);
 }
 
-.home-head .grade-link {
-  margin: 1.1rem 0 0;
+/* Why the check matters (owner decision D3) */
+.home-head .home-why {
+  max-width: 34rem;
+  margin: 1.1rem auto 0;
   font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
-  font-size: 1.1rem;
+  font-size: clamp(1.1rem, 4.4vw, 1.3rem);
+  line-height: 1.35;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+
+/* The check, as large and as clear as the search button above it; it wraps on a phone and never scrolls sideways */
+.home-check {
+  margin: 0.75rem 0 1.25rem;
+}
+
+.home-check a.button {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 3.5rem;
+  margin: 0;
+  padding: 0.75rem 1rem;
+  font-size: 1.3rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
 }
 
 .filters {
@@ -2086,11 +2105,6 @@ summary {
   white-space: nowrap;
 }
 
-.home-head .grade-link {
-  font-size: 1rem;
-  font-weight: 600;
-}
-
 .grade-preview h3 {
   display: block;
 }
@@ -2201,23 +2215,6 @@ body {
   box-shadow: 0 2px 0 var(--color-ink);
 }
 
-.home-head .grade-link a {
-  display: inline-block;
-  padding: 0.7rem 1.2rem;
-  border: 2px solid var(--color-primary);
-  border-radius: var(--radius);
-  background: var(--color-surface);
-  font-size: clamp(1.1rem, 4.8vw, 1.3rem);
-  font-weight: 700;
-  text-decoration: none;
-}
-
-.home-head .grade-link a:hover,
-.home-head .grade-link a:focus-visible {
-  background: var(--color-primary);
-  color: var(--color-button-text);
-}
-
 .grade-eyebrow-title {
   font-size: clamp(1.7rem, 7.6vw, 2.6rem);
   letter-spacing: 0.08em;
@@ -2276,8 +2273,7 @@ body {
 /* Headings that wrap split evenly, never leaving one word alone */
 h1,
 h2,
-h3,
-.home-head .grade-link a {
+h3 {
   text-wrap: balance;
 }
 
