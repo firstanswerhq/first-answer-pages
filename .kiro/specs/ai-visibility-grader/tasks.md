@@ -576,7 +576,7 @@ Approved by the owner on Nov 19, 2026. Task names: **G1 to G7** for Feature G (b
   - `answersSection` counts distinct questions, not answers ("We asked Claude, ChatGPT and Grok the same 3 questions. Claude was asked the first one 3 times."; with only the free question, "Claude was asked it 3 times."), and a carried group reads "We asked Claude 3 times on Nov 19."; the about page says the first question is asked up to 3 times (Requirement 16.3)
   - Tests: the report texts above, each answer opens, V38 and V52 rules apply to the shown answer, a Grade with one answer per question looks as before, an older Grade whose prompt differs from today's wording (and the data in `test/grade-report-list.test.js`) still shows its answers and not "We couldn't ask AI", the answers section says "the same 3 questions" after unlocking (not 5), "answer 1 of 2" and "answer 2 of 2" when ask 1 failed, the about page sentence is pinned, and everything is escaped
   - _Requirements: 23.5, 23.6, 23.10_
-- [ ] E4. Checkpoint for Feature E
+- [x] E4. Checkpoint for Feature E
   - Wording check (no promise that more answers will make an AI name the business); the full suite passes with only the one-line config additions of E1 in existing test files
   - _Requirements: 16.2, 17.4, 23.10_
 
