@@ -356,16 +356,66 @@ function askedLine(entry, now, label) {
     : `We just asked ${label}.`;
 }
 
+/** "1 time", "3 times". */
+const timesText = n => `${n} ${n === 1 ? 'time' : 'times'}`;
+
+/**
+ * How many times the main assistant was asked one question: the answers that came back, or more when a higher
+ * ask number shows an earlier ask failed ("We just asked Claude 3 times" with answers 2 and 3 back).
+ */
+function timesAsked(answers) {
+  const highest = Math.max(0, ...answers.map(a => (Number.isInteger(a.ask) ? a.ask : 0)));
+  return Math.max(answers.length, highest);
+}
+
+/**
+ * The free part when the main assistant answered the free question more than once (Feature E): the lead line,
+ * the ranked list and outcome from the shown answer (the first that named the business, else the first), with
+ * "From answer 1 of 3", and one closed block holding every answer. Everything is escaped.
+ */
+function severalAnswers(answers, input, now) {
+  const firstAnswer = answers[0];
+  const label = inline(firstAnswer.provider);
+  const subject = providerLabel(firstAnswer.provider);
+  const total = answers.length;
+  const named = answers.filter(a => a.named).length;
+  const times = timesText(timesAsked(answers));
+  // Fresh answers say "just"; carried-over or older ones say when they were asked.
+  const old = answers.some(a => a.reusedFrom)
+    || (Number.isFinite(now) && Number.isFinite(Date.parse(firstAnswer.at)) && now - Date.parse(firstAnswer.at) > JUST_ASKED_MS);
+  const asked = old
+    ? `We asked ${h(label)} ${times} on ${h(whenText(firstAnswer.reusedFrom || firstAnswer.at))}.`
+    : `We just asked ${h(label)} ${times}.`;
+  const count = named === 0 ? `in none of ${total} answers` : `in ${named} of ${total} answers`;
+  const shownIndex = Math.max(0, answers.findIndex(a => a.named));
+  const shown = answers[shownIndex];
+  const demo = firstAnswer.provider === 'mock' ? '<p class="hint">Demo answer (no AI connected)</p>\n  ' : '';
+  const blocks = answers.map((a, i) => `<p>Answer ${i + 1}</p><blockquote class="grade-answer seance-answer">${h(readableAnswer(a.answer ?? ''))}</blockquote>`).join('');
+  return [
+    `<p>${asked} ${h(subject)} named your business ${count}.</p>`,
+    `<p class="hint">From answer ${shownIndex + 1} of ${total}</p>`,
+    `<p>${h(outcome(shown, input))}</p>`,
+    competitorList(shown, input),
+    `${demo}<details><summary>${h(`See ${subject}'s answers`)}</summary>${blocks}</details>`,
+  ];
+}
+
 /** The AI part of the free report. */
 function aiFree(grade, { googleLive, requester, now, secondPending = [] }) {
   const all = aiOf(grade);
   const prompt = freeQuestion(grade.input);
-  const first = all.find(a => !isSecondOpinion(a) && a.prompt === prompt) ?? all.find(a => !isSecondOpinion(a));
+  // The free answers are the main answers to the first main answer's own question. Nothing here compares with
+  // today's wording of the question, so an older Grade asked with older wording still shows its answers.
+  const firstMain = all.find(a => !isSecondOpinion(a));
+  const mainAnswers = firstMain ? all.filter(a => !isSecondOpinion(a) && a.prompt === firstMain.prompt) : [];
+  const first = firstMain;
   const seconds = all.filter(a => isSecondOpinion(a) && (a.prompt === (first?.prompt ?? prompt)));
   const mainLabel = grade.aiMain?.label ?? (first ? providerLabel(first.provider) : 'The assistant');
   const parts = [];
 
-  if (first) {
+  if (first && mainAnswers.length > 1) {
+    parts.push(...severalAnswers(mainAnswers, grade.input, now));
+  } else if (first) {
     const lead = askedLine(first, now, inline(first.provider));
     parts.push(`<p>${lead} ${h(outcome(first, grade.input))}</p>`, competitorList(first, grade.input), answerBlock(first));
   } else if (seconds.length > 0) {
@@ -559,16 +609,30 @@ function answersSection(grade) {
     if (main.length === 0) {
       lines.push(`<p>${h(mainLabel)} did not answer, so this check has no AI score. The answers from ${h(joinAnd(others))} are here so you can compare.</p>`);
     } else {
-      const q = main.length;
-      if (q > 1) lines.push(`<p>${h(mainLabel)} named your business in ${main.filter(a => a.named).length} of its ${q} answers.</p>`);
-      lines.push(`<p>We asked ${h(joinAnd([mainLabel, ...others]))} the same ${q === 1 ? 'question' : `${q} questions`}. Only ${h(midSentence(mainLabel))}'s answers count toward your score, so your score stays steady from check to check. ${others.length === 1 ? `${h(others[0])}'s answers are` : "The other assistants' answers are"} below so you can compare.</p>`);
+      const answersCount = main.length;
+      if (answersCount > 1) lines.push(`<p>${h(mainLabel)} named your business in ${main.filter(a => a.named).length} of its ${answersCount} answers.</p>`);
+      // Count questions, not answers: the free question asked 3 times is still one question.
+      const questions = [...new Set(main.map(a => a.prompt))];
+      const q = questions.length;
+      const firstTimes = main.filter(a => a.prompt === questions[0]).length;
+      const askedMore = firstTimes > 1
+        ? ` ${h(mainLabel)} was asked ${q === 1 ? 'it' : 'the first one'} ${timesText(firstTimes)}.`
+        : '';
+      lines.push(`<p>We asked ${h(joinAnd([mainLabel, ...others]))} the same ${q === 1 ? 'question' : `${q} questions`}.${askedMore} Only ${h(midSentence(mainLabel))}'s answers count toward your score, so your score stays steady from check to check. ${others.length === 1 ? `${h(others[0])}'s answers are` : "The other assistants' answers are"} below so you can compare.</p>`);
     }
   }
   const prompts = [...new Set(all.map(a => a.prompt))];
   const items = prompts.map(p => {
     const entries = all.filter(a => a.prompt === p);
+    // When the main assistant answered this question more than once, each of its answers says which one it is.
+    const mains = entries.filter(a => !isSecondOpinion(a));
+    const label = a => {
+      const name = h(providerLabel(a.provider));
+      if (isSecondOpinion(a)) return `${name} (for comparison only)`;
+      return mains.length > 1 ? `${name}, answer ${mains.indexOf(a) + 1} of ${mains.length}` : name;
+    };
     return `<li><strong>${h(p)}</strong>${entries.map(a => `
-      <p>${h(providerLabel(a.provider))}${isSecondOpinion(a) ? ' (for comparison only)' : ''}: ${h(outcome(a, grade.input))}</p>
+      <p>${label(a)}: ${h(outcome(a, grade.input))}</p>
       ${answerBlock(a)}`).join('')}</li>`;
   }).join('\n    ');
   return `<section class="grade-all-answers">
@@ -814,7 +878,7 @@ export function aboutPage({ contactEmail = '', userAgent = '', indexable = false
   </ul>
   <h2>What we ask AI</h2>
   <ul>
-    <li>We ask Claude up to three questions about the best businesses of that kind in that city. The questions name the kind of business and the city, never the business name.</li>
+    <li>We ask Claude up to three questions about the best businesses of that kind in that city, and the first one up to 3 times, because AI answers change from one time to the next. The questions name the kind of business and the city, never the business name.</li>
     <li>Each answer, with the business name, city and state, is sent to Google's Gemini to help check whether the business is named.</li>
     <li>When we can, ChatGPT, Gemini, Grok and Perplexity are asked the same questions so the answers can be compared. Only Claude's answers count toward the score.</li>
     <li>The person who ran a check can see Google's live answer. It is private to them, and we never save it, score it or share it.</li>
