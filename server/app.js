@@ -39,7 +39,7 @@ import { createAdminRouter }   from './routes/admin.js';
 import { createGradeRouter }   from './routes/grade.js';
 import { createPagesRouter }    from './routes/pages.js';
 import { mountA2A }             from './routes/a2a.js';
-import { layout, markDemo, applySiteName } from './lib/html.js';
+import { layout, markDemo, applySiteName, applyTitleSuffix } from './lib/html.js';
 
 let warnedGraderSecret = false;
 
@@ -244,6 +244,22 @@ export function createApp(deps = {}) {
       next();
     });
   }
+
+  // Tab titles in one style, "<page> | <site name>" (V143). Installed after the two wrappers above, so it runs
+  // first and SITE_NAME is swapped in afterwards. Only HTML string bodies are touched.
+  app.use((req, res, next) => {
+    const send = res.send.bind(res);
+    res.send = body => {
+      if (typeof body === 'string') {
+        const type = String(res.get('Content-Type') ?? '');
+        if (type.includes('html') || (!type && /^\s*<!doctype html/i.test(body))) {
+          body = applyTitleSuffix(body);
+        }
+      }
+      return send(body);
+    };
+    next();
+  });
 
   // Liveness probe: no data access, no rate limit.
   app.get('/healthz', (req, res) => {

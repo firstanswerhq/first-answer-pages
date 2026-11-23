@@ -423,7 +423,8 @@ function readAddress(a) {
     const city = str(a.addressLocality);
     const region = str(a.addressRegion);
     const postalCode = str(a.postalCode);
-    const text = [street, city, region, postalCode].filter(Boolean).join(', ');
+    // US style: "400 Church Street, Franklin, TN 37064", with no comma before the ZIP (V144).
+    const text = [street, city, [region, postalCode].filter(Boolean).join(' ')].filter(Boolean).join(', ');
     return text ? { street, city, region, postalCode, text } : null;
   }
   return null;

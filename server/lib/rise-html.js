@@ -111,7 +111,7 @@ export function uploadPage({ photoEnabled = true, discarded = false, founders, f
     <button type="submit">Type it in</button>
   </form>
 </section>`;
-    return layout({ title: 'List your business free: First Answer Pages', body: manualBody, ...search });
+    return layout({ title: 'List your business free | First Answer Pages', body: manualBody, ...search });
   }
   const body = `<section class="rise">
   <h1>List your business free</h1>${discardedNote}
@@ -128,7 +128,7 @@ export function uploadPage({ photoEnabled = true, discarded = false, founders, f
   </noscript>
   ${typeItIn}
 </section>`;
-  return layout({ title: 'List your business free: First Answer Pages', body, scripts: ['/js/rise.js'], ...search });
+  return layout({ title: 'List your business free | First Answer Pages', body, scripts: ['/js/rise.js'], ...search });
 }
 
 /**
@@ -277,5 +277,5 @@ ${hoursRows}
     </form>
   </details>
 </section>`;
-  return layout({ title: `${heading}: First Answer Pages`, body });
+  return layout({ title: `${heading} | First Answer Pages`, body });
 }

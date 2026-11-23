@@ -1,8 +1,13 @@
 // Fix kit: copy-and-paste text built only from typed or found facts.
 // All lengths count code points, not UTF-16 units.
 
+import { stripAddressTail } from './schema.js';
+import { usAddressStyle } from './address-style.js';
+
 const TITLE_MAX = 60;
 const SUMMARY_MAX = 160;
+/** What the business label holds for the phone when none was found on the page (V137). */
+export const PHONE_PLACEHOLDER = 'ADD YOUR PHONE NUMBER';
 
 const cp = s => Array.from(s);
 const len = s => cp(s).length;
@@ -95,15 +100,21 @@ export function suggestedSummary(found) {
 export function jsonLdBlock(found) {
   const f = clean(found);
   const data = { '@context': 'https://schema.org', '@type': 'LocalBusiness', name: f.name };
-  if (f.phone) data.telephone = f.phone;
+  // No phone found: a plain placeholder the owner must replace (never an invented number) (V137).
+  data.telephone = f.phone || PHONE_PLACEHOLDER;
   if (f.website) data.url = f.website;
   // A business that goes to its customers ("no storefront") names its area and no address at all.
   const noStorefront = found?.noStorefront === true;
   if (!noStorefront && (f.address || f.city || f.state)) {
     const addr = { '@type': 'PostalAddress' };
-    if (f.address) addr.streetAddress = f.address;
+    // Only the street goes in streetAddress; the city, state and ZIP each have their own field (V144).
+    const whole = usAddressStyle(f.address);
+    const street = stripAddressTail(whole, f.city, f.state);
+    const zip = street !== whole ? /\b(\d{5}(?:-\d{4})?)\s*$/.exec(whole)?.[1] : undefined;
+    if (street) addr.streetAddress = street;
     if (f.city) addr.addressLocality = f.city;
     if (f.state) addr.addressRegion = f.state;
+    if (zip) addr.postalCode = zip;
     data.address = addr;
   }
   if (f.hours.length) data.openingHours = f.hours;

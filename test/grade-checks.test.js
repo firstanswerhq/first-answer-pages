@@ -51,7 +51,7 @@ test('a bare site fails with plain reasons', () => {
   assert.equal(r['info-sheet'].result, 'fail');
   assert.equal(r['title-city-service'].detail, 'Your title is "Home".');
   assert.equal(r['one-headline'].detail, 'We found 2 main headlines.');
-  assert.equal(r['image-descriptions'].detail, '1 of 1 pictures have no description.');
+  assert.equal(r['image-descriptions'].detail, 'Your 1 picture has no description.');
   for (const id of ['business-labeled', 'summary', 'share-picture', 'tap-to-call', 'hours-shown', 'address-shown', 'call-button']) {
     assert.equal(r[id].result, 'fail', id);
   }

@@ -111,7 +111,7 @@ test('V91: the "Saved, but…" line is a plain notice; a clean save stays the gr
 
 test('V92 and V93: the /grade title and description', async () => {
   assert.equal(FORM_SEARCH_TITLE, 'Can AI find your local business? Free AI Visibility Check | First Answer Pages');
-  assert.equal(FORM_SEARCH_DESCRIPTION, 'See whether AI assistants name your local business when someone asks for one like it, and get a score with plain fixes. Free, no sign-up.');
+  assert.equal(FORM_SEARCH_DESCRIPTION, 'See whether AI assistants name your local business when someone asks for one like it, and get a score with plain fixes. Free. No account needed.');
   const env = await startEnv();
   const html = await (await fetch(`${env.base}/grade`)).text();
   assert.ok(html.includes(`<title>${FORM_SEARCH_TITLE}</title>`));

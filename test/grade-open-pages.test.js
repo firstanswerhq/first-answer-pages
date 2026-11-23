@@ -115,7 +115,7 @@ test('F12: GET /grade/about is open the same way', async () => {
   assert.equal(res.headers['cache-control'], 'no-store');
   assert.equal(res.text.includes('name="robots"'), false);
   assert.ok(res.text.includes(`<link rel="canonical" href="${BASE_URL}/grade/about">`));
-  assert.ok(res.text.includes('<title>About the AI Visibility Check</title>'));
+  assert.ok(res.text.includes('<title>About the AI Visibility Check | First Answer Pages</title>'));
   assert.ok(res.text.includes(`<meta name="description" content="${ABOUT_SEARCH_DESCRIPTION.replace(/'/g, '&#39;')}">`));
 });
 

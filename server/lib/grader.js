@@ -22,6 +22,7 @@ import {
   normalizePhone, normalizeState, tidyCity, mapCategory, validateFields, US_STATE_CODES, STATE_ERROR,
   reviewsLinkHost, reviewsLinkOnPage, normalizeWebsite,
 } from './listing-fields.js';
+import { usAddressStyle } from './address-style.js';
 
 // ---- constants -------------------------------------------------------------------
 
@@ -47,7 +48,9 @@ const SECOND_OPINION_FAILS = 3;
 const SECOND_OPINION_PAUSE_MS = 15 * 60 * 1000;
 const MAX_TEXT_FOR_PATTERNS = 200000;
 
-const HOME_UNREADABLE = "We couldn't read your home page.";
+// The two "website could not be read" findings. The report reads the stored step findings to tell them apart (V134).
+export const HOME_UNREADABLE = "We couldn't read your home page.";
+export const WEBSITE_UNREACHED = "We couldn't reach your website.";
 const TOO_SLOW = 'Your website took too long to answer.';
 const WEBSITE_BUDGET_MS = 30 * 1000; // Requirement 2.8: the website steps share 30 seconds
 
@@ -550,6 +553,12 @@ export const isSecondOpinion = a => Boolean(a) && (a.second === true || SECOND_O
  * the first three in `facts`; Grades made before review links were read give an empty `reviewsLink`.
  */
 export function foundOf(grade) {
+  const found = foundFromGrade(grade);
+  // An address is one line in US style, with no comma before the ZIP, even in a Grade stored before that rule (V144).
+  return typeof found.address === 'string' && found.address !== '' ? { ...found, address: usAddressStyle(found.address) } : found;
+}
+
+function foundFromGrade(grade) {
   if (grade?.found && typeof grade.found === 'object') {
     const found = grade.found;
     return typeof found.reviewsLink === 'string' ? found : { ...found, reviewsLink: '' };
@@ -802,7 +811,7 @@ function aiNamedResult(ai, aiMain) {
   } else {
     detail = named
       ? `Yes. ${label} named your business in ${named} of ${ran} answers.`
-      : `No. ${label} did not name your business in any of ${ran} answers.`;
+      : `No. ${label} named your business in none of its ${ran} answers.`; // V142: "none of" with the count everywhere
   }
   return { id: 'ai-named', result: named > 0 ? 'pass' : 'fail', detail, earned };
 }
@@ -1209,7 +1218,7 @@ export function createGrader({
     } catch (err) {
       failure = failureFor(err);
     }
-    await step(0, home ? 'done' : 'failed', home ? 'Reached your website' : (failure ?? "We couldn't reach your website."), clock.now() - t);
+    await step(0, home ? 'done' : 'failed', home ? 'Reached your website' : (failure ?? WEBSITE_UNREACHED), clock.now() - t);
 
     let facts = null;
     t = clock.now();

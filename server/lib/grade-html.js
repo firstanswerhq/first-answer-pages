@@ -23,6 +23,7 @@ import { scoreGrade } from './grade-score.js';
 import { DEFAULT_SITE_NAME } from './config.js';
 import {
   providerLabel, freeQuestion, stepNames, foundOf, isSecondOpinion, schemaHours, readableHours, isPartialScore,
+  HOME_UNREADABLE, WEBSITE_UNREACHED,
 } from './grader.js';
 
 const ROBOTS_META = '<meta name="robots" content="noindex, nofollow">';
@@ -59,7 +60,7 @@ function page(title, body, {
 /** Title and summary of the check's form when it is shown to search engines (wording rules apply). */
 // The page shell adds no site-name suffix to a title, so the suffix is written here once.
 export const FORM_SEARCH_TITLE = `Can AI find your local business? Free AI Visibility Check | ${DEFAULT_SITE_NAME}`;
-export const FORM_SEARCH_DESCRIPTION = 'See whether AI assistants name your local business when someone asks for one like it, and get a score with plain fixes. Free, no sign-up.';
+export const FORM_SEARCH_DESCRIPTION = 'See whether AI assistants name your local business when someone asks for one like it, and get a score with plain fixes. Free. No account needed.';
 /** Summary of the about page when it is shown to search engines. */
 export const ABOUT_SEARCH_DESCRIPTION = "What the free AI Visibility Check reads on a business's website and asks AI assistants, and why.";
 
@@ -134,7 +135,7 @@ export function gradeFormPage({
     .join('');
   const body = `<section class="grade-start">
   <h1>Can AI find your business?</h1>
-  <p class="tagline">Get a free check in about two minutes. We ask an AI assistant who it would name, and we look at what AI can read on your website.</p>
+  <p class="tagline">Get a free check in about two minutes. We ask AI assistants to name the best businesses like yours in your city, and see if they name you. We also look at what AI can read on your website.</p>
   ${errors.form ? `<p class="form-error" role="alert">${h(errors.form)}</p>` : ''}
   ${['name', 'city', 'state', 'service', 'website'].some(k => errors[k]) ? '<p class="form-error" role="alert">Please fix the problems below.</p>' : ''}
   <form class="rise-form" method="POST" action="/grade">
@@ -218,6 +219,26 @@ export function failedPage(grade, { stamp = '', turnstileSiteKey = '' } = {}) {
 }
 
 // ---- pieces of the report ---------------------------------------------------------------
+
+/**
+ * Why the home page of a Grade with a website was not read, from the stored steps: the finding of the step that
+ * failed ("We couldn't read your home page.", "We couldn't reach your website.", "Your website took too long to
+ * answer."), or null when both steps ran or there was no website. A hand-built Grade with no steps gives null.
+ */
+function homeReadProblem(grade) {
+  if (!grade?.input?.website) return null;
+  try {
+    const names = stepNames(grade.input);
+    const steps = Array.isArray(grade.steps) ? grade.steps : [];
+    const first = steps.find(s => s && s.name === names[0]);
+    if (first?.state === 'failed') return typeof first.finding === 'string' ? first.finding : HOME_UNREADABLE;
+    const second = steps.find(s => s && s.name === names[1]);
+    if (second?.state === 'failed') return typeof second.finding === 'string' ? second.finding : HOME_UNREADABLE;
+  } catch {
+    return null;
+  }
+  return null;
+}
 
 /** Why the AI part of a partial score was left out, as the start of a sentence ending "so". */
 function partialReason(grade) {
@@ -441,12 +462,14 @@ function aiFree(grade, { googleLive, requester, now, secondPending = [] }) {
   } else if (seconds.length > 0) {
     parts.push(`<p>${h(mainLabel)} did not answer this time, so this check has no AI score.</p>`);
   } else {
-    const why = grade.aiMain?.state === 'limit'
-      ? "The daily limit for AI checks was reached. You can run the check again later."
-      : grade.aiMain?.state === 'not_connected'
-        ? 'The AI check is not connected yet.'
-        : "AI didn't answer this time. You can run the check again later.";
-    parts.push(`<p>We couldn't ask AI this time. ${why}</p>`);
+    if (grade.aiMain?.state === 'limit') {
+      parts.push("<p>We couldn't ask AI this time. The daily limit for AI checks was reached. You can run the check again tomorrow.</p>");
+    } else if (grade.aiMain?.state === 'not_connected') {
+      parts.push("<p>We couldn't ask AI this time. The AI check is not connected yet.</p>");
+    } else {
+      // One short sentence naming the assistant, not three that repeat each other (V140).
+      parts.push(`<p>${h(mainLabel)} didn't answer this time. Please run the check again later.</p>`);
+    }
   }
 
   if (seconds.length > 0) {
@@ -584,7 +607,11 @@ function groupLines(grade, score = currentScore(grade)) {
       : 'Not checked';
     lines.push(`<li><strong>${h(g.label)}:</strong> ${h(text)}</li>`);
   }
-  return lines.length ? `<section class="grade-areas">\n  <h2>Score by area</h2>\n  <ul class="grade-groups">${lines.join('')}</ul>\n</section>` : '';
+  // One line on how the headline score relates to the points below: the same two sums the areas add up to (V135).
+  const relation = Number.isInteger(score?.score) && Number.isFinite(score.earned) && Number.isFinite(score.available) && score.available > 0
+    ? `\n  <p class="hint">Your score is the share of the points we could check: ${score.earned} of ${score.available}.</p>`
+    : '';
+  return lines.length ? `<section class="grade-areas">\n  <h2>Score by area</h2>${relation}\n  <ul class="grade-groups">${lines.join('')}</ul>\n</section>` : '';
 }
 
 function checkRow(r, input) {
@@ -624,7 +651,11 @@ function answersSection(grade) {
   const mainLabel = grade.aiMain?.label ?? (main[0] ? providerLabel(main[0].provider) : 'The assistant');
   const lines = [];
   // The count is said once, in one form whether or not there are second opinions (V104, V108).
-  if (main.length > 1) lines.push(`<p>${h(mainLabel)} named your business in ${main.filter(a => a.named).length} of its ${main.length} answers.</p>`);
+  if (main.length > 1) {
+    const namedCount = main.filter(a => a.named).length;
+    // "none of its 5 answers", never "0 of its 5 answers" (V142).
+    lines.push(`<p>${h(mainLabel)} named your business in ${namedCount === 0 ? 'none' : namedCount} of its ${main.length} answers.</p>`);
+  }
   if (seconds.length > 0) {
     const others = [...new Set(seconds.map(s => providerLabel(s.provider)))];
     if (main.length === 0) {
@@ -643,9 +674,11 @@ function answersSection(grade) {
   }
   const prompts = [...new Set(all.map(a => a.prompt))];
   const items = prompts.map(p => {
-    const entries = all.filter(a => a.prompt === p);
+    const asked = all.filter(a => a.prompt === p);
     // When the main assistant answered this question more than once, each of its answers says which one it is.
-    const mains = entries.filter(a => !isSecondOpinion(a));
+    const mains = asked.filter(a => !isSecondOpinion(a));
+    // Claude's answers come first under every question, then the second opinions (V142).
+    const entries = [...mains, ...asked.filter(a => isSecondOpinion(a))];
     const label = a => {
       const name = h(providerLabel(a.provider));
       if (isSecondOpinion(a)) return `${name} (for comparison only)`;
@@ -679,12 +712,15 @@ function fixKit(grade, contactEmail) {
   const items = [
     ['kit-title', 'Page title', 'Use this as your home page title.', suggestedTitle(kit)],
     ['kit-summary', 'Page summary', 'Use this as the summary Google shows under your title.', suggestedSummary(kit)],
-    ['kit-label', 'Business label for AI', 'Paste this into your home page so AI can read your name and phone.', jsonLdBlock(labelKit)],
+    ['kit-label', 'Business label for AI',
+      // No phone found: the block holds a placeholder, and the line above it says to replace it (V137).
+      `Paste this into your home page so AI can read your name and phone.${kit.phone ? '' : ' Put your phone number in before you paste.'}`,
+      jsonLdBlock(labelKit)],
     ['kit-llms', 'Info sheet for AI (llms.txt)', 'Save this as a plain text file named llms.txt on your website.', llmsDraft(kit)],
   ];
   const blocked = resultsOf(grade).find(r => r.id === 'ai-bots-allowed' && r.result === 'fail')?.blocked ?? [];
   if (blocked.length > 0) {
-    items.push(['kit-robots', 'robots.txt lines', 'Add these lines to your robots.txt file so these AI assistants can read your website.', robotsLines(blocked)]);
+    items.push(['kit-robots', 'robots.txt lines', 'Replace the lines that block these assistants with these lines in your robots.txt file, so they can read your website.', robotsLines(blocked)]);
   }
   const blocks = items.map(([id, title, help, text]) => `<div class="kit-item">
       <h3>${h(title)}</h3>
@@ -779,13 +815,27 @@ export function reportPage(grade, opts = {}) {
   const number = scored
     ? `<p class="grade-score-number"><span class="num">${s.score}</span><span class="of">out of 100</span></p>`
     : '<p class="grade-score-number"><span class="num-text">Not enough to score yet</span></p>';
+  // The daily limit is the reason the AI part did not run: say "tomorrow", not "later" (V139).
+  const limited = grade.aiMain?.state === 'limit';
   const noWebsite = !i.website
-    ? '<p class="notice" role="status">We could only run the AI check. Add a website to get a score. A free listing gives AI something to read about the business.</p>'
+    ? (limited
+      ? '<p class="notice" role="status">We couldn\'t run any checks this time. Please try again tomorrow.</p>'
+      : '<p class="notice" role="status">We could only run the AI check. Add a website to get a score. A free listing gives AI something to read about the business.</p>')
     : '';
   // A score that leaves out the AI part is marked as partial, and never set beside an earlier score.
   const partial = isPartialScore(grade);
   const partialLine = partial
-    ? `<p class="hint grade-partial">${h(`Partial score: ${partialReason(grade)} the AI part isn't counted. Check again later for your full score.`)}</p>`
+    ? `<p class="hint grade-partial">${h(`Partial score: ${partialReason(grade)} the AI part isn't counted. Check again ${limited ? 'tomorrow' : 'later'} for your full score.`)}</p>`
+    : '';
+  // A website we could not read gives a score from the few checks that ran. Say so under the score, on the locked
+  // and the unlocked report alike (V134), in the same style as the notice for an AI that did not answer.
+  const homeProblem = homeReadProblem(grade);
+  const readNotice = homeProblem !== null && scored
+    ? `<p class="hint grade-partial">${h(`Partial score: we couldn't read your home page, so most website checks aren't counted.${homeProblem === HOME_UNREADABLE ? ' Your website may be blocking automated visitors.' : ''}`)}</p>`
+    : '';
+  const host = hostOf(i.website);
+  const reachLine = homeProblem === WEBSITE_UNREACHED && host
+    ? `<p class="hint grade-partial">${h(`We couldn't reach ${host}. Check the spelling and run the check again.`)}</p>`
     : '';
   // Shown only when the results include reviews-visible, so scores are never compared across the change in points.
   const hasReviewsCheck = resultsOf(grade).some(r => r && r.id === 'reviews-visible');
@@ -798,6 +848,8 @@ export function reportPage(grade, opts = {}) {
     <p class="grade-eyebrow"><span class="grade-eyebrow-title">AI Visibility Check</span><span class="grade-eyebrow-sub">Report &middot; First Answer Pages</span></p>
     ${number}
     ${partialLine}
+    ${readNotice}
+    ${reachLine}
     <h1>${h(i.name)}</h1>
     <p class="grade-where">${h(i.service)} in ${h(i.city)}, ${h(i.state)}</p>
     ${failedLine}
@@ -891,7 +943,7 @@ export function aboutPage({ contactEmail = '', userAgent = '', indexable = false
   <p>This is our free <a href="/grade">AI Visibility Check</a>. Someone types in a business name, city, state and what the business does, and a website if it has one. This page says exactly what the check does, so anyone whose website was checked can see why.</p>
   <h2>What we visit</h2>
   <ul>
-    <li>Our server visits the website once per check. It reads the home page, /robots.txt and /llms.txt. Each is read at most once.</li>
+    <li>Our server visits the website once per check. It reads the home page, /robots.txt and /llms.txt. Each is read at most once per check.</li>
     <li>It reads public pages only, on the public internet.</li>
     <li>It does not log in, fill in forms, run scripts or send cookies.</li>
     ${userAgent ? `<li>Our visits identify themselves as: <code>${h(userAgent)}</code></li>` : ''}

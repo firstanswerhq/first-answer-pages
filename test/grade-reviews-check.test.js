@@ -27,7 +27,7 @@ test('F3: reviews-visible is a 3-point Customer basics Check with the label, tex
   assert.ok(c);
   assert.equal(c.group, 'customer_basics');
   assert.equal(c.points, 3);
-  assert.equal(c.label, 'Reviews AI can see');
+  assert.equal(c.label, 'Can AI see your reviews?');
   assert.equal(c.passText, PASS_DETAIL);
   assert.equal(c.failText, FAIL_DETAIL);
   assert.equal(c.fix, FIX);

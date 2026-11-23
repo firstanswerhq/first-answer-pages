@@ -377,8 +377,6 @@ a.button:focus-visible {
   color: var(--color-fail);
   font-size: 0.85rem;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
 }
 
 .rise-form .check {

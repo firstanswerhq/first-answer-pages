@@ -329,7 +329,16 @@ export function createGradeRouter(ctx) {
         { key: `grade-recheck:${req.ip}`, ...RULES['grade-recheck'] },
         { key: `grade-recheck-grade:${grade.id}`, ...RULES['grade-recheck-grade'] },
       ]);
-      if (!limited.allowed) return tooMany(res, limited.retryAfterSeconds);
+      if (!limited.allowed) {
+        // Pressed again within the 2 minutes this report allows: say that, and go back to the report (V138).
+        // The limits themselves are unchanged; only the page differs.
+        const justChecked = ctx.rateLimiter.peek(`grade-recheck-grade:${grade.id}`, RULES['grade-recheck-grade']);
+        if (!justChecked.allowed) {
+          res.set('Retry-After', String(limited.retryAfterSeconds));
+          return html(res, 429, messagePage('Please wait', 'You just checked again. Please wait two minutes.', { href: back, text: 'Back to the report' }));
+        }
+        return tooMany(res, limited.retryAfterSeconds);
+      }
 
       await ctx.grader.recheck(grade.id);
       return res.redirect(303, back);
@@ -361,7 +370,7 @@ export function createGradeRouter(ctx) {
       const peek = ctx.aiBudget.peek({ kind: 'grade' });
       if (peek.remaining <= SECOND_OPINION_RESERVE || ctx.aiBudget.consume({ kind: 'grade' }).allowed !== true) {
         res.set('Retry-After', String(peek.retryAfterSeconds ?? 3600));
-        return html(res, 429, messagePage("Not today", "We are keeping the rest of today's AI checks for new reports. Please try again tomorrow.", { href: `/grade/${grade.id}`, text: 'Back to the report' }));
+        return html(res, 429, messagePage("That is all for today", "We are keeping the rest of today's AI checks for new reports. Please try again tomorrow.", { href: `/grade/${grade.id}`, text: 'Back to the report' }));
       }
 
       // The budget accepted the call. Only now is the Grade's own count checked and raised, in one stored

@@ -167,7 +167,7 @@ export function verifyPage({ draftId, listing, status, price, fees, note, testMo
   <p><a href="/listings/${encodeURIComponent(listing.id)}">See your listing</a></p>
   <p class="hint">Save this page now: bookmark it, or text the link to yourself. It is the only way back to get or renew the Verified stamp.</p>
 </section>`;
-  return layout({ title: `Get the Verified stamp: ${DEFAULT_SITE_NAME}`, body });
+  return layout({ title: `Get the Verified stamp | ${DEFAULT_SITE_NAME}`, body });
 }
 
 /** Public page linked from the stamp. */

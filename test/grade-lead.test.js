@@ -272,9 +272,9 @@ test('gate on: the report shows the Lead_Form; a valid form stores one Lead, set
   }, 'the extra AI answers');
   assert.equal(assistant.calls, 3);
   assert.ok(grade.extraAiStartedAt);
-  assert.match(grade.results.find(r => r.id === 'ai-named').detail, /Claude did not name your business in any of 3 answers/);
+  assert.match(grade.results.find(r => r.id === 'ai-named').detail, /Claude named your business in none of its 3 answers/);
   const after = await (await get(env, `/grade/${id}`, { cookie })).text();
-  assert.ok(after.includes('named your business in 0 of its 3 answers.'));
+  assert.ok(after.includes('named your business in none of its 3 answers.'));
 });
 
 test('a forged unlock cookie does not open the report', async () => {
@@ -352,7 +352,7 @@ test('claim fills address, phone and hours from a business label', async () => {
   const [draft] = await readJson(env, 'drafts.json', []);
   assert.equal(draft.fields.category, 'hvac');
   assert.equal(draft.fields.phone, '(615) 555-0188');
-  assert.equal(draft.fields.address, '400 Church Street, Franklin, TN, 37064');
+  assert.equal(draft.fields.address, '400 Church Street, Franklin, TN 37064');
   assert.equal(draft.fields.hours.monday, '07:00-18:00');
   assert.equal(draft.fields.hours.friday, '07:00-18:00');
   assert.equal(draft.fields.hours.saturday, undefined);
@@ -535,10 +535,10 @@ test('ChatGPT is asked the same questions as Claude, and both show in the report
   assert.equal(chatgpt.calls, 3);
   assert.equal(grade.ai.filter(a => a.provider === 'chatgpt').length, 3);
   const after = await (await get(env, `/grade/${id}`, { cookie })).text();
-  assert.ok(after.includes('Claude named your business in 0 of its 3 answers.'));
+  assert.ok(after.includes('Claude named your business in none of its 3 answers.'));
   assert.ok(after.includes("We asked Claude and ChatGPT the same 3 questions. Only Claude's answers count toward your score, so your score stays steady from check to check. ChatGPT's answers are below so you can compare."));
   // Only Claude's answers are scored, so ChatGPT naming the business does not change the score.
-  assert.equal(grade.results.find(r => r.id === 'ai-named').detail, 'No. Claude did not name your business in any of 3 answers.');
+  assert.equal(grade.results.find(r => r.id === 'ai-named').detail, 'No. Claude named your business in none of its 3 answers.');
 });
 
 test('turning ChatGPT on later: a repeat check keeps Claude\'s stored answer and asks only ChatGPT', async () => {

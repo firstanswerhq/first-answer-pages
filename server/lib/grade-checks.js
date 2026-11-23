@@ -27,14 +27,14 @@ export function serviceAreaFix(input) {
 export const CHECKS = Object.freeze([
   {
     id: 'ai-bots-allowed', group: 'ai_readable', points: 8,
-    label: 'AI assistants are allowed in',
+    label: 'Can AI assistants get in?',
     passText: 'Your website lets AI assistants read it.',
     failText: 'Your website tells some AI assistants to stay out.',
     fix: 'Your website tells some AI assistants to stay out. Add the lines in your fix kit to robots.txt so they can read it.',
   },
   {
     id: 'business-labeled', group: 'ai_readable', points: 8,
-    label: 'Business name and phone labeled for AI',
+    label: 'Business label for AI',
     passText: 'Your home page labels your business name and phone for AI.',
     failText: 'We found no readable business label with your name and phone.',
     fix: 'Add the business label block from your fix kit to your home page so AI can read your name and phone.',
@@ -48,21 +48,21 @@ export const CHECKS = Object.freeze([
   },
   {
     id: 'title-city-service', group: 'search_basics', points: 7,
-    label: 'Page title names your city and service',
+    label: 'Page title',
     passText: 'Your title names your city and your service.',
     failText: 'Your title does not name both your city and your service.',
     fix: 'Change your page title to the one in your fix kit so it says what you do and where.',
   },
   {
     id: 'one-headline', group: 'search_basics', points: 4,
-    label: 'One main headline on the home page',
+    label: 'Main headline on the home page',
     passText: 'Your home page has one main headline.',
     failText: 'Your home page should have exactly one main headline.',
     fix: 'Use exactly one main headline on your home page, and say what you do and where.',
   },
   {
     id: 'summary', group: 'search_basics', points: 4,
-    label: 'Short page summary',
+    label: 'Page summary',
     passText: 'Your page has a short summary of the right length.',
     failText: 'Your page summary is missing or not 50 to 170 characters.',
     fix: 'Add a short page summary of 50 to 170 characters. It is the text Google shows under your title. Your fix kit has one you can copy.',
@@ -118,7 +118,7 @@ export const CHECKS = Object.freeze([
   },
   {
     id: 'reviews-visible', group: 'customer_basics', points: 3,
-    label: 'Reviews AI can see',
+    label: 'Can AI see your reviews?',
     passText: 'Your home page shows customer reviews that AI can read.',
     failText: "We found no customer reviews on your home page. AI assistants often can't see reviews that are only inside Google.",
     fix: "Put 3 or more of your real customer reviews on your home page, with each customer's first name and the date, and add a link to your Google reviews.",
@@ -274,7 +274,9 @@ function checkFacts(id, facts, input) {
       const total = facts.imgCount;
       const missing = facts.imgMissingAlt;
       if (total === 0 || (total - missing) / total >= 0.8) return pass(id);
-      return fail(id, `${missing} of ${total} pictures have no description.`);
+      // "Your 1 picture has no description." for a single picture; "2 of 5 pictures have no description." stays (V142).
+  if (total === 1) return fail(id, 'Your 1 picture has no description.');
+  return fail(id, `${missing} of ${total} pictures have no description.`);
     }
     case 'share-picture':
       return judge(id, Boolean(facts.ogImage));
