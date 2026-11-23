@@ -15,7 +15,8 @@ const INPUT = { name: 'Zephyr Plumbing', city: 'Nashville', state: 'TN', service
 const FREE = freeQuestion(INPUT);
 
 const NAMED_TEXT = '1. Zephyr Plumbing\n2. Other Co\n3. Another Co';
-const NAMED_SECOND_TEXT = '1. Other Co\n2. Zephyr Plumbing\n\nOther names to check:\nThird Co';
+// The later list is a bullet list, as AI answers write it (a bare line is not a list item; see V52's test).
+const NAMED_SECOND_TEXT = '1. Other Co\n2. Zephyr Plumbing\n\nOther names to check:\n- Third Co Plumbing has a 5.0 rating from 2 reviews.';
 const NOT_NAMED_TEXT = '1. Other Co\n2. Another Co\n3. Third Co';
 
 function answer(text, { named, position = null, total = 3, competitors = ['Other Co', 'Another Co'], ask, prompt = FREE, provider = 'anthropic', extra = {} } = {}) {
@@ -62,7 +63,7 @@ test('E3: the list and outcome come from the first answer that named the busines
   assert.ok(shown.includes('<p class="hint">From answer 2 of 3</p>'));
   assert.ok(shown.includes('It listed 2 businesses, and yours was 2nd.'));
   assert.ok(shown.includes('Also mentioned:'));
-  assert.ok(shown.includes('<li>Third Co</li>'));
+  assert.ok(shown.includes('<li>Third Co Plumbing</li>'));
 
   // None named it: the first answer is shown.
   const none = render([answer(NOT_NAMED_TEXT, { ask: 1, competitors: ['Other Co'] }), answer(NOT_NAMED_TEXT, { ask: 2 })]);
@@ -140,7 +141,7 @@ test('E3: the answers section counts questions, not answers, and says the first 
     answer(NOT_NAMED_TEXT, { prompt: EXTRA_2 }), chatgpt(EXTRA_2),
   ];
   const html = render(ai, { leadGate: false });
-  assert.ok(html.includes('We asked Claude and ChatGPT the same 3 questions. Claude was asked the first one 3 times. Only Claude&#39;s answers count'));
+  assert.ok(html.includes('We asked Claude and ChatGPT the same 3 questions. Claude was asked the first one 3 times. Only Claude\'s answers count'));
   assert.equal(html.includes('the same 5 questions'), false);
   assert.ok(html.includes('Claude named your business in 2 of its 5 answers.'));
   assert.ok(html.includes('Claude, answer 1 of 3:') && html.includes('Claude, answer 3 of 3:'));
@@ -159,7 +160,7 @@ test('E3: with one answer per question the answers section reads as before', () 
     answer(NOT_NAMED_TEXT, { prompt: EXTRA_2 }), chatgpt(EXTRA_2),
   ];
   const html = render(ai, { leadGate: false });
-  assert.ok(html.includes("We asked Claude and ChatGPT the same 3 questions. Only Claude&#39;s answers count toward your score"));
+  assert.ok(html.includes("We asked Claude and ChatGPT the same 3 questions. Only Claude's answers count toward your score"));
   assert.equal(html.includes('was asked the first one'), false);
   assert.equal(/Claude, answer \d of \d/.test(html), false);
 });

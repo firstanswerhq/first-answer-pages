@@ -222,7 +222,7 @@ Every number on the report is something the Grader measured. It shows no dollar 
 
 **The AI check.** The Grader uses the same assistant provider as the Séance (`SEANCE_PROVIDER`). With the mock provider, every answer is labeled "Demo answer (no AI connected)". In production the mock never answers: the AI part says it isn't connected.
 
-**Lead gate.** With `GRADER_LEAD_GATE=on` (the default) the free part of a report is open to anyone with the link. The full report (every check, the fix for each, and the copy-and-paste fix kit) opens after the visitor sends their name, email and phone. Opening it also runs two more AI questions, so the AI part of the score uses three answers. Set `GRADER_LEAD_GATE=off` to show the full report to everyone, for demos and contest judges. The cookie that opens a report is signed with `GRADER_SECRET`.
+**Lead gate.** With `GRADER_LEAD_GATE=on` (the default) the free part of a report is open to anyone with the link. The full report (every check, the fix for each, and the copy-and-paste fix kit) opens after the visitor sends their name, email and phone. Opening it also asks Claude two more questions, once each. With `GRADE_MAIN_ASKS=3` (the default) the free question is asked up to 3 times, so the AI part of the score uses up to 5 answers (up to 3 with `GRADE_MAIN_ASKS=1`). Set `GRADER_LEAD_GATE=off` to show the full report to everyone, for demos and contest judges. The cookie that opens a report is signed with `GRADER_SECRET`.
 
 **Where leads appear.** Log in as admin, then open `/admin/leads` for the newest 100 leads and `/admin/grades` for the newest 100 grades (with a Delete button for removal requests). Above the list, `/admin/grades` also shows how the protection is set up (the human check and the heads-up emails, on or off) and today's counts: AI calls used and left, checks run, human-check passes and refusals, and refusals by the per-address and per-network limits. With `NOTIFIER=resend`, each new lead is also emailed to `ADMIN_EMAIL` only, never to a business owner.
 
@@ -322,7 +322,7 @@ Limits are per client address unless noted. A refused request gets a 429 and a `
 | Quote requests for one listing | 3 per hour per client per listing |
 | `POST /seance/run` | 10 per hour per client |
 | `POST /seance/run` for one listing | 1 per 10 minutes per listing |
-| `POST /grade` (new grades) | 5 per hour and 6 per day per client (each check can use 3 AI calls, and the whole site shares 60 AI calls a day) |
+| `POST /grade` (new grades) | 5 per hour and 6 per day per client (with the default `GRADE_MAIN_ASKS=3`, each check can use up to 5 Claude calls, plus 1 per second-opinion key for each of its 3 questions, so up to 17 with all four keys set; a reply that needs a resend costs 1 more. The Grader's calls come from `GRADE_AI_CALLS_PER_DAY`, 60 a day by default) |
 | `POST /grade/:id/unlock` | 5 per hour per client |
 | `POST /grade/:id/recheck` | 10 per hour per client, and 1 per 2 minutes per grade |
 | `POST /grade/:id/claim` | the same limit as `POST /rise` (10 per 10 minutes) |
