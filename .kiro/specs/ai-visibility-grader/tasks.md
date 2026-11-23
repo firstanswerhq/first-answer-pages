@@ -493,7 +493,7 @@ Approved to build (after F10, and after the Feature G tasks, see the build order
 
 - [x] F11. Add the main pages to the sitemap
   - Built (Nov 22): the four main pages are listed. `/grade` and `/grade/about` are wired in `routes/sitemap.js` behind `GRADE_PAGES_OPEN = false`, because they still send `noindex, nofollow` and the existing "/grade stays out of sitemap.xml" test in `test/grade-flow.test.js` may change only in F12; F12 turns `GRADE_PAGES_OPEN` on together with the header change and the two test lines the design names
-  - `server/lib/sitemap.js`: `generateSitemap(listings, baseUrl, categories, extraPages = [])`; the default keeps every existing output; `server/routes/sitemap.js` passes `/about`, `/verified`, `/privacy` and `/rise`, plus `/grade` and `/grade/about` when the grader is on, and passes none in demo mode
+  - `server/lib/sitemap.js`: `generateSitemap(listings, baseUrl, categories, extraPages = [])`; the default keeps every existing output; `server/routes/sitemap.js` passes `/about`, `/privacy` and `/rise`, plus `/verified` only when verification is on (`ctx.trust` is present, the verify router's own condition; V89), plus `/grade` and `/grade/about` when the grader is on, and passes none in demo mode
   - Example tests: the sitemap lists the four pages and the two `/grade` pages and still lists no report, draft or admin address; each listed path returns 200 and no noindex header when requested; with the grader off the two `/grade` pages are not listed; in demo mode no extra pages are listed; `test/sitemap.test.js`, `test/production-samples.test.js`, `test/polish.test.js` and `test/approval.test.js` pass unchanged
   - _Requirements: 22.1, 22.4_
 - [ ] F12. Open the plain `/grade` form and `/grade/about` to search engines

@@ -7,8 +7,9 @@ import { generateSitemap } from '../lib/sitemap.js';
 import { publicListing } from '../lib/public-listing.js';
 import { baseUrlFor } from '../lib/base-url.js';
 
-/** The main public pages, each served with status 200 and no noindex. */
+/** The main public pages, in sitemap order. `/verified` is served only while verification is on (V89). */
 export const MAIN_PAGES = Object.freeze(['/about', '/verified', '/privacy', '/rise']);
+const VERIFIED_PAGE = '/verified';
 
 /** The two open pages of the AI Visibility Check. */
 export const GRADE_PAGES = Object.freeze(['/grade', '/grade/about']);
@@ -22,14 +23,18 @@ export const GRADE_PAGES_OPEN = false;
 
 /**
  * The extra paths for the sitemap: none in demo mode (every page is noindex then); otherwise the main pages,
- * plus the two /grade pages when the grader is on and those pages are open.
+ * plus the two /grade pages when the grader is on and those pages are open. `/verified` is listed only when
+ * verification is on, the same condition the verify router uses (`ctx.trust` is present); without it that
+ * page is a 404. Pure: tests pass the flag.
  * @param {object} config
+ * @param {{ verificationOn?: boolean }} [opts]
  * @returns {string[]}
  */
-export function mainPages(config = {}) {
+export function mainPages(config = {}, { verificationOn = false } = {}) {
   if (config.demoMode) return [];
+  const main = MAIN_PAGES.filter(p => p !== VERIFIED_PAGE || verificationOn === true);
   const grade = GRADE_PAGES_OPEN && config.graderEnabled !== false ? GRADE_PAGES : [];
-  return [...MAIN_PAGES, ...grade];
+  return [...main, ...grade];
 }
 
 /**
@@ -46,7 +51,8 @@ export function createSitemapRouter(ctx) {
       ? store.getListings().filter(l => !store.isSeed(l.id))
       : store.getListings();
     res.status(200).type('application/xml').send(generateSitemap(
-      listings.map(publicListing), baseUrlFor(req, config), store.getCategories(), mainPages(config),
+      listings.map(publicListing), baseUrlFor(req, config), store.getCategories(),
+      mainPages(config, { verificationOn: Boolean(ctx.trust) }),
     ));
   });
 

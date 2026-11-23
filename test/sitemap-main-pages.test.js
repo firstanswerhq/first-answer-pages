@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 
 import { createApp } from '../server/app.js';
 import { generateSitemap } from '../server/lib/sitemap.js';
+import { configFromEnv } from '../server/lib/config.js';
 import { MAIN_PAGES, GRADE_PAGES, GRADE_PAGES_OPEN, mainPages } from '../server/routes/sitemap.js';
 
 const REPO_DATA = fileURLToPath(new URL('../data/', import.meta.url));
@@ -56,20 +57,49 @@ test('F11: only plain site paths are used, and they are escaped', () => {
 
 // ---- which pages the route lists ----------------------------------------------------------------------------
 
-test('F11: the route lists the four main pages, none in demo mode, and the /grade pages only once F12 opens them', () => {
-  assert.deepEqual(MAIN_PAGES, ['/about', '/verified', '/privacy', '/rise']);
+const ALWAYS = ['/about', '/privacy', '/rise'];
+const WITH_VERIFIED = ['/about', '/verified', '/privacy', '/rise'];
+
+test('F11 (V89): the route lists /about, /privacy and /rise, /verified only when verification is on, and none in demo mode', () => {
+  assert.deepEqual(MAIN_PAGES, WITH_VERIFIED);
   assert.deepEqual(GRADE_PAGES, ['/grade', '/grade/about']);
   assert.deepEqual(mainPages({ demoMode: true }), []);
-  assert.deepEqual(mainPages({ demoMode: false, graderEnabled: false }), MAIN_PAGES);
-  assert.deepEqual(mainPages({ demoMode: false }), GRADE_PAGES_OPEN ? [...MAIN_PAGES, ...GRADE_PAGES] : MAIN_PAGES);
+  assert.deepEqual(mainPages({ demoMode: true }, { verificationOn: true }), []);
+  assert.deepEqual(mainPages({ demoMode: false, graderEnabled: false }), ALWAYS);
+  assert.deepEqual(mainPages({ demoMode: false, graderEnabled: false }, { verificationOn: true }), WITH_VERIFIED);
+  assert.deepEqual(mainPages({ demoMode: false }), GRADE_PAGES_OPEN ? [...ALWAYS, ...GRADE_PAGES] : ALWAYS);
+  assert.deepEqual(mainPages({ demoMode: false }, { verificationOn: true }), GRADE_PAGES_OPEN ? [...WITH_VERIFIED, ...GRADE_PAGES] : WITH_VERIFIED);
+  assert.deepEqual(mainPages(), ALWAYS, 'off by default');
 });
 
-async function startEnv(config = {}) {
+/** Fake trust providers, built the way test/trust.test.js builds them: nothing here is ever called by a page view. */
+function fakeTrust() {
+  return {
+    payments: {
+      name: 'fake', testMode: false, webhookEnabled: true,
+      async createCheckout() { return { id: 'cs_1', url: 'https://pay.example/cs_1' }; },
+      async getCheckout() { return { paid: false, open: true, url: 'https://pay.example/cs_1' }; },
+      async expireCheckout() { return true; },
+      async cancelIdCheck() { return true; },
+      async createIdCheck() { return { id: 'vs_1', url: 'https://id.example/vs_1' }; },
+      async getIdCheck() { return { status: '', failed: false }; },
+      parseWebhook() { throw new Error('bad_signature'); },
+    },
+    phone: { name: 'fake', async send() {}, async check() { return false; } },
+  };
+}
+
+async function startEnv(config = {}, { trust } = {}) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'fap-sitemap-pages-'));
   for (const name of ['listings.json', 'categories.json']) {
     await fs.copyFile(path.join(REPO_DATA, name), path.join(dir, name));
   }
-  const app = createApp({ dataDir: dir, config: { adminToken: 'sitemap-token', baseUrl: 'http://example.test', ...config } });
+  const base = configFromEnv({ ADMIN_TOKEN: 'sitemap-token', BASE_URL: 'http://example.test' }, { warn: () => {} });
+  const app = createApp({
+    dataDir: dir,
+    config: { ...base, adminToken: 'sitemap-token', baseUrl: 'http://example.test', ...config },
+    ...(trust ? { trust } : {}),
+  });
   const server = app.listen(0, '127.0.0.1');
   await new Promise((resolve, reject) => {
     server.once('listening', resolve);
@@ -85,10 +115,10 @@ async function startEnv(config = {}) {
 
 const sitemap = async env => (await fetch(`${env.base}/sitemap.xml`)).text();
 
-test('F11: the live sitemap lists the four pages, and no report, draft or admin address', async () => {
+test('F11: the live sitemap lists the main pages, and no report, draft or admin address', async () => {
   const env = await startEnv({ demoMode: false, production: false });
   const urls = locs(await sitemap(env));
-  for (const p of MAIN_PAGES) assert.ok(urls.includes(`http://example.test${p}`), p);
+  for (const p of ALWAYS) assert.ok(urls.includes(`http://example.test${p}`), p);
   assert.ok(urls.includes('http://example.test/'));
   assert.equal(urls.some(u => /\/grade\/[A-Za-z0-9_-]{22}/.test(u)), false, 'no report');
   assert.equal(urls.some(u => u.includes('/rise/drafts')), false, 'no draft');
@@ -96,12 +126,11 @@ test('F11: the live sitemap lists the four pages, and no report, draft or admin 
   assert.equal(urls.some(u => u.includes('/api/')), false);
 });
 
-test('F11: each listed page returns 200 and is not marked noindex', async () => {
-  const env = await startEnv({ demoMode: false, production: false });
+/** Every page the sitemap lists (listings and category pages aside) must return 200 and not be noindex. */
+async function assertListedPagesOpen(env) {
   const paths = locs(await sitemap(env))
     .filter(u => !u.includes('/listings/') && !u.includes('?category='))
     .map(u => u.replace('http://example.test', ''));
-  assert.ok(paths.length >= 5);
   for (const p of paths) {
     const res = await fetch(`${env.base}${p}`);
     assert.equal(res.status, 200, p);
@@ -109,13 +138,31 @@ test('F11: each listed page returns 200 and is not marked noindex', async () => 
     const html = await res.text();
     assert.doesNotMatch(html, /<meta name="robots" content="[^"]*noindex/i, p);
   }
+  return paths;
+}
+
+test('V89: with verification off the sitemap has /about, /privacy and /rise and no /verified, and each listed page is open', async () => {
+  const env = await startEnv({ demoMode: false, production: false });
+  const paths = await assertListedPagesOpen(env);
+  for (const p of ['/', ...ALWAYS]) assert.ok(paths.includes(p), p);
+  assert.equal(paths.includes('/verified'), false);
+  assert.equal((await fetch(`${env.base}/verified`)).status, 404, 'the page is not served, so it is not listed');
+});
+
+test('V89: with verification on the sitemap has /verified too, and each listed page is open', async () => {
+  const env = await startEnv({ demoMode: false, production: false }, { trust: fakeTrust() });
+  const paths = await assertListedPagesOpen(env);
+  for (const p of ['/', ...WITH_VERIFIED]) assert.ok(paths.includes(p), p);
+  const urls = locs(await sitemap(env));
+  assert.ok(urls.indexOf('http://example.test/about') < urls.indexOf('http://example.test/verified'));
+  assert.ok(urls.indexOf('http://example.test/verified') < urls.indexOf('http://example.test/privacy'));
 });
 
 test('F11: with the grader off the /grade pages are not listed, and in demo mode no extra pages are', async () => {
   const off = await startEnv({ demoMode: false, production: false, graderEnabled: false });
   const offUrls = locs(await sitemap(off));
   assert.equal(offUrls.some(u => u.includes('/grade')), false);
-  for (const p of MAIN_PAGES) assert.ok(offUrls.includes(`http://example.test${p}`), p);
+  for (const p of ALWAYS) assert.ok(offUrls.includes(`http://example.test${p}`), p);
 
   const demo = await startEnv({ demoMode: true, production: false });
   const demoUrls = locs(await sitemap(demo));
