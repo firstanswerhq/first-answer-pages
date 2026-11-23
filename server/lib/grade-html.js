@@ -23,7 +23,7 @@ import { scoreGrade } from './grade-score.js';
 import { DEFAULT_SITE_NAME } from './config.js';
 import {
   providerLabel, freeQuestion, stepNames, foundOf, isSecondOpinion, schemaHours, readableHours, isPartialScore,
-  HOME_UNREADABLE, WEBSITE_UNREACHED,
+  HOME_UNREADABLE, WEBSITE_UNREACHED, freeAnswersOf, scoredResults,
 } from './grader.js';
 
 const ROBOTS_META = '<meta name="robots" content="noindex, nofollow">';
@@ -447,9 +447,9 @@ function aiFree(grade, { googleLive, requester, now, secondPending = [] }) {
   const prompt = freeQuestion(grade.input);
   // The free answers are the main answers to the first main answer's own question. Nothing here compares with
   // today's wording of the question, so an older Grade asked with older wording still shows its answers.
-  const firstMain = all.find(a => !isSecondOpinion(a));
-  const mainAnswers = firstMain ? all.filter(a => !isSecondOpinion(a) && a.prompt === firstMain.prompt) : [];
-  const first = firstMain;
+  // An answer to one of the two extra questions is never the free answer, even when the free question failed.
+  const mainAnswers = freeAnswersOf(all);
+  const first = mainAnswers[0];
   const seconds = all.filter(a => isSecondOpinion(a) && (a.prompt === (first?.prompt ?? prompt)));
   const mainLabel = grade.aiMain?.label ?? (first ? providerLabel(first.provider) : 'The assistant');
   const parts = [];
@@ -503,7 +503,7 @@ function aiFree(grade, { googleLive, requester, now, secondPending = [] }) {
   const google = googleLive ? `<section class="grade-ai grade-google">
   <h2>What Google's AI says</h2>
   <p>The question we ask: ${h(prompt)}</p>
-  <p class="hint">From Google's Gemini. Google doesn't review or endorse this report. Only you can see the answer. We don't save it. Your score comes from ${h(midSentence(mainLabel))}'s answers only.</p>
+  <p class="hint">From Google's Gemini. Google doesn't review or endorse this report. Only you can see the answer. We don't save it. Your score comes from ${h(midSentence(mainLabel))}'s answers to the first question only.</p>
   ${requester
     ? `<form method="post" action="/grade/${h(grade.id)}/google-live"><button type="submit" class="button">Show Google's live answer</button></form>`
     : '<p class="hint">Google\'s live answer is private to the person who ran the check, so it is not shown here.</p>'}
@@ -650,11 +650,23 @@ function answersSection(grade) {
   const seconds = all.filter(a => isSecondOpinion(a));
   const mainLabel = grade.aiMain?.label ?? (main[0] ? providerLabel(main[0].provider) : 'The assistant');
   const lines = [];
+  // The score counts the free question's answers only (Requirement 26). The main assistant's answers to the two
+  // extra questions are shown, labeled, and have a line of their own.
+  const free = freeAnswersOf(all);
+  const counted = new Set(free);
+  const otherMain = main.filter(a => !counted.has(a));
   // The count is said once, in one form whether or not there are second opinions (V104, V108).
-  if (main.length > 1) {
-    const namedCount = main.filter(a => a.named).length;
+  if (free.length > 1) {
+    const namedCount = free.filter(a => a.named).length;
     // "none of its 5 answers", never "0 of its 5 answers" (V142).
-    lines.push(`<p>${h(mainLabel)} named your business in ${namedCount === 0 ? 'none' : namedCount} of its ${main.length} answers.</p>`);
+    lines.push(`<p>${h(mainLabel)} named your business in ${namedCount === 0 ? 'none' : namedCount} of its ${free.length} answers.</p>`);
+  }
+  if (otherMain.length > 0) {
+    const k = otherMain.length;
+    const n = otherMain.filter(a => a.named).length;
+    lines.push(k === 1
+      ? `<p>On the other question, ${h(mainLabel)} ${n === 1 ? 'named' : 'did not name'} your business. It is not counted toward your score.</p>`
+      : `<p>On the ${k} other questions, ${h(mainLabel)} named your business in ${n === 0 ? 'none' : n} of ${k}. They are not counted toward your score.</p>`);
   }
   if (seconds.length > 0) {
     const others = [...new Set(seconds.map(s => providerLabel(s.provider)))];
@@ -665,12 +677,16 @@ function answersSection(grade) {
       const questions = [...new Set(main.map(a => a.prompt))];
       const q = questions.length;
       // The same count as the lead line, so a failed ask still reads "asked it 3 times" in both places.
-      const firstTimes = timesAsked(main.filter(a => a.prompt === questions[0]));
+      const firstTimes = free.length > 0 ? timesAsked(free) : 1;
       const askedMore = firstTimes > 1
         ? ` ${h(mainLabel)} was asked ${q === 1 ? 'it' : 'the first one'} ${timesText(firstTimes)}.`
         : '';
-      lines.push(`<p>We asked ${h(joinAnd([mainLabel, ...others]))} the same ${q === 1 ? 'question' : `${q} questions`}.${askedMore} Only ${h(midSentence(mainLabel))}'s answers count toward your score, so your score stays steady from check to check. ${others.length === 1 ? `${h(others[0])}'s answers are` : "The other assistants' answers are"} below so you can compare.</p>`);
+      lines.push(`<p>We asked ${h(joinAnd([mainLabel, ...others]))} the same ${q === 1 ? 'question' : `${q} questions`}.${askedMore} ${others.length === 1 ? `${h(others[0])}'s answers are` : "The other assistants' answers are"} below so you can compare.</p>`);
     }
+  }
+  // Said whenever an answer below does not count, so the owner knows the score does not move when this report opens.
+  if (main.length > 0 && (otherMain.length > 0 || seconds.length > 0)) {
+    lines.push(`<p>Your score counts only ${h(midSentence(mainLabel))}'s answers to the first question, so it does not change when you open this report.</p>`);
   }
   const prompts = [...new Set(all.map(a => a.prompt))];
   const items = prompts.map(p => {
@@ -682,6 +698,7 @@ function answersSection(grade) {
     const label = a => {
       const name = h(providerLabel(a.provider));
       if (isSecondOpinion(a)) return `${name} (for comparison only)`;
+      if (!counted.has(a)) return `${name} (not counted toward your score)`;
       return mains.length > 1 ? `${name}, answer ${mains.indexOf(a) + 1} of ${mains.length}` : name;
     };
     return `<li><strong>${h(p)}</strong>${entries.map(a => `
@@ -792,7 +809,10 @@ function recheckBlock(grade, rechecking) {
  *   googleLive?: boolean, requester?: boolean, leadValues?: object, leadErrors?: object,
  * }} [opts] `unlocked` is true when this visitor opened the full report; `leadGate: false` shows it to everyone.
  */
-export function reportPage(grade, opts = {}) {
+export function reportPage(storedGrade, opts = {}) {
+  // One number everywhere (Requirement 26): every part of the page reads the results with the `ai-named` result
+  // worked out from the stored answers by the one rule (the free question's answers only). Nothing is written.
+  const grade = { ...storedGrade, results: scoredResults(storedGrade) };
   const {
     unlocked = false, leadGate = true, contactEmail = '', opened = false,
     googleLive = false, requester = false, leadValues, leadErrors,
@@ -952,7 +972,7 @@ export function aboutPage({ contactEmail = '', userAgent = '', indexable = false
   <ul>
     <li>We ask Claude up to 3 questions about the best businesses of that kind in that city, and the first one up to 3 times, because AI answers change from one time to the next. The questions name the kind of business and the city, never the business name.</li>
     <li>Each answer, with the business name, city and state, is sent to Google's Gemini to help check whether the business is named.</li>
-    <li>When we can, ChatGPT, Gemini, Grok and Perplexity are asked the same questions so the answers can be compared. Only Claude's answers count toward the score.</li>
+    <li>When we can, ChatGPT, Gemini, Grok and Perplexity are asked the same questions so the answers can be compared. Only Claude's answers to the first question count toward the score.</li>
     <li>The person who ran a check can see Google's live answer. It is private to them, and we never save it, score it or share it.</li>
   </ul>
   <h2>Your report</h2>

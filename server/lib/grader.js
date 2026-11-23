@@ -792,9 +792,35 @@ function safeSources(list) {
     .map(s => ({ url: s.url, title: s.title }));
 }
 
-/** The ai-named Check from the main assistant's answers. */
+// ---- which answers are the free question's (owner decision D1, Requirement 26) ---------------------------------
+
+/** How the two extra questions start, in every wording they have had. The free question always starts "Who are the best ". */
+const EXTRA_QUESTION_STARTS = Object.freeze(['I need ', "I'm looking for ", 'Which ']);
+
+/**
+ * True for an answer to one of the two extra questions asked after unlocking: flagged `extra: true` when it was
+ * stored, or (in a Grade stored before the flag) recognized by how its question starts.
+ */
+export function isExtraAnswer(a) {
+  if (!a || typeof a !== 'object') return false;
+  if (a.extra === true) return true;
+  const prompt = typeof a.prompt === 'string' ? a.prompt : '';
+  return EXTRA_QUESTION_STARTS.some(start => prompt.startsWith(start));
+}
+
+/**
+ * The main assistant's answers to the free question: its answers that are not extra-question answers, to the
+ * question of the first of them. The extra questions and every second opinion are never in it. Nothing here
+ * compares with today's wording of the question, so a Grade asked with older wording still has its answers.
+ */
+export function freeAnswersOf(ai) {
+  const main = (Array.isArray(ai) ? ai : []).filter(a => a && typeof a === 'object' && !isSecondOpinion(a) && !isExtraAnswer(a));
+  return main.length === 0 ? [] : main.filter(a => a.prompt === main[0].prompt);
+}
+
+/** The ai-named Check from the main assistant's answers to the free question (the extra questions never count). */
 function aiNamedResult(ai, aiMain) {
-  const main = ai.filter(a => !isSecondOpinion(a));
+  const main = freeAnswersOf(ai);
   if (main.length === 0) {
     const detail = aiMain?.state === 'limit' ? AI_LIMIT_REACHED
       : aiMain?.state === 'not_connected' ? AI_NOT_CONNECTED
@@ -823,11 +849,25 @@ function assemble(websiteResults, ai, aiMain) {
   return all.sort((a, b) => (order.get(a.id) ?? 99) - (order.get(b.id) ?? 99));
 }
 
+/**
+ * A Grade's stored results with the `ai-named` result worked out again from its stored answers by the one rule of
+ * Requirement 26 (the free question's answers only), so a Grade stored while the extra questions counted shows the
+ * same number as a new one. Used for every number a page shows: the report, the admin list, the lead's score and a
+ * Recheck's "before" number. Nothing is written. A Grade with no stored `ai-named` result, or with no main answer at
+ * all, keeps its results as they are.
+ */
+export function scoredResults(grade) {
+  const results = Array.isArray(grade?.results) ? grade.results : [];
+  const ai = Array.isArray(grade?.ai) ? grade.ai.filter(a => a && typeof a === 'object') : [];
+  const hasStored = results.some(r => r && r.id === 'ai-named');
+  if (!hasStored || !ai.some(a => !isSecondOpinion(a))) return results;
+  return results.map(r => (r && r.id === 'ai-named' ? aiNamedResult(ai, grade.aiMain) : r));
+}
+
 /** The Score number a report shows for a Grade (the same rule as `reportPage`), or null. */
 export function shownScore(grade) {
-  const results = Array.isArray(grade?.results)
-    ? grade.results.filter(r => r && typeof r === 'object' && typeof r.id === 'string')
-    : [];
+  const results = scoredResults(grade)
+    .filter(r => r && typeof r === 'object' && typeof r.id === 'string');
   const stored = Number.isInteger(grade?.score?.score) ? grade.score.score : null;
   if (results.length === 0) return stored;
   try {
@@ -1559,9 +1599,9 @@ export function createGrader({
         await grades().update(list => {
           const g = list.find(x => x && x.id === id);
           if (!g) return;
-          g.ai = [...g.ai, ...entries];
-          // The free question may have failed or hit the limit; once the main assistant answers, say so.
-          if (entries.some(e => !isSecondOpinion(e)) && g.aiMain) g.aiMain.state = 'ok';
+          // Flagged, so nothing ever mistakes an extra-question answer for the free question's (Requirement 26).
+          // They are shown in the full report and never counted, so the score is the same before and after.
+          g.ai = [...g.ai, ...entries.map(e => ({ ...e, extra: true }))];
           g.results = assemble(g.results, g.ai, g.aiMain);
           g.score = scoreOf(g.results);
         });
@@ -1737,7 +1777,8 @@ export function createGrader({
           // A partial score (no AI answer) is never put beside a full one, and neither is a score from before
           // the reviews-visible Check existed: the points changed then, so the two would not compare.
           const hadReviewsCheck = Array.isArray(g.results) && g.results.some(r => r && r.id === 'reviews-visible');
-          g.previousScore = isPartialScore(g) || !hadReviewsCheck ? null : (g.score?.score ?? null);
+          // The "before" number is the one the report showed, worked out by the same rule (Requirement 26).
+          g.previousScore = isPartialScore({ ...g, results: scoredResults(g) }) || !hadReviewsCheck ? null : shownScore(g);
           g.facts = storedFacts(web.facts, web.found);
           g.found = web.found;
           g.results = assemble(web.results, g.ai, g.aiMain);

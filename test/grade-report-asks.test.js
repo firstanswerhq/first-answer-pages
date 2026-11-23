@@ -142,9 +142,10 @@ test('E3: the answers section counts questions, not answers, and says the first 
     answer(NOT_NAMED_TEXT, { prompt: EXTRA_2 }), chatgpt(EXTRA_2),
   ];
   const html = render(ai, { leadGate: false });
-  assert.ok(html.includes('We asked Claude and ChatGPT the same 3 questions. Claude was asked the first one 3 times. Only Claude\'s answers count'));
+  assert.ok(html.includes('We asked Claude and ChatGPT the same 3 questions. Claude was asked the first one 3 times. ChatGPT\'s answers are below so you can compare.'));
   assert.equal(html.includes('the same 5 questions'), false);
-  assert.ok(html.includes('Claude named your business in 2 of its 5 answers.'));
+  assert.ok(html.includes('Claude named your business in 2 of its 3 answers.'));
+  assert.ok(html.includes('On the 2 other questions, Claude named your business in none of 2. They are not counted toward your score.'));
   assert.equal(html.includes('Named in 2 of 5 answers.'), false, 'the count is said once (V104)');
   assert.ok(html.includes('Claude, answer 1 of 3:') && html.includes('Claude, answer 3 of 3:'));
   assert.ok(html.includes('ChatGPT (for comparison only):'));
@@ -162,7 +163,7 @@ test('E3: with one answer per question the answers section reads as before', () 
     answer(NOT_NAMED_TEXT, { prompt: EXTRA_2 }), chatgpt(EXTRA_2),
   ];
   const html = render(ai, { leadGate: false });
-  assert.ok(html.includes("We asked Claude and ChatGPT the same 3 questions. Only Claude's answers count toward your score"));
+  assert.ok(html.includes("We asked Claude and ChatGPT the same 3 questions. ChatGPT's answers are below so you can compare."));
   assert.equal(html.includes('was asked the first one'), false);
   assert.equal(/Claude, answer \d of \d/.test(html), false);
 });

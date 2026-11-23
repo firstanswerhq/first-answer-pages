@@ -462,11 +462,11 @@ Node.js 22, plain Express, plain JavaScript ES modules, JSON files under `DATA_D
 
 #### Acceptance Criteria
 
-1. THE `ai-named` Check (Requirement 8) SHALL be scored from the main assistant's answers to the free question only: the answers whose question is the same as the first main answer's question (the rule of Requirement 23.5). THE two extra questions after unlocking and every second opinion SHALL still be asked, stored and shown in the full report, and SHALL NOT count toward the score.
+1. THE `ai-named` Check (Requirement 8) SHALL be scored from the main assistant's answers to the free question only: the answers whose question is the same as the first main answer's question (the rule of Requirement 23.5). THE two extra questions after unlocking and every second opinion SHALL still be asked, stored and shown in the full report, and SHALL NOT count toward the score. AN answer to an extra question SHALL never be taken for the free question's answer, even when the free question failed or hit the daily limit and the extras were answered (each new extra answer is stored flagged `extra: true`; an older Grade's is recognized by how its question starts): the AI part is then not checked and the score partial, with its true reason.
 2. A Grade's score SHALL be the same before and after the contact form, and after the two extra questions finish. ONE rule SHALL give the report's headline, the area lines, the Check rows, "N of M checks need work", the admin Grades list, the lead's stored score and the "before" number of a Recheck, so no page shows two numbers.
 3. THE full report SHALL say which answers count, in plain words: "Your score counts only Claude's answers to the first question, so it does not change when you open this report." (the assistant's name as shown). EACH answer that does not count SHALL be labeled: a second opinion "(for comparison only)", as today; the main assistant's answer to an extra question "(not counted toward your score)".
 4. EVERY count line in the full report SHALL count the free question's answers only ("Claude named your business in 2 of its 3 answers."), so it agrees with the lead line at the top. THE extra questions SHALL have their own line, for example "On the 2 other questions, Claude named your business in 1 of 2. They are not counted toward your score." (or "in none of 2").
-5. A Grade stored before this requirement, whose extra questions were counted, SHALL show a score worked out the same way from its stored answers (some go up, and some go down: the owner accepted this). WHEN a stored Grade has no main answer to the free question, its stored result is used as it is. A repeat check that carries answers (Requirement 14.3) SHALL never count carried extra-question answers either.
+5. A Grade stored before this requirement, whose extra questions were counted, SHALL show a score worked out the same way from its stored answers (some go up, and some go down, when only the extra answers named the business, so that Check turns from pass to fail: the owner's rule, accepted). WHEN a stored Grade has no main answer to the free question, its stored result is used as it is. A repeat check that carries answers (Requirement 14.3) SHALL never count carried extra-question answers either.
 6. THE wording SHALL NOT say or imply that a score, a listing or a fix will make an AI assistant name the business.
 
 ### Requirement 27: "Partly" Instead of "Pass" on a Weak AI Result (D2)
@@ -478,7 +478,7 @@ Node.js 22, plain Express, plain JavaScript ES modules, JSON files under `DATA_D
 #### Acceptance Criteria
 
 1. THE `ai-named` Check row SHALL show "Pass" only WHEN every counted answer named the business (all 30 points), "Partly" WHEN some did (the points shown exactly as the rule of Requirement 8.1 gives them, for example "8 of 30 points"), and "Needs work" WHEN none did. THE row SHALL carry its own style (a `partly` class with its own color and icon) and the word, so it reads without color, and SHALL not scroll sideways at 390px.
-2. THIS is a display label only. THE points, THE Score, the stored result (`pass` or `fail`), "N of M checks need work", "Fix these first" and the admin pages SHALL NOT change. A result stored without `earned` SHALL show "Pass" as before.
+2. THIS is a display label only. THE points, THE Score, the stored result (`pass` or `fail`), "N of M checks need work", "Fix these first" and the admin pages SHALL NOT change. A result stored without `earned` SHALL show "Pass" as before. UNDER "Partly" the row SHALL show the stored detail without its leading "Yes. " ("Claude named your business in 1 of 3 answers."); the stored text stays.
 
 ### Requirement 28: The Home Page Says Why This Matters (D3)
 
@@ -489,7 +489,7 @@ Node.js 22, plain Express, plain JavaScript ES modules, JSON files under `DATA_D
 #### Acceptance Criteria
 
 1. THE home page SHALL say, under the headline and tagline: "People now ask AI who to call. List your business free so AI can find it."
-2. WHEN the grader is on, THE home page SHALL show a button "Check if AI can find your business" linking to `/grade`, right under the search form, as large and as clear as the search button, in place of the small text link. WHEN the grader is off, neither the button nor any `/grade` link SHALL be shown.
+2. WHEN the grader is on, THE home page SHALL show a button "Check if AI can find your business" linking to `/grade`, right under the search form, as large and as clear as the search button, in place of the small text link. WHEN the grader is off, neither the button nor any `/grade` link SHALL be shown anywhere on the home page, the footer included. THE sentence of criterion 1 SHALL be shown whether the grader is on or off.
 3. THE page SHALL keep the classic phone-book look, work with JavaScript off, and not scroll sideways at 390px.
 4. THE wording SHALL NOT promise that a listing will make an AI assistant name the business.
 
@@ -504,6 +504,7 @@ Node.js 22, plain Express, plain JavaScript ES modules, JSON files under `DATA_D
 1. THE claim (Requirement 11.3) SHALL leave `services` empty: the draft form SHALL show the Services box empty and marked as needing the owner's input (it is listed in `missingFields`, as every missing required field already is).
 2. THE claim SHALL pre-fill the hours it found in the draft form's own style, "7am-6pm" and "8:30am-5pm", not "07:00-18:00". A value that is not a 24-hour time range SHALL be kept as it was found.
 3. EVERYTHING else the claim fills (name, category, phone, service area, city, state, address, reviews link, website) and every rule about review and approval SHALL stay as they are.
+4. THE listing's business label (`schema.js` `parseHoursRange`) SHALL read hours written "HH:MM-HH:MM" (24-hour) as well as the form's own style, so listings already published from a report, which carry hours like "07:00-18:00", get their opening hours in their JSON-LD too (V155).
 
 ### Requirement 30: The Business Label Check Knows Every Local-Business Type (D5)
 
@@ -515,5 +516,5 @@ Node.js 22, plain Express, plain JavaScript ES modules, JSON files under `DATA_D
 
 1. THE `business-labeled` Check (Requirement 6.3) SHALL treat a JSON-LD block as describing the business WHEN one of its types is `LocalBusiness`, any schema.org subtype of it through any chain of parent types (for example `AutoWash`, `NailSalon`, `VeterinaryCare`, `ExerciseGym`, `Hotel`, `Florist`, `Pharmacy`, `AccountingService`), `CleaningService` (kept as today), or `Organization` together with a telephone and an address (as today). THE Check still passes only WHEN the block has the business's name and telephone.
 2. THE list SHALL be fixed in the code (a file of type names), built by hand from the schema.org type tree, with the schema.org release it was taken from written at the top of the file. THE Grader SHALL NOT fetch anything to build or refresh it.
-3. A type that is not on the list ("MadeUpBusinessType", `Person`, `WebSite`) SHALL still fail.
+3. A type that is not on the list ("MadeUpBusinessType", `Person`, `WebSite`) SHALL still fail. A leading `http://schema.org/`, `https://schema.org/` or `schema:` (any case) SHALL be removed from a type before the lookup. `Organization` subtypes that are not local businesses (`Corporation`, `NGO`) SHALL count like `Organization` (only with a telephone and an address), and `OnlineBusiness` and `OnlineStore` SHALL never count as local (V156).
 4. SITES with these types gain the Check's 8 points when the Check is next run (a new check, or "Check again"); the owner approved the higher scores.

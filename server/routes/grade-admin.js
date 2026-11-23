@@ -11,7 +11,7 @@
 
 import { layout, escapeHtml } from '../lib/html.js';
 import { formatRunTime } from '../lib/seance-html.js';
-import { isPartialScore } from '../lib/grader.js';
+import { isPartialScore, scoredResults } from '../lib/grader.js';
 import { scoreGrade } from '../lib/grade-score.js';
 
 const NOTES = Object.freeze({
@@ -93,9 +93,11 @@ export function mountGradeAdmin(router, ctx, { adminNav, wantsHtml, form }) {
         // A score without the AI part is marked "partial" next to the number.
         // Worked out from the stored results with the current points, like the report (never the stored Score).
         // A Grade stored with no results at all has nothing to work out from, so it keeps its stored number.
-        const current = Array.isArray(g.results) && g.results.length > 0 ? scoreGrade(g.results).score : g.score?.score;
+        // The `ai-named` result is worked out by the same rule as the report (the free question's answers only).
+        const view = { ...g, results: scoredResults(g) };
+        const current = view.results.length > 0 ? scoreGrade(view.results).score : g.score?.score;
         const score = Number.isInteger(current)
-          ? `${current}${isPartialScore(g) ? ' (partial)' : ''}`
+          ? `${current}${isPartialScore(view) ? ' (partial)' : ''}`
           : 'not scored';
         const id = String(g.id ?? '');
         const safeId = encodeURIComponent(id);
