@@ -664,6 +664,11 @@ export function createGrader({
     : DEFAULT_MAX_RUNNING;
   const waiting = []; // Grade_Ids in line
 
+  // GRADE_MAIN_ASKS: 1 to 3; a missing or odd value counts as 3 (config.js has already checked a set value).
+  const mainAsks = () => (Number.isInteger(config.gradeMainAsks) && config.gradeMainAsks >= 1 && config.gradeMainAsks <= 3
+    ? config.gradeMainAsks
+    : 3);
+
   const watchGuard = () => {
     try {
       guard?.watch?.();
@@ -791,7 +796,7 @@ export function createGrader({
    * `existing` holds answers already on the Grade (carried over or asked earlier).
    * @returns {Promise<{ entries: object[], mainState: 'ok'|'limit'|'failed'|'not_connected'|'off' }>}
    */
-  async function askQuestion({ input, prompt, existing, onSecond, gradeId }) {
+  async function askQuestion({ input, prompt, existing, onSecond, gradeId, asks = 1 }) {
     const main = assistantProvider;
     const mainName = main?.name ?? 'unknown';
     const isMock = mainName === 'mock';
@@ -803,6 +808,13 @@ export function createGrader({
       if (counted) watchGuard();
       return counted;
     };
+    // More than 12 of the Grader's calls left: the reserve that keeps the day's last calls for other owners.
+    const aboveReserve = () => aiBudget.peek({ kind: 'grade' }).remaining > SECOND_OPINION_RESERVE;
+
+    // How many times the main assistant is asked this question (Feature E). The demo assistant gives the same
+    // answer to the same prompt, so it is asked once.
+    const wanted = Number.isInteger(asks) && asks >= 1 ? Math.min(asks, 3) : 1;
+    const planned = isMock ? 1 : wanted;
 
     let mainState = 'ok';
     const plans = [];
@@ -810,7 +822,15 @@ export function createGrader({
     else if (have(mainName)) mainState = 'ok';
     else if (isMock && config.production === true) mainState = 'not_connected';
     else if (!isMock && !consume()) mainState = 'limit';
-    else plans.push({ assistant: main, second: false });
+    else {
+      // Ask 1 as today; asks 2 and up only while more than 12 calls remain, each charged when it is planned.
+      plans.push({ assistant: main, second: false, ask: 1 });
+      for (let k = 2; k <= planned; k += 1) {
+        if (!aboveReserve() || !consume()) break;
+        plans.push({ assistant: main, second: false, ask: k });
+      }
+    }
+    const asked = plans.length;
 
     // Second opinions: never behind the demo assistant, never on the day's last calls,
     // and not at all for a while after three failures in a row.
@@ -825,13 +845,24 @@ export function createGrader({
 
     // One retry after a 429 (rate limited) or 529 (overloaded): wait what the provider asks (at most 20
     // seconds, 5 when it says nothing), inside the same deadline. The retry is not charged again.
-    const askWithRetry = async (assistant, second, signal) => {
+    const askWithRetry = async (plan, signal) => {
+      const { assistant, second } = plan;
+      // A resend inside an ask (the reply paused mid-search) is one more paid call. Ask 1 keeps today's rule;
+      // asks 2 and up resend only while more than 12 calls remain, and when the resend is refused the ask is
+      // marked so its paused preamble is dropped rather than scored as "not named".
+      const consumeExtra = (plan.ask ?? 1) <= 1
+        ? consume
+        : () => {
+          if (aboveReserve() && consume()) return true;
+          plan.resendRefused = true;
+          return false;
+        };
       const ask = () => assistant.ask({
         prompt,
         signal,
         category,
         businessName: input.name,
-        ...(second ? {} : { consumeExtra: consume }),
+        ...(second ? {} : { consumeExtra }),
       });
       try {
         return await ask();
@@ -846,18 +877,26 @@ export function createGrader({
       }
     };
 
-    const run = async ({ assistant, second }) => {
+    const run = async plan => {
+      const { assistant, second } = plan;
       const started = clock.now();
       try {
         const raw = await withDeadline(
-          signal => askWithRetry(assistant, second, signal),
+          signal => askWithRetry(plan, signal),
           second ? secondOpinionTimeoutMs : AI_TIMEOUT_MS,
         );
+        // An ask (2 and up) whose resend was refused counts as not run: nothing is kept from it.
+        if (!second && plan.resendRefused) {
+          log('ai-ask-dropped reason=resend-refused');
+          return { entry: null, second, name: assistant.name, dropped: true };
+        }
         const result = typeof raw === 'string' ? { answer: raw } : raw;
         if (!result || typeof result.answer !== 'string' || result.answer.trim() === '') throw coded('unparseable');
         const entry = await buildEntry({
           assistant, second, prompt, input, result, ms: Math.max(0, clock.now() - started),
         });
+        // Which ask this was, only when more than one was planned (one ask stays exactly as before).
+        if (!second && planned > 1) entry.ask = plan.ask;
         if (second) noteSecond(assistant.name, true);
         return { entry, second, name: assistant.name };
       } catch (err) {
@@ -874,7 +913,7 @@ export function createGrader({
 
     // Second opinions run at the same time as the main answer, but nothing waits for them: each one is
     // handed to `onSecond` when it ends (or when its 45 seconds are up). Without `onSecond` they are awaited.
-    const mainPlan = plans.find(p => !p.second);
+    const mainPlans = plans.filter(p => !p.second);
     // Remember which second opinions are still answering, so an open report can say so and refresh.
     for (const plan of plans) if (plan.second && gradeId) trackSecond(gradeId, plan.assistant.name, true);
     const secondRuns = plans.filter(p => p.second).map(async plan => {
@@ -891,13 +930,14 @@ export function createGrader({
     });
     secondRuns.forEach(p => p.catch(() => {}));
 
-    const mainOutcome = mainPlan ? await run(mainPlan) : null;
-    if (mainOutcome && !mainOutcome.entry) mainState = 'failed';
-    const entries = mainOutcome?.entry ? [mainOutcome.entry] : [];
+    // All planned asks start together, each with its own deadline and its own retry.
+    const mainOutcomes = await Promise.all(mainPlans.map(plan => run(plan)));
+    const entries = mainOutcomes.filter(o => o.entry).map(o => o.entry);
+    if (mainPlans.length > 0 && entries.length === 0) mainState = 'failed';
     if (typeof onSecond !== 'function') {
       for (const o of await Promise.all(secondRuns)) if (o.entry) entries.push(o.entry);
     }
-    return { entries, mainState };
+    return { entries, mainState, planned, asked };
   }
 
   // Grade_Id -> (assistant name -> how many of its answers are still coming). Counted per answer, so a
@@ -1088,10 +1128,11 @@ export function createGrader({
       const prompt = freeQuestion(input);
       let outcome;
       try {
-        outcome = await askQuestion({ input, prompt, existing: grade.ai, onSecond, gradeId: id });
+        // The free question is asked GRADE_MAIN_ASKS times (1 to 3; a missing value counts as 3).
+        outcome = await askQuestion({ input, prompt, existing: grade.ai, onSecond, gradeId: id, asks: mainAsks() });
       } catch {
         log(`ai-step-failed id=${id}`);
-        outcome = { entries: [], mainState: 'failed' };
+        outcome = { entries: [], mainState: 'failed', planned: 1, asked: 0 };
       }
       const ai = [...(await carried), ...outcome.entries];
       const main = ai.filter(a => !isSecondOpinion(a) && a.prompt === prompt);
@@ -1106,6 +1147,14 @@ export function createGrader({
         finding = "AI didn't answer this time";
       } else if (reused) {
         finding = 'Used an answer from earlier this week';
+      } else if (outcome.planned > 1) {
+        // More than one ask planned: say how many were asked and how many answered, and when the allowance cut it short.
+        const label = providerLabel(assistantProvider?.name);
+        const answered = outcome.entries.filter(e => !isSecondOpinion(e)).length;
+        const times = n => `${n} ${n === 1 ? 'time' : 'times'}`;
+        finding = outcome.asked < outcome.planned
+          ? `Asked ${label} ${times(outcome.asked)} (today's AI limit was reached); ${answered} answered.`
+          : `Asked ${label} ${times(outcome.asked)}; ${answered} answered.`;
       } else {
         const first = main[0];
         finding = first && first.total > 0
@@ -1189,10 +1238,13 @@ export function createGrader({
   // ---- starting a Grade -----------------------------------------------------------------------------------------
 
   /** Answers from a Grade of the same business in the last 7 days, for assistants that are still switched on. */
-  async function reusableAnswers(key) {
+  async function reusableAnswers(key, input) {
     const list = await grades().read();
     if (!Array.isArray(list)) return [];
     const names = new Set([assistantProvider?.name, ...extras.map(e => e.name)]);
+    // Only answers to this Grade's own questions, word for word: an answer to a differently worded question
+    // would be counted beside the new asks and stop Claude being asked again.
+    const prompts = input ? new Set([freeQuestion(input), ...extraQuestions(input)]) : null;
     const cutoff = clock.now() - REUSE_WINDOW_MS;
     const earlier = list
       .filter(g => g && g.status === 'done' && g.key === key && Array.isArray(g.ai) && g.ai.length > 0
@@ -1202,6 +1254,7 @@ export function createGrader({
     const copies = [];
     for (const a of earlier.ai) {
       if (!names.has(a.provider)) continue;
+      if (prompts && !prompts.has(a.prompt)) continue;
       copies.push({ ...structuredClone(a), reusedFrom: a.reusedFrom || a.at });
     }
     return copies;
@@ -1243,7 +1296,7 @@ export function createGrader({
     if (!checked.ok) throw new TypeError('Invalid grade input');
     const { input } = checked;
     const key = reuseKey(input);
-    const copies = await reusableAnswers(key);
+    const copies = await reusableAnswers(key, input);
     const id = newId();
     const created = {
       id,
