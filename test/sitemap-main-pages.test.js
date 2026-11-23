@@ -55,6 +55,12 @@ test('F11: only plain site paths are used, and they are escaped', () => {
   assert.equal(xml.includes('evil.example'), false);
 });
 
+test('M1: a path holding a control character is refused', () => {
+  const xml = generateSitemap([], BASE, categories, ['/about\u0000', '/a\u0007b', '/x\u007f', '/y\u0085', '/privacy']);
+  assert.deepEqual(locs(xml), [`${BASE}/`, `${BASE}/privacy`]);
+  assert.equal(/[\u0000-\u001f\u007f-\u009f]/.test(xml.replace(/\n/g, '')), false);
+});
+
 // ---- which pages the route lists ----------------------------------------------------------------------------
 
 const ALWAYS = ['/about', '/privacy', '/rise'];
@@ -69,7 +75,8 @@ test('F11 (V89): the route lists /about, /privacy and /rise, /verified only when
   assert.deepEqual(mainPages({ demoMode: false, graderEnabled: false }, { verificationOn: true }), WITH_VERIFIED);
   assert.deepEqual(mainPages({ demoMode: false }), GRADE_PAGES_OPEN ? [...ALWAYS, ...GRADE_PAGES] : ALWAYS);
   assert.deepEqual(mainPages({ demoMode: false }, { verificationOn: true }), GRADE_PAGES_OPEN ? [...WITH_VERIFIED, ...GRADE_PAGES] : WITH_VERIFIED);
-  assert.deepEqual(mainPages(), ALWAYS, 'off by default');
+  // No config: verification counts as off, and the grader counts as on (it is off only when graderEnabled is false).
+  assert.deepEqual(mainPages(), GRADE_PAGES_OPEN ? [...ALWAYS, ...GRADE_PAGES] : ALWAYS, 'verification off, grader on by default');
 });
 
 /** Fake trust providers, built the way test/trust.test.js builds them: nothing here is ever called by a page view. */

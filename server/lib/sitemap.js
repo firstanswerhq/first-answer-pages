@@ -31,7 +31,8 @@ export function generateSitemap(listings, baseUrl, categories, extraPages = []) 
       .map(c => `${baseUrl}/?category=${encodeURIComponent(c.slug)}`)
     : [];
   const pages = [...new Set((Array.isArray(extraPages) ? extraPages : [])
-    .filter(p => typeof p === 'string' && /^\/(?!\/)[^\s]*$/.test(p) && p !== '/'))];
+    // A plain site path: one leading '/', no whitespace and no control character (M1).
+    .filter(p => typeof p === 'string' && /^\/(?!\/)[^\s\p{Cc}]*$/u.test(p) && p !== '/'))];
   const urls = [
     `${baseUrl}/`,
     ...pages.map(p => `${baseUrl}${p}`),
