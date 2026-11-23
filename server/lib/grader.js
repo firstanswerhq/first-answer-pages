@@ -1146,15 +1146,19 @@ export function createGrader({
         state = 'failed';
         finding = "AI didn't answer this time";
       } else if (reused) {
-        finding = 'Used an answer from earlier this week';
+        // One carried answer keeps today's sentence; more than one says so (V103).
+        finding = main.length > 1
+          ? `Used ${providerLabel(main[0].provider)}'s answers from earlier this week.`
+          : 'Used an answer from earlier this week';
       } else if (outcome.planned > 1) {
         // More than one ask planned: say how many were asked and how many answered, and when the allowance cut it short.
         const label = providerLabel(assistantProvider?.name);
         const answered = outcome.entries.filter(e => !isSecondOpinion(e)).length;
         const times = n => `${n} ${n === 1 ? 'time' : 'times'}`;
+        const answers = n => `${n} ${n === 1 ? 'answer' : 'answers'}`;
         finding = outcome.asked < outcome.planned
-          ? `Asked ${label} ${times(outcome.asked)} (today's AI limit was reached); ${answered} answered.`
-          : `Asked ${label} ${times(outcome.asked)}; ${answered} answered.`;
+          ? `Asked ${label} ${times(outcome.asked)}, not ${outcome.planned}, because we reached today's limit. Got ${answers(answered)}.`
+          : `Asked ${label} ${times(outcome.asked)} and got ${answers(answered)}.`;
       } else {
         const first = main[0];
         finding = first && first.total > 0

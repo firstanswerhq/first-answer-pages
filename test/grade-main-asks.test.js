@@ -133,7 +133,7 @@ test('E2: one ask that fails is simply missing: "1 of 2 answers" and 15 of 30, w
   assert.equal(mainAnswers(grade).length, 2);
   assert.equal(aiNamed(grade).earned, 15);
   assert.equal(aiNamed(grade).detail, 'Yes. Claude named your business in 1 of 2 answers.');
-  assert.equal(aiFinding(grade), 'Asked Claude 3 times; 2 answered.');
+  assert.equal(aiFinding(grade), 'Asked Claude 3 times and got 2 answers.');
 });
 
 test('E2: when all three asks fail the AI part is not checked and the score is partial', async () => {
@@ -195,7 +195,7 @@ test('E2: with 13 calls left 1 ask is made', async () => {
   const grade = await runGrade(env);
   assert.equal(claude.calls.length, 1);
   assert.equal(used(env), 1);
-  assert.equal(aiFinding(grade), "Asked Claude 1 time (today's AI limit was reached); 1 answered.");
+  assert.equal(aiFinding(grade), "Asked Claude 1 time, not 3, because we reached today's limit. Got 1 answer.");
 });
 
 test('E2: with 14 calls left 2 asks are made, and the finding says the limit cut it short', async () => {
@@ -204,7 +204,7 @@ test('E2: with 14 calls left 2 asks are made, and the finding says the limit cut
   const grade = await runGrade(env);
   assert.equal(claude.calls.length, 2);
   assert.equal(used(env), 2);
-  assert.equal(aiFinding(grade), "Asked Claude 2 times (today's AI limit was reached); 2 answered.");
+  assert.equal(aiFinding(grade), "Asked Claude 2 times, not 3, because we reached today's limit. Got 2 answers.");
 });
 
 test('E2: with 15 calls left 3 asks are made', async () => {
@@ -212,7 +212,7 @@ test('E2: with 15 calls left 3 asks are made', async () => {
   const env = await startEnv({ assistant: claude, gradeLeft: 15 });
   const grade = await runGrade(env);
   assert.equal(claude.calls.length, 3);
-  assert.equal(aiFinding(grade), 'Asked Claude 3 times; 3 answered.');
+  assert.equal(aiFinding(grade), 'Asked Claude 3 times and got 3 answers.');
 });
 
 test('E2: with more than 15 calls left 3 asks are made, never more', async () => {
@@ -257,7 +257,7 @@ test('E2: with 12 or fewer left, ask 1 resends as today but a refused resend dro
   // The dropped asks do not lower the score: named in 1 of 1.
   assert.equal(aiNamed(grade).earned, 30);
   assert.equal(aiNamed(grade).detail, 'Yes. Claude named your business.');
-  assert.equal(aiFinding(grade), 'Asked Claude 3 times; 1 answered.');
+  assert.equal(aiFinding(grade), 'Asked Claude 3 times and got 1 answer.');
 });
 
 test('E2: a refused resend on ask 1 keeps today\'s rule (the answer it has is used)', async () => {
@@ -331,8 +331,17 @@ test('E2: carried-over answers to the same question mean no new asks', async () 
   const second = await runGrade(env);
   assert.equal(claude.calls.length, 3, 'Claude is not asked again');
   assert.equal(mainAnswers(second).length, 3);
-  assert.equal(aiFinding(second), 'Used an answer from earlier this week');
+  assert.equal(aiFinding(second), "Used Claude's answers from earlier this week.");
   assert.equal(aiNamed(second).detail, 'Yes. Claude named your business in 2 of 3 answers.');
+});
+
+test('V103: one carried answer keeps today\'s sentence', async () => {
+  const claude = fakeClaude([NAMED]);
+  const env = await startEnv({ assistant: claude, asks: 1 });
+  await runGrade(env);
+  const second = await runGrade(env);
+  assert.equal(claude.calls.length, 1, 'Claude is not asked again');
+  assert.equal(aiFinding(second), 'Used an answer from earlier this week');
 });
 
 test('E2: answers to a differently worded question are not carried over, and only the new asks count', async () => {

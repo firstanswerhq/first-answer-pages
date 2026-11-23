@@ -364,7 +364,9 @@ const timesText = n => `${n} ${n === 1 ? 'time' : 'times'}`;
  * ask number shows an earlier ask failed ("We just asked Claude 3 times" with answers 2 and 3 back).
  */
 function timesAsked(answers) {
-  const highest = Math.max(0, ...answers.map(a => (Number.isInteger(a.ask) ? a.ask : 0)));
+  // Only ask numbers 1 to 3 count; a hand-edited 99, 0, -1, 2.5 or "3" is ignored (V106).
+  const validAsk = a => (Number.isInteger(a.ask) && a.ask >= 1 && a.ask <= 3 ? a.ask : 0);
+  const highest = Math.max(0, ...answers.map(validAsk));
   return Math.max(answers.length, highest);
 }
 
@@ -379,21 +381,33 @@ function severalAnswers(answers, input, now) {
   const subject = providerLabel(firstAnswer.provider);
   const total = answers.length;
   const named = answers.filter(a => a.named).length;
-  const times = timesText(timesAsked(answers));
+  const n = timesAsked(answers);
+  const times = timesText(n);
+  // Fewer answers than asks: say how many came back, and count against those (V100).
+  const short = total < n;
+  const got = short ? ` and got ${total} answers` : '';
   // Fresh answers say "just"; carried-over or older ones say when they were asked.
   const old = answers.some(a => a.reusedFrom)
     || (Number.isFinite(now) && Number.isFinite(Date.parse(firstAnswer.at)) && now - Date.parse(firstAnswer.at) > JUST_ASKED_MS);
   const asked = old
-    ? `We asked ${h(label)} ${times} on ${h(whenText(firstAnswer.reusedFrom || firstAnswer.at))}.`
-    : `We just asked ${h(label)} ${times}.`;
-  const count = named === 0 ? `in none of ${total} answers` : `in ${named} of ${total} answers`;
+    ? `We asked ${h(label)} ${times} on ${h(whenText(firstAnswer.reusedFrom || firstAnswer.at))}${got}.`
+    : `We just asked ${h(label)} ${times}${got}.`;
+  const count = short
+    ? (named === 0 ? `in none of the ${total}` : `in ${named} of the ${total}`)
+    : (named === 0 ? `in none of ${total} answers` : `in ${named} of ${total} answers`);
   const shownIndex = Math.max(0, answers.findIndex(a => a.named));
   const shown = answers[shownIndex];
+  // Which answer the list is from, numbered among the answers that came back (V102).
+  const from = shown.named
+    ? `This list is from answer ${shownIndex + 1}, the first one that named you.`
+    : `This list is from answer ${shownIndex + 1}.`;
   const demo = firstAnswer.provider === 'mock' ? '<p class="hint">Demo answer (no AI connected)</p>\n  ' : '';
   const blocks = answers.map((a, i) => `<p>Answer ${i + 1}</p><blockquote class="grade-answer seance-answer">${h(readableAnswer(a.answer ?? ''))}</blockquote>`).join('');
   return [
     `<p>${asked} ${h(subject)} named your business ${count}.</p>`,
-    `<p class="hint">From answer ${shownIndex + 1} of ${total}</p>`,
+    // Why we ask more than once (V101). The Grade stores the asks made, so the number is the times asked.
+    `<p class="hint">AI answers change from one time to the next, so we ask the same question ${times}.</p>`,
+    `<p class="hint">${from}</p>`,
     `<p>${h(outcome(shown, input))}</p>`,
     competitorList(shown, input),
     `${demo}<details><summary>${h(`See ${subject}'s answers`)}</summary>${blocks}</details>`,
@@ -603,7 +617,8 @@ function answersSection(grade) {
   const seconds = all.filter(a => isSecondOpinion(a));
   const mainLabel = grade.aiMain?.label ?? (main[0] ? providerLabel(main[0].provider) : 'The assistant');
   const lines = [];
-  if (main.length > 1) lines.push(`<p><strong>Named in ${main.filter(a => a.named).length} of ${main.length} answers.</strong></p>`);
+  // The count is said once (V104): the full sentence below when there are second opinions, else this line.
+  if (main.length > 1 && seconds.length === 0) lines.push(`<p><strong>Named in ${main.filter(a => a.named).length} of ${main.length} answers.</strong></p>`);
   if (seconds.length > 0) {
     const others = [...new Set(seconds.map(s => providerLabel(s.provider)))];
     if (main.length === 0) {
@@ -614,7 +629,8 @@ function answersSection(grade) {
       // Count questions, not answers: the free question asked 3 times is still one question.
       const questions = [...new Set(main.map(a => a.prompt))];
       const q = questions.length;
-      const firstTimes = main.filter(a => a.prompt === questions[0]).length;
+      // The same count as the lead line, so a failed ask still reads "asked it 3 times" in both places.
+      const firstTimes = timesAsked(main.filter(a => a.prompt === questions[0]));
       const askedMore = firstTimes > 1
         ? ` ${h(mainLabel)} was asked ${q === 1 ? 'it' : 'the first one'} ${timesText(firstTimes)}.`
         : '';
@@ -878,7 +894,7 @@ export function aboutPage({ contactEmail = '', userAgent = '', indexable = false
   </ul>
   <h2>What we ask AI</h2>
   <ul>
-    <li>We ask Claude up to three questions about the best businesses of that kind in that city, and the first one up to 3 times, because AI answers change from one time to the next. The questions name the kind of business and the city, never the business name.</li>
+    <li>We ask Claude up to 3 questions about the best businesses of that kind in that city, and the first one up to 3 times, because AI answers change from one time to the next. The questions name the kind of business and the city, never the business name.</li>
     <li>Each answer, with the business name, city and state, is sent to Google's Gemini to help check whether the business is named.</li>
     <li>When we can, ChatGPT, Gemini, Grok and Perplexity are asked the same questions so the answers can be compared. Only Claude's answers count toward the score.</li>
     <li>The person who ran a check can see Google's live answer. It is private to them, and we never save it, score it or share it.</li>

@@ -51,26 +51,27 @@ test('E3: the lead line says how many times Claude was asked and in how many ans
   assert.ok(none.includes('<p>We just asked Claude 3 times. Claude named your business in none of 3 answers.</p>'));
 });
 
-test('E3: the list and outcome come from the first answer that named the business, with "From answer 1 of 3"', () => {
+test('E3: the list and outcome come from the first answer that named the business, with "This list is from answer 1, the first one that named you."', () => {
   const html = render([ANSWER_1, ANSWER_2, ANSWER_3]);
-  assert.ok(html.includes('<p class="hint">From answer 1 of 3</p>'));
+  assert.ok(html.includes('<p class="hint">This list is from answer 1, the first one that named you.</p>'));
   assert.ok(html.includes('It listed 3 businesses, and yours was 1st.'));
   assert.ok(html.includes('<li class="grade-you"><strong>Zephyr Plumbing</strong> (you)</li>'));
 
   // Only the second answer named it: that one is shown, with the later list read as in V52.
   const second = answer(NAMED_SECOND_TEXT, { named: true, position: 2, total: 2, competitors: ['Other Co'], ask: 2 });
   const shown = render([answer(NOT_NAMED_TEXT, { ask: 1 }), second, answer(NOT_NAMED_TEXT, { ask: 3 })]);
-  assert.ok(shown.includes('<p class="hint">From answer 2 of 3</p>'));
+  assert.ok(shown.includes('<p class="hint">This list is from answer 2, the first one that named you.</p>'));
   assert.ok(shown.includes('It listed 2 businesses, and yours was 2nd.'));
   assert.ok(shown.includes('Also mentioned:'));
   assert.ok(shown.includes('<li>Third Co Plumbing</li>'));
 
   // None named it: the first answer is shown.
   const none = render([answer(NOT_NAMED_TEXT, { ask: 1, competitors: ['Other Co'] }), answer(NOT_NAMED_TEXT, { ask: 2 })]);
-  assert.ok(none.includes('<p class="hint">From answer 1 of 2</p>'));
+  assert.ok(none.includes('<p class="hint">This list is from answer 1.</p>'));
+  assert.equal(none.includes('the first one that named you'), false);
 });
 
-test('E3: every answer opens in one closed "See Claude\'s answers" block, each labelled', () => {
+test('E3: every answer opens in one closed "See Claude\'s answers" block, each labeled', () => {
   const html = render([ANSWER_1, ANSWER_2, ANSWER_3]);
   const block = /<details><summary>See Claude&#39;s answers<\/summary>([\s\S]*?)<\/details>/.exec(html);
   assert.ok(block, 'one closed block');
@@ -85,8 +86,8 @@ test('E3: with ask 1 failed, the answers that came back are numbered among thems
   const two = answer(NAMED_TEXT, { named: true, position: 1, ask: 2 });
   const three = answer(NOT_NAMED_TEXT, { ask: 3 });
   const html = render([two, three], { leadGate: false });
-  assert.ok(html.includes('<p>We just asked Claude 3 times. Claude named your business in 1 of 2 answers.</p>'));
-  assert.ok(html.includes('<p class="hint">From answer 1 of 2</p>'));
+  assert.ok(html.includes('<p>We just asked Claude 3 times and got 2 answers. Claude named your business in 1 of the 2.</p>'));
+  assert.ok(html.includes('<p class="hint">This list is from answer 1, the first one that named you.</p>'));
   assert.ok(html.includes('<p>Answer 1</p>') && html.includes('<p>Answer 2</p>'));
   assert.equal(html.includes('<p>Answer 3</p>'), false);
   assert.ok(html.includes('Claude, answer 1 of 2:'));
@@ -105,7 +106,7 @@ test('E3: a Grade with one answer per question looks as before', () => {
   const html = render([one]);
   assert.ok(html.includes('<p>We just asked Claude. It listed 3 businesses, and yours was 1st.</p>'));
   assert.ok(html.includes('<details><summary>See the full answer</summary>'));
-  for (const newText of ['From answer', 'See Claude&#39;s answers', 'times.', '<p>Answer 1</p>']) {
+  for (const newText of ['From answer', 'This list is from', 'AI answers change from one time', 'See Claude&#39;s answers', 'times.', '<p>Answer 1</p>']) {
     assert.equal(html.includes(newText), false, newText);
   }
 });
@@ -144,6 +145,7 @@ test('E3: the answers section counts questions, not answers, and says the first 
   assert.ok(html.includes('We asked Claude and ChatGPT the same 3 questions. Claude was asked the first one 3 times. Only Claude\'s answers count'));
   assert.equal(html.includes('the same 5 questions'), false);
   assert.ok(html.includes('Claude named your business in 2 of its 5 answers.'));
+  assert.equal(html.includes('Named in 2 of 5 answers.'), false, 'the count is said once (V104)');
   assert.ok(html.includes('Claude, answer 1 of 3:') && html.includes('Claude, answer 3 of 3:'));
   assert.ok(html.includes('ChatGPT (for comparison only):'));
 });
@@ -165,10 +167,59 @@ test('E3: with one answer per question the answers section reads as before', () 
   assert.equal(/Claude, answer \d of \d/.test(html), false);
 });
 
+// ---- page-read fixes (review 2026-11-23, V100 to V106) -------------------------------------------------------
+
+test('V100: fewer answers than asks: "and got 2 answers", counted "of the 2"', () => {
+  const none = render([answer(NOT_NAMED_TEXT, { ask: 1 }), answer(NOT_NAMED_TEXT, { ask: 3 })]);
+  assert.ok(none.includes('<p>We just asked Claude 3 times and got 2 answers. Claude named your business in none of the 2.</p>'));
+  const both = render([ANSWER_1, ANSWER_2].map(a => ({ ...a, ask: a.ask + 1 })));
+  assert.ok(both.includes('<p>We just asked Claude 3 times and got 2 answers. Claude named your business in 2 of the 2.</p>'));
+  const carried = render([answer(NAMED_TEXT, { named: true, position: 1, ask: 1 }), answer(NOT_NAMED_TEXT, { ask: 3 })]
+    .map(a => ({ ...a, reusedFrom: '2026-11-19T15:00:00.000Z' })));
+  assert.match(carried, /<p>We asked Claude 3 times on [^<]*Nov[^<]*19[^<]* and got 2 answers\. Claude named your business in 1 of the 2\.<\/p>/);
+  // Every ask answered: the sentence is as before.
+  const all = render([ANSWER_1, ANSWER_2, ANSWER_3]);
+  assert.equal(all.includes('and got'), false);
+  assert.equal(all.includes('of the 3'), false);
+});
+
+test('V101: one hint line under the lead line says why we ask more than once', () => {
+  const html = render([ANSWER_1, ANSWER_2, ANSWER_3]);
+  const hint = '<p class="hint">AI answers change from one time to the next, so we ask the same question 3 times.</p>';
+  assert.equal(html.split(hint).length - 1, 1, 'shown once');
+  const lead = html.indexOf('We just asked Claude 3 times.');
+  assert.ok(lead !== -1 && lead < html.indexOf(hint) && html.indexOf(hint) < html.indexOf('This list is from answer'));
+  const two = render([answer(NAMED_TEXT, { named: true, position: 1, ask: 1 }), answer(NOT_NAMED_TEXT, { ask: 2 })]);
+  assert.ok(two.includes('so we ask the same question 2 times.</p>'));
+});
+
+test('V104: "Every answer" says the count once', () => {
+  const withSeconds = render([ANSWER_1, ANSWER_2, ANSWER_3, chatgpt(FREE)], { leadGate: false });
+  assert.ok(withSeconds.includes('Claude named your business in 2 of its 3 answers.'));
+  assert.equal(withSeconds.includes('Named in 2 of 3 answers.'), false);
+  // Without second opinions the one count line stays as before.
+  const alone = render([ANSWER_1, ANSWER_2, ANSWER_3], { leadGate: false });
+  assert.ok(alone.includes('<p><strong>Named in 2 of 3 answers.</strong></p>'));
+  assert.equal(alone.includes('of its 3 answers'), false);
+});
+
+test('V100/V104: with ask 1 failed, "Every answer" also says Claude was asked 3 times', () => {
+  const html = render([answer(NAMED_TEXT, { named: true, position: 1, ask: 2 }), answer(NOT_NAMED_TEXT, { ask: 3 }), chatgpt(FREE)], { leadGate: false });
+  assert.ok(html.includes('We asked Claude and ChatGPT the same question. Claude was asked it 3 times.'));
+});
+
+test('V106: ask numbers that are not whole numbers from 1 to 3 are ignored', () => {
+  for (const bad of [99, 0, -1, 2.5, '3']) {
+    const html = render([answer(NOT_NAMED_TEXT, { extra: { ask: bad } }), answer(NOT_NAMED_TEXT, { ask: 1 })], { leadGate: false });
+    assert.ok(html.includes('<p>We just asked Claude 2 times. Claude named your business in none of 2 answers.</p>'), String(bad));
+    assert.equal(/asked Claude (99|3) times/.test(html), false, String(bad));
+  }
+});
+
 // ---- the about page, escaping and wording ------------------------------------------------------------------
 
 test('E3: the about page says the first question is asked up to 3 times', () => {
-  assert.ok(aboutPage().includes('We ask Claude up to three questions about the best businesses of that kind in that city, and the first one up to 3 times, because AI answers change from one time to the next.'));
+  assert.ok(aboutPage().includes('We ask Claude up to 3 questions about the best businesses of that kind in that city, and the first one up to 3 times, because AI answers change from one time to the next.'));
 });
 
 test('E3: everything is escaped', () => {
