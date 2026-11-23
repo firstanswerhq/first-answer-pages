@@ -20,6 +20,7 @@ import {
 import { formatRunTime } from './seance-html.js';
 import { listedNames, splitLists } from './name-match.js';
 import { scoreGrade } from './grade-score.js';
+import { DEFAULT_SITE_NAME } from './config.js';
 import {
   providerLabel, freeQuestion, stepNames, foundOf, isSecondOpinion, schemaHours, readableHours, isPartialScore,
 } from './grader.js';
@@ -56,8 +57,9 @@ function page(title, body, {
 }
 
 /** Title and summary of the check's form when it is shown to search engines (wording rules apply). */
-export const FORM_SEARCH_TITLE = 'Does AI know your business? Free check';
-export const FORM_SEARCH_DESCRIPTION = 'Find out whether AI assistants name your business when someone asks for one like it. Free, no sign-up.';
+// The page shell adds no site-name suffix to a title, so the suffix is written here once.
+export const FORM_SEARCH_TITLE = `Can AI find your local business? Free AI Visibility Check | ${DEFAULT_SITE_NAME}`;
+export const FORM_SEARCH_DESCRIPTION = 'See whether AI assistants name your local business when someone asks for one like it, and get a score with plain fixes. Free, no sign-up.';
 /** Summary of the about page when it is shown to search engines. */
 export const ABOUT_SEARCH_DESCRIPTION = "What the free AI Visibility Check reads on a business's website and asks AI assistants, and why.";
 
@@ -808,7 +810,7 @@ export function aboutPage({ contactEmail = '', userAgent = '', indexable = false
     <li>Our server visits the website once per check. It reads the home page, /robots.txt and /llms.txt. Each is read at most once.</li>
     <li>It reads public pages only, on the public internet.</li>
     <li>It does not log in, fill in forms, run scripts or send cookies.</li>
-    ${userAgent ? `<li>Its user-agent string is: <code>${h(userAgent)}</code></li>` : ''}
+    ${userAgent ? `<li>Our visits identify themselves as: <code>${h(userAgent)}</code></li>` : ''}
   </ul>
   <h2>What we ask AI</h2>
   <ul>

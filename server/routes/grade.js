@@ -104,7 +104,19 @@ export function createGradeRouter(ctx) {
     indexable, canonical: indexable ? canonicalFor('/grade') : '',
   }));
 
-  router.get('/grade', (req, res) => formPage(res, 200, { indexable: isOpenPage(req) }));
+  /** A failure on one of the two open pages must not leave the error reply without noindex (V97). */
+  const closeOnError = (res, next, err) => {
+    if (!res.headersSent) res.set('X-Robots-Tag', 'noindex, nofollow');
+    return next(err);
+  };
+
+  router.get('/grade', (req, res, next) => {
+    try {
+      return formPage(res, 200, { indexable: isOpenPage(req) });
+    } catch (err) {
+      return closeOnError(res, next, err);
+    }
+  });
 
   router.post('/grade', form, async (req, res, next) => {
     try {
@@ -170,12 +182,16 @@ export function createGradeRouter(ctx) {
     }
   });
 
-  router.get('/grade/about', (req, res) => {
-    const indexable = isOpenPage(req);
-    html(res, 200, aboutPage({
-      contactEmail: ctx.config.contactEmail ?? '', userAgent: ctx.graderUserAgent ?? '',
-      indexable, canonical: indexable ? canonicalFor('/grade/about') : '',
-    }));
+  router.get('/grade/about', (req, res, next) => {
+    try {
+      const indexable = isOpenPage(req);
+      return html(res, 200, aboutPage({
+        contactEmail: ctx.config.contactEmail ?? '', userAgent: ctx.graderUserAgent ?? '',
+        indexable, canonical: indexable ? canonicalFor('/grade/about') : '',
+      }));
+    } catch (err) {
+      return closeOnError(res, next, err);
+    }
   });
 
   // ---- one Grade ---------------------------------------------------------------------------

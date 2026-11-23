@@ -26,8 +26,12 @@ const FIELD_LABELS = Object.freeze({
   website: 'Website (optional)',
 });
 
+/** The /rise summary for search results, with and without the photo reader. */
+export const RISE_DESCRIPTION = 'List your local business free on First Answer Pages. Send a photo of your card or sign, or type it in. We review every listing.';
+export const RISE_DESCRIPTION_NO_PHOTO = 'List your local business free on First Answer Pages. Type in your details. We review every listing.';
+
 /** Help text under the website box. */
-export const WEBSITE_HINT = 'The address of your own website, like https://example.com';
+export const WEBSITE_HINT = 'The address of your own website, like example.com';
 
 /** Shown when the owner typed a website that was left out. Plain words, like the reviews link note. */
 export const WEBSITE_LEFT_OUT = 'We left that website out. It must start with https:// and be the address of your own website, like https://example.com.';
@@ -86,7 +90,12 @@ export const DEMO_BANNER_TEXT = 'Demo: no photo reader is connected, so this is 
  * Page for the upload form: GET /rise.
  * @param {{ photoEnabled?: boolean, discarded?: boolean }} [opts]
  */
-export function uploadPage({ photoEnabled = true, discarded = false, founders, fees } = {}) {
+export function uploadPage({ photoEnabled = true, discarded = false, founders, fees, canonical = '' } = {}) {
+  // For search results (V94). The photo sentence is said only while the photo reader is open.
+  const search = {
+    description: photoEnabled ? RISE_DESCRIPTION : RISE_DESCRIPTION_NO_PHOTO,
+    ...(canonical ? { canonical } : {}),
+  };
   const inviteHtml = foundersInvite(founders, { fees });
   const invite = inviteHtml ? `\n  ${inviteHtml}` : '';
   const discardedNote = discarded ? '\n  <p class="notice" role="status">Draft discarded.</p>' : '';
@@ -102,7 +111,7 @@ export function uploadPage({ photoEnabled = true, discarded = false, founders, f
     <button type="submit">Type it in</button>
   </form>
 </section>`;
-    return layout({ title: 'List your business free: First Answer Pages', body: manualBody });
+    return layout({ title: 'List your business free: First Answer Pages', body: manualBody, ...search });
   }
   const body = `<section class="rise">
   <h1>List your business free</h1>${discardedNote}
@@ -119,7 +128,7 @@ export function uploadPage({ photoEnabled = true, discarded = false, founders, f
   </noscript>
   ${typeItIn}
 </section>`;
-  return layout({ title: 'List your business free: First Answer Pages', body, scripts: ['/js/rise.js'] });
+  return layout({ title: 'List your business free: First Answer Pages', body, scripts: ['/js/rise.js'], ...search });
 }
 
 /**
@@ -202,7 +211,12 @@ export function reviewPage(draft, categories, opts = {}) {
     : reviewsOut ? SAVED_LINK_LEFT_OUT
       : websiteOut ? SAVED_WEBSITE_LEFT_OUT
         : 'Saved.';
-  const savedNote = opts.saved === true ? `<p class="notice saved-note" role="status">${escapeHtml(savedText)}</p>` : '';
+  // A clean save is the green "Saved."; when something was left out the line is a plain notice, not good news (V91).
+  const anyLeftOut = reviewsOut || websiteOut;
+  const savedNote = opts.saved !== true ? ''
+    : anyLeftOut
+      ? `<p class="notice" role="status">${escapeHtml(savedText)}</p>`
+      : `<p class="notice saved-note" role="status">${escapeHtml(savedText)}</p>`;
   const heading = fresh ? 'Type in your listing' : 'Check your listing';
   const tagline = fresh
     ? 'Fill in your business details, then press Confirm. Nobody can see it until we review it.'

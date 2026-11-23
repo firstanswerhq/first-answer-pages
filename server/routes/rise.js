@@ -19,6 +19,7 @@ import { createDraftStore, draftProvider } from '../lib/drafts.js';
 import { validateFields, DAYS } from '../lib/listing-fields.js';
 import { uploadPage, reviewPage, messagePage } from '../lib/rise-html.js';
 import { formatFee } from '../lib/trust.js';
+import { claimWebsite } from '../lib/grader.js';
 
 const FORM_TYPE = 'application/x-www-form-urlencoded';
 const DRAFT_FORM_LIMIT = 64 * 1024;
@@ -75,6 +76,12 @@ export function parseServices(value) {
   return value.split(/\r?\n|\r|,/).map(s => s.trim()).filter(s => s !== '');
 }
 
+/** The canonical address of GET /rise, from the configured base address only; '' when it is not a plain site address. */
+export function riseCanonical(config) {
+  const base = typeof config?.baseUrl === 'string' ? config.baseUrl.trim().replace(/\/+$/, '') : '';
+  return /^https?:\/\/[^/\s]+$/i.test(base) ? `${base}/rise` : '';
+}
+
 /** Builds raw listing fields from an urlencoded review-form body. */
 function fieldsFromForm(body) {
   const b = body !== null && typeof body === 'object' ? body : {};
@@ -93,9 +100,25 @@ function fieldsFromForm(body) {
     address: str('address'),
     ownerEmail: str('ownerEmail'),
     reviewsLink: str('reviewsLink'),
-    website: str('website'),
+    website: ownerWebsite(str('website')),
     hours,
   };
+}
+
+/**
+ * A website as the owner typed it, ready for `normalizeWebsite` (which still decides, unchanged): text with no
+ * scheme ("mybusiness.com", "www.mybusiness.com/menu") gets "https://" in front; an "http://" address is
+ * rewritten the way the claim does it (`claimWebsite`); anything else is passed on as typed, so
+ * `normalizeWebsite` refuses it as before. Never throws.
+ * @param {string} typed
+ * @returns {string}
+ */
+export function ownerWebsite(typed) {
+  const text = typeof typed === 'string' ? typed.trim() : '';
+  if (text === '') return '';
+  if (/^http:\/\//i.test(text)) return claimWebsite(text);
+  if (/^[a-z][a-z0-9+.-]*:/i.test(text) || text.startsWith('//')) return text;
+  return `https://${text}`;
 }
 
 /** True when the owner typed something in `key` that validation left out (the review page then says so). */
@@ -156,6 +179,8 @@ export function createRiseRouter(ctx) {
     sendPage(res, 200, uploadPage({ photoEnabled: !photoListingClosed(), discarded: req.query.discarded === '1',
       founders: typeof ctx.store.getFoundersStatus === 'function' ? ctx.store.getFoundersStatus() : undefined,
       fees: ctx.trust ? ctx.config?.trust : undefined,
+      // From the configured base address only, never the request's Host (V94); none when it is not a plain site address.
+      canonical: riseCanonical(ctx.config),
     }));
   });
 

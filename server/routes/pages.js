@@ -62,12 +62,16 @@ export function createPagesRouter(ctx) {
   });
 
   router.get('/about', (req, res) => {
+    // A pointer to the free check, only while the grader is on (V95).
+    const checkPara = config.graderEnabled !== false
+      ? '\n<p>Want to know if AI can find your business? <a href="/grade">Run the free AI Visibility Check.</a></p>'
+      : '';
     const body = `<section class="message">
 <h1>About ${DEFAULT_SITE_NAME}</h1>
 <p>Remember the phone book? Every business in town in one place, with a number you could call. Then it stopped arriving, and finding a local business got harder for anyone without a big ad budget. Now people ask AI who to call. ${DEFAULT_SITE_NAME} brings the phone book back for that world: one plain listing for every local business, written so AI assistants can read it.</p>
 <p>${DEFAULT_SITE_NAME} is a free local business directory, built so AI assistants like ChatGPT and Claude can read it and point people to real local businesses. Each listing has the business's phone number, services, service area and hours, written so both people and AI can understand it.</p>
 <p>Business owners can list themselves free: snap a photo of a business card, flyer or sign, or type it in. We review every listing before it goes live. Visitors can call a business or send a quote request right from its page.</p>
-<p><a href="/rise">List your business free &rarr;</a> &middot; <a href="/">Browse the directory</a></p>${contactPara}
+<p><a href="/rise">List your business free &rarr;</a> &middot; <a href="/">Browse the directory</a></p>${checkPara}${contactPara}
 </section>`;
     res.status(200).type('html').send(layout({
       title: `About | ${DEFAULT_SITE_NAME}`,

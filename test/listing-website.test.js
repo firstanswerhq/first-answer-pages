@@ -101,7 +101,7 @@ test('F9: the review form has the optional Website input and hint', () => {
   const html = reviewPage({ id: 'd1', fields: { ...LISTING, website: SITE }, missingFields: [] }, categories);
   assert.ok(html.includes('Website (optional)'));
   assert.ok(html.includes(`name="website" value="${SITE}"`));
-  assert.ok(html.includes('The address of your own website, like https://example.com'));
+  assert.ok(html.includes('The address of your own website, like example.com'));
   assert.equal(html.includes(WEBSITE_LEFT_OUT), false);
   // A bad stored value is never put back in the box.
   const bad = reviewPage({ id: 'd1', fields: { ...LISTING, website: 'javascript:alert(1)' }, missingFields: [] }, categories);
@@ -116,7 +116,7 @@ test('F9: a left-out website is said plainly at the top and by the box, like the
   }
   const draft = { id: 'd1', fields: LISTING, missingFields: [] };
   const one = reviewPage(draft, categories, { saved: true, websiteLeftOut: true });
-  assert.ok(one.includes(`<p class="notice saved-note" role="status">${SAVED_WEBSITE_LEFT_OUT}</p>`));
+  assert.ok(one.includes(`<p class="notice" role="status">${SAVED_WEBSITE_LEFT_OUT}</p>`));
   assert.ok(one.includes(WEBSITE_LEFT_OUT));
   assert.equal(one.includes(REVIEWS_LINK_LEFT_OUT), false);
   const both = reviewPage(draft, categories, { saved: true, websiteLeftOut: true, reviewsLeftOut: true });
@@ -170,7 +170,8 @@ test('F9: the owner saves a website; a bad one is left out with the note, and bo
   assert.equal(good.headers.get('location'), `/rise/drafts/${id}?saved=1`);
   assert.equal((await draftFields(env, id)).website, 'https://zephyrplumbing.com/');
 
-  const bad = await save(env, id, { ...FORM, website: 'http://evil.example/<b>' });
+  // V90: an http:// address is now rewritten to https and kept, so the refused example is a login address.
+  const bad = await save(env, id, { ...FORM, website: 'https://user:pw@evil.example/<b>' });
   assert.equal(bad.headers.get('location'), `/rise/drafts/${id}?saved=1&left=website`);
   assert.equal(Object.hasOwn(await draftFields(env, id), 'website'), false);
   const page = await (await fetch(`${env.base}${bad.headers.get('location')}`)).text();
