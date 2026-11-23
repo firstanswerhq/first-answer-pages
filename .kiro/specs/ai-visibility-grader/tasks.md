@@ -481,7 +481,7 @@ From `feature-request-2026-11-18.md` and `spec-review-2026-11-18.md`: Feature A,
   - `routes/rise.js` `fieldsFromForm`, the draft form and review page in `rise-html.js`, and the admin Draft page: the optional "Website" input and row, with the note "We left that link out. It must be a public https address, like https://example.com." when a submitted value was left out
   - Example tests: the listing page row and its escaping; the `sameAs` entry with the website alone, the reviews link alone, both and neither (no `sameAs` key), and `url` unchanged; llms.txt and MCP output with and without the field (the line-count properties in `test/llms.test.js` hold); the form input, the left-out note and the admin row
   - _Requirements: 21.3, 21.4, 21.5, 21.7_
-- [ ] F10. Claim fills the website; checkpoint for A, B and C
+- [x] F10. Claim fills the website; checkpoint for A, B and C
   - `grader.claim`: set `website` to `normalizeWebsite(claimWebsite(grade.input.website))`, where `claimWebsite` rewrites an `http://` address to `https://` with the same host and path and no port, without fetching anything; leave it empty when none was given or it is not valid; no other claim field changes; the owner sees the value on the Draft review page and can change or clear it
   - Example tests: the claim fill from a typed site (a typed address with a query string comes back without it), a typed `http://example.com:8080/menu?x=1` fills `https://example.com/menu`, an empty value, and a value that is not valid
   - Cloud run: the full suite passes, including every test that existed before this section (with only the lines listed in the design's "Numbers that change" table changed)

@@ -20,7 +20,7 @@ import { analyzeAnswer, listedNames, looksLikeSameName, registeredDomain } from 
 import { DROP_BELOW, NAMED_ABOVE } from './name-check.js';
 import {
   normalizePhone, normalizeState, tidyCity, mapCategory, validateFields, US_STATE_CODES, STATE_ERROR,
-  reviewsLinkHost, reviewsLinkOnPage,
+  reviewsLinkHost, reviewsLinkOnPage, normalizeWebsite,
 } from './listing-fields.js';
 
 // ---- constants -------------------------------------------------------------------
@@ -364,6 +364,24 @@ export function foundOf(grade) {
     website: grade?.input?.website || '',
     reviewsLink: '',
   };
+}
+
+/**
+ * The website a claim carries over, before `normalizeWebsite` checks it: the check accepts `http` sites and
+ * ports, so an `http://` address becomes `https://` with the same host and path and no port (and no user name,
+ * query string or `#` part). Nothing is fetched or looked up. '' when there is no usable address.
+ * @param {unknown} value the Grade's typed website
+ * @returns {string}
+ */
+export function claimWebsite(value) {
+  if (typeof value !== 'string' || value.trim() === '') return '';
+  try {
+    const url = new URL(value.trim());
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return '';
+    return `https://${url.hostname}${url.pathname || '/'}`;
+  } catch {
+    return '';
+  }
 }
 
 const REVIEW_SITE_RANK = { google: 0, yelp: 1, facebook: 2, nextdoor: 2 };
@@ -1395,6 +1413,9 @@ export function createGrader({
         // The best review link read from the home page (never from an AI answer); validateFields checks it again
         // and leaves it out when it is not a valid reviews link.
         reviewsLink: typeof found.reviewsLink === 'string' ? found.reviewsLink : '',
+        // The website the owner typed on the check, as a clean https address (validateFields checks it once more);
+        // empty when none was given or it cannot be a listing website. Nothing is fetched.
+        website: normalizeWebsite(claimWebsite(input.website)),
       }, categories);
       const created = await draftStore.create({
         fields: checked.fields, missingFields: checked.missingFields, provider: 'grader',
