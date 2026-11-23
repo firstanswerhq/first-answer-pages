@@ -56,33 +56,51 @@ const WORD_START = '(?<![\\p{L}\\p{N}])';
 const WORD_END = '(?![\\p{L}\\p{N}])';
 const NEVER = /(?!)/u;
 
+/** Longest stretch between "serving" (or "we serve") and the city or area word, inside one sentence. */
+const SERVE_WINDOW = 120;
+const SERVE_VERB = `${WORD_START}(?:we\\s(?:proudly\\s)?serve|proudly\\sserve|serving)${WORD_END}`;
+const SPACE = '[\\s\\p{P}]{1,3}';
+
 /**
- * The service-area test for one Grade, matched against `normalizeForMatch(facts.text)` (lower case, punctuation
- * gone). The city is normalized the same way and every special character is escaped. An empty city adds no
- * city alternative (never an empty one, which would match everywhere). Never throws.
+ * The service-area test for one Grade, matched against the page text before punctuation is taken out
+ * (`serviceAreaSource(facts)`: the first 200,000 characters). It also works on normalized text.
+ *
+ * The city is normalized (lower case, punctuation gone), each of its words is escaped, and the words may be
+ * joined in the page by spaces or punctuation, so "St. Louis" matches "st louis". An empty city adds no city
+ * alternative (never an empty one, which would match everywhere).
+ *
+ * After "serving", "we serve" or "proudly serve" the city or an area word must come in the same sentence: the
+ * window stops at a period, "!", "?" or a line break, and runs at most 120 characters. To stay fast, the window
+ * is checked backward from a city or area word (a lookbehind), so a page full of "serving" with no city costs
+ * nothing. No open-ended or lazy matching. Never throws.
  * @param {unknown} city
  * @returns {RegExp}
  */
 export function serviceAreaPattern(city) {
   try {
-    const name = normalizeForMatch(typeof city === 'string' ? city : '').slice(0, 120);
+    const words = normalizeForMatch(typeof city === 'string' ? city : '').slice(0, 120).split(' ').filter(Boolean);
     // Only the characters that may be escaped under the `u` flag (a "\-" would be a syntax error there).
-    const escaped = name.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+    const escaped = words.map(w => w.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')).join(SPACE);
     const target = escaped ? `${AREA_WORDS}|${escaped}` : AREA_WORDS;
+    const word = t => `${WORD_START}(?:${t})${WORD_END}`;
     const parts = [
-      'service areas?',
-      'areas? we serve',
-      // Bounded window: the city or an area word within 40 characters of the verb. The normalized text has no
-      // punctuation, so a wider window would reach into the next sentence ("We serve breakfast. ... Nashville").
-      `(?:we (?:proudly )?serve|proudly serve|serving)${WORD_END}[^\\n]{0,40}${WORD_START}(?:${target})${WORD_END}`,
+      word(`service${SPACE}areas?`),
+      word(`areas?${SPACE}we${SPACE}serve`),
+      // The city or area word, then (looking back) the verb earlier in the same sentence.
+      `${word(target)}(?<=${SERVE_VERB}[^.!?\\n]{0,${SERVE_WINDOW}}(?:${target}))`,
     ];
     if (escaped) {
-      parts.push(`${escaped} and (?:the )?(?:surrounding|nearby|neighboring) (?:areas?|communities|towns|cities|counties)`);
+      parts.push(word(`${escaped}${SPACE}and\\s(?:the\\s)?(?:surrounding|nearby|neighboring)\\s(?:areas?|communities|towns|cities|counties)`));
     }
-    return new RegExp(`${WORD_START}(?:${parts.join('|')})${WORD_END}`, 'iu');
+    return new RegExp(parts.join('|'), 'iu');
   } catch {
     return NEVER;
   }
+}
+
+/** The page text as the service-area test reads it: the first 200,000 characters, punctuation kept. */
+export function serviceAreaSource(facts) {
+  return textForPatterns(facts?.text);
 }
 
 // ---------- reviews ----------

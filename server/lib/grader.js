@@ -20,6 +20,7 @@ import { analyzeAnswer, listedNames, looksLikeSameName, registeredDomain } from 
 import { DROP_BELOW, NAMED_ABOVE } from './name-check.js';
 import {
   normalizePhone, normalizeState, tidyCity, mapCategory, validateFields, US_STATE_CODES, STATE_ERROR,
+  reviewsLinkHost, reviewsLinkOnPage,
 } from './listing-fields.js';
 
 // ---- constants -------------------------------------------------------------------
@@ -346,16 +347,47 @@ const SECOND_OPINION_PROVIDERS = new Set(['chatgpt', 'gemini', 'grok', 'perplexi
 /** True for a second-opinion answer, whether or not an older Grade marked it. */
 export const isSecondOpinion = a => Boolean(a) && (a.second === true || SECOND_OPINION_PROVIDERS.has(a.provider));
 
-/** Phone, hours and address found on the website. Grades made before `found` existed keep them in `facts`. */
+/**
+ * Phone, hours, address and the best reviews link found on the website. Grades made before `found` existed keep
+ * the first three in `facts`; Grades made before review links were read give an empty `reviewsLink`.
+ */
 export function foundOf(grade) {
-  if (grade?.found && typeof grade.found === 'object') return grade.found;
+  if (grade?.found && typeof grade.found === 'object') {
+    const found = grade.found;
+    return typeof found.reviewsLink === 'string' ? found : { ...found, reviewsLink: '' };
+  }
   const f = grade?.facts && typeof grade.facts === 'object' ? grade.facts : {};
   return {
     phone: typeof f.phone === 'string' ? f.phone : '',
     hours: Array.isArray(f.hours) ? f.hours.filter(x => typeof x === 'string') : [],
     address: typeof f.address === 'string' ? f.address : '',
     website: grade?.input?.website || '',
+    reviewsLink: '',
   };
+}
+
+const REVIEW_SITE_RANK = { google: 0, yelp: 1, facebook: 2, nextdoor: 2 };
+
+/**
+ * The best of the home page's review links: a Google link first, then Yelp, then Facebook or Nextdoor, in page
+ * order within each kind; an empty string when none passes both review-link checks.
+ * @param {unknown} links facts.reviewLinks
+ * @returns {string}
+ */
+export function bestReviewsLink(links) {
+  let best = '';
+  let bestRank = Infinity;
+  for (const link of Array.isArray(links) ? links : []) {
+    if (typeof link !== 'string') continue;
+    const site = reviewsLinkOnPage(link);
+    if (site === '' || reviewsLinkHost(link) === '') continue;
+    const rank = REVIEW_SITE_RANK[site];
+    if (rank < bestRank) {
+      best = link.trim();
+      bestRank = rank;
+    }
+  }
+  return best;
 }
 
 /**
@@ -386,8 +418,9 @@ const PHONE_IN_TEXT = /\(?\d{3}\)?[\s.\-\u2013]+\d{3}[\s.\-\u2013]\d{4}/g;
 
 /** Phone, hours and address from the page: the business label first, then tap-to-call links, then the text. */
 function foundFromFacts(facts, input) {
-  const found = { phone: '', hours: [], address: '', website: input.website || '' };
+  const found = { phone: '', hours: [], address: '', website: input.website || '', reviewsLink: '' };
   if (!facts) return found;
+  found.reviewsLink = bestReviewsLink(facts.reviewLinks);
   const business = facts.jsonLd?.business ?? null;
   const text = String(facts.text ?? '').slice(0, MAX_TEXT_FOR_PATTERNS);
 
@@ -563,6 +596,21 @@ function assemble(websiteResults, ai, aiMain) {
   const all = [...websiteResults.filter(r => r.id !== 'ai-named'), aiNamedResult(ai, aiMain)];
   const order = new Map(CHECKS.map((c, i) => [c.id, i]));
   return all.sort((a, b) => (order.get(a.id) ?? 99) - (order.get(b.id) ?? 99));
+}
+
+/** The Score number a report shows for a Grade (the same rule as `reportPage`), or null. */
+export function shownScore(grade) {
+  const results = Array.isArray(grade?.results)
+    ? grade.results.filter(r => r && typeof r === 'object' && typeof r.id === 'string')
+    : [];
+  const stored = Number.isInteger(grade?.score?.score) ? grade.score.score : null;
+  if (results.length === 0) return stored;
+  try {
+    const { score } = scoreGrade(results);
+    return Number.isInteger(score) ? score : null;
+  } catch {
+    return stored;
+  }
 }
 
 function scoreOf(results) {
@@ -1278,7 +1326,9 @@ export function createGrader({
       email: lead.email,
       phone: lead.phone,
       okToContact: lead.okToContact === true,
-      score: grade.score?.score ?? null,
+      // The score the report shows: worked out from the stored results with the current points, so an old
+      // Grade's lead (and the lead email) agree with its report. With no results, the stored number stays.
+      score: shownScore(grade),
       createdAt: nowIso(),
     };
     await leads().append(stored);
@@ -1337,10 +1387,14 @@ export function createGrader({
         phone: found.phone,
         hours: hoursToObject(found.hours),
         services: [input.service],
-        serviceArea: input.city,
+        // A business that goes to its customers lists its area and no street address, even when the page shows one.
+        serviceArea: input.noStorefront === true ? `${input.city} and nearby areas` : input.city,
         city: input.city,
         state: input.state,
-        address: found.address,
+        address: input.noStorefront === true ? '' : found.address,
+        // The best review link read from the home page (never from an AI answer); validateFields checks it again
+        // and leaves it out when it is not a valid reviews link.
+        reviewsLink: typeof found.reviewsLink === 'string' ? found.reviewsLink : '',
       }, categories);
       const created = await draftStore.create({
         fields: checked.fields, missingFields: checked.missingFields, provider: 'grader',

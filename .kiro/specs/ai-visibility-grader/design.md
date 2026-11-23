@@ -293,7 +293,7 @@ Requirements 18 to 22. The features are for every small business, not one client
 
 - `service areas?`;
 - `areas? we serve`;
-- `we serve`, `we proudly serve`, `proudly serve` or `serving`, followed within 40 characters (`[^\n]{0,40}`; 80 reached into the next sentence once punctuation is gone) by the city name or one of `area`, `areas`, `county`, `counties`, `surrounding`, `nearby`, `communities`;
+- `we serve`, `we proudly serve`, `proudly serve` or `serving`, followed in the same sentence (before a period, "!", "?" or a line break) and within 120 characters (`[^.!?\n]{0,120}`) by the city name or one of the area words below. This is matched on the page text before punctuation is taken out (V79), and checked backward from the city or area word so a page full of "serving" costs nothing; the city's words may be joined by spaces or punctuation ("St. Louis") by the city name or one of `area`, `areas`, `county`, `counties`, `surrounding`, `nearby`, `communities`;
 - the city name followed by `and (the )?(surrounding|nearby|neighboring) (areas?|communities|towns|cities|counties)`.
 
 "We serve breakfast all day" and a bare "serving biscuits" do not match. Unticked Grades never use this pattern (the restaurant fixture contains "serving" and must keep its result). Only bounded windows are used (no open-ended or lazy matching), and a 1 MB page is read in well under the 200 ms limit.

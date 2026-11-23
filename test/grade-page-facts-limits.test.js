@@ -70,14 +70,15 @@ test('V75: normalizing and testing 1 MB of page text stays under 200 ms', () => 
   assert.ok(ms < 200, `took ${Math.round(ms)} ms`);
 });
 
-test('V76: the window after "serving" and "we serve" is 40 characters', () => {
+test('V76 (as changed by V79): the window after "serving" stays inside one sentence, up to 120 characters', () => {
   const nashville = serviceAreaPattern('Nashville');
-  const read = text => nashville.test(normalizeForMatch(text));
+  // V79: the page text is read before punctuation is taken out.
+  const read = text => nashville.test(text);
   assert.equal(read('We serve breakfast all day. Visit us at 12 Main St, Nashville, TN'), false);
   assert.equal(read('We proudly serve the greater Nashville area'), true);
   assert.equal(read('Serving Nashville and surrounding areas'), true);
   assert.equal(read('Proudly serve the Nashville area'), true);
   // The window holds the characters between the verb and the city: a space, the x's and a space.
-  assert.equal(read(`Serving ${'x'.repeat(38)} Nashville`), true, 'just inside the window');
-  assert.equal(read(`Serving ${'x'.repeat(45)} Nashville`), false, 'just outside the window');
+  assert.equal(read(`Serving ${'x'.repeat(118)} Nashville`), true, 'just inside the window');
+  assert.equal(read(`Serving ${'x'.repeat(125)} Nashville`), false, 'just outside the window');
 });

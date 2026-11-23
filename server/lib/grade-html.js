@@ -83,7 +83,11 @@ function contactLink(contactEmail, text) {
     : `<a href="/about">${h(text)}</a>`;
 }
 
-const resultsOf = grade => (Array.isArray(grade.results) ? grade.results : []);
+// Entries that are not objects with a string id (a hand-edited grades.json) are left out, so the report is
+// never a 500 because of them.
+const resultsOf = grade => (Array.isArray(grade?.results)
+  ? grade.results.filter(r => r !== null && typeof r === 'object' && typeof r.id === 'string')
+  : []);
 const aiOf = grade => (Array.isArray(grade.ai) ? grade.ai : []);
 
 // ---- the form ------------------------------------------------------------------------
@@ -562,7 +566,7 @@ function fixKit(grade, contactEmail) {
     phone: found.phone ?? '', website: i.website ?? '', address: found.address ?? '', hours: readableHours(found.hours),
   };
   // The business label wants schema.org's own hours format; free text like "Monday to Friday, 8 am to 5 pm" is left out of it.
-  const labelKit = { ...kit, hours: schemaHours(found.hours) };
+  const labelKit = { ...kit, hours: schemaHours(found.hours), noStorefront: i.noStorefront === true };
   const intro = i.website
     ? 'Send this kit to whoever looks after your website. Each box says where it goes, and the Copy button copies it.'
     : 'This kit is ready for when you have a website. Hand it to whoever builds it. Each box says where it goes, and the Copy button copies it.';

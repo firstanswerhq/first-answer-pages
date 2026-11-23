@@ -100,7 +100,9 @@ export function jsonLdBlock(found) {
   const data = { '@context': 'https://schema.org', '@type': 'LocalBusiness', name: f.name };
   if (f.phone) data.telephone = f.phone;
   if (f.website) data.url = f.website;
-  if (f.address || f.city || f.state) {
+  // A business that goes to its customers ("no storefront") names its area and no address at all.
+  const noStorefront = found?.noStorefront === true;
+  if (!noStorefront && (f.address || f.city || f.state)) {
     const addr = { '@type': 'PostalAddress' };
     if (f.address) addr.streetAddress = f.address;
     if (f.city) addr.addressLocality = f.city;
@@ -108,7 +110,12 @@ export function jsonLdBlock(found) {
     data.address = addr;
   }
   if (f.hours.length) data.openingHours = f.hours;
-  if (f.city) data.areaServed = f.city;
+  if (noStorefront) {
+    if (f.city) data.areaServed = place(f.city, f.state);
+  } else if (f.city) {
+    data.areaServed = f.city;
+  }
+  // Built only from what the owner typed and the page showed: never a rating or a review.
   const json = JSON.stringify(data, null, 2).replace(/</g, '\\u003c');
   return `<script type="application/ld+json">\n${json}\n</script>`;
 }

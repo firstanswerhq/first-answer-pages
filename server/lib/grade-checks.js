@@ -2,7 +2,7 @@
 // Pure functions: facts, robots and llms results come in, Check_Results go out.
 
 import {
-  HOURS_PATTERN, STREET_PATTERN, CTA_PATTERN, hasReviewSignal, serviceAreaPattern, serviceAreaText,
+  HOURS_PATTERN, STREET_PATTERN, CTA_PATTERN, hasReviewSignal, serviceAreaPattern, serviceAreaSource,
 } from './page-facts.js';
 import { AI_AGENTS, parseRobots, mayFetchRoot } from './robots.js';
 
@@ -287,7 +287,8 @@ function checkFacts(id, facts, input) {
       // No storefront: the service area counts, from the page text or the business label; a street address
       // alone neither passes nor fails it.
       const v = checkById(id, input);
-      const ok = serviceAreaPattern(input.city).test(serviceAreaText(facts)) || Boolean(facts.jsonLd?.business?.areaServed);
+      // Read before punctuation is taken out, so the "serving" window stops at the end of a sentence.
+      const ok = serviceAreaPattern(input.city).test(serviceAreaSource(facts)) || Boolean(facts.jsonLd?.business?.areaServed);
       return ok ? result(id, 'pass', v.passText) : result(id, 'fail', v.failText);
     }
     case 'call-button':
