@@ -93,18 +93,29 @@ function fieldsFromForm(body) {
     address: str('address'),
     ownerEmail: str('ownerEmail'),
     reviewsLink: str('reviewsLink'),
+    website: str('website'),
     hours,
   };
 }
 
-/** True when the owner typed a reviews link that validation left out (the review page then says so). */
-function reviewsLinkLeftOut(body, fields) {
-  const typed = body !== null && typeof body === 'object' && typeof body.reviewsLink === 'string' ? body.reviewsLink.trim() : '';
-  return typed !== '' && !(typeof fields.reviewsLink === 'string' && fields.reviewsLink !== '');
+/** True when the owner typed something in `key` that validation left out (the review page then says so). */
+function leftOut(body, fields, key) {
+  const typed = body !== null && typeof body === 'object' && typeof body[key] === 'string' ? body[key].trim() : '';
+  return typed !== '' && !(typeof fields[key] === 'string' && fields[key] !== '');
 }
 
-/** Fixed query value for that note; the typed value is never echoed. */
-const LEFT_OUT_QUERY = 'left=reviews';
+/**
+ * Fixed query text naming what was left out ("left=reviews", "left=website" or "left=both"), or ''. The typed
+ * value is never echoed.
+ */
+function leftOutQuery(body, fields) {
+  const reviews = leftOut(body, fields, 'reviewsLink');
+  const website = leftOut(body, fields, 'website');
+  if (reviews && website) return 'left=both';
+  if (reviews) return 'left=reviews';
+  if (website) return 'left=website';
+  return '';
+}
 
 /**
  * @param {object} ctx resolved dependencies from createApp
@@ -275,7 +286,8 @@ export function createRiseRouter(ctx) {
       }
       sendPage(res, 200, reviewPage(found.draft, ctx.store.getCategories(), {
         saved: req.query.saved === '1',
-        reviewsLeftOut: req.query.left === 'reviews',
+        reviewsLeftOut: req.query.left === 'reviews' || req.query.left === 'both',
+        websiteLeftOut: req.query.left === 'website' || req.query.left === 'both',
       }));
     } catch (err) {
       next(err);
@@ -300,8 +312,8 @@ export function createRiseRouter(ctx) {
       if (result.status === 409) {
         return sendPage(res, 409, await lockedPage(req.params.id));
       }
-      const left = reviewsLinkLeftOut(req.body, fields) ? `&${LEFT_OUT_QUERY}` : '';
-      res.redirect(303, `/rise/drafts/${encodeURIComponent(req.params.id)}?saved=1${left}`);
+      const left = leftOutQuery(req.body, fields);
+      res.redirect(303, `/rise/drafts/${encodeURIComponent(req.params.id)}?saved=1${left ? `&${left}` : ''}`);
     } catch (err) {
       next(err);
     }
@@ -334,9 +346,10 @@ export function createRiseRouter(ctx) {
         if (saved.status === 409) {
           return sendPage(res, 409, await lockedPage(req.params.id));
         }
-        // A reviews link that was left out is said so before anything is sent, so the owner can fix or clear it.
-        if (reviewsLinkLeftOut(req.body, fields)) {
-          return res.redirect(303, `/rise/drafts/${encodeURIComponent(req.params.id)}?saved=1&${LEFT_OUT_QUERY}`);
+        // A link that was left out is said so before anything is sent, so the owner can fix or clear it.
+        const left = leftOutQuery(req.body, fields);
+        if (left !== '') {
+          return res.redirect(303, `/rise/drafts/${encodeURIComponent(req.params.id)}?saved=1&${left}`);
         }
       }
       const result = await ctx.store.submitDraft(req.params.id);

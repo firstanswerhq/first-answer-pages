@@ -6,7 +6,20 @@ import { getCategories } from '../data.js';
 import { DEFAULT_SITE_NAME } from './config.js';
 import { formatFoundersDeadline } from './founders.js';
 import { formatFee } from './trust.js';
-import { reviewsLinkHost } from './listing-fields.js';
+import { reviewsLinkHost, normalizeWebsite } from './listing-fields.js';
+
+/**
+ * The listing's "Website" row: a link to the business's own site, with its host (no "www.") as the text. The
+ * stored value is checked again (the same check as the JSON API), and nothing is shown when it fails.
+ * @param {unknown} website
+ * @returns {string}
+ */
+export function websiteRow(website) {
+  const clean = normalizeWebsite(website);
+  if (clean === '') return '';
+  const host = new URL(clean).hostname.replace(/^www\./, '');
+  return `\n    <dt>Website</dt>\n    <dd><a href="${escapeHtml(clean)}" rel="noopener noreferrer">${escapeHtml(host)}</a></dd>`;
+}
 
 /** How each review site is named in "See our reviews on …". */
 const REVIEW_SITE_NAMES = Object.freeze({ google: 'Google', yelp: 'Yelp', facebook: 'Facebook', nextdoor: 'Nextdoor' });
@@ -403,7 +416,7 @@ ${days.map(([day, text]) => `      <tr><th scope="row">${day}</th><td>${escapeHt
     <dt>Phone</dt>
     <dd>${telLink(listing.phone)}</dd>${addressRow}
     <dt>Service area</dt>
-    <dd>${escapeHtml(listing.serviceArea)}</dd>${reviewsRow(listing.reviewsLink)}
+    <dd>${escapeHtml(listing.serviceArea)}</dd>${websiteRow(listing.website)}${reviewsRow(listing.reviewsLink)}
     <dt>Services</dt>
     <dd>
     <ul>

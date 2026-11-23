@@ -17,7 +17,7 @@ import { publicListing } from './public-listing.js';
 import { DEFAULT_SITE_NAME } from './config.js';
 import { normalizeCategory, normalizeCity, categoryForQuery } from './search-match.js';
 import { filledHours } from './html.js';
-import { reviewsLinkHost } from './listing-fields.js';
+import { reviewsLinkHost, normalizeWebsite } from './listing-fields.js';
 
 export const SUPPORTED_PROTOCOL_VERSIONS = Object.freeze(['2025-06-18', '2025-03-26', '2024-11-05']);
 export const SERVER_INFO = Object.freeze({ name: 'first-answer-pages', version: '0.1.0' });
@@ -134,6 +134,8 @@ function summarize(ctx, listing) {
     services: l.services,
     url: listingUrl(ctx, l.id),
     // The link to the business's reviews, only when it has a valid one; never a rating, count or review text.
+    // The business's own website (publicListing has already checked it again), only when it has one.
+    ...(normalizeWebsite(l.website) !== '' ? { website: normalizeWebsite(l.website) } : {}),
     ...(reviewsLinkHost(l.reviewsLink) !== '' ? { reviews: l.reviewsLink.trim() } : {}),
   };
 }

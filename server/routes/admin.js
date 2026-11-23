@@ -30,7 +30,7 @@ import { mountGradeAdmin } from './grade-admin.js';
 import { draftProvider } from '../lib/drafts.js';
 import { formatRunTime } from '../lib/seance-html.js';
 import { indexNowNote } from '../lib/indexnow.js';
-import { DAYS } from '../lib/listing-fields.js';
+import { DAYS, normalizeWebsite, reviewsLinkHost } from '../lib/listing-fields.js';
 import { markQuoteHandled } from '../lib/quotes.js';
 import { runSeanceForListing } from './seance.js';
 import { DEFAULT_SITE_NAME } from '../lib/config.js';
@@ -287,9 +287,9 @@ export function createAdminRouter(ctx) {
           row('Hours', hoursHtml(f.hours)),
           row('Service area', f.serviceArea ? escapeHtml(f.serviceArea) : 'None given'),
           ...(f.address ? [row('Address', escapeHtml(f.address))] : []),
-          ...(f.website ? [row('Website', escapeHtml(f.website))] : []),
-          // Shown as text, never as a link: the admin checks it before approving.
-          ...(typeof f.reviewsLink === 'string' && f.reviewsLink !== '' ? [row('Reviews link', escapeHtml(f.reviewsLink))] : []),
+          // Both links are checked again and shown as text, never as links: the admin checks them before approving.
+          ...(normalizeWebsite(f.website) !== '' ? [row('Website', escapeHtml(f.website.trim()))] : []),
+          ...(reviewsLinkHost(f.reviewsLink) !== '' ? [row('Reviews link', escapeHtml(f.reviewsLink.trim()))] : []),
           ...(f.ownerEmail ? [row('Owner email (private)', escapeHtml(f.ownerEmail))] : []),
         ].join('\n');
         return `<li class="pending-item" id="pending-${escapeHtml(e.id)}">

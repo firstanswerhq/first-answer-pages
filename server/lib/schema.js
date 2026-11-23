@@ -4,7 +4,7 @@
  * Converts a Listing into a schema.org LocalBusiness JSON-LD object.
  */
 
-import { reviewsLinkHost } from './listing-fields.js';
+import { reviewsLinkHost, normalizeWebsite } from './listing-fields.js';
 
 const REQUIRED_FIELDS = ['name', 'phone', 'description', 'city', 'state', 'services'];
 
@@ -83,7 +83,10 @@ export function buildSchema(listing, verification, options = {}) {
   }
   // The business's own pages elsewhere, added only when there is one: its reviews page (checked again here,
   // in case the stored data was edited by hand). `url` stays the listing page.
+  // The website first, then the reviews link, each checked again and only when present.
   const sameAs = [];
+  const website = normalizeWebsite(listing.website);
+  if (website !== '') sameAs.push(website);
   if (reviewsLinkHost(listing.reviewsLink) !== '') sameAs.push(listing.reviewsLink.trim());
   if (sameAs.length > 0) schema.sameAs = sameAs;
   return schema;

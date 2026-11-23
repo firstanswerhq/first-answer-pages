@@ -5,7 +5,7 @@
  */
 
 import { layout, escapeHtml, foundersInvite } from './html.js';
-import { DAYS, STATE_HINT, STATE_ERROR } from './listing-fields.js';
+import { DAYS, STATE_HINT, STATE_ERROR, normalizeWebsite, reviewsLinkHost } from './listing-fields.js';
 
 const DAY_LABELS = Object.freeze(
   Object.fromEntries(DAYS.map(d => [d, d[0].toUpperCase() + d.slice(1)])),
@@ -23,7 +23,14 @@ const FIELD_LABELS = Object.freeze({
   address: 'Street address',
   ownerEmail: 'Your email',
   reviewsLink: 'Reviews link (optional)',
+  website: 'Website (optional)',
 });
+
+/** Help text under the website box. */
+export const WEBSITE_HINT = 'The address of your own website, like https://example.com';
+
+/** Shown when the owner typed a website that was left out. Plain words, like the reviews link note. */
+export const WEBSITE_LEFT_OUT = 'We left that website out. It must start with https:// and be the address of your own website, like https://example.com.';
 
 /** Help text under the reviews link box. */
 export const REVIEWS_LINK_HINT = 'A link to your reviews on Google, Yelp, Facebook or Nextdoor.';
@@ -33,6 +40,10 @@ export const REVIEWS_LINK_LEFT_OUT = 'We left that link out. It must start with 
 
 /** The top line after a save that left the reviews link out. */
 export const SAVED_LINK_LEFT_OUT = 'Saved, but we left out your reviews link. See below.';
+
+/** The top line after a save that left the website out, and after one that left out both. */
+export const SAVED_WEBSITE_LEFT_OUT = 'Saved, but we left out your website. See below.';
+export const SAVED_BOTH_LEFT_OUT = 'Saved, but we left out your website and your reviews link. See below.';
 
 /** Hint under the street address box. */
 export const ADDRESS_HINT = 'Optional. Leave it blank if you go to your customers.';
@@ -185,10 +196,13 @@ export function reviewPage(draft, categories, opts = {}) {
 
   // At the top of the page so a phone shows it without scrolling after the reload.
   // When the reviews link was left out, the top line says so too (the note by the box is far down the page).
-  const savedNote = opts.saved !== true ? ''
-    : opts.reviewsLeftOut === true
-      ? `<p class="notice saved-note" role="status">${escapeHtml(SAVED_LINK_LEFT_OUT)}</p>`
-      : '<p class="notice saved-note" role="status">Saved.</p>';
+  const reviewsOut = opts.reviewsLeftOut === true;
+  const websiteOut = opts.websiteLeftOut === true;
+  const savedText = reviewsOut && websiteOut ? SAVED_BOTH_LEFT_OUT
+    : reviewsOut ? SAVED_LINK_LEFT_OUT
+      : websiteOut ? SAVED_WEBSITE_LEFT_OUT
+        : 'Saved.';
+  const savedNote = opts.saved === true ? `<p class="notice saved-note" role="status">${escapeHtml(savedText)}</p>` : '';
   const heading = fresh ? 'Type in your listing' : 'Check your listing';
   const tagline = fresh
     ? 'Fill in your business details, then press Confirm. Nobody can see it until we review it.'
@@ -220,7 +234,11 @@ ${row('address', `${input('address', f.address).replace('maxlength="500"', 'maxl
       <span class="hint" id="f-address-hint">${escapeHtml(ADDRESS_HINT)}</span>`, missing, fresh)}
 ${row('ownerEmail', `<input type="email" id="f-ownerEmail" name="ownerEmail" value="${escapeHtml(f.ownerEmail ?? '')}" maxlength="254" autocomplete="email" aria-describedby="f-ownerEmail-hint">
       <span class="hint" id="f-ownerEmail-hint">${escapeHtml(OWNER_EMAIL_HINT)}</span>`, missing, fresh)}
-${row('reviewsLink', `<input type="text" id="f-reviewsLink" name="reviewsLink" value="${escapeHtml(f.reviewsLink ?? '')}" maxlength="1000" inputmode="url" autocapitalize="none" autocomplete="url" aria-describedby="f-reviewsLink-hint">
+${row('website', `<input type="text" id="f-website" name="website" value="${escapeHtml(normalizeWebsite(f.website) !== '' ? f.website.trim() : '')}" maxlength="600" inputmode="url" autocapitalize="none" autocomplete="url" aria-describedby="f-website-hint">
+      <span class="hint" id="f-website-hint">${escapeHtml(WEBSITE_HINT)}</span>${websiteOut
+    ? `\n      <span class="missing-note" role="alert">${escapeHtml(WEBSITE_LEFT_OUT)}</span>`
+    : ''}`, missing, fresh)}
+${row('reviewsLink', `<input type="text" id="f-reviewsLink" name="reviewsLink" value="${escapeHtml(reviewsLinkHost(f.reviewsLink) !== '' ? f.reviewsLink.trim() : '')}" maxlength="1000" inputmode="url" autocapitalize="none" autocomplete="url" aria-describedby="f-reviewsLink-hint">
       <span class="hint" id="f-reviewsLink-hint">${escapeHtml(REVIEWS_LINK_HINT)}</span>${opts.reviewsLeftOut === true
     ? `\n      <span class="missing-note" role="alert">${escapeHtml(REVIEWS_LINK_LEFT_OUT)}</span>`
     : ''}`, missing, fresh)}

@@ -7,7 +7,7 @@
 import { getCategories } from '../data.js';
 import { DEFAULT_SITE_NAME } from './config.js';
 import { filledHours } from './html.js';
-import { reviewsLinkHost } from './listing-fields.js';
+import { reviewsLinkHost, normalizeWebsite } from './listing-fields.js';
 
 /** Forces a value onto one line: line breaks and control characters become one space. */
 function oneLine(value) {
@@ -94,7 +94,10 @@ export function generateLlmsTxt(listings, baseUrl, categories, options = {}) {
         `City: ${oneLine(l.city)}, ${oneLine(l.state)}`,
         `Service Area: ${oneLine(l.serviceArea)}`,
       );
-      // Only when the listing has a valid reviews link, so other listings keep exactly their old lines.
+      // Only when the listing has a valid website or reviews link (checked again here), so other listings keep
+      // exactly their old lines.
+      const website = normalizeWebsite(l.website);
+      if (website !== '') lines.push(`Website: ${website}`);
       if (reviewsLinkHost(l.reviewsLink) !== '') lines.push(`Reviews: ${oneLine(l.reviewsLink)}`);
       const services = (Array.isArray(l.services) ? l.services : []).map(oneLine).filter(Boolean);
       if (services.length > 0) lines.push(`Services: ${services.join('; ')}`);

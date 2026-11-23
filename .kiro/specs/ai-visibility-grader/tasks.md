@@ -475,7 +475,7 @@ From `feature-request-2026-11-18.md` and `spec-review-2026-11-18.md`: Feature A,
   - `server/data.js` `buildListing`: add `website` to its `MODEL_KEYS` list, copied only when it is a non-empty string, so an approved Draft keeps it
   - New test file `test/grade-website-field.test.js` (additions only): valid links; refused `http`, an IPv4 address, an IPv6 address, `localhost`, `https://user:pass@example.com/`, `https://example.com:8443/`, a name with no dot, and a value over 300 characters; a link with a query string and `#` part comes back without them; `https://example.com:443/` comes back as `https://example.com/`; `https://example.com./` comes back as `https://example.com/`; `https://localhost./` and `https://127.0.0.1./` are refused; `validateFields` leaves an invalid value out and keeps a valid one; an approved Draft publishes it
   - _Requirements: 21.1, 21.2, 21.8_
-- [ ] F9. Show, edit and publish the website
+- [x] F9. Show, edit and publish the website
   - `listingDetail` in `server/lib/html.js`: a plain "Website" row linking to the site (host as the text, escaped, `rel="noopener noreferrer"`); nothing when the field is empty
   - `schema.js`: add `sameAs` (the website, then the reviews link, each only when present; the array only when not empty); the label's `url` stays the listing page; `llms.js` and the MCP `summarize` text: a `Website` line or link, only when present; the JSON API and the MCP `get_listing` need no code
   - `routes/rise.js` `fieldsFromForm`, the draft form and review page in `rise-html.js`, and the admin Draft page: the optional "Website" input and row, with the note "We left that link out. It must be a public https address, like https://example.com." when a submitted value was left out
