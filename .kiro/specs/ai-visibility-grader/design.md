@@ -515,16 +515,18 @@ Claude answers a little differently every time, and one answer can swing the sco
    - an all-capitals word (no lower-case letter) of 5 or more letters and letters only is made lower case (PLUMBERS, ROOFING, ELECTRICIANS); any other all-capitals word is kept (4 letters or fewer, or holding a slash, a digit, "&" or other marks: HVAC, A/C, CPA, DJ, IT, BBQ, RV, B&B);
    - a word with a capital inside it after a lower-case letter (iPhone), a nationality or cuisine word (Mexican, Italian, Chinese, Thai, Japanese, Indian, Greek, French, Korean, Vietnamese, Cuban, Cajun, Caribbean, Mediterranean, American, Spanish, German, Irish) and "Dr." are kept as typed;
    - when the phrase is in Title Case (every word that has letters starts with a capital, not counting the joining words and, or, of, the, for, in, on, at, by, to, with, a, an), every other word gets a lower-case first letter ("Plumbers and Electricians", "Heating & Air", "Pressure Washing Companies"); otherwise only the first word does, and the owner's other words are kept as typed.
-3. Raise a fixed list of abbreviations typed in lower case (V115): a/c → A/C, hvac → HVAC, cpa → CPA, cpas → CPAs, dj → DJ, djs → DJs, bbq → BBQ, rv → RV, and "it" → "IT" only as the first word when the next word is "support" or "services".
+   - a phrase of two or more words with no lower-case letter at all is made lower case word by word instead (V121: "LAWN CARE", "HVAC REPAIR", "MEXICAN RESTAURANT"); steps 3 and 4 then apply. A single all-capitals word keeps the rule above (HVAC, CPA, BBQ stay).
+3. By each word's lower-case form, whatever was typed: a joining word (and, or, of, the, for, in, on, at, by, to, with, a, an) is written in lower case (V120: "PLUMBERS AND ELECTRICIANS" gives "plumbers and electricians"); a keep-capital word gets its capital (V122; the list is Mexican, Italian, Chinese, Thai, Japanese, Indian, Greek, French, Korean, Vietnamese, Cuban, Cajun, Caribbean, Mediterranean, American, Spanish, German, Irish, Asian, Hawaiian, Brazilian, Ethiopian, Lebanese, Turkish, Peruvian, Tex-Mex); an abbreviation is raised, looked up with and without a final "s" (V115, V119): a/c → A/C, hvac → HVAC, cpa → CPA, dj → DJ, bbq → BBQ, rv → RV, b&b → B&B, so "CPAs", "cpas" and "Cpas" give "CPAs" and "DJs", "RVs", "B&Bs" work the same. "it" → "IT" only as the first word when the next word is "support" or "services".
+4. Food typed without "restaurant" (V123), fixed rules checked before the last-word rules, nothing general: a cuisine word last ("Italian", "authentic Thai") adds " restaurants"; "food" after a cuisine word becomes "restaurants" ("Thai food" gives "Thai restaurants"); a last word on the list BBQ, barbecue, sushi, seafood, tacos, burgers, wings, ramen, pho, steak adds " restaurants"; "pizza" adds " places"; "Bar & Grill" and "bar and grill" give "bar and grill restaurants". Anything else goes on to the last-word rules.
 
 *The last word* (fixed lists, not general English plural rules; no general "-er", "-or" or "-ian" rule, since "water heater", "garage door", "computer" and "Italian" would turn into products or people) (V112 to V114). Compared in lower case; the ending is always lower case, so capitals follow the word ("CPAs", "DJs"):
 
 - "business" becomes "businesses";
 - these end in "s" but are not a plural of a business, and get " businesses": arts, gas, bus, lens, glass, fitness, wellness, logistics, analytics, electronics, cosmetics, aesthetics, graphics, news, sales; so does any word ending in "ss";
 - any other word ending in "s" is already plural (rentals, services);
-- a nationality or cuisine word is never made plural: it gets " businesses" ("Italian businesses"; "Italian restaurants" as typed stays as typed);
+- a nationality or cuisine word is never made plural (as the last word it is caught by the food rules first: "Italian restaurants");
 - "es": church, wash, coach;
-- "y" to "ies": company, agency, bakery, brewery, winery, notary, pharmacy, nursery, laundry, grocery, distillery, creamery;
+- "y" to "ies": company, agency, bakery, brewery, winery, notary, pharmacy, nursery, laundry, distillery, creamery ("grocery" is not on it, V124: "grocery businesses", while "grocery store" gives "grocery stores");
 - handyman becomes handymen;
 - "s": contractor, shop, service, crew, store, salon, studio, clinic, restaurant, cafe, firm, lawyer, doctor, plumber, roofer, painter, cleaner, landscaper, mechanic, barber, photographer, realtor, agent, groomer, inspector, attorney, locksmith, chiropractor, tutor, tailor, jeweler, bookkeeper, vet, trainer, walker, builder, gym, spa, bar, hotel, motel, daycare, preschool, boutique, barbershop, place, truck, home, school, park, diner, pub, mover, caterer, office, center, garage, dealership, cpa, dj (the note's two-word entries, such as "dog walker", "pizza place" and "funeral home", are covered by their last word);
 - words ending in "ist" (dentist, florist, therapist) or "ician" (electrician, technician, beautician, optician), and veterinarian, pediatrician, dietitian, librarian, guardian, take "s";
@@ -554,7 +556,7 @@ The 30 services from the W1 review (V111 to V117), each pinned with its exact th
 
 | Typed | `named` | Typed | `named` |
 |---|---|---|---|
-| dentist | dentists | Italian | Italian businesses |
+| dentist | dentists | Italian | Italian restaurants (V123) |
 | car wash | car washes | martial arts | martial arts businesses |
 | CPA | CPAs | Heating & Air | heating & air businesses |
 | DJ | DJs | a/c repair | A/C repair businesses |
@@ -567,7 +569,26 @@ The 30 services from the W1 review (V111 to V117), each pinned with its exact th
 | law firm | law firms | tree service | tree services |
 | Roofing Company | roofing companies | pet grooming | pet grooming businesses |
 | Mexican restaurants | Mexican restaurants | real estate agent | real estate agents |
-| IT support | IT support businesses | Thai food | Thai food businesses |
+| IT support | IT support businesses | Thai food | Thai restaurants (V123) |
+
+The cases from the review of V111 to V118 (V119 to V124), each pinned in the table test:
+
+| Typed | `named` | Typed | `named` |
+|---|---|---|---|
+| CPAs, cpas, Cpas | CPAs | DJs, djs, Djs | DJs |
+| RVs | RVs | B&Bs | B&Bs |
+| PLUMBERS AND ELECTRICIANS | plumbers and electricians | Plumbers AND Electricians | plumbers and electricians |
+| LAWN CARE | lawn care businesses | HVAC REPAIR | HVAC repair businesses |
+| MEXICAN RESTAURANT | Mexican restaurants | IT SUPPORT | IT support businesses |
+| HVAC | HVAC businesses | BBQ | BBQ restaurants |
+| mexican restaurants | Mexican restaurants | asian restaurants | Asian restaurants |
+| Italian | Italian restaurants | authentic Thai | authentic Thai restaurants |
+| Thai food | Thai restaurants | Mexican food | Mexican restaurants |
+| sushi, seafood, ramen, pho, steak, barbecue | … restaurants | tacos, burgers, wings | tacos restaurants, burgers restaurants, wings restaurants |
+| pizza | pizza places | Bar & Grill, bar and grill | bar and grill restaurants |
+| grocery | grocery businesses | grocery store | grocery stores |
+
+Every keep-capital word is also pinned typed in lower case, in capitals, alone and before "food". Left as they are on purpose (V119 note): "Dr. Smith Dental Office", "Mr. Fix It", "St. Louis style pizza", "church of christ", "taxes", "used cars", "Men's haircuts", "24 hour" without a hyphen, and "plumber" versus "plumbers" asking again.
 | nail salon | nail salons | photographer | photographers |
 
 The three questions (V111) are "Who are the best <named> in <city>, <ST>? Name your top 5.", "I'm looking for <named> in <city>, <ST>. Which ones would you recommend?" and "Which <named> in <city>, <ST> do people recommend most?". Already clean services ("plumbers", "roofers", "accountants") give exactly today's free question and scan step; the two extra questions change for every service, which is intended. The Google live question uses `freeQuestion`, so it follows. The service as typed is still stored in `input.service` and shown on the report; the category mapping, the reuse key and the report's other texts keep using it. "Plumbers", " plumbers ", "PLUMBERS" and "plumbers." give exactly the questions of "plumbers", so a repeat check reuses its answers (V117).
@@ -608,6 +629,10 @@ Nothing else moves. Each line is a place where a new requirement changes a numbe
 | `test/grade-turnstile.test.js`, `startEnv` default config | no `gradeMainAsks` | adds `gradeMainAsks: 1` | same reason (J1) |
 | `test/grade-no-storefront.test.js`, env config | no `gradeMainAsks` | adds `gradeMainAsks: 1` | same reason (J1) |
 | `test/grade-question.test.js` (W1's own file), the two tests that quote the second and third questions | "I need … Which companies would you recommend?" and "… do people say are the most reliable?" | "I'm looking for … Which ones would you recommend?" and "… do people recommend most?" | V111: all three questions use the named phrase; no older test file quotes these questions |
+| `test/grade-question.test.js`, 30-service table rows "Italian" and "Thai food" | "Italian businesses", "Thai food businesses" | "Italian restaurants", "Thai restaurants" | V123: the fixed food rules |
+| `test/grade-question.test.js`, V115 rows "BBQ" and "bbq", and "A1 TOWING" | "BBQ businesses", "A1 towing businesses" | "BBQ restaurants", "a1 towing businesses" | V123 (BBQ is on the food list); V121 (a phrase of two or more words typed all in capitals is lowered, and "A1" is on no raise list) |
+| `test/grade-question.test.js`, V112 test, the cuisine words alone | "Italian businesses" and the like | "Italian restaurants" and the like ("vegetarian businesses" unchanged) | V122 (Asian, Hawaiian, Brazilian added) and V123 |
+| `test/grade-question.test.js`, V114 "ies" row "grocery" | "groceries" | the row becomes "grocery store" → "grocery stores" | V124 |
 | `test/grade-question.test.js`, the N2 "PLUMBERS" test | "PLUMBERS" keeps its capitals and its questions differ | "PLUMBERS" gives the questions of "plumbers" | V115 and V117 |
 | `test/grade-lead.test.js` line 277, "Every answer" count after unlocking | `'Named in 0 of 3 answers.'` | `'named your business in 0 of its 3 answers.'` | V108: the count line uses the full sentence form with or without second opinions (the accepted exception of V110) |
 

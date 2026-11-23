@@ -141,11 +141,18 @@ function reuseKey(input) {
 
 // ---- the cleaned service phrase (Feature F, Requirement 24) ------------------------------------------------
 
-/** Nationality and cuisine words that keep their capital. */
-const KEEP_CAPITAL = new Set([
-  'mexican', 'italian', 'chinese', 'thai', 'japanese', 'indian', 'greek', 'french', 'korean', 'vietnamese',
-  'cuban', 'cajun', 'caribbean', 'mediterranean', 'american', 'spanish', 'german', 'irish',
-]);
+/**
+ * Nationality and cuisine words, by their lower-case form, with the capital they always get, whatever was
+ * typed (V122).
+ */
+const KEEP_CAPITAL = new Map([
+  'Mexican', 'Italian', 'Chinese', 'Thai', 'Japanese', 'Indian', 'Greek', 'French', 'Korean', 'Vietnamese',
+  'Cuban', 'Cajun', 'Caribbean', 'Mediterranean', 'American', 'Spanish', 'German', 'Irish', 'Asian', 'Hawaiian',
+  'Brazilian', 'Ethiopian', 'Lebanese', 'Turkish', 'Peruvian', 'Tex-Mex',
+].map(w => [w.toLowerCase(), w]));
+
+/** Last words that are food and get " restaurants" (V123). "tacos" and "burgers" end in "s" but are not a plural of a business. */
+const FOOD_RESTAURANTS = new Set(['bbq', 'barbecue', 'sushi', 'seafood', 'tacos', 'burgers', 'wings', 'ramen', 'pho', 'steak']);
 
 /** Last words that end in "s" but are not a plural of a business (V113). Any word ending in "ss" is treated the same. */
 const NOT_PLURAL_S = new Set([
@@ -157,8 +164,9 @@ const NOT_PLURAL_S = new Set([
 const TAKES_ES = new Set(['church', 'wash', 'coach']);
 
 /** Last words whose "y" becomes "ies" (V114). */
+// "grocery" is not on it: "grocery businesses", while "grocery store" gives "grocery stores" (V124).
 const TAKES_IES = new Set([
-  'company', 'agency', 'bakery', 'brewery', 'winery', 'notary', 'pharmacy', 'nursery', 'laundry', 'grocery',
+  'company', 'agency', 'bakery', 'brewery', 'winery', 'notary', 'pharmacy', 'nursery', 'laundry',
   'distillery', 'creamery',
 ]);
 
@@ -175,10 +183,18 @@ const TAKES_S = new Set([
 /** Words ending in "ian" that take "s"; words ending in "ician" do too (V112). */
 const IAN_TAKES_S = new Set(['veterinarian', 'pediatrician', 'dietitian', 'librarian', 'guardian']);
 
-/** Abbreviations typed in lower case that are raised (V115). "it" is handled on its own. */
+/**
+ * Abbreviations that are raised (V115), looked up by their lower-case form with or without a final "s", whatever
+ * was typed (V119: "CPAs", "cpas" and "Cpas" all give "CPAs"). "it" is handled on its own.
+ */
 const RAISE = new Map([
-  ['a/c', 'A/C'], ['hvac', 'HVAC'], ['cpa', 'CPA'], ['cpas', 'CPAs'], ['dj', 'DJ'], ['djs', 'DJs'], ['bbq', 'BBQ'], ['rv', 'RV'],
+  ['a/c', 'A/C'], ['hvac', 'HVAC'], ['cpa', 'CPA'], ['dj', 'DJ'], ['bbq', 'BBQ'], ['rv', 'RV'], ['b&b', 'B&B'],
 ]);
+const raised = lw => {
+  if (RAISE.has(lw)) return RAISE.get(lw);
+  if (lw.length > 1 && lw.endsWith('s') && RAISE.has(lw.slice(0, -1))) return `${RAISE.get(lw.slice(0, -1))}s`;
+  return null;
+};
 
 /** Joining words that do not count when deciding whether a phrase is in Title Case. */
 const JOINING = new Set(['and', 'or', 'of', 'the', 'for', 'in', 'on', 'at', 'by', 'to', 'with', 'a', 'an']);
@@ -232,22 +248,51 @@ export function servicePhrase(service) {
   if (text === '') return { named: '' };
   try {
     const words = text.split(' ');
-    // Title Case: every word with letters starts with a capital, not counting joining words (V115).
-    const counted = words.filter(w => hasLetter(w) && !JOINING.has(w.toLowerCase()));
-    const title = counted.length > 0 && counted.every(startsUpper);
-    const cased = words.map((w, i) => caseWord(w, title || i === 0));
-    const raised = cased.map((w, i) => {
-      if (RAISE.has(w)) return RAISE.get(w);
-      if (i === 0 && w === 'it' && /^(support|services)$/i.test(cased[1] ?? '')) return 'IT';
-      return w;
+    let cased;
+    if (words.length >= 2 && hasUpper(text) && !hasLower(text)) {
+      // A phrase of two or more words typed all in capitals is lowered; the lists below then apply (V121).
+      cased = words.map(w => w.toLowerCase());
+    } else {
+      // Title Case: every word with letters starts with a capital, not counting joining words (V115).
+      const counted = words.filter(w => hasLetter(w) && !JOINING.has(w.toLowerCase()));
+      const title = counted.length > 0 && counted.every(startsUpper);
+      cased = words.map((w, i) => caseWord(w, title || i === 0));
+    }
+    // By the lower-case form, whatever was typed: joining words in lower case (V120), keep-capital words with their
+    // capital (V122), abbreviations raised with or without a final "s" (V119).
+    const fixed = cased.map(w => {
+      const lw = w.toLowerCase();
+      if (JOINING.has(lw)) return lw;
+      if (KEEP_CAPITAL.has(lw)) return KEEP_CAPITAL.get(lw);
+      return raised(lw) ?? w;
     });
-    const last = pluralLast(raised[raised.length - 1]);
-    raised[raised.length - 1] = last.word;
-    const phrase = raised.join(' ');
+    if (fixed[0] === 'it' && /^(support|services)$/i.test(fixed[1] ?? '')) fixed[0] = 'IT';
+    const food = foodPhrase(fixed);
+    if (food) return { named: food.join(' ') };
+    const last = pluralLast(fixed[fixed.length - 1]);
+    fixed[fixed.length - 1] = last.word;
+    const phrase = fixed.join(' ');
     return { named: last.names ? phrase : `${phrase} businesses` };
   } catch {
     return { named: text };
   }
+}
+
+/** The fixed food rules (V123), or null when none applies. Nothing general: anything else keeps the other rules. */
+function foodPhrase(words) {
+  const n = words.length;
+  const lw = i => (words[i] ?? '').toLowerCase();
+  // "Bar & Grill", "bar and grill".
+  if (n >= 3 && lw(n - 3) === 'bar' && (lw(n - 2) === '&' || lw(n - 2) === 'and') && lw(n - 1) === 'grill') {
+    return [...words.slice(0, n - 2), 'and', words[n - 1], 'restaurants'];
+  }
+  // A cuisine word last ("Italian", "authentic Thai").
+  if (KEEP_CAPITAL.has(lw(n - 1))) return [...words, 'restaurants'];
+  // "Thai food", "Mexican food".
+  if (n >= 2 && lw(n - 1) === 'food' && KEEP_CAPITAL.has(lw(n - 2))) return [...words.slice(0, n - 1), 'restaurants'];
+  if (FOOD_RESTAURANTS.has(lw(n - 1))) return [...words, 'restaurants'];
+  if (lw(n - 1) === 'pizza') return [...words, 'places'];
+  return null;
 }
 
 /** The question in the free part of a report. */

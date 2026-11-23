@@ -466,6 +466,16 @@ Wording only; no scoring change.
 - [x] V117. The N2 tests pin "PLUMBERS" equal to "plumbers", and the capitals that are kept or lowered
 - [x] V118. The fix kit title never cuts the service mid-phrase and keeps the state when the service is shown (older than Feature F)
 
+### AI. Reviews of V107 to V118 (`review-2026-11-23-v111.md`)
+
+- [x] V119. Abbreviations are looked up by their lower-case form, with and without a final "s", whatever was typed: "CPAs", "cpas", "Cpas" give "CPAs"; DJs, RVs and B&Bs the same
+- [x] V120. Joining words (and, or, of, the, for, in, on, at, by, to, with, a, an) are always lower case
+- [x] V121. A phrase of two or more words typed all in capitals is lowered, then the raise and keep-capital lists apply; a single all-capitals word keeps the 4-letters-or-fewer rule
+- [x] V122. Keep-capital words get their capital whatever was typed; Asian, Hawaiian, Brazilian, Ethiopian, Lebanese, Turkish, Peruvian and Tex-Mex added
+- [x] V123. Fixed food rules: a cuisine word last adds " restaurants", "<cuisine> food" becomes "<cuisine> restaurants", the food list adds " restaurants", "pizza places", "bar and grill restaurants"
+- [x] V124. "grocery" is off the "ies" list
+- Tests: a new V119 to V124 table test, every keep-capital word typed four ways, and the three questions for four new cases; the older lines in `test/grade-question.test.js` that pinned results these rules change are listed in the design's table
+
 ## Owner-approved features (Nov 18)
 
 From `feature-request-2026-11-18.md` and `spec-review-2026-11-18.md`: Feature A, a no-storefront mode for the address check (Requirement 18); Feature B, a "Reviews AI can see" check and a reviews link on the free listing (Requirements 19 and 20); Feature C, the business's own website on the listing (Requirement 21, tasks F8 to F10); and Feature D, letting Google and Bing find the main pages (Requirement 22, tasks F11 to F13). Feature D is approved too (F11 to F13). Three more features were approved on Nov 19 (`feature-request-2026-11-19.md`): bot protection (Feature G, Requirement 25, tasks G1 to G7), asking Claude three times (Feature E, Requirement 23, tasks E1 to E4) and a question that reads naturally (Feature F, Requirement 24, tasks W1 and W2; "W" for wording, so the names stay apart from F1 to F13). **Build order: the G tasks first, then F1 to F13, then E1 to E4, then W1 and W2.** Build one task at a time, in order, after the spec has been checked again. No shell commands: the cloud runs the tests and sends back failures. Add tests only. Never change or loosen an existing test, except the exact lines listed in "Numbers that change in existing tests (and why)" in the design, each with its reason. Follow `wording.md` and `grader-safety.md`: plain words, American spelling, never promise AI will name a business, never invent, copy or edit a review, escape everything, never log typed input.

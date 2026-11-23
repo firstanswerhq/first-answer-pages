@@ -59,7 +59,7 @@ const THIRTY = [
   ['law firm', 'law firms'],
   ['Roofing Company', 'roofing companies'],
   ['Mexican restaurants', 'Mexican restaurants'],
-  ['Italian', 'Italian businesses'],
+  ['Italian', 'Italian restaurants'], // V123
   ['martial arts', 'martial arts businesses'],
   ['Heating & Air', 'heating & air businesses'],
   ['a/c repair', 'A/C repair businesses'],
@@ -73,7 +73,7 @@ const THIRTY = [
   ['pet grooming', 'pet grooming businesses'],
   ['real estate agent', 'real estate agents'],
   ['IT support', 'IT support businesses'],
-  ['Thai food', 'Thai food businesses'],
+  ['Thai food', 'Thai restaurants'], // V123
   ['nail salon', 'nail salons'],
   ['photographer', 'photographers'],
 ];
@@ -117,8 +117,8 @@ test('V115: all-capitals words of 5 or more letters are lowered; shorter ones an
   assert.equal(named('ROOFING'), 'roofing businesses');
   assert.equal(named('ELECTRICIANS'), 'electricians');
   for (const [typed, phrase] of [['HVAC', 'HVAC businesses'], ['A/C', 'A/C businesses'], ['CPA', 'CPAs'], ['DJ', 'DJs'],
-    ['IT support', 'IT support businesses'], ['BBQ', 'BBQ businesses'], ['RV park', 'RV parks'], ['B&B', 'B&B businesses'],
-    ['BBQ catering', 'BBQ catering businesses'], ['A1 TOWING', 'A1 towing businesses']]) {
+    ['IT support', 'IT support businesses'], ['BBQ', 'BBQ restaurants'], ['RV park', 'RV parks'], ['B&B', 'B&B businesses'],
+    ['BBQ catering', 'BBQ catering businesses'], ['A1 TOWING', 'a1 towing businesses']]) { // BBQ: V123; A1 TOWING: V121
     assert.equal(named(typed), phrase, typed);
   }
 });
@@ -134,7 +134,7 @@ test('V115: a phrase in Title Case is lowered word by word, except the words tha
 
 test('V115: a fixed list of abbreviations typed in lower case is raised', () => {
   for (const [typed, phrase] of [['a/c repair', 'A/C repair businesses'], ['hvac repair', 'HVAC repair businesses'],
-    ['cpa', 'CPAs'], ['cpas', 'CPAs'], ['dj', 'DJs'], ['djs', 'DJs'], ['bbq', 'BBQ businesses'], ['rv park', 'RV parks'],
+    ['cpa', 'CPAs'], ['cpas', 'CPAs'], ['dj', 'DJs'], ['djs', 'DJs'], ['bbq', 'BBQ restaurants'], ['rv park', 'RV parks'], // bbq: V123
     ['it support', 'IT support businesses'], ['it services', 'IT services']]) {
     assert.equal(named(typed), phrase, typed);
   }
@@ -175,13 +175,13 @@ test('W1: "water heater", "garage door" and "computer" are not made plural by a 
 });
 
 test('V112: a nationality, cuisine or other "-ian" word is never given a plural "s"', () => {
-  // Italian, Indian, Mexican and Thai keep their capital; Asian, Hawaiian and Brazilian are not on that list, so a
-  // lone one gets the usual lower-case first letter. None of them is ever made plural.
+  // None of them is ever made plural. A cuisine word last gets " restaurants" (V122, V123); "vegetarian" is not a
+  // cuisine word and gets " businesses".
   for (const word of ['Italian', 'Indian', 'Asian', 'Hawaiian', 'Brazilian', 'vegetarian', 'Mexican', 'Thai']) {
-    assert.equal(named(word).toLowerCase(), `${word.toLowerCase()} businesses`, word);
     assert.equal(named(word).toLowerCase().includes(`${word.toLowerCase()}s`), false, word);
   }
-  for (const word of ['Italian', 'Indian', 'Mexican', 'Thai']) assert.equal(named(word), `${word} businesses`, word);
+  assert.equal(named('vegetarian'), 'vegetarian businesses');
+  for (const word of ['Italian', 'Indian', 'Asian', 'Hawaiian', 'Brazilian', 'Mexican', 'Thai']) assert.equal(named(word), `${word} restaurants`, word);
   assert.equal(named('Italian restaurants'), 'Italian restaurants');
   for (const word of ['electrician', 'technician', 'beautician', 'optician', 'veterinarian', 'pediatrician', 'dietitian',
     'librarian', 'guardian']) {
@@ -219,7 +219,7 @@ test('V114: the fixed lists for "s", "es" and "ies", and capitals follow the wor
   }
   for (const [typed, phrase] of [['company', 'companies'], ['agency', 'agencies'], ['bakery', 'bakeries'],
     ['brewery', 'breweries'], ['winery', 'wineries'], ['notary', 'notaries'], ['pharmacy', 'pharmacies'],
-    ['nursery', 'nurseries'], ['laundry', 'laundries'], ['grocery', 'groceries'], ['distillery', 'distilleries'],
+    ['nursery', 'nurseries'], ['laundry', 'laundries'], ['grocery store', 'grocery stores'], ['distillery', 'distilleries'], // grocery: V124
     ['creamery', 'creameries']]) {
     assert.equal(named(typed), phrase, typed);
   }
@@ -277,6 +277,63 @@ test('V117: "ROOFING" and "Plumbers and Electricians" come out in lower case; HV
   assert.ok(named('DJ').startsWith('DJ'));
   assert.ok(named('IT support').startsWith('IT support'));
   assert.ok(named('BBQ').startsWith('BBQ'));
+});
+
+// ---- V119 to V124 (review of V111 to V118) --------------------------------------------------------------------
+
+const CUISINE = ['Mexican', 'Italian', 'Chinese', 'Thai', 'Japanese', 'Indian', 'Greek', 'French', 'Korean', 'Vietnamese',
+  'Cuban', 'Cajun', 'Caribbean', 'Mediterranean', 'American', 'Spanish', 'German', 'Irish', 'Asian', 'Hawaiian',
+  'Brazilian', 'Ethiopian', 'Lebanese', 'Turkish', 'Peruvian', 'Tex-Mex'];
+
+const V119_V124 = [
+  // V119: a plural abbreviation typed in capitals.
+  ['CPAs', 'CPAs'], ['cpas', 'CPAs'], ['Cpas', 'CPAs'], ['DJs', 'DJs'], ['djs', 'DJs'], ['Djs', 'DJs'],
+  ['RVs', 'RVs'], ['rvs', 'RVs'], ['B&Bs', 'B&Bs'], ['b&bs', 'B&Bs'], ['wedding DJs', 'wedding DJs'], ['tax CPAs', 'tax CPAs'],
+  // V120: joining words are always lower case.
+  ['PLUMBERS AND ELECTRICIANS', 'plumbers and electricians'], ['Plumbers AND Electricians', 'plumbers and electricians'],
+  ['heating OR cooling', 'heating or cooling businesses'], ['Doctors Of Chiropractic', 'doctors of chiropractic businesses'],
+  // V121: a phrase of two or more words typed all in capitals.
+  ['LAWN CARE', 'lawn care businesses'], ['HVAC REPAIR', 'HVAC repair businesses'], ['MEXICAN RESTAURANT', 'Mexican restaurants'],
+  ['IT SUPPORT', 'IT support businesses'], ['CPA FIRM', 'CPA firms'], ['ROOF REPAIR', 'roof repair businesses'],
+  // A single all-capitals word keeps the 4-letters-or-fewer rule.
+  ['HVAC', 'HVAC businesses'], ['CPA', 'CPAs'], ['BBQ', 'BBQ restaurants'], ['PLUMBERS', 'plumbers'],
+  // V122: keep-capital words get their capital whatever was typed.
+  ['mexican restaurants', 'Mexican restaurants'], ['MEXICAN RESTAURANTS', 'Mexican restaurants'], ['asian restaurants', 'Asian restaurants'],
+  ['tex-mex restaurants', 'Tex-Mex restaurants'], ['TEX-MEX', 'Tex-Mex restaurants'],
+  // V123: food typed without "restaurant".
+  ['Italian', 'Italian restaurants'], ['authentic Thai', 'authentic Thai restaurants'], ['Thai food', 'Thai restaurants'],
+  ['Mexican food', 'Mexican restaurants'], ['italian food', 'Italian restaurants'], ['BBQ', 'BBQ restaurants'],
+  ['barbecue', 'barbecue restaurants'], ['sushi', 'sushi restaurants'], ['seafood', 'seafood restaurants'],
+  ['tacos', 'tacos restaurants'], ['burgers', 'burgers restaurants'], ['wings', 'wings restaurants'],
+  ['ramen', 'ramen restaurants'], ['pho', 'pho restaurants'], ['steak', 'steak restaurants'], ['pizza', 'pizza places'],
+  ['Bar & Grill', 'bar and grill restaurants'], ['bar and grill', 'bar and grill restaurants'],
+  ['fast food', 'fast food businesses'], ['pizza place', 'pizza places'],
+  // V124: grocery.
+  ['grocery', 'grocery businesses'], ['grocery store', 'grocery stores'],
+];
+
+test('V119-V124: every case gives its phrase', () => {
+  for (const [typed, phrase] of V119_V124) assert.equal(named(typed), phrase, typed);
+});
+
+test('V122: every keep-capital word gets its capital, typed in lower case, in capitals or as a cuisine on its own', () => {
+  for (const word of CUISINE) {
+    assert.equal(named(`${word.toLowerCase()} restaurants`), `${word} restaurants`, word);
+    assert.equal(named(`${word.toUpperCase()} RESTAURANTS`), `${word} restaurants`, word);
+    assert.equal(named(word.toLowerCase()), `${word} restaurants`, word);
+    assert.equal(named(`${word.toLowerCase()} food`), `${word} restaurants`, word);
+  }
+});
+
+test('V119-V124: the three questions for a few of the new cases', () => {
+  for (const [service, phrase] of [['CPAs', 'CPAs'], ['LAWN CARE', 'lawn care businesses'], ['Thai food', 'Thai restaurants'], ['pizza', 'pizza places']]) {
+    const input = { ...TALLAHASSEE, service };
+    assert.deepEqual([freeQuestion(input), ...extraQuestions(input)], [
+      `Who are the best ${phrase} in Tallahassee, FL? Name your top 5.`,
+      `I'm looking for ${phrase} in Tallahassee, FL. Which ones would you recommend?`,
+      `Which ${phrase} in Tallahassee, FL do people recommend most?`,
+    ], service);
+  }
 });
 
 // ---- odd input -------------------------------------------------------------------------------------------------
