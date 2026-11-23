@@ -48,12 +48,12 @@ export function createGradeRouter(ctx) {
   const html = (res, status, body) => res.status(status).type('html').send(body);
   const tooMany = (res, retryAfterSeconds) => {
     res.set('Retry-After', String(retryAfterSeconds));
-    return html(res, 429, messagePage('Please slow down', 'We have had a lot of checks from your address. Please try again a little later.'));
+    return html(res, 429, messagePage('Please slow down', 'We have had a lot of checks from your internet connection. Please try again a little later.'));
   };
   // Many unrelated people can share one mobile network, so this refusal does not say "your address".
   const tooManyNetwork = (res, retryAfterSeconds) => {
     res.set('Retry-After', String(retryAfterSeconds));
-    return html(res, 429, messagePage('Please slow down', 'A lot of checks have come from your network today. Please try again tomorrow, or from another connection.'));
+    return html(res, 429, messagePage('Please slow down', 'A lot of checks have come from your internet provider today. Please try again tomorrow, or from another connection.'));
   };
   const hasCookie = (kind, id, req) => hasValidCookie(secret(), kind, id, req.headers.cookie);
 

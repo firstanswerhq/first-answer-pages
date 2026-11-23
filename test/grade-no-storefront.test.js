@@ -184,7 +184,7 @@ test('F4: the Check keeps its id, group and points in both modes, and stays a te
   assert.equal(variant.id, plain.id);
   assert.equal(variant.group, 'customer_basics');
   assert.equal(variant.points, plain.points);
-  assert.equal(variant.label, 'Service area on your home page');
+  assert.equal(variant.label, 'Service area on the home page');
   assert.equal(plain.label, 'Street address on the home page');
   assert.equal(checkById('address-shown', site).label, plain.label);
   assert.equal(checkById('tap-to-call', noStore), checkById('tap-to-call'), 'other Checks are unchanged');
@@ -264,12 +264,12 @@ test('F4: the preview says "Serves the <city> area" and never "Add your address"
 test('F4: the report rows and "Fix these first" use the service-area wording, escaped', () => {
   const results = [{ id: 'address-shown', result: 'fail', detail: 'We found no service area on your home page.' }];
   const html = reportPage(grade({ ...noStore, city: 'St. <Louis>' }, results), { leadGate: false });
-  assert.ok(html.includes('Service area on your home page'));
+  assert.ok(html.includes('Service area on the home page'));
   assert.equal(html.includes('Street address on the home page'), false);
   assert.ok(html.includes('like &quot;Serving St. &lt;Louis&gt; and nearby areas&quot;.'));
   assert.equal(html.includes('Serving St. <Louis>'), false);
 
   const plain = reportPage(grade(site, [{ id: 'address-shown', result: 'fail', detail: 'We found no street address on your home page.' }]), { leadGate: false });
   assert.ok(plain.includes('Street address on the home page'));
-  assert.equal(plain.includes('Service area on your home page'), false);
+  assert.equal(plain.includes('Service area on the home page'), false);
 });

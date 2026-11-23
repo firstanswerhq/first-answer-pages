@@ -29,7 +29,13 @@ const FIELD_LABELS = Object.freeze({
 export const REVIEWS_LINK_HINT = 'A link to your reviews on Google, Yelp, Facebook or Nextdoor.';
 
 /** Shown when the owner typed a reviews link that was left out. */
-export const REVIEWS_LINK_LEFT_OUT = 'We left that link out. It must be an https link to your reviews on Google, Yelp, Facebook or Nextdoor.';
+export const REVIEWS_LINK_LEFT_OUT = 'We left that link out. It must start with https:// and go to your reviews on Google, Yelp, Facebook or Nextdoor.';
+
+/** The top line after a save that left the reviews link out. */
+export const SAVED_LINK_LEFT_OUT = 'Saved, but we left out your reviews link. See below.';
+
+/** Hint under the street address box. */
+export const ADDRESS_HINT = 'Optional. Leave it blank if you go to your customers.';
 
 /** Help text under the owner email box. */
 export const OWNER_EMAIL_HINT = 'Optional. Never shown publicly. We use it only to contact you about your listing and the quote requests customers send you.';
@@ -178,7 +184,11 @@ export function reviewPage(draft, categories, opts = {}) {
     : '';
 
   // At the top of the page so a phone shows it without scrolling after the reload.
-  const savedNote = opts.saved === true ? '<p class="notice saved-note" role="status">Saved.</p>' : '';
+  // When the reviews link was left out, the top line says so too (the note by the box is far down the page).
+  const savedNote = opts.saved !== true ? ''
+    : opts.reviewsLeftOut === true
+      ? `<p class="notice saved-note" role="status">${escapeHtml(SAVED_LINK_LEFT_OUT)}</p>`
+      : '<p class="notice saved-note" role="status">Saved.</p>';
   const heading = fresh ? 'Type in your listing' : 'Check your listing';
   const tagline = fresh
     ? 'Fill in your business details, then press Confirm. Nobody can see it until we review it.'
@@ -206,7 +216,8 @@ ${row('description', `<textarea id="f-description" name="description" rows="4" m
 ${row('city', input('city', f.city), missing, fresh)}
 ${row('state', `<input type="text" id="f-state" name="state" value="${escapeHtml(f.state ?? '')}" maxlength="40" size="6" autocomplete="address-level1" aria-describedby="f-state-hint">
       <span class="hint" id="f-state-hint">${escapeHtml(STATE_HINT)}</span>`, missing, fresh)}
-${row('address', input('address', f.address), missing, fresh)}
+${row('address', `${input('address', f.address).replace('maxlength="500"', 'maxlength="500" aria-describedby="f-address-hint"')}
+      <span class="hint" id="f-address-hint">${escapeHtml(ADDRESS_HINT)}</span>`, missing, fresh)}
 ${row('ownerEmail', `<input type="email" id="f-ownerEmail" name="ownerEmail" value="${escapeHtml(f.ownerEmail ?? '')}" maxlength="254" autocomplete="email" aria-describedby="f-ownerEmail-hint">
       <span class="hint" id="f-ownerEmail-hint">${escapeHtml(OWNER_EMAIL_HINT)}</span>`, missing, fresh)}
 ${row('reviewsLink', `<input type="text" id="f-reviewsLink" name="reviewsLink" value="${escapeHtml(f.reviewsLink ?? '')}" maxlength="1000" inputmode="url" autocapitalize="none" autocomplete="url" aria-describedby="f-reviewsLink-hint">

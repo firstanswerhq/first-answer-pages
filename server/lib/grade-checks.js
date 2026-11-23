@@ -103,7 +103,7 @@ export const CHECKS = Object.freeze([
     fix: 'Write your street address in plain text on your home page, or your service area if you travel to customers.',
     // Used instead when the owner ticked "We go to our customers (no storefront)". Same id, group and points.
     serviceArea: {
-      label: 'Service area on your home page',
+      label: 'Service area on the home page',
       passText: 'Your home page says what area you serve.',
       failText: 'We found no service area on your home page.',
       fix: serviceAreaFix,

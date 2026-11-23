@@ -3,7 +3,7 @@
  * output (pages, JSON, JSON-LD, MCP, llms.txt, sitemap).
  */
 
-import { reviewsLinkHost } from './listing-fields.js';
+import { reviewsLinkHost, normalizeWebsite } from './listing-fields.js';
 
 /** Keys that exist on stored listings but must never be shown publicly. */
 export const PRIVATE_KEYS = Object.freeze(['ownerEmail']);
@@ -19,5 +19,11 @@ export function publicListing(listing) {
   for (const key of PRIVATE_KEYS) delete copy[key];
   // A reviews link is public only when it is a valid one (a hand-edited bad link never leaves the site).
   if (Object.hasOwn(copy, 'reviewsLink') && reviewsLinkHost(copy.reviewsLink) === '') delete copy.reviewsLink;
+  // The same for the business's own website: checked again, and returned only in its clean form.
+  if (Object.hasOwn(copy, 'website')) {
+    const website = normalizeWebsite(copy.website);
+    if (website === '') delete copy.website;
+    else copy.website = website;
+  }
   return copy;
 }

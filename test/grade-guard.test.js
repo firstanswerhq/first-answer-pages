@@ -147,7 +147,7 @@ test('G1: the 21st check in a day from one IPv4 /24 is turned away, and a differ
   // More than an hour: the wait came from the daily network rule, not the hourly address rule.
   assert.ok(Number(refused.headers.get('retry-after')) > 3600);
   const text = await refused.text();
-  assert.ok(text.includes('A lot of checks have come from your network today. Please try again tomorrow, or from another connection.'));
+  assert.ok(text.includes('A lot of checks have come from your internet provider today. Please try again tomorrow, or from another connection.'));
   assert.equal(text.includes('from your address'), false, 'it does not blame one address');
 
   // Another network is not affected.
@@ -165,7 +165,7 @@ test('G1: a lower GRADE_NETWORK_PER_DAY is honored, for an IPv6 /64 too', async 
   }
   const refused = await startCheck(env, '2001:db8:1:2:aaaa::9');
   assert.equal(refused.status, 429);
-  assert.ok((await refused.text()).includes('from your network today'));
+  assert.ok((await refused.text()).includes('from your internet provider today'));
   // The next /64 is a different network.
   assert.equal((await startCheck(env, '2001:db8:1:3::1')).status, 303);
 });
@@ -184,7 +184,7 @@ test('G1: the per-address limits still apply, with their own message', async () 
   assert.equal(refused.status, 429);
   assert.ok(refused.headers.get('retry-after'));
   const text = await refused.text();
-  assert.ok(text.includes('We have had a lot of checks from your address.'));
+  assert.ok(text.includes('We have had a lot of checks from your internet connection.'));
   assert.equal(text.includes('from your network'), false);
 });
 
@@ -202,7 +202,7 @@ test('G1: a check refused by the network limit uses none of the address counts',
   // It leaves the same address's count at zero, so five more attempts from it would all be refused by the network only.
   for (let i = 0; i < 5; i += 1) assert.equal((await startCheck(env, '203.0.113.2')).status, 429);
   const text = await (await startCheck(env, '203.0.113.2')).text();
-  assert.ok(text.includes('from your network today'));
+  assert.ok(text.includes('from your internet provider today'));
 });
 
 test('V55: when the network is full, its message shows even if the address is also full', async () => {
@@ -216,7 +216,7 @@ test('V55: when the network is full, its message shows even if the address is al
   assert.equal(refused.status, 429);
   assert.ok(Number(refused.headers.get('retry-after')) > 3600);
   const text = await refused.text();
-  assert.ok(text.includes('A lot of checks have come from your network today. Please try again tomorrow, or from another connection.'));
+  assert.ok(text.includes('A lot of checks have come from your internet provider today. Please try again tomorrow, or from another connection.'));
   assert.equal(text.includes('from your address'), false);
 });
 

@@ -32,3 +32,16 @@ Use "the home page" in all three.
 ## V88 To check, not wording
 A test page labeled with the schema.org type `AutoWash` got "no business label found". `AutoWash` is a kind of LocalBusiness (under AutomotiveBusiness).
 Check how the business-label Check decides which types count. If it uses a fixed list, say so in a note and list what is missing; do not change scoring without a requirement.
+
+## Kiro findings
+
+V82 to V87 are done as written: the left-out note, the "Saved, but…" top line, the street address hint, the two limit messages and the label "Service area on the home page". The tests that quoted the old text (`test/grade-guard.test.js`, `test/grade-no-storefront.test.js`, `test/listing-reviews-link.test.js`) were updated on those lines only.
+
+V88 (no scoring change made): yes, it is a fixed list. `isBusinessNode` in `server/lib/page-facts.js` counts a JSON-LD node as the business when one of its `@type` values is in `BUSINESS_TYPES`, or when it is an `Organization` that has both a `telephone` and an `address`. The set holds 31 types: LocalBusiness, Restaurant, FoodEstablishment, CafeOrCoffeeShop, BarOrPub, Bakery, HomeAndConstructionBusiness, RoofingContractor, HVACBusiness, Plumber, Electrician, GeneralContractor, HousePainter, Locksmith, MovingCompany, AutomotiveBusiness, AutoRepair, HealthAndBeautyBusiness, HairSalon, BeautySalon, DaySpa, LegalService, Attorney, ProfessionalService, FinancialService, InsuranceAgency, RealEstateAgent, Dentist, MedicalBusiness, Store, CleaningService. A parent type in the list does not cover its children: `AutomotiveBusiness` is there, but `AutoWash` is not, so a page labeled only `AutoWash` gets "We found no readable business label". The same happens for every other schema.org subtype of LocalBusiness that is not listed. Missing ones that local businesses use often include:
+- automotive: AutoWash, AutoBodyShop, AutoDealer, AutoPartsStore, AutoRental, GasStation, MotorcycleDealer, MotorcycleRepair;
+- food and drink: FastFoodRestaurant, IceCreamShop, Brewery, Winery, Distillery;
+- health and beauty: NailSalon, TattooParlor, HealthClub, Optician, Pharmacy, Physician, MedicalClinic, VeterinaryCare;
+- services and places: AccountingService, AnimalShelter, ChildCare, DryCleaningOrLaundry, EmergencyService, EmploymentAgency, TravelAgency, SelfStorage, Notary, LodgingBusiness, Hotel, ShoppingCenter, EntertainmentBusiness, SportsActivityLocation, TouristInformationCenter, GovernmentOffice, Library, RadioStation;
+- the many Store kinds: HardwareStore, FurnitureStore, ClothingStore, Florist, PetStore, BikeStore, BookStore, GroceryStore, ConvenienceStore, LiquorStore, JewelryStore, ShoeStore, ToyStore, and others.
+
+The trade types under HomeAndConstructionBusiness are all already listed. Two ways to fix the rest, for whoever writes the requirement: list every schema.org descendant of LocalBusiness (well over a hundred names, kept in one file), or keep a small map from each subtype to its parent and count a type when any parent on its chain is listed. Either one changes scores for pages that use these types (the business-labeled Check is worth 8 points), so it needs a requirement and an entry in the design's "Numbers that change" table first.

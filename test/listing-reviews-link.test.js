@@ -21,7 +21,7 @@ const REPO_DATA = fileURLToPath(new URL('../data/', import.meta.url));
 const categories = JSON.parse(await fs.readFile(path.join(REPO_DATA, 'categories.json'), 'utf8'));
 const TOKEN = 'reviews-link-test-token';
 const YELP = 'https://www.yelp.com/biz/zephyr-plumbing-nashville';
-const LEFT_OUT_HTML = 'We left that link out. It must be an https link to your reviews on Google, Yelp, Facebook or Nextdoor.';
+const LEFT_OUT_HTML = 'We left that link out. It must start with https:// and go to your reviews on Google, Yelp, Facebook or Nextdoor.';
 
 const cleanups = [];
 after(async () => {

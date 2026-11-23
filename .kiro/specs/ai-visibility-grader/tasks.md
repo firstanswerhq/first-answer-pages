@@ -469,7 +469,7 @@ From `feature-request-2026-11-18.md` and `spec-review-2026-11-18.md`: Feature A,
 
 ### Feature C: the business's own website (Requirement 21)
 
-- [ ] F8. The website validator and the `website` listing field
+- [x] F8. The website validator and the `website` listing field
   - In `server/lib/listing-fields.js`, export `normalizeWebsite(url)` as the design describes: public `https` only; remove one trailing dot from the host first; refuse every IP address (IPv4 and IPv6), `localhost` and `.localhost` names, names with no dot, user names, passwords and ports; keep scheme, host and path only (query string and `#` part dropped); 300 characters at most after that; never throws and never looks anything up on the network
   - `normalizeFields` adds `website` only when the validator returns a value, so the model-key, size-limit and idempotence checks in `test/listing-fields.test.js` hold and the result has no `website` key when the input has none or an invalid one (tests do not expect `{}`); it is never in `missingFields`
   - `server/data.js` `buildListing`: add `website` to its `MODEL_KEYS` list, copied only when it is a non-empty string, so an approved Draft keeps it

@@ -5,6 +5,8 @@
  * No I/O. Everything here is a total function: it never throws on odd input.
  */
 
+import net from 'node:net';
+
 export const DAYS = Object.freeze([
   'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
 ]);
@@ -164,6 +166,51 @@ export function tidyCity(text) {
     .trim();
 }
 
+// ---- the business's own website ---------------------------------------------------------------
+
+/** Longest text looked at, before parsing. */
+const MAX_WEBSITE_INPUT = 600;
+/** Longest website kept, after it is rebuilt as scheme, host and path. */
+export const MAX_WEBSITE = 300;
+
+/**
+ * The business's own website as a clean public https address ("https://<host><path>"), or '' when it is not
+ * one. Works on the trimmed text, which must start with "https://". Refused: more than 600 characters before
+ * parsing, any other scheme, a user name or password, a port (a default ":443" is dropped by the parser), any
+ * IP address (IPv4 or IPv6, public or not), "localhost" and names ending in ".localhost", and a name with no
+ * dot. One trailing dot on the host is removed first. The query string and the "#" part are dropped, so no login
+ * or tracking parameters are kept; the result is refused when it is longer than 300 characters. Never throws and
+ * never looks anything up on the network.
+ * @param {unknown} value
+ * @returns {string}
+ */
+export function normalizeWebsite(value) {
+  try {
+    if (typeof value !== 'string') return '';
+    const text = value.trim();
+    if (text === '' || text.length > MAX_WEBSITE_INPUT || /[\s\p{Cc}]/u.test(text)) return '';
+    // Written out in full: "https:example.com" parses, but in a page's href it points at our own site.
+    if (!/^https:\/\//i.test(text)) return '';
+    let url;
+    try {
+      url = new URL(text);
+    } catch {
+      return '';
+    }
+    if (url.protocol !== 'https:' || url.username !== '' || url.password !== '' || url.port !== '') return '';
+    let host = url.hostname.toLowerCase();
+    if (host.endsWith('.')) host = host.slice(0, -1);
+    const bare = host.startsWith('[') && host.endsWith(']') ? host.slice(1, -1) : host;
+    if (bare === '' || net.isIP(bare) !== 0) return '';
+    if (host === 'localhost' || host.endsWith('.localhost')) return '';
+    if (!host.includes('.') || host.startsWith('.') || host.endsWith('.') || host.includes('..')) return '';
+    const clean = `https://${host}${url.pathname || '/'}`;
+    return clean.length <= MAX_WEBSITE ? clean : '';
+  } catch {
+    return '';
+  }
+}
+
 // ---- review links --------------------------------------------------------------------------
 
 /** Longest review link kept, query string and `#` part included (real Google links often pass 300). */
@@ -295,6 +342,9 @@ export function normalizeFields(raw, categories) {
   // without one has exactly the fields it had before.
   const reviews = get('reviewsLink');
   if (typeof reviews === 'string' && reviewsLinkHost(reviews) !== '') out.reviewsLink = reviews.trim();
+  // Optional link to the business's own website, the same way: the key only when it has a value.
+  const website = normalizeWebsite(get('website'));
+  if (website !== '') out.website = website;
   return out;
 }
 
