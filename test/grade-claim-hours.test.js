@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 
 import { createApp } from '../server/app.js';
 import { createAiBudget } from '../server/lib/ai-budget.js';
-import { formStyleHours } from '../server/lib/grader.js';
+import { formStyleHours, schemaHours } from '../server/lib/grader.js';
 import { buildSchema, parseHoursRange } from '../server/lib/schema.js';
 import { listingMetaDescription } from '../server/routes/listings.js';
 
@@ -27,10 +27,45 @@ test('formStyleHours: 24-hour ranges become the form style', () => {
   assert.equal(formStyleHours('9:00-13:05'), '9am-1:05pm');
   assert.equal(formStyleHours('07:00 to 18:00'), '7am-6pm');
   assert.equal(formStyleHours('07:00\u201318:00'), '7am-6pm');
+  assert.equal(formStyleHours('8:00-17:00'), '8am-5pm');
+});
+
+test('V177: a range is 24-hour only when an hour has a leading zero or is 0 or 13 or more', () => {
+  assert.equal(formStyleHours('0:00-12:00'), '12am-12pm');
+  assert.equal(formStyleHours('8:00-13:00'), '8am-1pm');
+});
+
+test('V178, V179: 00:00-00:00 is open all day; 24:00 is only a closing time, and means 23:59', () => {
+  assert.equal(formStyleHours('00:00-24:00'), '12am-11:59pm');
+  assert.equal(formStyleHours('08:00-24:00'), '8am-11:59pm');
+  assert.equal(formStyleHours('00:00-00:00'), '12am-11:59pm');
+  assert.equal(formStyleHours('08:00-08:00'), '08:00-08:00', 'any other equal pair is kept as found');
+  assert.deepEqual(parseHoursRange('00:00-24:00'), { opens: '00:00', closes: '23:59' });
+  assert.deepEqual(parseHoursRange('00:00-00:00'), { opens: '00:00', closes: '23:59' });
+  assert.deepEqual(parseHoursRange('08:00-24:00'), { opens: '08:00', closes: '23:59' });
+  assert.equal(parseHoursRange('08:00-08:00'), null);
+  assert.equal(parseHoursRange('12:00-12:00'), null);
+  assert.equal(parseHoursRange('24:00-24:00'), null);
+  assert.equal(parseHoursRange('24:00-08:00'), null, '24:00 is not an opening time');
+  assert.equal(parseHoursRange('24:30-08:00'), null);
+  assert.equal(parseHoursRange('08:00-24:30'), null);
+});
+
+test('V177: the fix kit label reads 24-hour times only when they cannot be 12-hour times', () => {
+  assert.deepEqual(schemaHours(['Mo-Fr 08:00-17:00']), ['Mo-Fr 08:00-17:00']);
+  assert.deepEqual(schemaHours(['Mo-Fr 07:00-18:00']), ['Mo-Fr 07:00-18:00']);
+  assert.deepEqual(schemaHours(['Mo-Fr 9am-5pm']), ['Mo-Fr 09:00-17:00']);
+  assert.deepEqual(schemaHours(['Mo-Fr 8:00-5:00']), []);
+  assert.deepEqual(schemaHours(['Mo-Fr 9:00-5:00']), []);
+  assert.deepEqual(schemaHours(['Mo-Fr 12:00-1:00']), []);
 });
 
 test('formStyleHours: any other value is kept as found', () => {
-  for (const value of ['9am-5pm', 'Closed', 'By appointment', '', '00:00-24:00', '25:00-26:00', '07:60-18:00', '08:00-08:00']) {
+  for (const value of [
+    '9am-5pm', 'Closed', 'By appointment', '', '25:00-26:00', '07:60-18:00', '08:00-08:00', '24:00-24:00', '24:00-08:00',
+    // V177: could be 12-hour times with no am or pm, so they are not read as 24-hour
+    '8:00-5:00', '9:00 - 5:00', '12:00-1:00', '9:00-5:30', '8:00 to 12:00',
+  ]) {
     assert.equal(formStyleHours(value), value, value);
   }
   assert.equal(formStyleHours(undefined), undefined);
@@ -48,11 +83,14 @@ test('parseHoursRange reads both the 12-hour and the 24-hour forms', () => {
   assert.deepEqual(parseHoursRange('07:00 to 18:00'), { opens: '07:00', closes: '18:00' });
   assert.deepEqual(parseHoursRange('08:30\u201317:30'), { opens: '08:30', closes: '17:30' });
   assert.deepEqual(parseHoursRange('00:00-23:59'), { opens: '00:00', closes: '23:59' });
+  assert.deepEqual(parseHoursRange('9:00-13:05'), { opens: '09:00', closes: '13:05' });
 });
 
 test('parseHoursRange still refuses what it cannot read for sure', () => {
   for (const value of [
-    '25:00-26:00', '07:60-18:00', '24:00-24:00', '00:00-24:00', '7:00', '07:00-', '13:00 AM - 5:00 PM',
+    '25:00-26:00', '07:60-18:00', '24:00-24:00', '7:00', '07:00-', '13:00 AM - 5:00 PM',
+    // V177: could be 12-hour times with no am or pm
+    '8:00-5:00', '9:00 - 5:00', '12:00-1:00', '9:00-5:30',
     '0:30 AM - 5:00 PM', '7:60 AM - 5:00 PM', 'Closed', 'garbage', '', undefined, null, 700, {},
   ]) {
     assert.equal(parseHoursRange(value), null, String(value));
@@ -169,7 +207,11 @@ test('claim: the form shows an empty Services box marked as needing input', asyn
   assert.equal(res.status, 200);
   const html = await res.text();
   const label = /<label for="f-services">([^]*?)<\/label>/.exec(html)?.[1] ?? '';
-  assert.match(label, /Needs your input|Required/);
+  assert.ok(label.includes('Needs your input'), label);
+  assert.equal(label.includes('Required'), false);
+  assert.ok(html.includes('class="field missing"'));
+  // V182: an example in the empty box, as a placeholder (not a value)
+  assert.ok(html.includes('<textarea id="f-services" name="services" rows="5" placeholder="Drain cleaning, water heaters">'));
   const box = /<textarea id="f-services"[^>]*>([^]*?)<\/textarea>/.exec(html)?.[1];
   assert.equal(box?.trim(), '');
 });

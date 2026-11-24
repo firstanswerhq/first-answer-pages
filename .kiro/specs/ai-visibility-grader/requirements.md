@@ -508,9 +508,9 @@ Node.js 22, plain Express, plain JavaScript ES modules, JSON files under `DATA_D
 #### Acceptance Criteria
 
 1. THE claim (Requirement 11.3) SHALL leave `services` empty: the draft form SHALL show the Services box empty and marked as needing the owner's input (it is listed in `missingFields`, as every missing required field already is).
-2. THE claim SHALL pre-fill the hours it found in the draft form's own style, "7am-6pm" and "8:30am-5pm", not "07:00-18:00". A value that is not a 24-hour time range SHALL be kept as it was found.
+2. THE claim SHALL pre-fill the hours it found in the draft form's own style, "7am-6pm" and "8:30am-5pm", not "07:00-18:00". A value that is not a 24-hour time range SHALL be kept as it was found. A range SHALL be taken as 24-hour only when it cannot mean anything else: an hour has a leading zero or is 0 or 13 or more ("8:00-5:00" is kept as found, V177). "00:00-24:00" SHALL become "12am-11:59pm" (open all day; "24:00" is only a closing time, V179).
 3. EVERYTHING else the claim fills (name, category, phone, service area, city, state, address, reviews link, website) and every rule about review and approval SHALL stay as they are.
-4. THE listing's business label (`schema.js` `parseHoursRange`) SHALL read hours written "HH:MM-HH:MM" (24-hour) as well as the form's own style, so listings already published from a report, which carry hours like "07:00-18:00", get their opening hours in their JSON-LD too (V155).
+4. THE listing's business label (`schema.js` `parseHoursRange`) SHALL read hours written "HH:MM-HH:MM" (24-hour) as well as the form's own style, so listings already published from a report, which carry hours like "07:00-18:00", get their opening hours in their JSON-LD too (V155). THE same rule as criterion 2 SHALL apply: a range like "8:00-5:00" or "12:00-1:00", which could be 12-hour times, gives no opening hours rather than wrong ones (V177), and the fix kit's business label (`schemaHours`) leaves it out too. "00:00-00:00" SHALL mean open all day (opens 00:00, closes 23:59), never closed (V178); any other range whose opening and closing are equal gives none; "24:00" SHALL be accepted only as a closing time and read as 23:59 (V179).
 
 ### Requirement 30: The Business Label Check Knows Every Local-Business Type (D5)
 

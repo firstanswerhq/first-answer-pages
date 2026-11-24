@@ -237,7 +237,7 @@ export function reviewPage(draft, categories, opts = {}) {
 ${row('name', input('name', f.name), missing, fresh)}
 ${row('category', `<select id="f-category" name="category">${categoryOptions}</select>`, missing, fresh)}
 ${row('phone', input('phone', f.phone, 'tel').replace('maxlength="500"', 'maxlength="500" autocomplete="tel"'), missing, fresh)}
-${row('services', `<textarea id="f-services" name="services" rows="5">${escapeHtml(services)}</textarea>
+${row('services', `<textarea id="f-services" name="services" rows="5" placeholder="Drain cleaning, water heaters">${escapeHtml(services)}</textarea>
       <span class="hint">One per line, or separate with commas.</span>`, missing, fresh)}
 ${row('serviceArea', input('serviceArea', f.serviceArea), missing, fresh)}
 ${row('description', `<textarea id="f-description" name="description" rows="4" maxlength="500">${escapeHtml(f.description ?? '')}</textarea>`, missing, fresh)}

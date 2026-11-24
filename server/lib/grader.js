@@ -23,6 +23,7 @@ import {
   reviewsLinkHost, reviewsLinkOnPage, normalizeWebsite,
 } from './listing-fields.js';
 import { usAddressStyle } from './address-style.js';
+import { parseTwentyFourHourRange } from './schema.js';
 
 // ---- constants -------------------------------------------------------------------
 
@@ -458,13 +459,13 @@ function formStyleTime(hourText, minuteText) {
  * @param {unknown} value
  */
 export function formStyleHours(value) {
-  if (typeof value !== 'string') return value;
-  const m = /^\s*(\d{1,2}):(\d{2})\s*(?:-|\u2013|\u2014|to)\s*(\d{1,2}):(\d{2})\s*$/i.exec(value);
-  if (!m) return value;
-  const opens = formStyleTime(m[1], m[2]);
-  const closes = formStyleTime(m[3], m[4]);
-  if (!opens || !closes || opens === closes) return value;
-  return `${opens}-${closes}`;
+  // Only a range that cannot mean anything but 24-hour time is changed (V177); "00:00-24:00" is open all day
+  // and becomes "12am-11:59pm" (V178, V179). "8:00-5:00" could be 12-hour times, so it stays as found.
+  const range = parseTwentyFourHourRange(value);
+  if (!range) return value;
+  const opens = formStyleTime(...range.opens.split(':'));
+  const closes = formStyleTime(...range.closes.split(':'));
+  return opens && closes ? `${opens}-${closes}` : value;
 }
 
 /** Applies formStyleHours to every day of a { monday: '07:00-18:00', ... } object. */
@@ -505,7 +506,9 @@ export function schemaHours(lines) {
     const [open, close, extra] = value.split('-');
     const a = schemaTime(open ?? '');
     const b = schemaTime(close ?? '');
-    if (!a || !b || extra !== undefined) continue;
+    if (!a || !b || a === b || extra !== undefined) continue;
+    // Times with no am or pm are used only when they cannot be 12-hour times ("8:00-5:00" could be), V177.
+    if (!/[ap]/i.test(`${open}${close}`) && !parseTwentyFourHourRange(value)) continue;
     const key = `${a}-${b}`;
     byTime.set(key, [...(byTime.get(key) ?? []), DAY_NAMES.indexOf(day)]);
   }

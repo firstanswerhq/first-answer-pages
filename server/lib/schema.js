@@ -150,6 +150,29 @@ function from24(hour, minute) {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
+/** For 24-hour ranges: opens and closes at the same time. 00:00 to 00:00 is open all day (V178); any other equal pair means nothing. */
+function settle(range) {
+  if (range.opens !== range.closes) return range;
+  return range.opens === '00:00' ? { opens: '00:00', closes: '23:59' } : null;
+}
+
+/**
+ * Reads "07:00-18:00" as a 24-hour range, but only when it cannot mean anything else: an hour has a leading zero
+ * ("07") or is 0 or 13 or more. "8:00-5:00" or "12:00-1:00" could be 12-hour times without am or pm, so they are
+ * not read (V177). "24:00" is accepted only as a closing time and means 23:59 (V179).
+ * @returns {{ opens: string, closes: string } | null} 'HH:MM' times
+ */
+export function parseTwentyFourHourRange(text) {
+  if (typeof text !== 'string') return null;
+  const m = RANGE_24.exec(text);
+  if (!m) return null;
+  const sure = [m[1], m[3]].some(h => (h.length === 2 && h[0] === '0') || Number(h) === 0 || Number(h) >= 13);
+  if (!sure) return null;
+  const opens = from24(m[1], m[2]);
+  const closes = Number(m[3]) === 24 && Number(m[4]) === 0 ? '23:59' : from24(m[3], m[4]);
+  return opens && closes ? settle({ opens, closes }) : null;
+}
+
 /**
  * Parses "7:00 AM - 5:00 PM" or "07:00-18:00" to { opens: '07:00', closes: '17:00' }, or null.
  * The 12-hour form is tried first; when it matches but a time is invalid, the answer is null.
@@ -162,11 +185,7 @@ export function parseHoursRange(text) {
     const closes = to24(m[4], m[5], m[6]);
     return opens && closes ? { opens, closes } : null;
   }
-  const m24 = RANGE_24.exec(text);
-  if (!m24) return null;
-  const opens = from24(m24[1], m24[2]);
-  const closes = from24(m24[3], m24[4]);
-  return opens && closes ? { opens, closes } : null;
+  return parseTwentyFourHourRange(text);
 }
 
 function buildOpeningHours(hours) {
