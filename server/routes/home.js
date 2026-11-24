@@ -146,8 +146,10 @@ ${results}`;
     // Category pages: "Plumbers in Nashville | First Answer Pages". The default site
     // name is swapped for SITE_NAME by the app-level HTML wrapper.
     let title = `${DEFAULT_SITE_NAME}: Local Business Directory`;
+    // The typed city, cut at 60 characters, is the only form of it in the title and the description (V256).
+    const shownCity = Array.from(city).slice(0, 60).join('');
     if (categoryLabel) {
-      let titleCity = city;
+      let titleCity = shownCity;
       if (!titleCity) {
         const cities = new Set(filtered.map(l => (typeof l.city === 'string' ? l.city.trim() : '')).filter(Boolean));
         if (cities.size === 1) [titleCity] = cities;
@@ -159,7 +161,7 @@ ${results}`;
     // known category (city filters point at the category page).
     const base = baseUrlFor(req, ctx.config);
     const canonical = categoryLabel ? `${base}/?category=${encodeURIComponent(category)}` : `${base}/`;
-    const where = city ? ` in ${city}` : '';
+    const where = shownCity ? ` in ${shownCity}` : '';
     const description = categoryLabel
       ? `${categoryLabel}${where}: phone numbers, services and hours. Call them or ask for a quote, free.`
       : `Free local business directory that AI assistants can read. Find a local business${where}, call them, or ask for a quote.`;

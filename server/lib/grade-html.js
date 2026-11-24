@@ -777,12 +777,14 @@ function answersSection(grade, { now } = {}) {
     const questionsAsked = new Set(main.map(a => a.prompt)).size;
     const firstTimes = timesAsked(free);
     const asked = questionsAsked === 1
-      ? `We asked ${h(mainLabel)} the question${firstTimes > 1 ? ` ${timesText(firstTimes)}` : ''}.`
-      : `We asked ${h(mainLabel)} ${questionsAsked} questions${firstTimes > 1 ? `, and asked the first one ${timesText(firstTimes)}` : ''}.`;
+      ? `We asked ${h(midSentence(mainLabel))} the question${firstTimes > 1 ? ` ${timesText(firstTimes)}` : ''}.`
+      : `We asked ${h(midSentence(mainLabel))} ${questionsAsked} questions${firstTimes > 1 ? `, and asked the first one ${timesText(firstTimes)}` : ''}.`;
     const namedCount = free.filter(a => a.named).length;
     let counts;
     if (free.length === 1) {
-      counts = `Only that answer counts toward your score. ${h(mainLabel)} ${namedCount ? 'named you' : "didn't name you"}.`;
+      // "that answer" points at the question just named; with several questions it says which answer counts (V252).
+      const which = questionsAsked > 1 ? 'Only its answer to the first question counts' : 'Only that answer counts';
+      counts = `${which} toward your score. ${h(mainLabel)} ${namedCount ? 'named you' : "didn't name you"}.`;
     } else {
       const which = questionsAsked > 1 ? `Only those first ${free.length} answers` : 'Only these answers';
       const said = namedCount === 0 ? "didn't name you in any of them" : namedCount === free.length ? 'named you in all of them' : `named you in ${namedCount} of them`;
@@ -793,10 +795,10 @@ function answersSection(grade, { now } = {}) {
       const k = otherMain.length;
       const n = otherMain.filter(a => a.named).length;
       if (k === 1) {
-        otherLine = `On the other question, ${h(mainLabel)} ${n === 1 ? 'named you' : "didn't name you"}.`;
+        otherLine = `On the other question, ${h(midSentence(mainLabel))} ${n === 1 ? 'named you' : "didn't name you"}.`;
       } else {
         const said = n === 0 ? "didn't name you" : n === k ? `named you ${k === 2 ? 'both times' : `all ${k} times`}` : `named you in ${n} of ${k}`;
-        otherLine = `On the ${k} other questions, ${h(mainLabel)} ${said}.`;
+        otherLine = `On the ${k} other questions, ${h(midSentence(mainLabel))} ${said}.`;
       }
     }
     const compare = seconds.length > 0
@@ -960,7 +962,8 @@ function leadForm(grade, { values = {}, errors = {} } = {}) {
 
 function recheckBlock(grade, rechecking) {
   if (!grade.input.website) {
-    return `<p class="hint">You didn't give a website, so there is nothing to check again. Your fix kit still has a draft you can use. To ask AI again, ${runNewLink(grade, 'run a new check')}.</p>`;
+    // The same sentence as under the recheck button of every other report (V251, V257).
+    return `<p class="hint">You didn't give a website, so there is nothing to check again. Your fix kit still has a draft you can use. To ask AI again after your changes, ${runNewLink(grade, 'run a new check')}.</p>`;
   }
   // When the AI part is what is missing, "Check again" would not bring it back; the button says what it does (V203).
   // A Grade saved by the old rescue line says "ok" but is still partial, so the state alone is not used (V225-4).

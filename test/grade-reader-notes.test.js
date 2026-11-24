@@ -144,7 +144,7 @@ test('V209, V240: one paragraph says what was asked, which answers count and wha
   assert.equal(html.includes('Your score counts only'), false);
   // The ChatGPT sentence is left out when no other assistant answered.
   const alone = open(grade({ ai: [entry(FREE, true), entry(EXTRA_1, false, { extra: true })], state: 'ok', results: [...WEBSITE_ONLY, pass('ai-named', { earned: 30 })] }));
-  assert.ok(alone.includes("<p>We asked Claude 2 questions. Only that answer counts toward your score. Claude named you. On the other question, Claude didn't name you.</p>"));
+  assert.ok(alone.includes("<p>We asked Claude 2 questions. Only its answer to the first question counts toward your score. Claude named you. On the other question, Claude didn't name you.</p>"));
   assert.equal(alone.includes("answers are here to compare"), false);
 });
 

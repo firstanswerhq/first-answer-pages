@@ -198,7 +198,7 @@ test('V251: every report says how to ask AI again, as a link, and the footer say
   assert.ok(locked(ok).includes(`so ${link} after you make fixes.`));
   // A report with no website has no recheck button, and still says how to ask AI again.
   const none = open(grade({ input: { ...INPUT, website: '' }, ai: [entry(FREE, true)], state: 'ok', results: [pass('ai-named', { earned: 30 })] }));
-  assert.ok(none.includes(`To ask AI again, ${link}.`));
+  assert.ok(none.includes(`To ask AI again after your changes, ${link}.`));
 });
 
 test('V244: every mention of "Run a new check" is a link, and none says "at the top of this page"', () => {
@@ -311,6 +311,12 @@ test('V225-3: a filtered home page with no results is noindex; a page with resul
     await fs.copyFile(path.join(REPO_DATA, name), path.join(dir, name));
   }
   // Demo mode off: demo mode adds its own noindex to every page, which is not what this test looks at.
+  // One published plumber in Nashville, so a search the data answers can be told apart from one it cannot (V255).
+  await fs.writeFile(path.join(dir, 'published.json'), JSON.stringify([{
+    id: 'zephyr-plumbing-nashville', name: 'Zephyr Plumbing', category: 'plumbers', phone: '(615) 555-0142',
+    description: 'We fix pipes and drains in Nashville.', city: 'Nashville', state: 'TN', services: ['Drain cleaning'],
+    serviceArea: 'Nashville', hours: { monday: '8am-5pm' }, address: '12 Main Street, Nashville, TN 37203',
+  }]));
   const app = createApp({ dataDir: dir, config: { baseUrl: 'http://example.test', graderSecret: 'test-secret', gradeMainAsks: 1, demoMode: false } });
   const server = app.listen(0, '127.0.0.1');
   await new Promise((resolve, reject) => {
@@ -337,9 +343,45 @@ test('V225-3: a filtered home page with no results is noindex; a page with resul
   const plain = await fetch(`${base}/`);
   assert.equal(plain.headers.get('x-robots-tag'), null);
   await plain.text();
+  // V255: a search the data answers is a real page: no noindex header and no robots tag.
+  const answered = await fetch(`${base}/?category=plumbers&city=Nashville`);
+  assert.equal(answered.headers.get('x-robots-tag'), null);
+  const answeredText = await answered.text();
+  assert.ok(answeredText.includes('Zephyr Plumbing'), 'the search found the listing');
+  assert.equal(/name="robots"/.test(answeredText), false);
+  // V256: for an empty search, the title and the description show the typed city cut at 60 characters, never the whole.
+  const longCityPage = await (await fetch(`${base}/?category=plumbers&city=${'z'.repeat(200)}`)).text();
+  const title = /<title>([^<]*)<\/title>/.exec(longCityPage)?.[1] ?? '';
+  const description = /<meta name="description" content="([^"]*)"/.exec(longCityPage)?.[1] ?? '';
+  const zs = text => (text.match(/z/gi) ?? []).length;
+  assert.ok(zs(title) > 0 && zs(title) <= 60, `the title shows at most 60 characters of the city (${zs(title)})`);
+  assert.ok(zs(description) > 0 && zs(description) <= 60, `the description does too (${zs(description)})`);
 });
 
 // ---- V225-7 -----------------------------------------------------------------------------------------------------------------
+
+test('V253: in demo mode the assistant\'s name is lower case in the middle of a sentence and capital at its start', () => {
+  const demo = prompt => entry(prompt, false, { provider: 'mock' });
+  const g = grade({
+    state: 'ok', results: okResults({ earned: 0 }),
+    ai: [demo(FREE), demo(EXTRA_1), demo(EXTRA_2)].map((a, i) => ({ ...a, extra: i > 0 })),
+  });
+  g.aiMain = { provider: 'mock', label: 'The demo assistant', state: 'ok' };
+  const html = open(g);
+  assert.ok(html.includes('We asked the demo assistant 3 questions.'));
+  assert.ok(html.includes("On the 2 other questions, the demo assistant didn't name you."));
+  assert.ok(html.includes("The demo assistant didn't name you."), 'a sentence that starts with the name has a capital');
+  assert.equal(html.includes('We asked The demo assistant'), false);
+  assert.equal(html.includes('questions, The demo assistant'), false);
+});
+
+test('V252: with several questions, "that answer" says which answer counts; with one question it stays "that answer"', () => {
+  const many = open(grade({ ai: [entry(FREE, true), entry(EXTRA_1, false, { extra: true }), entry(EXTRA_2, false, { extra: true })], state: 'ok', results: okResults() }));
+  assert.ok(many.includes('Only its answer to the first question counts toward your score.'));
+  assert.equal(many.includes('Only that answer counts toward your score.'), false);
+  const one = open(grade({ ai: [entry(FREE, true), second(FREE)], state: 'ok', results: okResults() }));
+  assert.ok(one.includes('Only that answer counts toward your score.'));
+});
 
 test('V225-7: GET /grade?from= shows the "We filled this in" note, and the plain form does not', async () => {
   const claude = { name: 'anthropic', async ask() { return { answer: NOT_NAMED, provider: 'anthropic', model: 'stub', webSearch: true }; } };

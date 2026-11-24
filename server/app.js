@@ -65,6 +65,9 @@ const systemClock = Object.freeze({ now: () => Date.now() });
  *   a2a?: object,
  * }} [deps]
  */
+import { createPlacesLookup } from './lib/places.js';
+import { createBingLookup } from './lib/azure-maps.js';
+
 export function createApp(deps = {}) {
   const config = { ...configFromEnv(process.env), ...(deps.config ?? {}) };
   const clock = deps.clock ?? systemClock;
@@ -157,6 +160,10 @@ export function createApp(deps = {}) {
     assistantProvider: ctx.assistantProvider,
     extraAssistants: deps.extraAssistants ?? createExtraAssistants(config),
     nameChecker: deps.nameChecker !== undefined ? deps.nameChecker : createNameCheck(config),
+    // The health map's one Google Places lookup and one Azure Maps (Bing) search per check. Off without their keys
+    // and in test runs; a test passes a fake client, or null.
+    placesLookup: deps.placesLookup !== undefined ? deps.placesLookup : (config.testRun ? null : createPlacesLookup(config.places ?? {})),
+    bingLookup: deps.bingLookup !== undefined ? deps.bingLookup : (config.testRun ? null : createBingLookup(config.azureMaps ?? {})),
     aiBudget: ctx.aiBudget,
     safeFetcher: ctx.safeFetcher,
     draftStore: createDraftStore({ store, clock, newId: ctx.newId }),

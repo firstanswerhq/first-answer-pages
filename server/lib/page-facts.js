@@ -178,6 +178,34 @@ const NAMED = {
   rsquo: '\u2019', lsquo: '\u2018', ldquo: '\u201C', rdquo: '\u201D', hellip: '\u2026', copy: '\u00A9', reg: '\u00AE',
 };
 
+const MAX_LINKS_KEPT = 400;
+const MAX_LINK_HREF = 500;
+const FAQ_HEADING = /\b(?:faqs?|frequently asked questions|questions? (?:and|&) answers?|common questions|questions? we get asked)\b/i;
+
+/** How many times `needle` (already lowercase) appears in `lower`, counting at most 50. */
+function countOf(lower, needle) {
+  let n = 0;
+  let at = lower.indexOf(needle);
+  while (at !== -1 && n < 50) {
+    n += 1;
+    at = lower.indexOf(needle, at + needle.length);
+  }
+  return n;
+}
+
+/**
+ * True when the page has a questions-and-answers section (Requirement 3.11): a heading that says FAQ or common
+ * questions, two or more details/summary pairs, FAQPage markup, or two or more headings ending in a question mark.
+ */
+function hasQuestionsSection(facts, lowerHtml) {
+  const headings = Array.isArray(facts.headings) ? facts.headings : [];
+  if (headings.some(h => FAQ_HEADING.test(h))) return true;
+  if (headings.filter(h => /\?\s*$/.test(h)).length >= 2) return true;
+  if (countOf(lowerHtml, '<details') >= 2 && countOf(lowerHtml, '<summary') >= 2) return true;
+  const types = Array.isArray(facts.jsonLd?.types) ? facts.jsonLd.types : [];
+  return types.includes('FAQPage');
+}
+
 function emptyFacts() {
   return {
     title: '',
@@ -195,6 +223,10 @@ function emptyFacts() {
     ctaLabels: [],
     text: '',
     scriptBuilt: false,
+    // Every link with an address, in page order: { href, text } (at most 400). Read only; never fetched.
+    links: [],
+    // True when the page has a questions-and-answers section (Requirement 3.11).
+    faq: false,
     jsonLd: { blockCount: 0, unreadableCount: 0, blocks: [], types: [], business: null },
   };
 }
@@ -635,7 +667,12 @@ export function readPageFacts(html) {
         facts.reviewLinks.length < MAX_REVIEW_LINKS && linksSeen <= MAX_LINKS_FOR_REVIEWS
         && /^https:\/\//i.test(href) && reviewsLinkOnPage(href) !== ''
       ) facts.reviewLinks.push(href);
-      addLabel(cleanText(s.slice(start, end)));
+      const labelText = cleanText(s.slice(start, end));
+      // Every link with an address, in page order, for the health map's profile and service-page signals (never fetched).
+      if (href !== '' && facts.links.length < MAX_LINKS_KEPT && !/^(?:#|javascript:|mailto:|tel:)/i.test(href)) {
+        facts.links.push({ href: href.slice(0, MAX_LINK_HREF), text: labelText.slice(0, 100) });
+      }
+      addLabel(labelText);
     });
 
     scan(s, lower, 'button', true, MAX_CONTENT, (tag, start, end) => {
@@ -650,6 +687,7 @@ export function readPageFacts(html) {
   }
 
   facts.headings = readHeadings(s);
+  facts.faq = hasQuestionsSection(facts, toLower(s));
   const withoutTitle = removeElements(s, 'title');
   facts.text = cleanText(withoutTitle);
   facts.areaText = readAreaText(withoutTitle);

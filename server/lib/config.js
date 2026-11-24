@@ -369,6 +369,10 @@ export function configFromEnv(env = process.env, opts = {}) {
     // Gemini Decisions as a second check on reading AI answers for names. On with GEMINI_API_KEY unless 'off'.
     geminiNameCheck: parseOnOff(env.GEMINI_NAME_CHECK),
     decisionModel: nonEmpty(env.GEMINI_DECISION_MODEL),
+    // The health map's one Google Places lookup per check (Google Business Profile, reviews, details match) and
+    // one Azure Maps search (Bing). Each is off without its key: the signals then read "Not checked".
+    places: { apiKey: nonEmpty(env.GOOGLE_PLACES_API_KEY) },
+    azureMaps: { apiKey: nonEmpty(env.AZURE_MAPS_KEY) },
 
     visionProviderName: vision,
     assistantProviderName: assistant,
@@ -427,6 +431,8 @@ export function redactConfig(config) {
     ...(config.gemini && { gemini: { ...config.gemini, apiKey: mark(config.gemini.apiKey) } }),
     ...(config.grok && { grok: { ...config.grok, apiKey: mark(config.grok.apiKey) } }),
     ...(config.perplexity && { perplexity: { ...config.perplexity, apiKey: mark(config.perplexity.apiKey) } }),
+    ...(config.places && { places: { ...config.places, apiKey: mark(config.places.apiKey) } }),
+    ...(config.azureMaps && { azureMaps: { ...config.azureMaps, apiKey: mark(config.azureMaps.apiKey) } }),
     ...(config.trust && {
       trust: {
         ...config.trust,

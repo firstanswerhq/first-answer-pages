@@ -164,7 +164,7 @@ test('E3: with one answer per question the answers section reads as before', () 
     answer(NOT_NAMED_TEXT, { prompt: EXTRA_2 }), chatgpt(EXTRA_2),
   ];
   const html = render(ai, { leadGate: false });
-  assert.ok(html.includes("We asked Claude 3 questions. Only that answer counts toward your score. Claude didn't name you. On the 2 other questions, Claude didn't name you. ChatGPT's answers are here to compare."));
+  assert.ok(html.includes("We asked Claude 3 questions. Only its answer to the first question counts toward your score. Claude didn't name you. On the 2 other questions, Claude didn't name you. ChatGPT's answers are here to compare."));
   assert.equal(html.includes('was asked the first one'), false);
   assert.equal(/Claude, answer \d of \d/.test(html), false);
 });

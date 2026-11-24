@@ -250,7 +250,7 @@ test('V159: with the free question first already, the order is as it was', () =>
 const THREE = [entry(FREE, true), entry(EXTRA_1, false, { extra: true }), entry(EXTRA_2, false, { extra: true })];
 const OK = { results: [...WEBSITE_ONLY, pass('ai-named', { earned: 30 })], state: 'ok' };
 
-const THREE_PARAGRAPH = "<p>We asked Claude 3 questions. Only that answer counts toward your score. Claude named you. On the 2 other questions, Claude didn't name you.</p>";
+const THREE_PARAGRAPH = "<p>We asked Claude 3 questions. Only its answer to the first question counts toward your score. Claude named you. On the 2 other questions, Claude didn't name you.</p>";
 
 test('V160, V240: with the gate on, one paragraph says what was asked, which answer counts and what the others are', () => {
   const html = open(grade({ ai: THREE, ...OK }));

@@ -42,6 +42,8 @@ const NOTES = Object.freeze({
   unpublished: 'Unpublished.',
   unverified: 'Verified stamp removed.',
   reverified: 'Verification turned back on for that listing, with fresh photo ID tries.',
+  waived: 'The verification fee is waived for that listing. The phone code and photo ID steps still apply.',
+  notwaivable: 'That listing is already paid for, verified or switched off, so there is no fee to waive.',
   notfound: 'That entry was not found.',
   notpending: 'That entry is not waiting for review.',
   invalid: 'That listing is missing required fields, so it was not approved.',
@@ -315,6 +317,11 @@ ${preview}
           ? '\n  <p class="hint">Verified stamp: turned off by admin.</p>'
           : `\n  <p class="hint">Verified stamp: ${t.verified ? 'showing' : 'not yet'} &middot; fee paid: ${yesNo(t.paid)} &middot; phone: ${yesNo(t.phoneOk)} &middot; photo ID: ${yesNo(t.idOk)}</p>`;
         const founderLine = founder ? `\n  <p class="hint">Founding Member No. ${founder.number}</p>` : '';
+        // Admin only: the owner's own listings need no fee. Only the payment is skipped (Requirement 6).
+        const waivedLine = t?.waived ? '\n  <p class="hint">Fee waived by admin.</p>' : '';
+        const waive = t && !t.verified && !t.paid && !t.removed
+          ? `\n  <form method="POST" action="/admin/listings/${lid}/waive-fee"><button type="submit" class="admin-button admin-button-secondary">Waive the verification fee</button></form>`
+          : '';
         let unverify = '';
         if (started && !t.removed) {
           unverify = `\n  <form method="POST" action="/admin/listings/${lid}/unverify"><button type="submit" class="admin-button admin-button-secondary">Remove Verified stamp</button></form>`;
@@ -324,10 +331,10 @@ ${preview}
         }
         return `<li class="pending-item">
   <h2>${escapeHtml(l.name ?? l.id)}</h2>
-  <p>${escapeHtml(categoryLabel(l.category))} &middot; ${escapeHtml(l.city ?? '')}, ${escapeHtml(l.state ?? '')} &middot; ${escapeHtml(l.phone ?? '')}</p>${founderLine}${trustLine}
+  <p>${escapeHtml(categoryLabel(l.category))} &middot; ${escapeHtml(l.city ?? '')}, ${escapeHtml(l.state ?? '')} &middot; ${escapeHtml(l.phone ?? '')}</p>${founderLine}${trustLine}${waivedLine}
   <p><a href="/listings/${lid}">View listing</a></p>
   <form method="POST" action="/admin/listings/${lid}/seance"><button type="submit" class="admin-button">Run AI check (Séance)</button></form>
-  <form method="POST" action="/admin/listings/${lid}/unpublish"><button type="submit" class="admin-button admin-button-secondary">Unpublish</button></form>${unverify}
+  <form method="POST" action="/admin/listings/${lid}/unpublish"><button type="submit" class="admin-button admin-button-secondary">Unpublish</button></form>${unverify}${waive}
 </li>`;
       }).join('\n');
 
@@ -627,6 +634,26 @@ ${preview}
       }
       await ctx.store.updateTrustRecord(live.id, r => { delete r.removedAt; r.idAttempts = 0; delete r.idFailed; });
       reply(req, res, { json: { ok: true }, note: 'reverified', id: live.id });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Waive the verification fee for one of the owner's own listings (Requirement 6). Only the payment is skipped: the
+  // phone code and the photo ID check still have to pass. Who and when are saved; nothing shows to the public.
+  router.post('/admin/listings/:id/waive-fee', form, async (req, res, next) => {
+    try {
+      const live = ctx.store.findById(req.params.id);
+      if (!live || ctx.store.isSeed(live.id) || typeof ctx.store.updateTrustRecord !== 'function') {
+        return reply(req, res, { status: 404, json: { error: 'Listing not found' }, note: 'notfound' });
+      }
+      const status = ctx.store.getTrustStatus(live);
+      if (status.verified || status.paid || status.removed) {
+        return reply(req, res, { status: 409, json: { error: 'Nothing to waive: the listing is paid, verified or switched off' }, note: 'notwaivable', id: live.id });
+      }
+      const at = new Date(ctx.clock ? ctx.clock.now() : Date.now()).toISOString();
+      await ctx.store.updateTrustRecord(live.id, r => { r.waivedAt = at; r.waivedBy = 'admin'; });
+      reply(req, res, { json: { ok: true }, note: 'waived', id: live.id });
     } catch (err) {
       next(err);
     }

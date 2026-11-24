@@ -24,6 +24,9 @@ import {
 } from './listing-fields.js';
 import { usAddressStyle } from './address-style.js';
 import { parseHoursRange, parseTwentyFourHourRange } from './schema.js';
+import { buildSignals } from './health-signals.js';
+import { compareNames } from './health-compare.js';
+import { sitemapAddress } from './sitemap-read.js';
 
 // ---- constants -------------------------------------------------------------------
 
@@ -952,6 +955,8 @@ export function createGrader({
   sleep = pause, secondOpinionTimeoutMs = SECOND_OPINION_TIMEOUT_MS,
   // The main assistant's time limit (120 seconds); injectable so a test can cut it short.
   aiTimeoutMs = AI_TIMEOUT_MS,
+  // The one Google Places lookup and the one Azure Maps (Bing) search of a check; null without their keys.
+  placesLookup = null, bingLookup = null,
 }) {
   const grades = () => store.collection('grades');
   const leads = () => store.collection('leads');
@@ -1336,6 +1341,7 @@ export function createGrader({
     // the home page says nothing about whether AI assistants are let in).
     let robots = null;
     let llms = null;
+    let sitemap = null;
     let tooSlow = false;
     t = clock.now();
     if (budget.expired) {
@@ -1356,6 +1362,20 @@ export function createGrader({
         robots = null;
         llms = null;
       }
+      // The sitemap (Requirement 3.9): the first Sitemap: line of the robots.txt just read, else /sitemap.xml, asked for
+      // once, through the same safe fetcher with the same size limit, timeout and shared deadline as llms.txt. The
+      // answer is only saved for the health map; it does not change the Checks or the score.
+      if (!tooSlow) {
+        const target = sitemapAddress(robots?.text, base);
+        if (target) {
+          try {
+            const res = await within(budget, safeFetcher.fetchText(target));
+            sitemap = { status: res.status, text: res.text, contentType: res.contentType, url: target };
+          } catch {
+            sitemap = { error: true, url: target };
+          }
+        }
+      }
     }
     if (tooSlow && failure === undefined) failure = TOO_SLOW;
     const results = runWebsiteChecks({ facts, robots, llms, input, failure });
@@ -1371,7 +1391,88 @@ export function createGrader({
       await step(2, 'failed', bots?.detail ?? "We couldn't read your robots.txt file.", clock.now() - t);
     }
 
-    return { facts, found: foundFromFacts(facts, input), results, homeOk: Boolean(home && facts) };
+    return { facts, found: foundFromFacts(facts, input), results, robots, sitemap, homeOk: Boolean(home && facts) };
+  }
+
+  // ---- the health map's signals (high-tech-look Requirements 3 and 7) -------------------------------------------------
+
+  /**
+   * The one Google lookup and the one Bing search of a check. Each counts as one paid call toward the daily limit, and
+   * is skipped without its key. A lookup that fails or times out gives a result that says so; it never stops the check.
+   */
+  async function lookupProfiles(input) {
+    const query = { name: input.name, city: input.city, state: input.state, website: input.website || undefined };
+    const one = async client => {
+      if (!client) return { status: 'off' };
+      // Like a second opinion, a lookup never uses the day's last calls: they stay for the AI question of a new check.
+      if (aiBudget.peek({ kind: 'grade' }).remaining <= SECOND_OPINION_RESERVE || aiBudget.consume({ kind: 'grade' }).allowed !== true) {
+        return { status: 'limit', reason: "Today's limit for AI questions was reached, so we didn't look this up." };
+      }
+      watchGuard();
+      try {
+        return await client.lookup(query);
+      } catch {
+        return { status: 'error', reason: "We couldn't reach the lookup this time." };
+      }
+    };
+    const [places, bing] = await Promise.all([one(placesLookup), one(bingLookup)]);
+    return { places, bing };
+  }
+
+  /** The published listing for this business, if one clearly is it (same name and city, same state when both have one). */
+  function listingInfoFor(input) {
+    const info = { state: 'none', listing: null, verified: false, founder: null, foundersOpen: false };
+    try {
+      if (typeof store.getFoundersStatus === 'function') info.foundersOpen = store.getFoundersStatus()?.open === true;
+      const all = typeof store.searchListings === 'function' ? store.searchListings({ city: input.city }) : [];
+      const state = String(input.state ?? '').toUpperCase();
+      let matches = (Array.isArray(all) ? all : []).filter(l => l && typeof l === 'object'
+        && (!state || !l.state || String(l.state).toUpperCase() === state)
+        && ['match', 'close'].includes(compareNames(l.name, input.name)));
+      if (matches.length > 1) {
+        const domain = registeredDomain(input.website);
+        const byDomain = domain ? matches.filter(l => registeredDomain(l.website) === domain) : [];
+        if (byDomain.length === 1) matches = byDomain;
+        else {
+          const exact = matches.filter(l => compareNames(l.name, input.name) === 'match');
+          matches = exact.length === 1 ? exact : matches;
+        }
+      }
+      if (matches.length > 1) return { ...info, state: 'unsure' };
+      if (matches.length === 1) {
+        const l = matches[0];
+        const trust = typeof store.getTrustStatus === 'function' ? store.getTrustStatus(l) : undefined;
+        const founder = typeof store.getFounder === 'function' ? store.getFounder(l.id) : undefined;
+        return {
+          ...info,
+          state: 'listed',
+          listing: { id: l.id, name: l.name, phone: l.phone ?? '', address: l.address ?? '', website: l.website ?? '' },
+          verified: trust?.verified === true,
+          founder: founder ? { number: founder.number } : null,
+        };
+      }
+    } catch { /* a listing that cannot be read is "not listed" here, never a crash */ }
+    return info;
+  }
+
+  /** The health map's saved signals for one Grade, or null if they could not be worked out. Never throws. */
+  function signalsFor(input, web, looked) {
+    try {
+      return buildSignals({
+        input,
+        facts: web?.facts ?? null,
+        found: web?.found ?? {},
+        robots: web?.robots ?? null,
+        sitemap: web?.sitemap ?? null,
+        places: looked?.places ?? null,
+        bing: looked?.bing ?? null,
+        listingInfo: listingInfoFor(input),
+        websiteHours: hoursToObject(web?.found?.hours),
+        now: clock.now(),
+      });
+    } catch {
+      return null;
+    }
   }
 
   // ---- steps on the stored Grade ------------------------------------------------------------------------
@@ -1412,6 +1513,11 @@ export function createGrader({
 
     // Carried answers are read again by Gemini here, in the background and all at once, so
     // POST /grade never waits on it.
+    // The one Google lookup and the one Bing search, in parallel with the rest, each cut off after 5 seconds.
+    const profiles = lookupProfiles(input).catch(() => ({
+      places: { status: 'error', reason: "We couldn't reach Google this time." },
+      bing: { status: 'error', reason: "We couldn't reach Bing this time." },
+    }));
     const carried = rereadCarried(grade.ai, input).catch(() => grade.ai);
 
     // Second opinions never hold the report up: the ones that end before the report is written go in
@@ -1476,7 +1582,8 @@ export function createGrader({
       return { ai, mainState: outcome.mainState, cut };
     })();
 
-    const [web, aiOut] = await Promise.all([website, aiBranch]);
+    const [web, aiOut, looked] = await Promise.all([website, aiBranch, profiles]);
+    const signals = signalsFor(input, web, looked);
 
     const t = clock.now();
     await step(4, 'done', 'Your free listing is ready to claim', clock.now() - t);
@@ -1499,6 +1606,10 @@ export function createGrader({
       g.finishedAt = nowIso();
       g.facts = storedFacts(web.facts, web.found);
       g.found = web.found;
+      // What the Google and Bing lookups returned, and the health map's signals worked out from them. Saved with the
+      // Grade so the report, a recheck and the claim flow read the same facts; neither changes the score.
+      g.profiles = looked;
+      g.signals = signals;
       const has = new Set(aiOut.ai.map(a => `${a.prompt}|${a.provider}`));
       g.ai = [...aiOut.ai, ...late.entries.filter(a => !has.has(`${a.prompt}|${a.provider}`))];
       if (late.missed.length > 0) g.secondMissed = late.missed;
@@ -1852,6 +1963,9 @@ export function createGrader({
           g.previousScore = isPartialScore({ ...g, results: scoredResults(g) }) || !hadReviewsCheck ? null : shownScore(g);
           g.facts = storedFacts(web.facts, web.found);
           g.found = web.found;
+          // The website signals are read again; the saved Google and Bing results are reused, so a recheck makes no
+          // second paid lookup.
+          g.signals = signalsFor(g.input, web, g.profiles) ?? g.signals ?? null;
           g.results = assemble(web.results, g.ai, g.aiMain);
           g.score = scoreOf(g.results);
           g.recheckedAt = nowIso();
