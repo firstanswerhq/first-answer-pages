@@ -41,7 +41,10 @@ export function emptyTradeText(label) {
  */
 export function emptyTradeInCityText(label, city) {
   const what = emptyTradeText(label).replace(/^No (.*) listed yet\. Own one\?$/, '$1');
-  return `No ${what} in ${city} yet. Own one?`;
+  // The typed city, at most 60 characters, with the first letter of each word in capitals (V250, V225-3).
+  const shown = Array.from(String(city ?? '')).slice(0, 60).join('')
+    .replace(/(^|[\s-])(\p{L})/gu, (m, before, letter) => `${before}${letter.toUpperCase()}`);
+  return `No ${what} in ${shown} yet. Own one?`;
 }
 
 export function createHomeRouter(ctx) {
@@ -89,6 +92,8 @@ export function createHomeRouter(ctx) {
 
     let results;
     if (filtered.length === 0) {
+      // A search that finds nothing is not a page for search engines to keep: any typed city would make a new one (V225-3).
+      if (city || category) res.set('X-Robots-Tag', 'noindex');
       if (!city && (categoryLabel || !category)) {
         results = `<p class="no-results">${escapeHtml(emptyTradeText(categoryLabel))} <a href="/rise">List it free &rarr;</a></p>`;
       } else if (city && (categoryLabel || !category)) {

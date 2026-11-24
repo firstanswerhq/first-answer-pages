@@ -537,8 +537,7 @@ test('ChatGPT is asked the same questions as Claude, and both show in the report
   assert.equal(grade.ai.filter(a => a.provider === 'chatgpt').length, 3);
   const after = await (await get(env, `/grade/${id}`, { cookie })).text();
   assert.ok(after.includes("On the 2 other questions, Claude didn't name you."));
-  assert.ok(after.includes("We asked Claude and ChatGPT the same 3 questions. ChatGPT's answers are below so you can compare."));
-  assert.ok(after.includes("Only Claude's answers to the first question count toward your score. The other answers are here to compare."));
+  assert.ok(after.includes("We asked Claude 3 questions. Only that answer counts toward your score. Claude didn't name you. On the 2 other questions, Claude didn't name you. ChatGPT's answers are here to compare."));
   // Only Claude's answers are scored, so ChatGPT naming the business does not change the score.
   assert.equal(grade.results.find(r => r.id === 'ai-named').detail, "No. Claude didn't name your business.");
 });
@@ -594,8 +593,8 @@ test('with ChatGPT and Gemini on, all three answer; only Claude is scored', asyn
   }, 'three assistants on three questions');
   const page = await (await get(env, `/grade/${id}`, { cookie })).text();
   assert.match(page, /Gemini, asked the same question:/);
-  assert.ok(page.includes("We asked Claude, ChatGPT and Gemini the same 3 questions. The other assistants' answers are below so you can compare."));
-  assert.ok(page.includes("Only Claude's answers to the first question count toward your score. The other answers are here to compare."));
+  assert.ok(page.includes("The other assistants' answers are here to compare."));
+  assert.ok(page.includes('Only that answer counts toward your score.'));
   assert.match(page, /Gemini answered without a live web search\./);
   assert.match(page, /for comparison only \(not scored\)/);
 });

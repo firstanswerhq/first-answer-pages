@@ -68,6 +68,9 @@ export const ABOUT_SEARCH_DESCRIPTION = "What the free AI Visibility Check reads
 
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
+/** The link that starts a new check with this business filled in (V157). Every mention of it is this link (V244). */
+const runNewLink = (grade, text = 'Run a new check') => `<a href="/grade?from=${encodeURIComponent(grade.id)}">${text}</a>`;
+
 /** The first letter of a typed service in capitals ("plumbers" becomes "Plumbers"), as the fix kit does. */
 function capFirst(text) {
   const chars = Array.from(String(text ?? ''));
@@ -180,7 +183,7 @@ export function gradeFormPage({
     ${field({ id: 'g-state', name: 'state', label: 'State', value: values.state, hint: '2 letters, like TN', error: errors.state, attrs: ' autocomplete="address-level1"' })}
     ${field({ id: 'g-service', name: 'service', label: 'What you do', value: values.service, hint: 'Like roofers, plumbers or restaurants', error: errors.service, attrs: ' list="service-suggestions"' })}
     <datalist id="service-suggestions">${options}</datalist>
-    ${field({ id: 'g-website', name: 'website', label: 'Your website (optional)', value: values.website, hint: 'Like example.com. Leave it empty if you do not have one.', error: errors.website, attrs: ' inputmode="url" autocapitalize="none"' })}
+    ${field({ id: 'g-website', name: 'website', label: 'Your website (optional)', value: values.website, hint: "Like example.com. Leave it empty if you don't have one.", error: errors.website, attrs: ' inputmode="url" autocapitalize="none"' })}
     <div class="field">
       <label class="check" for="g-nostorefront"><input type="checkbox" id="g-nostorefront" name="noStorefront" value="1"${values.noStorefront === true ? ' checked' : ''}> We go to our customers (no storefront)</label>
       <span class="hint">${h("Check this box if you go to your customers and don't show a street address.")}</span>
@@ -279,7 +282,7 @@ function homeReadProblem(grade) {
 /** Why the AI part of a partial score was left out, as the start of a sentence ending "so". */
 function partialReason(grade) {
   const state = grade.aiMain?.state;
-  if (dailyLimitHit(grade)) return "the daily limit for AI checks was reached, so";
+  if (dailyLimitHit(grade)) return "today's limit for AI questions was reached, so";
   if (state === 'not_connected' || state === 'off') return "the AI check isn't connected yet, so";
   return `${midSentence(grade.aiMain?.label ?? 'The assistant')} didn't answer this time, so`;
 }
@@ -453,8 +456,9 @@ function severalAnswers(answers, input, now, cut = null) {
   const shownIndex = Math.max(0, answers.findIndex(a => a.named));
   const shown = answers[shownIndex];
   // Which answer the list is from, numbered among the answers that came back (V102).
+  // "the one that named you" when only one answer did, "the first one that named you" when several did (V245).
   const from = shown.named
-    ? `This list is from answer ${shownIndex + 1}, the first one that named you.`
+    ? `This list is from answer ${shownIndex + 1}, the ${named === 1 ? '' : 'first '}one that named you.`
     : `This list is from answer ${shownIndex + 1}.`;
   const demo = firstAnswer.provider === 'mock' ? '<p class="hint">Demo answer (no AI connected)</p>\n  ' : '';
   const blocks = answers.map((a, i) => `<p>Answer ${i + 1}</p><blockquote class="grade-answer seance-answer">${h(readableAnswer(a.answer ?? ''))}</blockquote>`).join('');
@@ -478,7 +482,9 @@ function severalAnswers(answers, input, now, cut = null) {
         : `In the first answer that named you, you were ${ordinal(position)} of ${of}.`)
       : outcome(shown, input);
     const rest = total - named;
-    result = h(`${where} In the other ${rest === 1 ? 'answer' : `${rest} answers`}, ${subject} didn't name you.`);
+    // One answer named you: "In the other 2 answers ..."; several did: "In 1 answer ..." (V225-6).
+    const others = named === 1 ? `In the other ${rest === 1 ? 'answer' : `${rest} answers`}` : `In ${rest === 1 ? '1 answer' : `${rest} answers`}`;
+    result = h(`${where} ${others}, ${subject} didn't name you.`);
   }
   return [
     `<p>${asked} ${h(subject)} ${count}.</p>`,
@@ -510,21 +516,21 @@ function aiFree(grade, { googleLive, requester, now, secondPending = [] }) {
     parts.push(`<p>${lead} ${h(outcome(first, grade.input))}</p>`, competitorList(first, grade.input), answerBlock(first));
   } else if (seconds.length > 0) {
     parts.push(dailyLimitHit(grade)
-      ? `<p>We couldn't ask ${h(mainLabel)} this time because today's limit for AI checks was reached, so this check has no AI score.</p>`
+      ? `<p>We couldn't ask ${h(mainLabel)} this time because today's limit for AI questions was reached, so this check has no AI score.</p>`
       : `<p>${h(mainLabel)} didn't answer this time, so this check has no AI score.</p>`);
   } else {
     // One clear instruction (V203): the button at the top runs a new check; the one at the bottom only reads the website.
     const hasWebsite = Boolean(grade.input?.website);
     if (dailyLimitHit(grade)) {
       parts.push(hasWebsite
-        ? "<p>We couldn't ask AI this time. The daily limit for AI checks was reached. Come back tomorrow and press Run a new check at the top of this page.</p>"
-        : "<p>We couldn't ask AI this time. The daily limit for AI checks was reached. You can run the check again tomorrow.</p>");
+        ? `<p>We couldn't ask AI this time. Today's limit for AI questions was reached. Come back tomorrow and tap ${runNewLink(grade)}.</p>`
+        : "<p>We couldn't ask AI this time. Today's limit for AI questions was reached. You can run the check again tomorrow.</p>");
     } else if (grade.aiMain?.state === 'not_connected') {
       parts.push("<p>We couldn't ask AI this time. The AI check is not connected yet.</p>");
     } else {
       // One short sentence naming the assistant, not three that repeat each other (V140).
       parts.push(hasWebsite
-        ? `<p>${h(mainLabel)} didn't answer this time. Come back later and press Run a new check at the top of this page.</p>`
+        ? `<p>${h(mainLabel)} didn't answer this time. Come back later and tap ${runNewLink(grade)}.</p>`
         : `<p>${h(mainLabel)} didn't answer this time. Please run the check again later.</p>`);
     }
   }
@@ -571,11 +577,22 @@ function aiFree(grade, { googleLive, requester, now, secondPending = [] }) {
 </section>${google ? `\n${google}` : ''}`;
 }
 
+/**
+ * True when the hours check passed on the home page but no hours were copied for the listing: the hours were plain
+ * text only (V241, the owner's decision: they are not copied, and the report says so).
+ */
+function hoursPlainTextOnly(grade) {
+  const passed = resultsOf(grade).some(r => r.id === 'hours-shown' && r.result === 'pass');
+  return passed && readableHours(foundOf(grade).hours).length === 0;
+}
+
 function previewCard(grade) {
   const i = grade.input;
   const found = foundOf(grade);
   const shown = readableHours(found.hours);
-  const hours = shown.length ? shown.map(x => h(x)).join('; ') : blank('Add your hours');
+  const hours = shown.length
+    ? shown.map(x => h(x)).join('; ')
+    : blank(hoursPlainTextOnly(grade) ? "Add your hours (we saw them on your website but couldn't copy them)" : 'Add your hours');
   return `<div class="grade-preview">
     <h3>${h(i.name)} &middot; ${found.phone ? `<span class="phone">${h(found.phone)}</span>` : blank('Add your phone number')}</h3>
     <p>${h(capFirst(i.service))} in ${h(i.city)}, ${h(i.state)}</p>
@@ -691,26 +708,36 @@ function checkRow(r, input, ctx = {}) {
   // Under "Partly" a leading "Yes. " would sit oddly beside a weak result; it is left off here, never in storage (V153).
   let detail = partly ? String(r.detail ?? '').replace(/^Yes\.\s+/, '') : (r.detail ?? '');
   let pointsHtml = `<br><span class="grade-points">${points}</span>`;
-  // The AI row when the AI part did not run (V203, V204, V211): say why in the assistant's own name, and what to do.
+  let detailHtml = h(detail);
+  // The AI row when the AI part did not run (V203, V204, V211, V242, V244): say why in the assistant's own name, with
+  // no "Not counted" badge, and give the way to ask again as a link.
   if (r.id === 'ai-named' && cls === 'not_checked') {
-    const website = Boolean(input?.website);
+    const website = Boolean(input?.website) && Boolean(ctx.runNew);
     if (ctx.limited) {
-      detail = `We hit today's limit for AI questions, so this part has no score yet.${website ? ' Come back tomorrow and press Run a new check at the top of this page.' : ''}`;
+      detailHtml = `${h("We hit today's limit for AI questions, so this part has no score yet.")}${website ? ` Come back tomorrow and tap ${ctx.runNew}.` : ''}`;
       pointsHtml = '';
     } else if (r.detail === AI_FAILED || r.detail === "AI didn't answer this time") {
-      detail = `${midSentence(ctx.label ?? 'The assistant')} didn't answer this time, so this part has no score.${website ? ' Come back later and press Run a new check at the top of this page.' : ''}`;
+      // The assistant's name starts the sentence, so it starts with a capital ("The demo assistant", V225-5).
+      detailHtml = `${h(`${capFirst(ctx.label ?? 'The assistant')} didn't answer this time, so this part has no score.`)}${website ? ` Come back later and tap ${ctx.runNew}.` : ''}`;
+      pointsHtml = '';
     }
+  }
+  // Hours found only as plain text are not copied into the listing; the row says so (V241).
+  if (r.id === 'hours-shown' && cls === 'pass' && ctx.hoursPlainOnly) {
+    detailHtml = h('Your home page shows your hours in plain text.');
   }
   // The AI row's advice is not a fix the owner can make, so it reads as what they can do, never as a promise (V205).
   const fixLabel = r.id === 'ai-named' ? 'What you can do:' : 'Fix:';
-  return `<li class="grade-check ${cls}"><span class="grade-result">${word}</span><strong>${h(c.label)}</strong>${pointsHtml}<p>${h(detail)}</p>${cls === 'fail' ? `<p><strong>${fixLabel}</strong> ${h(c.fix)}</p>` : ''}</li>`;
+  return `<li class="grade-check ${cls}"><span class="grade-result">${word}</span><strong>${h(c.label)}</strong>${pointsHtml}<p>${detailHtml}</p>${cls === 'fail' ? `<p><strong>${fixLabel}</strong> ${h(c.fix)}</p>` : ''}</li>`;
 }
 
 function allChecks(grade) {
   const results = resultsOf(grade);
   return GROUPS.filter(g => g.show !== false).map(g => {
     const ids = new Set(CHECKS.filter(c => c.group === g.id).map(c => c.id));
-    const ctx = { limited: dailyLimitHit(grade), label: grade.aiMain?.label };
+    const ctx = {
+      limited: dailyLimitHit(grade), label: grade.aiMain?.label, runNew: runNewLink(grade), hoursPlainOnly: hoursPlainTextOnly(grade),
+    };
     const rows = results.filter(r => ids.has(r.id)).map(r => checkRow(r, grade.input, ctx)).join('\n    ');
     return rows ? `<section class="grade-group">
     <h2>${h(g.label)}</h2>
@@ -721,7 +748,7 @@ function allChecks(grade) {
   }).join('\n  ');
 }
 
-const QUESTIONS_NOT_ASKED = "The other questions were not asked because today's limit for AI checks was reached.";
+const QUESTIONS_NOT_ASKED = "The other questions were not asked because today's limit for AI questions was reached.";
 
 /** The full list of answers, with how many named the business. */
 function answersSection(grade, { now } = {}) {
@@ -742,46 +769,84 @@ function answersSection(grade, { now } = {}) {
   const free = freeAnswersOf(all);
   const counted = new Set(free);
   const otherMain = main.filter(a => !counted.has(a));
-  // The count is said once, in one form whether or not there are second opinions (V104, V108).
-  if (free.length > 1) {
+  const others = [...new Set(seconds.map(s => providerLabel(s.provider)))];
+  // When some answers do not count, one paragraph says it in order (V240): what we asked, which answers count and what
+  // the assistant did with them, the other questions, and what the rest are for. Each fact once.
+  const stacked = free.length > 0 && (otherMain.length > 0 || seconds.length > 0);
+  if (stacked) {
+    const questionsAsked = new Set(main.map(a => a.prompt)).size;
+    const firstTimes = timesAsked(free);
+    const asked = questionsAsked === 1
+      ? `We asked ${h(mainLabel)} the question${firstTimes > 1 ? ` ${timesText(firstTimes)}` : ''}.`
+      : `We asked ${h(mainLabel)} ${questionsAsked} questions${firstTimes > 1 ? `, and asked the first one ${timesText(firstTimes)}` : ''}.`;
     const namedCount = free.filter(a => a.named).length;
-    // "all 3 answers", "any of its 3 answers", never "3 of its 3" or "none of its 3" (V142, V207).
-    lines.push(`<p>${h(mainLabel)} ${namedCountText(namedCount, free.length)}.</p>`);
-  }
-  if (otherMain.length > 0) {
-    const k = otherMain.length;
-    const n = otherMain.filter(a => a.named).length;
-    let said;
-    if (n === 0) said = "didn't name you";
-    else if (n === k) said = `named you ${k === 2 ? 'both times' : `all ${k} times`}`;
-    else said = `named your business in ${n} of ${k}`;
-    lines.push(k === 1
-      ? `<p>On the other question, ${h(mainLabel)} ${n === 1 ? 'named your business' : "didn't name your business"}. It is not counted toward your score.</p>`
-      : `<p>On the ${k} other questions, ${h(mainLabel)} ${said}. They are not counted toward your score.</p>`);
+    let counts;
+    if (free.length === 1) {
+      counts = `Only that answer counts toward your score. ${h(mainLabel)} ${namedCount ? 'named you' : "didn't name you"}.`;
+    } else {
+      const which = questionsAsked > 1 ? `Only those first ${free.length} answers` : 'Only these answers';
+      const said = namedCount === 0 ? "didn't name you in any of them" : namedCount === free.length ? 'named you in all of them' : `named you in ${namedCount} of them`;
+      counts = `${which} count toward your score. ${h(mainLabel)} ${said}.`;
+    }
+    let otherLine = '';
+    if (otherMain.length > 0) {
+      const k = otherMain.length;
+      const n = otherMain.filter(a => a.named).length;
+      if (k === 1) {
+        otherLine = `On the other question, ${h(mainLabel)} ${n === 1 ? 'named you' : "didn't name you"}.`;
+      } else {
+        const said = n === 0 ? "didn't name you" : n === k ? `named you ${k === 2 ? 'both times' : `all ${k} times`}` : `named you in ${n} of ${k}`;
+        otherLine = `On the ${k} other questions, ${h(mainLabel)} ${said}.`;
+      }
+    }
+    const compare = seconds.length > 0
+      ? (others.length === 1 ? `${h(others[0])}'s answers are here to compare.` : "The other assistants' answers are here to compare.")
+      : '';
+    lines.push(`<p>${[asked, counts, otherLine, compare].filter(Boolean).join(' ')}</p>`);
+  } else {
+    if (free.length > 1) {
+      // The count is said once, in one form (V104, V108).
+      const namedCount = free.filter(a => a.named).length;
+      // "all 3 answers", "any of its 3 answers", never "3 of its 3" or "none of its 3" (V142, V207).
+      lines.push(`<p>${h(mainLabel)} ${namedCountText(namedCount, free.length)}.</p>`);
+    }
+    // The free question got no answer, so nothing counts, but the answers to the other questions are still told.
+    if (otherMain.length > 0) {
+      const k = otherMain.length;
+      const n = otherMain.filter(a => a.named).length;
+      if (k === 1) {
+        lines.push(`<p>On the other question, ${h(mainLabel)} ${n === 1 ? 'named your business' : "didn't name your business"}. It is not counted toward your score.</p>`);
+      } else {
+        const said = n === 0 ? "didn't name you" : n === k ? `named you ${k === 2 ? 'both times' : `all ${k} times`}` : `named your business in ${n} of ${k}`;
+        lines.push(`<p>On the ${k} other questions, ${h(mainLabel)} ${said}. They are not counted toward your score.</p>`);
+      }
+    }
   }
   // The free question got no answer, but the extra questions did (they run when it failed): say so plainly (V158).
   if (main.length > 0 && free.length === 0) {
     // When the daily limit was the reason, Claude is not blamed (V166).
     lines.push(limitHit
-      ? `<p>We couldn't ask ${h(mainLabel)} the first question because today's limit for AI checks was reached, so this check has no AI score. The other answers are shown below but not counted toward your score.</p>`
+      ? `<p>We couldn't ask ${h(mainLabel)} the first question because today's limit for AI questions was reached, so this check has no AI score. The other answers are shown below but not counted toward your score.</p>`
       : `<p>${h(mainLabel)} didn't answer the first question, so this check has no AI score. The other answers are shown below but not counted toward your score.</p>`);
   }
   if (limitHit && otherMain.length === 0) lines.push(`<p>${QUESTIONS_NOT_ASKED}</p>`);
-  // The two other questions are asked in the background after the report opens. While they are still being
-  // answered, say so, so a report with 2 of 3 questions does not look finished (V220). The note goes away by itself:
-  // after 4 minutes (the same time a running check is called stale) it is no longer shown.
-  const extraPrompts = new Set(all.filter(a => a.extra === true).map(a => a.prompt));
-  const stillAsking = Boolean(grade.extraAiStartedAt) && !limitHit && Number.isFinite(now)
-    && Number.isFinite(Date.parse(grade.extraAiStartedAt)) && now - Date.parse(grade.extraAiStartedAt) < 4 * 60 * 1000
-    && extraPrompts.size < extraQuestions(grade.input).length;
-  if (stillAsking) {
-    lines.push('<p class="notice" role="status" data-grade-rechecking>The other questions are still being answered. This page updates by itself.</p>');
+  // The two other questions run in the background after the report opens (V220, V243). While they really run, the
+  // report says so and refreshes; when they have stopped with fewer answered than asked, it says that instead. The run
+  // writes `extraAiDoneAt` when it ends. A report made before that marker existed has none, so the note is shown for
+  // at most 5 minutes after the start and after that the run counts as stopped.
+  const extraPrompts = new Set(all.filter(a => a.extra === true && !isSecondOpinion(a)).map(a => a.prompt));
+  const expected = extraQuestions(grade.input).length;
+  if (grade.extraAiStartedAt && !limitHit && extraPrompts.size < expected) {
+    const startedAt = Date.parse(grade.extraAiStartedAt);
+    const stillRunning = !grade.extraAiDoneAt && Number.isFinite(now) && Number.isFinite(startedAt) && now - startedAt < 5 * 60 * 1000;
+    lines.push(stillRunning
+      ? '<p class="notice" role="status" data-grade-rechecking>The other questions are still being answered. This page updates by itself.</p>'
+      : '<p class="hint">We couldn\'t get answers to every question this time. The ones we got are below.</p>');
   }
-  if (seconds.length > 0) {
-    const others = [...new Set(seconds.map(s => providerLabel(s.provider)))];
+  if (seconds.length > 0 && !stacked) {
     if (main.length === 0) {
       lines.push(limitHit
-        ? `<p>We couldn't ask ${h(mainLabel)} because today's limit for AI checks was reached, so this check has no AI score. The answers from ${h(joinAnd(others))} are here so you can compare.</p>`
+        ? `<p>We couldn't ask ${h(mainLabel)} because today's limit for AI questions was reached, so this check has no AI score. The answers from ${h(joinAnd(others))} are here so you can compare.</p>`
         : `<p>${h(mainLabel)} didn't answer, so this check has no AI score. The answers from ${h(joinAnd(others))} are here so you can compare.</p>`);
     } else {
       // Count questions, not answers: the free question asked 3 times is still one question.
@@ -794,14 +859,6 @@ function answersSection(grade, { now } = {}) {
         : '';
       lines.push(`<p>We asked ${h(joinAnd([mainLabel, ...others]))} the same ${q === 1 ? 'question' : `${q} questions`}.${askedMore} ${others.length === 1 ? `${h(others[0])}'s answers are` : "The other assistants' answers are"} below so you can compare.</p>`);
     }
-  }
-  // Said whenever an answer below does not count, so the owner knows the score does not move when this report opens.
-  // "This question" while only one has been asked so far; with the gate off the report is open from the first view,
-  // so the ending says the score stays the same as more answers come in (V160).
-  if (free.length > 0 && (otherMain.length > 0 || seconds.length > 0)) {
-    const which = new Set(all.map(a => a.prompt)).size === 1 ? 'this question' : 'the first question';
-    // One sentence for every setup (V209): which answers count, and what the others are for.
-    lines.push(`<p>Only ${h(midSentence(mainLabel))}'s answers to ${which} count toward your score. The other answers are here to compare.</p>`);
   }
   // The free question is listed first, even when a repeat check stored carried extra answers before it (V159).
   const firstPrompt = free[0]?.prompt ?? freeQuestion(grade.input);
@@ -903,10 +960,13 @@ function leadForm(grade, { values = {}, errors = {} } = {}) {
 
 function recheckBlock(grade, rechecking) {
   if (!grade.input.website) {
-    return '<p class="hint">You didn\'t give a website, so there is nothing to check again. Your fix kit still has a draft you can use.</p>';
+    return `<p class="hint">You didn't give a website, so there is nothing to check again. Your fix kit still has a draft you can use. To ask AI again, ${runNewLink(grade, 'run a new check')}.</p>`;
   }
   // When the AI part is what is missing, "Check again" would not bring it back; the button says what it does (V203).
-  const aiMissing = dailyLimitHit(grade) || (grade.aiMain && grade.aiMain.state !== 'ok' && isPartialScore(grade));
+  // A Grade saved by the old rescue line says "ok" but is still partial, so the state alone is not used (V225-4).
+  const aiState = grade.aiMain?.state;
+  const aiMissing = dailyLimitHit(grade) || (isPartialScore(grade) && aiState !== 'not_connected' && aiState !== 'off');
+  const askAgain = `To ask AI again after your changes, ${runNewLink(grade, 'run a new check')}.`;
   const parts = [];
   if (rechecking) {
     parts.push('<p class="notice" role="status" data-grade-rechecking>Checking your website again. This page updates by itself.</p>');
@@ -916,9 +976,9 @@ function recheckBlock(grade, rechecking) {
   }
   parts.push(aiMissing
     ? `<form method="POST" action="/grade/${h(grade.id)}/recheck"><button type="submit" class="button">Recheck my website only</button></form>
-  <p class="hint">Fixed something on your website? This reads your website again and does not ask AI again. To ask AI again, press Run a new check at the top of this page.</p>`
+  <p class="hint">Fixed something on your website? This reads your website again and doesn't ask AI again. ${askAgain}</p>`
     : `<form method="POST" action="/grade/${h(grade.id)}/recheck"><button type="submit" class="button">Check again</button></form>
-  <p class="hint">Fixed something? Check again to see your new score. This reads your website again and does not ask AI again.</p>`);
+  <p class="hint">Fixed something? Check again to see your new score. This reads your website again and doesn't ask AI again. ${askAgain}</p>`);
   return `<section class="grade-recheck">\n  <h2>Made some changes?</h2>\n  ${parts.join('\n  ')}\n</section>`;
 }
 
@@ -971,7 +1031,7 @@ export function reportPage(storedGrade, opts = {}) {
     // "Check again" only reads the website again and never asks the AI, so it cannot give the full score back. The line
     // points at a new check instead, with the business's details filled in (V157; nothing new is spent by this page).
     // One instruction (V203): come back, then press Run a new check. The button at the bottom only reads the website.
-    ? `<p class="hint grade-partial">${h(`Partial score: ${partialReason(grade)} the AI part isn't counted.`)} Come back ${limited ? 'tomorrow' : 'later'} and press <a href="/grade?from=${encodeURIComponent(grade.id)}">Run a new check</a> to get your full score.</p>`
+    ? `<p class="hint grade-partial">${h(`Partial score: ${partialReason(grade)} the AI part isn't counted.`)} Come back ${limited ? 'tomorrow' : 'later'} and tap ${runNewLink(grade)} to get your full score.</p>`
     : '';
   // A website we could not read gives a score from the few checks that ran. Say so under the score, on the locked
   // and the unlocked report alike (V134), in the same style as the notice for an AI that did not answer.
@@ -1015,7 +1075,7 @@ export function reportPage(storedGrade, opts = {}) {
 </div>`;
 
   const when = grade.finishedAt || grade.createdAt;
-  const foot = `<p class="grade-meta">Automated check, ${h(whenText(when))}. AI assistants pick up changes over days to weeks, so look again after you make fixes.</p>
+  const foot = `<p class="grade-meta">Automated check, ${h(whenText(when))}. AI assistants pick up changes over days to weeks, so ${runNewLink(grade, 'run a new check')} after you make fixes.</p>
 <p class="hint">Ask us to remove this report: ${contactLink(contactEmail, contactEmail || 'contact page')}.</p>`;
 
   const justOpened = opened && full && leadGate && unlocked
@@ -1099,7 +1159,7 @@ export function aboutPage({ contactEmail = '', userAgent = '', indexable = false
   <h2>What we ask AI</h2>
   <ul>
     <li>We ask Claude up to 3 questions. We ask the first question up to 3 times, because AI answers change. The questions name the kind of business and the city, never the business name.</li>
-    <li>We use Google's Gemini as a checker to see whether each answer names the business. Each answer, with the business name, city and state, is sent to it for that.</li>
+    <li>When it's switched on, we use Google's Gemini as a checker to see whether each answer names the business. Each answer, with the business name, city and state, is sent to it for that. Otherwise we look for the name in the answer ourselves.</li>
     <li>When we can, ChatGPT, Gemini, Grok and Perplexity are asked the same questions so the answers can be compared. Only Claude's answers to the first question count toward the score.</li>
     <li>The person who ran the check can also see what Google's AI says right now. It is private to them, and we never save it, score it or share it.</li>
   </ul>

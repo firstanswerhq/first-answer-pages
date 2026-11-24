@@ -61,7 +61,7 @@ test('E3: the list and outcome come from the first answer that named the busines
   // Only the second answer named it: that one is shown, with the later list read as in V52.
   const second = answer(NAMED_SECOND_TEXT, { named: true, position: 2, total: 2, competitors: ['Other Co'], ask: 2 });
   const shown = render([answer(NOT_NAMED_TEXT, { ask: 1 }), second, answer(NOT_NAMED_TEXT, { ask: 3 })]);
-  assert.ok(shown.includes('<p class="hint">AI answers change from one time to the next, so we ask the same question 3 times. This list is from answer 2, the first one that named you.</p>'));
+  assert.ok(shown.includes('<p class="hint">AI answers change from one time to the next, so we ask the same question 3 times. This list is from answer 2, the one that named you.</p>'));
   assert.ok(shown.includes('In that answer you were 2nd of 2. In the other 2 answers, Claude didn&#39;t name you.'));
   assert.ok(shown.includes('Also mentioned:'));
   assert.ok(shown.includes('<li>Third Co Plumbing</li>'));
@@ -88,7 +88,7 @@ test('E3: with ask 1 failed, the answers that came back are numbered among thems
   const three = answer(NOT_NAMED_TEXT, { ask: 3 });
   const html = render([two, three], { leadGate: false });
   assert.ok(html.includes('<p>We just asked Claude 3 times and got 2 answers. Claude named your business in 1 of the 2.</p>'));
-  assert.ok(html.includes('<p class="hint">AI answers change from one time to the next, so we ask the same question 3 times. This list is from answer 1, the first one that named you.</p>'));
+  assert.ok(html.includes('<p class="hint">AI answers change from one time to the next, so we ask the same question 3 times. This list is from answer 1, the one that named you.</p>'));
   assert.ok(html.includes('<p>Answer 1</p>') && html.includes('<p>Answer 2</p>'));
   assert.equal(html.includes('<p>Answer 3</p>'), false);
   assert.ok(html.includes('Claude, answer 1 of 2:'));
@@ -143,10 +143,10 @@ test('E3: the answers section counts questions, not answers, and says the first 
     answer(NOT_NAMED_TEXT, { prompt: EXTRA_2 }), chatgpt(EXTRA_2),
   ];
   const html = render(ai, { leadGate: false });
-  assert.ok(html.includes('We asked Claude and ChatGPT the same 3 questions. Claude was asked the first one 3 times. ChatGPT\'s answers are below so you can compare.'));
+  assert.ok(html.includes("We asked Claude 3 questions, and asked the first one 3 times. Only those first 3 answers count toward your score. Claude named you in 2 of them. On the 2 other questions, Claude didn't name you. ChatGPT's answers are here to compare."));
   assert.equal(html.includes('the same 5 questions'), false);
-  assert.ok(html.includes('Claude named your business in 2 of its 3 answers.'));
-  assert.ok(html.includes("On the 2 other questions, Claude didn't name you. They are not counted toward your score."));
+  assert.ok(html.includes('Claude named you in 2 of them.'));
+  assert.ok(html.includes("On the 2 other questions, Claude didn't name you."));
   assert.equal(html.includes('Named in 2 of 5 answers.'), false, 'the count is said once (V104)');
   assert.ok(html.includes('Claude, answer 1 of 3:') && html.includes('Claude, answer 3 of 3:'));
   assert.ok(html.includes('ChatGPT (for comparison only):'));
@@ -154,7 +154,7 @@ test('E3: the answers section counts questions, not answers, and says the first 
 
 test('E3: with only the free question, "Claude was asked it 3 times."', () => {
   const html = render([ANSWER_1, ANSWER_2, ANSWER_3, chatgpt(FREE)], { leadGate: false });
-  assert.ok(html.includes('We asked Claude and ChatGPT the same question. Claude was asked it 3 times.'));
+  assert.ok(html.includes('We asked Claude the question 3 times.'));
 });
 
 test('E3: with one answer per question the answers section reads as before', () => {
@@ -164,7 +164,7 @@ test('E3: with one answer per question the answers section reads as before', () 
     answer(NOT_NAMED_TEXT, { prompt: EXTRA_2 }), chatgpt(EXTRA_2),
   ];
   const html = render(ai, { leadGate: false });
-  assert.ok(html.includes("We asked Claude and ChatGPT the same 3 questions. ChatGPT's answers are below so you can compare."));
+  assert.ok(html.includes("We asked Claude 3 questions. Only that answer counts toward your score. Claude didn't name you. On the 2 other questions, Claude didn't name you. ChatGPT's answers are here to compare."));
   assert.equal(html.includes('was asked the first one'), false);
   assert.equal(/Claude, answer \d of \d/.test(html), false);
 });
@@ -193,7 +193,7 @@ test('V101/V109: one hint paragraph under the lead line says why we ask more tha
   const lead = html.indexOf('We just asked Claude 3 times.');
   assert.ok(lead !== -1 && lead < html.indexOf(hint));
   const two = render([answer(NAMED_TEXT, { named: true, position: 1, ask: 1 }), answer(NOT_NAMED_TEXT, { ask: 2 })]);
-  assert.ok(two.includes('so we ask the same question 2 times. This list is from answer 1, the first one that named you.</p>'));
+  assert.ok(two.includes('so we ask the same question 2 times. This list is from answer 1, the one that named you.</p>'));
 });
 
 test('V107: when today\'s limit cut the asks short, the hint says how many we ask and how many we could', () => {
@@ -201,8 +201,8 @@ test('V107: when today\'s limit cut the asks short, the hint says how many we as
   const aiMain = { provider: 'anthropic', label: 'Claude', state: 'ok', asks: { planned: 3, asked: 2 } };
   const html = reportPage(grade(ai, { aiMain }), { now: NOW });
   assert.ok(html.includes('<p>We just asked Claude 2 times. Claude named your business in 1 of 2 answers.</p>'));
-  assert.ok(html.includes('<p class="hint">AI answers change from one time to the next, so we ask the same question 3 times. Today we could ask only 2 times because we reached today&#39;s limit. This list is from answer 1, the first one that named you.</p>')
-    || html.includes("<p class=\"hint\">AI answers change from one time to the next, so we ask the same question 3 times. Today we could ask only 2 times because we reached today's limit. This list is from answer 1, the first one that named you.</p>"));
+  assert.ok(html.includes('<p class="hint">AI answers change from one time to the next, so we ask the same question 3 times. Today we could ask only 2 times because we reached today&#39;s limit. This list is from answer 1, the one that named you.</p>')
+    || html.includes("<p class=\"hint\">AI answers change from one time to the next, so we ask the same question 3 times. Today we could ask only 2 times because we reached today's limit. This list is from answer 1, the one that named you.</p>"));
   // All planned asks made (no stored cut, or a cut that does not match the answers): the sentence is as it was.
   const full = reportPage(grade(ai, { aiMain: { ...aiMain, asks: { planned: 3, asked: 3 } } }), { now: NOW });
   assert.ok(full.includes('so we ask the same question 2 times. This list is from'));
@@ -218,7 +218,7 @@ test('V107: when today\'s limit cut the asks short, the hint says how many we as
 
 test('V104/V108: "Every answer" says the count once, in the full sentence form', () => {
   const withSeconds = render([ANSWER_1, ANSWER_2, ANSWER_3, chatgpt(FREE)], { leadGate: false });
-  assert.ok(withSeconds.includes('Claude named your business in 2 of its 3 answers.'));
+  assert.ok(withSeconds.includes('Claude named you in 2 of them.'));
   assert.equal(withSeconds.includes('Named in 2 of 3 answers.'), false);
   const alone = render([ANSWER_1, ANSWER_2, ANSWER_3], { leadGate: false });
   assert.ok(alone.includes('<p>Claude named your business in 2 of its 3 answers.</p>'));
@@ -228,7 +228,7 @@ test('V104/V108: "Every answer" says the count once, in the full sentence form',
 
 test('V100/V104: with ask 1 failed, "Every answer" also says Claude was asked 3 times', () => {
   const html = render([answer(NAMED_TEXT, { named: true, position: 1, ask: 2 }), answer(NOT_NAMED_TEXT, { ask: 3 }), chatgpt(FREE)], { leadGate: false });
-  assert.ok(html.includes('We asked Claude and ChatGPT the same question. Claude was asked it 3 times.'));
+  assert.ok(html.includes('We asked Claude the question 3 times.'));
 });
 
 test('V106: ask numbers that are not whole numbers from 1 to 3 are ignored', () => {

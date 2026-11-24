@@ -285,7 +285,7 @@ test('V46: a second opinion that takes too long shows "didn\'t answer in time"',
 
 // ---- V47: a check without Claude's answer is marked partial ------------------------------------------------
 
-const PARTIAL_LINE = "Partial score: Claude didn&#39;t answer this time, so the AI part isn&#39;t counted. Come back later and press <a href=\"/grade?from=__ID__\">Run a new check</a> to get your full score.";
+const PARTIAL_LINE = "Partial score: Claude didn&#39;t answer this time, so the AI part isn&#39;t counted. Come back later and tap <a href=\"/grade?from=__ID__\">Run a new check</a> to get your full score.";
 
 test('V47: a Grade with no AI answer shows the partial line, the admin list says partial, and a Recheck shows no "before" line', async () => {
   const claude = { name: 'anthropic', async ask() { throw new Error('down'); } };

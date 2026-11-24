@@ -130,7 +130,7 @@ test('V152: an old unlocked Grade goes up, and the report, the headline and the 
   }
   const full = reportPage(g, { now: NOW, unlocked: true });
   assert.ok(full.includes('20 of 30 points'));
-  assert.ok(full.includes('Claude named your business in 2 of its 3 answers.'));
+  assert.ok(full.includes('Claude named you in 2 of them.'));
   assert.equal(full.includes('of its 5 answers'), false);
 });
 
@@ -147,7 +147,7 @@ test('V152: an old unlocked Grade goes down when only the extra answers named th
   const full = reportPage(g, { now: NOW, unlocked: true });
   assert.equal(numberOf(full), String(expected));
   assert.ok(full.includes('Needs work'));
-  assert.ok(full.includes('On the 2 other questions, Claude named you both times. They are not counted toward your score.'));
+  assert.ok(full.includes('On the 2 other questions, Claude named you both times.'));
 });
 
 // ---- the report's words -----------------------------------------------------------------------------------------
@@ -157,10 +157,8 @@ test('D1: the full report counts the free answers, gives the other questions a l
     second(FREE), second(EXTRA_1), second(EXTRA_2)];
   const g = { ...oldGrade('mixAAAAAAAAAAAAAAAAAAA', 'Mix Plumbing', ai, UP_STORED) };
   const html = reportPage(g, { now: NOW, unlocked: true });
-  assert.ok(html.includes('<p>Claude named your business in 2 of its 3 answers.</p>'));
-  assert.ok(html.includes('<p>On the 2 other questions, Claude named your business in 1 of 2. They are not counted toward your score.</p>'));
-  assert.ok(html.includes("<p>We asked Claude and ChatGPT the same 3 questions. Claude was asked the first one 3 times. ChatGPT's answers are below so you can compare.</p>"));
-  assert.ok(html.includes("<p>Only Claude's answers to the first question count toward your score. The other answers are here to compare.</p>"));
+  // V240: one paragraph, each fact once.
+  assert.ok(html.includes("<p>We asked Claude 3 questions, and asked the first one 3 times. Only those first 3 answers count toward your score. Claude named you in 2 of them. On the 2 other questions, Claude named you in 1 of 2. ChatGPT's answers are here to compare.</p>"));
   assert.ok(html.includes('Claude (not counted toward your score): '));
   assert.ok(html.includes('ChatGPT (for comparison only): '));
   assert.ok(html.includes('Claude, answer 1 of 3: '));
@@ -170,9 +168,9 @@ test('D1: the full report counts the free answers, gives the other questions a l
 
 test('D1: one other question reads in the singular; none named reads "none of"', () => {
   const one = reportPage(oldGrade('oneAAAAAAAAAAAAAAAAAAA', 'One', [entry(FREE, true), entry(EXTRA_1, true, { extra: true })], UP_STORED), { now: NOW, unlocked: true });
-  assert.ok(one.includes('<p>On the other question, Claude named your business. It is not counted toward your score.</p>'));
+  assert.ok(one.includes('On the other question, Claude named you.'));
   const none = reportPage(oldGrade('noneAAAAAAAAAAAAAAAAAA', 'None', [entry(FREE, true), entry(EXTRA_1, false, { extra: true })], UP_STORED), { now: NOW, unlocked: true });
-  assert.ok(none.includes("<p>On the other question, Claude didn't name your business. It is not counted toward your score.</p>"));
+  assert.ok(none.includes("On the other question, Claude didn't name you."));
   const zero = reportPage(oldGrade('zeroAAAAAAAAAAAAAAAAAA', 'Zero', [entry(FREE, true), entry(EXTRA_1, false), entry(EXTRA_2, false)], UP_STORED), { now: NOW, unlocked: true });
   assert.ok(zero.includes("On the 2 other questions, Claude didn't name you."));
   // Only the free question: no line about other questions, and no "does not change" sentence.
@@ -316,8 +314,8 @@ test('D1: the score is the same before and after the report opens (named 2 of 3,
   const openHtml = reportPage(grade, { now: NOW, unlocked: true });
   assert.equal(numberOf(lockedHtml), String(scoreBefore));
   assert.equal(numberOf(openHtml), String(scoreBefore));
-  assert.ok(openHtml.includes('<p>Claude named your business in 2 of its 3 answers.</p>'));
-  assert.ok(openHtml.includes("On the 2 other questions, Claude didn't name you. They are not counted toward your score."));
+  assert.ok(openHtml.includes('Claude named you in 2 of them.'));
+  assert.ok(openHtml.includes("On the 2 other questions, Claude didn't name you."));
   assert.ok(openHtml.includes('Claude (not counted toward your score): '));
 });
 
@@ -351,7 +349,7 @@ test('V151: free asks all fail and the extras answer: the AI part stays not chec
 
   const html = reportPage(grade, { now: NOW, unlocked: true });
   assert.ok(html.includes('Partial score: Claude didn&#39;t answer this time, so the AI part isn&#39;t counted.'));
-  assert.ok(html.includes("<p>Claude didn't answer this time. Come back later and press Run a new check at the top of this page.</p>"), 'the reason in the free part');
+  assert.ok(html.includes(`<p>Claude didn't answer this time. Come back later and tap <a href="/grade?from=${id}">Run a new check</a>.</p>`), 'the reason in the free part');
   assert.equal(html.includes('We just asked Claude'), false, 'an extra answer is not shown as the free answer');
   assert.ok(html.includes('Claude (not counted toward your score): '));
   assert.ok(html.includes('On the 2 other questions, Claude named you both times.'));

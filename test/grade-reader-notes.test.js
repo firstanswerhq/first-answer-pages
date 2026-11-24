@@ -51,12 +51,12 @@ const aiRow = html => new RegExp('<li class="grade-check [a-z_]+">(?:(?!</li>)[^
 
 test('V203: one instruction, "Come back ... and press Run a new check", and a bottom button that says what it does', () => {
   const failed = open(grade({ state: 'failed' }));
-  assert.ok(failed.includes(`Come back later and press <a href="/grade?from=${ID}">Run a new check</a> to get your full score.`));
-  assert.ok(failed.includes('Come back later and press Run a new check at the top of this page.'));
+  assert.ok(failed.includes(`Come back later and tap <a href="/grade?from=${ID}">Run a new check</a> to get your full score.`));
+  assert.ok(failed.includes(`Come back later and tap <a href="/grade?from=${ID}">Run a new check</a>.`));
   assert.ok(failed.includes('>Recheck my website only</button>'));
   const limit = open(grade({ state: 'limit', results: [...WEBSITE_ONLY, notChecked(AI_LIMIT_REACHED)] }));
-  assert.ok(limit.includes(`Come back tomorrow and press <a href="/grade?from=${ID}">Run a new check</a> to get your full score.`));
-  assert.ok(limit.includes('Come back tomorrow and press Run a new check at the top of this page.'));
+  assert.ok(limit.includes(`Come back tomorrow and tap <a href="/grade?from=${ID}">Run a new check</a> to get your full score.`));
+  assert.ok(limit.includes(`Come back tomorrow and tap <a href="/grade?from=${ID}">Run a new check</a>.`));
   assert.ok(limit.includes('>Recheck my website only</button>'));
   for (const html of [failed, limit]) {
     assert.equal(/run the check again (tomorrow|later)/i.test(html), false, 'no second, different instruction');
@@ -67,8 +67,10 @@ test('V203: one instruction, "Come back ... and press Run a new check", and a bo
 test('V204: with Claude failed and ChatGPT answering, the AI row names Claude, not "AI"', () => {
   const html = open(grade({ state: 'failed', ai: [second(FREE)] }));
   const row = aiRow(html);
-  assert.ok(row.includes("Claude didn&#39;t answer this time, so this part has no score. Come back later and press Run a new check at the top of this page."));
+  assert.ok(row.includes(`Claude didn&#39;t answer this time, so this part has no score. Come back later and tap <a href="/grade?from=${ID}">Run a new check</a>.`));
   assert.equal(html.includes('AI didn&#39;t answer this time'), false);
+  // V242: no "Not counted" badge on this row, as on the daily-limit row.
+  assert.equal(row.includes('Not counted'), false);
 });
 
 test('V211: the daily-limit AI row keeps "Not checked", says why in one sentence, and has no "Not counted"', () => {
@@ -87,7 +89,7 @@ test('V205: the advice under a failed AI row is "What you can do:" and promises 
   });
   const row = aiRow(open(g));
   assert.ok(row.includes('<strong>What you can do:</strong>'));
-  assert.ok(row.includes('Claim your free listing and work through the fixes below so AI has more to read. Changes take days to weeks. No one can make AI name a business.'));
+  assert.ok(row.includes('Claim your free listing and work through the fixes below. AI assistants pick up changes over days to weeks. No one can make AI name a business.'));
   assert.equal(row.includes('Fix:'), false);
   assert.equal(row.includes("can&#39;t promise"), false);
 });
@@ -116,12 +118,12 @@ test('V207: counts read as plain words: all, any of, both', () => {
     ai: [entry(FREE, true), entry(EXTRA_1, true, { extra: true }), entry(EXTRA_2, true, { extra: true })], state: 'ok',
     results: [...WEBSITE_ONLY, pass('ai-named', { earned: 30 })],
   }));
-  assert.ok(extrasBoth.includes('On the 2 other questions, Claude named you both times. They are not counted toward your score.'));
+  assert.ok(extrasBoth.includes('On the 2 other questions, Claude named you both times.'));
   const extrasNone = open(grade({
     ai: [entry(FREE, true), entry(EXTRA_1, false, { extra: true }), entry(EXTRA_2, false, { extra: true })], state: 'ok',
     results: [...WEBSITE_ONLY, pass('ai-named', { earned: 30 })],
   }));
-  assert.ok(extrasNone.includes("On the 2 other questions, Claude didn't name you. They are not counted toward your score."));
+  assert.ok(extrasNone.includes("On the 2 other questions, Claude didn't name you."));
 });
 
 // ---- V208, V209, V210 -------------------------------------------------------------------------------------------
@@ -135,11 +137,15 @@ test('V208: the two numbers are tied together, and a partial score says "could c
   assert.ok(locked(failed).includes(`You earned ${p.earned} of the ${p.available} points we could check today. That is ${p.score} out of 100.`));
 });
 
-test('V209: one sentence says which answers count and what the others are for', () => {
+test('V209, V240: one paragraph says what was asked, which answers count and what the others are for', () => {
   const ai = [entry(FREE, true), second(FREE)];
   const html = open(grade({ ai, state: 'ok', results: [...WEBSITE_ONLY, pass('ai-named', { earned: 30 })] }));
-  assert.ok(html.includes("<p>Only Claude's answers to this question count toward your score. The other answers are here to compare.</p>"));
+  assert.ok(html.includes("<p>We asked Claude the question. Only that answer counts toward your score. Claude named you. ChatGPT's answers are here to compare.</p>"));
   assert.equal(html.includes('Your score counts only'), false);
+  // The ChatGPT sentence is left out when no other assistant answered.
+  const alone = open(grade({ ai: [entry(FREE, true), entry(EXTRA_1, false, { extra: true })], state: 'ok', results: [...WEBSITE_ONLY, pass('ai-named', { earned: 30 })] }));
+  assert.ok(alone.includes("<p>We asked Claude 2 questions. Only that answer counts toward your score. Claude named you. On the other question, Claude didn't name you.</p>"));
+  assert.equal(alone.includes("answers are here to compare"), false);
 });
 
 test('V210: the listing text says who sends it and who approves it', () => {

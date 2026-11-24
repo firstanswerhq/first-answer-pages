@@ -57,7 +57,7 @@ function grade({ ai = [], results = [...WEBSITE_ONLY, notChecked(AI_FAILED)], st
 
 const locked = (g, opts = {}) => reportPage(g, { now: NOW, ...opts });
 const open = (g, opts = {}) => reportPage(g, { now: NOW, unlocked: true, ...opts });
-const RUN_NEW = `<a href="/grade?from=${ID}">Run a new check</a> to get your full score.`;
+const RUN_NEW = `Come back tomorrow and tap <a href="/grade?from=${ID}">Run a new check</a> to get your full score.`;
 
 // ---- V164 ---------------------------------------------------------------------------------------------------------
 
@@ -75,7 +75,7 @@ test('V164: the daily-limit reason is found by the step\'s finding, whatever the
   const other = [{ name: 'Asking the AI', state: 'failed', ms: 5, finding: "AI didn't answer this time" }];
   const html = locked(grade({ ai, results: [...WEBSITE_ONLY, stored], state: 'ok', steps: other }));
   assert.ok(html.includes('Partial score: Claude didn&#39;t answer this time'));
-  assert.equal(html.includes('tomorrow for your full score'), false);
+  assert.equal(html.includes('Come back tomorrow'), false);
 });
 
 // ---- V166 ---------------------------------------------------------------------------------------------------------
@@ -86,15 +86,15 @@ test('V166: when the limit was the reason, no sentence blames Claude (extras ans
     results: [...WEBSITE_ONLY, notChecked(AI_LIMIT_REACHED)], state: 'limit',
   });
   const html = open(g);
-  assert.ok(html.includes("<p>We couldn't ask Claude the first question because today's limit for AI checks was reached, so this check has no AI score. The other answers are shown below but not counted toward your score.</p>"));
+  assert.ok(html.includes("<p>We couldn't ask Claude the first question because today's limit for AI questions was reached, so this check has no AI score. The other answers are shown below but not counted toward your score.</p>"));
   assert.equal(html.includes('did not answer the first question'), false);
 });
 
 test('V166: when the limit was the reason, second opinions alone read the same way, in the full report and the free part', () => {
   const g = grade({ ai: [second(FREE), second(EXTRA_1)], results: [...WEBSITE_ONLY, notChecked(AI_LIMIT_REACHED)], state: 'limit' });
   const html = open(g);
-  assert.ok(html.includes("<p>We couldn't ask Claude because today's limit for AI checks was reached, so this check has no AI score. The answers from ChatGPT are here so you can compare.</p>"));
-  assert.ok(html.includes("<p>We couldn't ask Claude this time because today's limit for AI checks was reached, so this check has no AI score.</p>"));
+  assert.ok(html.includes("<p>We couldn't ask Claude because today's limit for AI questions was reached, so this check has no AI score. The answers from ChatGPT are here so you can compare.</p>"));
+  assert.ok(html.includes("<p>We couldn't ask Claude this time because today's limit for AI questions was reached, so this check has no AI score.</p>"));
   assert.equal(html.includes('did not answer'), false);
 });
 

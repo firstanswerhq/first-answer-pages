@@ -59,7 +59,7 @@ export const OWNER_EMAIL_HINT = 'Optional. Never shown publicly. We use it only 
 export const HOURS_PLACEHOLDER = '7am-5pm, or Closed';
 
 /** Hint under the hours boxes. */
-export const HOURS_HINT = "Type Closed for days you're closed. Leave a day blank only if your hours change.";
+export const HOURS_HINT = "Type Closed for days you're closed. Leave a day blank only if your hours that day vary from week to week.";
 export const DESCRIPTION_PLACEHOLDER = 'One or two sentences about your business, like who you are and what you do.';
 export const SERVICES_PLACEHOLDER = 'List what you offer, like: repairs, new installs';
 export const CATEGORY_GUESSED_OTHER = 'We picked Other. Choose a better fit if there is one.';

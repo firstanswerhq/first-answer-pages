@@ -208,16 +208,16 @@ test('V139: no website and the daily limit: one clear line, and "tomorrow" in pl
   const html = locked(g);
   assert.ok(html.includes("We couldn't run any checks this time. Please try again tomorrow."));
   assert.equal(html.includes('We could only run the AI check'), false);
-  assert.ok(html.includes("We couldn't ask AI this time. The daily limit for AI checks was reached. You can run the check again tomorrow."));
+  assert.ok(html.includes("We couldn't ask AI this time. Today's limit for AI questions was reached. You can run the check again tomorrow."));
   assert.equal(html.includes('check again later'), false);
 });
 
 test('V139: with a website, the partial line says "tomorrow" for the daily limit and "later" otherwise', () => {
   const results = [...WEBSITE_ONLY, notChecked('ai-named', AI_LIMIT_REACHED)];
   const limit = locked(grade({ results, aiMain: { provider: 'anthropic', label: 'Claude', state: 'limit' } }));
-  assert.ok(limit.includes('Partial score: the daily limit for AI checks was reached, so the AI part isn&#39;t counted. Come back tomorrow and press <a href="/grade?from=finalAAAAAAAAAAAAAAAAAA">Run a new check</a> to get your full score.'));
+  assert.ok(limit.includes('Partial score: today&#39;s limit for AI questions was reached, so the AI part isn&#39;t counted. Come back tomorrow and tap <a href="/grade?from=finalAAAAAAAAAAAAAAAAAA">Run a new check</a> to get your full score.'));
   const failed = locked(grade({ results, aiMain: { provider: 'anthropic', label: 'Claude', state: 'failed' } }));
-  assert.ok(failed.includes('Partial score: Claude didn&#39;t answer this time, so the AI part isn&#39;t counted. Come back later and press <a href="/grade?from=finalAAAAAAAAAAAAAAAAAA">Run a new check</a> to get your full score.'));
+  assert.ok(failed.includes('Partial score: Claude didn&#39;t answer this time, so the AI part isn&#39;t counted. Come back later and tap <a href="/grade?from=finalAAAAAAAAAAAAAAAAAA">Run a new check</a> to get your full score.'));
 });
 
 test('V139: with no website and no limit, the sentence is as before', () => {

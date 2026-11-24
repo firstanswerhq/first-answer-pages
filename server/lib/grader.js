@@ -1648,26 +1648,35 @@ export function createGrader({
   // ---- the extra AI questions ------------------------------------------------------------------------------------------
 
   async function runExtraQuestions(id) {
-    for (const prompt of extraQuestions((await get(id)).input)) {
-      const grade = await get(id);
-      if (!grade) return;
-      // Second opinions are saved as they arrive; only the main answer is waited for.
-      const { entries, mainState } = await askQuestion({
-        input: grade.input, prompt, existing: grade.ai, onSecond: details => saveLateSecond(id, details), gradeId: id,
-      });
-      if (entries.length > 0) {
-        await grades().update(list => {
-          const g = list.find(x => x && x.id === id);
-          if (!g) return;
-          // Flagged, so nothing ever mistakes an extra-question answer for the free question's (Requirement 26).
-          // They are shown in the full report and never counted, so the score is the same before and after.
-          g.ai = [...(Array.isArray(g.ai) ? g.ai : []), ...entries.map(e => ({ ...e, extra: true }))];
-          g.results = assemble(g.results, g.ai, g.aiMain);
-          g.score = scoreOf(g.results);
+    try {
+      for (const prompt of extraQuestions((await get(id)).input)) {
+        const grade = await get(id);
+        if (!grade) return;
+        // Second opinions are saved as they arrive; only the main answer is waited for.
+        const { entries, mainState } = await askQuestion({
+          input: grade.input, prompt, existing: grade.ai, onSecond: details => saveLateSecond(id, details), gradeId: id,
         });
+        if (entries.length > 0) {
+          await grades().update(list => {
+            const g = list.find(x => x && x.id === id);
+            if (!g) return;
+            // Flagged, so nothing ever mistakes an extra-question answer for the free question's (Requirement 26).
+            // They are shown in the full report and never counted, so the score is the same before and after.
+            g.ai = [...(Array.isArray(g.ai) ? g.ai : []), ...entries.map(e => ({ ...e, extra: true }))];
+            g.results = assemble(g.results, g.ai, g.aiMain);
+            g.score = scoreOf(g.results);
+          });
+        }
+        // The main assistant failed: do not spend more paid calls on the next question.
+        if (mainState === 'failed') break;
       }
-      // The main assistant failed: do not spend more paid calls on the next question.
-      if (mainState === 'failed') break;
+    } finally {
+      // The run is over, whether it asked everything or stopped early: the report stops saying "still being
+      // answered" and, if fewer questions were answered than asked, says so (V243).
+      await grades().update(list => {
+        const g = list.find(x => x && x.id === id);
+        if (g) g.extraAiDoneAt = nowIso();
+      });
     }
   }
 

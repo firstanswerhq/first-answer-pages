@@ -65,9 +65,9 @@ const answersOf = html => /<section class="grade-all-answers">[^]*?<\/section>/.
 
 test('V157: the partial line says "Run a new check", linked to the form with this business filled in', () => {
   const failed = locked(grade({ state: 'failed' }));
-  assert.ok(failed.includes(`Partial score: Claude didn&#39;t answer this time, so the AI part isn&#39;t counted. Come back later and press <a href="/grade?from=${ID}">Run a new check</a> to get your full score.</p>`));
+  assert.ok(failed.includes(`Partial score: Claude didn&#39;t answer this time, so the AI part isn&#39;t counted. Come back later and tap <a href="/grade?from=${ID}">Run a new check</a> to get your full score.</p>`));
   const limit = locked(grade({ state: 'limit', results: [...WEBSITE_ONLY, notChecked(AI_LIMIT_REACHED)] }));
-  assert.ok(limit.includes(`Partial score: the daily limit for AI checks was reached, so the AI part isn&#39;t counted. Come back tomorrow and press <a href="/grade?from=${ID}">Run a new check</a> to get your full score.</p>`));
+  assert.ok(limit.includes(`Partial score: today&#39;s limit for AI questions was reached, so the AI part isn&#39;t counted. Come back tomorrow and tap <a href="/grade?from=${ID}">Run a new check</a> to get your full score.</p>`));
   for (const html of [failed, limit]) {
     assert.equal(/Check again (later|tomorrow) for your full score/.test(html), false, 'no "Check again" in that line');
   }
@@ -81,7 +81,7 @@ test('V157, V203: "Check again" stays for a Grade with a website; when the AI pa
     const html = open(grade({ state, results: [...WEBSITE_ONLY, notChecked(state === 'limit' ? AI_LIMIT_REACHED : AI_FAILED)] }));
     assert.ok(html.includes('>Recheck my website only</button>'), state);
     assert.equal(html.includes('>Check again</button>'), false, state);
-    assert.ok(html.includes('To ask AI again, press Run a new check at the top of this page.'), state);
+    assert.ok(html.includes(`To ask AI again after your changes, <a href="/grade?from=${ID}">run a new check</a>.`), state);
   }
 });
 
@@ -250,23 +250,26 @@ test('V159: with the free question first already, the order is as it was', () =>
 const THREE = [entry(FREE, true), entry(EXTRA_1, false, { extra: true }), entry(EXTRA_2, false, { extra: true })];
 const OK = { results: [...WEBSITE_ONLY, pass('ai-named', { earned: 30 })], state: 'ok' };
 
-test('V160: with the gate on, the ending says it does not change when the report opens', () => {
+const THREE_PARAGRAPH = "<p>We asked Claude 3 questions. Only that answer counts toward your score. Claude named you. On the 2 other questions, Claude didn't name you.</p>";
+
+test('V160, V240: with the gate on, one paragraph says what was asked, which answer counts and what the others are', () => {
   const html = open(grade({ ai: THREE, ...OK }));
-  assert.ok(html.includes("<p>Only Claude's answers to the first question count toward your score. The other answers are here to compare.</p>"));
+  assert.ok(html.includes(THREE_PARAGRAPH));
+  assert.equal(html.includes('does not change when you open this report'), false);
 });
 
-test('V160: with the gate off, the ending says it stays the same as more answers come in', () => {
+test('V160, V240: with the gate off the paragraph is the same', () => {
   const html = open(grade({ ai: THREE, ...OK }), { leadGate: false });
-  assert.ok(html.includes("<p>Only Claude's answers to the first question count toward your score. The other answers are here to compare.</p>"));
+  assert.ok(html.includes(THREE_PARAGRAPH));
   assert.equal(html.includes('when you open this report'), false);
 });
 
-test('V160: while only one question has been asked, it says "this question"', () => {
+test('V160, V240: while only one question has been asked, it says "the question" and what the other assistant is for', () => {
   const ai = [entry(FREE, true), second(FREE)];
   const on = open(grade({ ai, ...OK }));
-  assert.ok(on.includes("<p>Only Claude's answers to this question count toward your score. The other answers are here to compare.</p>"));
+  assert.ok(on.includes("<p>We asked Claude the question. Only that answer counts toward your score. Claude named you. ChatGPT's answers are here to compare.</p>"));
   const off = open(grade({ ai, ...OK }), { leadGate: false });
-  assert.ok(off.includes("<p>Only Claude's answers to this question count toward your score. The other answers are here to compare.</p>"));
+  assert.ok(off.includes("<p>We asked Claude the question. Only that answer counts toward your score. Claude named you. ChatGPT's answers are here to compare.</p>"));
 });
 
 // ---- V161 -------------------------------------------------------------------------------------------------------
@@ -280,7 +283,7 @@ test('V161: an old Grade saved by the rescue line takes its reason from the AI s
     ai: [entry(EXTRA_1, true), entry(EXTRA_2, true)], results: [...WEBSITE_ONLY, stored], state: 'ok', steps,
   });
   const html = locked(old);
-  assert.ok(html.includes(`Partial score: the daily limit for AI checks was reached, so the AI part isn&#39;t counted. Come back tomorrow and press <a href="/grade?from=${ID}">Run a new check</a> to get your full score.</p>`));
+  assert.ok(html.includes(`Partial score: today&#39;s limit for AI questions was reached, so the AI part isn&#39;t counted. Come back tomorrow and tap <a href="/grade?from=${ID}">Run a new check</a> to get your full score.</p>`));
   assert.equal(html.includes('Claude didn&#39;t answer this time'), false);
   assert.ok(Number.isInteger(shownScore(old)), 'the website points still give a number');
   assert.ok(open(old).includes('On the 2 other questions, Claude named you both times.'));
@@ -311,7 +314,9 @@ test('V162: the free question hit the daily limit, so the extra questions are no
   assert.equal(shownScore(grade), shownScore(before), 'the score does not move');
 
   const html = open(grade);
-  assert.ok(html.includes("The other questions were not asked because today's limit for AI checks was reached."));
+  assert.ok(html.includes("The other questions were not asked because today's limit for AI questions was reached."));
+  // V225-1: the limit line still says "tomorrow", and the instruction is one link.
+  assert.ok(html.includes('Come back tomorrow and tap <a href="/grade?from='));
   assert.ok(html.includes('Run a new check</a> to get your full score.'));
 });
 
