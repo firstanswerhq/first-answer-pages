@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 
 import { createApp } from '../server/app.js';
 import { createAiBudget } from '../server/lib/ai-budget.js';
-import { formStyleHours, schemaHours } from '../server/lib/grader.js';
+import { formStyleHours, schemaHours, readableHours } from '../server/lib/grader.js';
 import { buildSchema, parseHoursRange } from '../server/lib/schema.js';
 import { listingMetaDescription } from '../server/routes/listings.js';
 
@@ -49,6 +49,29 @@ test('V178, V179: 00:00-00:00 is open all day; 24:00 is only a closing time, and
   assert.equal(parseHoursRange('24:00-08:00'), null, '24:00 is not an opening time');
   assert.equal(parseHoursRange('24:30-08:00'), null);
   assert.equal(parseHoursRange('08:00-24:30'), null);
+});
+
+test('V184: the 12-hour form follows the same equal-times rule', () => {
+  assert.deepEqual(parseHoursRange('12am-12am'), { opens: '00:00', closes: '23:59' });
+  assert.equal(parseHoursRange('9am-9am'), null);
+  assert.deepEqual(parseHoursRange('9am-5pm'), { opens: '09:00', closes: '17:00' });
+});
+
+test('V185, V187: the fix kit label checks each side, and keeps open-all-day hours', () => {
+  assert.deepEqual(schemaHours(['Mo-Fr 9am-5:00']), []);
+  assert.deepEqual(schemaHours(['Mo-Fr 5:00-9pm']), []);
+  assert.deepEqual(schemaHours(['Mo-Fr 9am-17:00']), ['Mo-Fr 09:00-17:00'], 'a side that is clear on its own is used');
+  assert.deepEqual(schemaHours(['Mo-Fr 00:00-24:00']), ['Mo-Fr 00:00-23:59']);
+  assert.deepEqual(schemaHours(['Mo-Fr 00:00-00:00']), ['Mo-Fr 00:00-23:59']);
+  assert.deepEqual(schemaHours(['Mo-Fr 9am-9am']), []);
+});
+
+test('V188: the hours people read follow the same rule', () => {
+  assert.deepEqual(readableHours(['Mo-Fr 8:00-5:00']), ['Monday to Friday, 8:00-5:00']);
+  assert.deepEqual(readableHours(['Mo-Fr 9:30-4:30']), ['Monday to Friday, 9:30-4:30']);
+  assert.deepEqual(readableHours(['Mo-Fr 08:00-17:00']), ['Monday to Friday, 8:00 am to 5:00 pm']);
+  assert.deepEqual(readableHours(['Mo-Fr 00:00-00:00']), ['Monday to Friday, 12:00 am to 11:59 pm']);
+  assert.deepEqual(readableHours(['Mo-Fr 9am-5pm']), ['Monday to Friday, 9:00 am to 5:00 pm']);
 });
 
 test('V177: the fix kit label reads 24-hour times only when they cannot be 12-hour times', () => {
@@ -210,8 +233,8 @@ test('claim: the form shows an empty Services box marked as needing input', asyn
   assert.ok(label.includes('Needs your input'), label);
   assert.equal(label.includes('Required'), false);
   assert.ok(html.includes('class="field missing"'));
-  // V182: an example in the empty box, as a placeholder (not a value)
-  assert.ok(html.includes('<textarea id="f-services" name="services" rows="5" placeholder="Drain cleaning, water heaters">'));
+  // V182, V186: a neutral line in the empty box, as a placeholder (not a value)
+  assert.ok(html.includes('<textarea id="f-services" name="services" rows="5" placeholder="List what you offer, one per line">'));
   const box = /<textarea id="f-services"[^>]*>([^]*?)<\/textarea>/.exec(html)?.[1];
   assert.equal(box?.trim(), '');
 });

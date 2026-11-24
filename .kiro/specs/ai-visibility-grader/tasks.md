@@ -699,6 +699,10 @@ From `review-2026-11-23-owner-decisions.md`: the owner approved D1 to D5 ("Yes t
   - `schema.js`: new exported `parseTwentyFourHourRange` (24-hour only when an hour has a leading zero or is 0 or 13 or more, V177; 00:00-00:00 is open all day, V178; "24:00" only as a closing time, V179), used by `parseHoursRange`, `formStyleHours` and `schemaHours` in `grader.js`; `rise-html.js`: a placeholder in the Services box (V182)
   - Tests (`test/grade-claim-hours.test.js`): `8:00-5:00`, `9:00 - 5:00` and `12:00-1:00` stay as found and parse to null; `00:00-00:00` and `24:00` closing; the fix kit label; the exact "Needs your input" and `class="field missing"` (V181); O4's own "kept as found" and "refuses" lists change for `00:00-24:00`; docs fixed (V183)
   - _Requirements: 29.2, 29.4_
+- [x] O4b. The notes V184 to V189 (before O5)
+  - `schema.js`: the 12-hour branch runs the equal-times rule (V184); `grader.js`: `schemaHours` and `readableHours` use `parseTwentyFourHourRange` first, then a per-side check `sideIsSure` (V185, V187, V188); `rise-html.js`: the Services placeholder is "List what you offer, one per line" (V186, owner's decision)
+  - Tests (`test/grade-claim-hours.test.js`): V184, V185, V187 and V188 lists; the placeholder test changes with V186
+  - _Requirements: 29.4_
 - [ ] O5. D5: the business-label Check knows every local-business type (Requirement 30)
   - New `server/lib/schema-types.js` with the fixed list built by hand from the schema.org type tree (release and source written at the top); `page-facts.js` builds `BUSINESS_TYPES` from it plus `CleaningService`, strips a leading `http://schema.org/`, `https://schema.org/` or `schema:` before the lookup, counts `Organization` subtypes like `Organization` and never counts `OnlineBusiness` or `OnlineStore` (V156); read the page behind `test/grade-checks.test.js` lines 55 to 58 first
   - Tests: new `test/schema-types.test.js` and Check tests, as listed in the design; no existing line changes

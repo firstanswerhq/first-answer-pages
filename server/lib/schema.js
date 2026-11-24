@@ -150,7 +150,7 @@ function from24(hour, minute) {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
-/** For 24-hour ranges: opens and closes at the same time. 00:00 to 00:00 is open all day (V178); any other equal pair means nothing. */
+/** Opens and closes at the same time (either form). 00:00 to 00:00 is open all day (V178, V184); any other equal pair means nothing. */
 function settle(range) {
   if (range.opens !== range.closes) return range;
   return range.opens === '00:00' ? { opens: '00:00', closes: '23:59' } : null;
@@ -183,7 +183,7 @@ export function parseHoursRange(text) {
   if (m) {
     const opens = to24(m[1], m[2], m[3]);
     const closes = to24(m[4], m[5], m[6]);
-    return opens && closes ? { opens, closes } : null;
+    return opens && closes ? settle({ opens, closes }) : null;
   }
   return parseTwentyFourHourRange(text);
 }

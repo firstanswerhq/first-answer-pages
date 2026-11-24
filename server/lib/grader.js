@@ -475,6 +475,15 @@ function formStyleHoursObject(hours) {
   return out;
 }
 
+/** True when one side of a range is clear on its own: it has am or pm, or its hour has a leading zero or is 0 or 13+. */
+function sideIsSure(text) {
+  const t = typeof text === 'string' ? text.trim() : '';
+  if (/[ap]/i.test(t)) return true;
+  const m = /^(\d{1,2}):\d{2}$/.exec(t);
+  if (!m) return false;
+  return (m[1].length === 2 && m[1][0] === '0') || Number(m[1]) === 0 || Number(m[1]) >= 13;
+}
+
 const SCHEMA_DAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 
 /** "9am" -> "09:00", "17:30" -> "17:30"; null when the time could mean more than one thing. */
@@ -504,11 +513,14 @@ export function schemaHours(lines) {
   const byTime = new Map();
   for (const [day, value] of Object.entries(hoursToObject(lines))) {
     const [open, close, extra] = value.split('-');
-    const a = schemaTime(open ?? '');
-    const b = schemaTime(close ?? '');
-    if (!a || !b || a === b || extra !== undefined) continue;
-    // Times with no am or pm are used only when they cannot be 12-hour times ("8:00-5:00" could be), V177.
-    if (!/[ap]/i.test(`${open}${close}`) && !parseTwentyFourHourRange(value)) continue;
+    if (extra !== undefined) continue;
+    // A whole 24-hour range that cannot mean anything else is read by the one shared reader (V177, V187: open all
+    // day is 00:00-23:59, the same as the form and the JSON-LD). Otherwise each side is read on its own, and a
+    // side with no am or pm is used only when its own hour cannot be a 12-hour time (V185).
+    const whole = parseTwentyFourHourRange(value);
+    const a = whole ? whole.opens : (sideIsSure(open) ? schemaTime(open ?? '') : null);
+    const b = whole ? whole.closes : (sideIsSure(close) ? schemaTime(close ?? '') : null);
+    if (!a || !b || a === b) continue;
     const key = `${a}-${b}`;
     byTime.set(key, [...(byTime.get(key) ?? []), DAY_NAMES.indexOf(day)]);
   }
@@ -569,8 +581,11 @@ export function readableHours(lines) {
     const last = DAY_TITLES[DAY_NAMES.indexOf(days[j])];
     const label = j === i ? first : j === i + 1 ? `${first} and ${last}` : `${first} to ${last}`;
     const [open, close, extra] = byDay[days[i]].split('-');
-    const a = readableTime(open ?? '');
-    const b = readableTime(close ?? '');
+    // Same rule as the Fix Kit label (V188): the shared 24-hour reader first; a side with no am or pm that could be
+    // a 12-hour time makes the line show as found.
+    const whole = parseTwentyFourHourRange(byDay[days[i]]);
+    const a = whole ? readableTime(whole.opens) : (sideIsSure(open) ? readableTime(open ?? '') : null);
+    const b = whole ? readableTime(whole.closes) : (sideIsSure(close) ? readableTime(close ?? '') : null);
     out.push(`${label}, ${a && b && extra === undefined ? `${a} to ${b}` : byDay[days[i]]}`);
     i = j + 1;
   }
