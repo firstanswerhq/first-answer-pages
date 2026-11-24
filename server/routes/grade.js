@@ -94,8 +94,8 @@ export function createGradeRouter(ctx) {
   });
 
   // ---- the form ---------------------------------------------------------------------------
-  const formPage = (res, status, { values = {}, errors = {}, indexable = false } = {}) => html(res, status, gradeFormPage({
-    values, errors, stamp: signFormStamp(secret(), now()), categories: ctx.store.getCategories(),
+  const formPage = (res, status, { values = {}, errors = {}, indexable = false, prefilled = false } = {}) => html(res, status, gradeFormPage({
+    values, errors, prefilled, stamp: signFormStamp(secret(), now()), categories: ctx.store.getCategories(),
     // Empty (no widget) unless both Turnstile keys are set.
     turnstileSiteKey: ctx.turnstile?.siteKey ?? '',
     // Only the plain first render, and only when the headers above left out noindex.
@@ -126,7 +126,8 @@ export function createGradeRouter(ctx) {
           };
         }
       }
-      return formPage(res, 200, { values, indexable: isOpenPage(req) });
+      // A form filled in from an earlier check says so (V214).
+      return formPage(res, 200, { values, indexable: isOpenPage(req), prefilled: Object.keys(values).length > 0 });
     } catch (err) {
       return closeOnError(res, next, err);
     }

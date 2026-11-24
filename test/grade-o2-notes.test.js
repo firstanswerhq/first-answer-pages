@@ -57,7 +57,7 @@ function grade({ ai = [], results = [...WEBSITE_ONLY, notChecked(AI_FAILED)], st
 
 const locked = (g, opts = {}) => reportPage(g, { now: NOW, ...opts });
 const open = (g, opts = {}) => reportPage(g, { now: NOW, unlocked: true, ...opts });
-const RUN_NEW = `<a href="/grade?from=${ID}">Run a new check</a> tomorrow for your full score.`;
+const RUN_NEW = `<a href="/grade?from=${ID}">Run a new check</a> to get your full score.`;
 
 // ---- V164 ---------------------------------------------------------------------------------------------------------
 
@@ -101,8 +101,8 @@ test('V166: when the limit was the reason, second opinions alone read the same w
 test('V166: for any other reason the sentences are as before', () => {
   const g = grade({ ai: [second(FREE), second(EXTRA_1)] });
   const html = open(g);
-  assert.ok(html.includes('<p>Claude did not answer, so this check has no AI score. The answers from ChatGPT are here so you can compare.</p>'));
-  assert.ok(html.includes('<p>Claude did not answer this time, so this check has no AI score.</p>'));
+  assert.ok(html.includes("<p>Claude didn't answer, so this check has no AI score. The answers from ChatGPT are here so you can compare.</p>"));
+  assert.ok(html.includes("<p>Claude didn't answer this time, so this check has no AI score.</p>"));
   assert.equal(html.includes("We couldn't ask Claude"), false);
 });
 

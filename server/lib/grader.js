@@ -886,11 +886,11 @@ function aiNamedResult(ai, aiMain) {
   const earned = Math.round((30 * named) / ran);
   let detail;
   if (ran === 1) {
-    detail = named ? `Yes. ${label} named your business.` : `No. ${label} did not name your business.`;
+    detail = named ? `Yes. ${label} named your business.` : `No. ${label} didn't name your business.`;
   } else {
     detail = named
-      ? `Yes. ${label} named your business in ${named} of ${ran} answers.`
-      : `No. ${label} named your business in none of its ${ran} answers.`; // V142: "none of" with the count everywhere
+      ? `Yes. ${label} named your business in ${named === ran ? (ran === 2 ? 'both answers' : `all ${ran} answers`) : `${named} of ${ran} answers`}.`
+      : `No. ${label} didn't name your business in any of its ${ran} answers.`; // V142, V207: plain counts everywhere
   }
   return { id: 'ai-named', result: named > 0 ? 'pass' : 'fail', detail, earned };
 }

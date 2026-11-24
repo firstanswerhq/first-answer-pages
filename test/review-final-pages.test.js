@@ -144,7 +144,7 @@ test('V134: the score itself is unchanged by the notice', () => {
 test('V135: one hint under "Score by area" says how the score relates to the points', () => {
   const g = grade();
   const s = scoreGrade(g.results);
-  const hint = `Your score is the share of the points we could check: ${s.earned} of ${s.available}.`;
+  const hint = `You earned ${s.earned} of the ${s.available} points we checked. That is ${s.score} out of 100.`;
   assert.equal(s.score, 83);
   for (const html of [locked(g), open(g)]) {
     assert.ok(html.includes(`<p class="hint">${hint}</p>`));
@@ -152,7 +152,7 @@ test('V135: one hint under "Score by area" says how the score relates to the poi
     assert.equal(html.split(hint).length - 1, 1, 'said once');
   }
   const none = locked(grade({ results: [pass('ai-named', { earned: 30 })] }));
-  assert.equal(none.includes('the share of the points we could check'), false, 'no number, no hint');
+  assert.equal(none.includes('You earned'), false, 'no number, no hint');
 });
 
 // ---- V136 ----------------------------------------------------------------------------------------------------
@@ -215,9 +215,9 @@ test('V139: no website and the daily limit: one clear line, and "tomorrow" in pl
 test('V139: with a website, the partial line says "tomorrow" for the daily limit and "later" otherwise', () => {
   const results = [...WEBSITE_ONLY, notChecked('ai-named', AI_LIMIT_REACHED)];
   const limit = locked(grade({ results, aiMain: { provider: 'anthropic', label: 'Claude', state: 'limit' } }));
-  assert.ok(limit.includes('Partial score: the daily limit for AI checks was reached, so the AI part isn&#39;t counted. <a href="/grade?from=finalAAAAAAAAAAAAAAAAAA">Run a new check</a> tomorrow for your full score.'));
+  assert.ok(limit.includes('Partial score: the daily limit for AI checks was reached, so the AI part isn&#39;t counted. Come back tomorrow and press <a href="/grade?from=finalAAAAAAAAAAAAAAAAAA">Run a new check</a> to get your full score.'));
   const failed = locked(grade({ results, aiMain: { provider: 'anthropic', label: 'Claude', state: 'failed' } }));
-  assert.ok(failed.includes('Partial score: Claude didn&#39;t answer this time, so the AI part isn&#39;t counted. <a href="/grade?from=finalAAAAAAAAAAAAAAAAAA">Run a new check</a> later for your full score.'));
+  assert.ok(failed.includes('Partial score: Claude didn&#39;t answer this time, so the AI part isn&#39;t counted. Come back later and press <a href="/grade?from=finalAAAAAAAAAAAAAAAAAA">Run a new check</a> to get your full score.'));
 });
 
 test('V139: with no website and no limit, the sentence is as before', () => {
@@ -268,7 +268,7 @@ const mainEntry = (ask, extra = {}) => ({
 test('V142: "none of its 3 answers", never "0 of its 3 answers"', () => {
   const g = grade({ ai: [mainEntry(1), mainEntry(2), mainEntry(3)] });
   const html = open(g);
-  assert.ok(html.includes('<p>Claude named your business in none of its 3 answers.</p>'));
+  assert.ok(html.includes("<p>Claude didn't name your business in any of its 3 answers.</p>"));
   assert.equal(html.includes('0 of its'), false);
   const some = open(grade({ ai: [mainEntry(1, { named: true, position: 1 }), mainEntry(2), mainEntry(3)] }));
   assert.ok(some.includes('<p>Claude named your business in 1 of its 3 answers.</p>'));

@@ -69,7 +69,10 @@ test('D2: no answer named the business: "Needs work", with its fix, as before', 
   assert.ok(row.includes('<span class="grade-result">Needs work</span>'));
   assert.ok(row.includes('0 of 30 points'));
   assert.ok(row.includes('<p>No. Claude named your business in none of its 3 answers.</p>'));
-  assert.ok(row.includes('<strong>Fix:</strong>'));
+  // V205: the advice for the AI row reads "What you can do:", and it makes no promise.
+  assert.ok(row.includes('<strong>What you can do:</strong>'));
+  assert.ok(row.includes('No one can make an AI assistant name a business.'));
+  assert.equal(row.includes('<strong>Fix:</strong>'), false);
 });
 
 test('D2: a result stored without "earned" (an older Grade) stays "Pass"', () => {

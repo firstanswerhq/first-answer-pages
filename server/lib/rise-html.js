@@ -59,7 +59,10 @@ export const OWNER_EMAIL_HINT = 'Optional. Never shown publicly. We use it only 
 export const HOURS_PLACEHOLDER = '7am-5pm, or Closed';
 
 /** Hint under the hours boxes. */
-export const HOURS_HINT = "Leave a day blank if it varies. Type Closed if you're closed.";
+export const HOURS_HINT = "Type Closed for days you're closed. Leave a day blank only if your hours change.";
+export const DESCRIPTION_PLACEHOLDER = 'One or two sentences about your business, like who you are and what you do.';
+export const SERVICES_PLACEHOLDER = 'List what you offer, like: repairs, new installs';
+export const CATEGORY_GUESSED_OTHER = 'We picked Other. Choose a better fit if there is one.';
 
 /** True when a draft's fields hold nothing the owner has typed yet. */
 function isEmptyFields(fields) {
@@ -235,12 +238,14 @@ export function reviewPage(draft, categories, opts = {}) {
   ${summary}
   <form class="rise-form" method="POST" action="${base}">
 ${row('name', input('name', f.name), missing, fresh)}
-${row('category', `<select id="f-category" name="category">${categoryOptions}</select>`, missing, fresh)}
+${row('category', `<select id="f-category" name="category">${categoryOptions}</select>${draft.provider === 'grader' && f.category === 'other'
+    ? `\n      <span class="hint">${escapeHtml(CATEGORY_GUESSED_OTHER)}</span>`
+    : ''}`, missing, fresh)}
 ${row('phone', input('phone', f.phone, 'tel').replace('maxlength="500"', 'maxlength="500" autocomplete="tel"'), missing, fresh)}
-${row('services', `<textarea id="f-services" name="services" rows="5" placeholder="List what you offer, one per line">${escapeHtml(services)}</textarea>
+${row('services', `<textarea id="f-services" name="services" rows="5" placeholder="${escapeHtml(SERVICES_PLACEHOLDER)}">${escapeHtml(services)}</textarea>
       <span class="hint">One per line, or separate with commas.</span>`, missing, fresh)}
 ${row('serviceArea', input('serviceArea', f.serviceArea), missing, fresh)}
-${row('description', `<textarea id="f-description" name="description" rows="4" maxlength="500">${escapeHtml(f.description ?? '')}</textarea>`, missing, fresh)}
+${row('description', `<textarea id="f-description" name="description" rows="4" maxlength="500" placeholder="${escapeHtml(DESCRIPTION_PLACEHOLDER)}">${escapeHtml(f.description ?? '')}</textarea>`, missing, fresh)}
 ${row('city', input('city', f.city), missing, fresh)}
 ${row('state', `<input type="text" id="f-state" name="state" value="${escapeHtml(f.state ?? '')}" maxlength="40" size="6" autocomplete="address-level1" aria-describedby="f-state-hint">
       <span class="hint" id="f-state-hint">${escapeHtml(STATE_HINT)}</span>`, missing, fresh)}

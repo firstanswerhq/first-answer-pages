@@ -250,7 +250,7 @@ test('claim: the form shows an empty Services box marked as needing input', asyn
   assert.equal(label.includes('Required'), false);
   assert.ok(html.includes('class="field missing"'));
   // V182, V186: a neutral line in the empty box, as a placeholder (not a value)
-  assert.ok(html.includes('<textarea id="f-services" name="services" rows="5" placeholder="List what you offer, one per line">'));
+  assert.ok(html.includes('<textarea id="f-services" name="services" rows="5" placeholder="List what you offer, like: repairs, new installs">'));
   const box = /<textarea id="f-services"[^>]*>([^]*?)<\/textarea>/.exec(html)?.[1];
   assert.equal(box?.trim(), '');
 });

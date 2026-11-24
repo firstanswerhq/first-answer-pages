@@ -140,14 +140,14 @@ test('V152: an old unlocked Grade goes down when only the extra answers named th
   const recomputed = scoredResults(g).find(r => r.id === 'ai-named');
   assert.equal(recomputed.result, 'fail');
   assert.equal(recomputed.earned, 0);
-  assert.equal(recomputed.detail, 'No. Claude did not name your business.');
+  assert.equal(recomputed.detail, "No. Claude didn't name your business.");
   const expected = scoreGrade([...WEBSITE_ONLY, fail('reviews-visible'), recomputed]).score;
   assert.ok(expected < stored);
   assert.equal(shownScore(g), expected);
   const full = reportPage(g, { now: NOW, unlocked: true });
   assert.equal(numberOf(full), String(expected));
   assert.ok(full.includes('Needs work'));
-  assert.ok(full.includes('On the 2 other questions, Claude named your business in 2 of 2. They are not counted toward your score.'));
+  assert.ok(full.includes('On the 2 other questions, Claude named you both times. They are not counted toward your score.'));
 });
 
 // ---- the report's words -----------------------------------------------------------------------------------------
@@ -160,7 +160,7 @@ test('D1: the full report counts the free answers, gives the other questions a l
   assert.ok(html.includes('<p>Claude named your business in 2 of its 3 answers.</p>'));
   assert.ok(html.includes('<p>On the 2 other questions, Claude named your business in 1 of 2. They are not counted toward your score.</p>'));
   assert.ok(html.includes("<p>We asked Claude and ChatGPT the same 3 questions. Claude was asked the first one 3 times. ChatGPT's answers are below so you can compare.</p>"));
-  assert.ok(html.includes("<p>Your score counts only Claude's answers to the first question, so it does not change when you open this report.</p>"));
+  assert.ok(html.includes("<p>Only Claude's answers to the first question count toward your score. The other answers are here to compare.</p>"));
   assert.ok(html.includes('Claude (not counted toward your score): '));
   assert.ok(html.includes('ChatGPT (for comparison only): '));
   assert.ok(html.includes('Claude, answer 1 of 3: '));
@@ -172,9 +172,9 @@ test('D1: one other question reads in the singular; none named reads "none of"',
   const one = reportPage(oldGrade('oneAAAAAAAAAAAAAAAAAAA', 'One', [entry(FREE, true), entry(EXTRA_1, true, { extra: true })], UP_STORED), { now: NOW, unlocked: true });
   assert.ok(one.includes('<p>On the other question, Claude named your business. It is not counted toward your score.</p>'));
   const none = reportPage(oldGrade('noneAAAAAAAAAAAAAAAAAA', 'None', [entry(FREE, true), entry(EXTRA_1, false, { extra: true })], UP_STORED), { now: NOW, unlocked: true });
-  assert.ok(none.includes('<p>On the other question, Claude did not name your business. It is not counted toward your score.</p>'));
+  assert.ok(none.includes("<p>On the other question, Claude didn't name your business. It is not counted toward your score.</p>"));
   const zero = reportPage(oldGrade('zeroAAAAAAAAAAAAAAAAAA', 'Zero', [entry(FREE, true), entry(EXTRA_1, false), entry(EXTRA_2, false)], UP_STORED), { now: NOW, unlocked: true });
-  assert.ok(zero.includes('On the 2 other questions, Claude named your business in none of 2.'));
+  assert.ok(zero.includes("On the 2 other questions, Claude didn't name you."));
   // Only the free question: no line about other questions, and no "does not change" sentence.
   const alone = reportPage(oldGrade('aloneAAAAAAAAAAAAAAAAAA', 'Alone', [entry(FREE, true), entry(FREE, false)], UP_STORED), { now: NOW, unlocked: true });
   assert.equal(alone.includes('other question'), false);
@@ -316,7 +316,7 @@ test('D1: the score is the same before and after the report opens (named 2 of 3,
   assert.equal(numberOf(lockedHtml), String(scoreBefore));
   assert.equal(numberOf(openHtml), String(scoreBefore));
   assert.ok(openHtml.includes('<p>Claude named your business in 2 of its 3 answers.</p>'));
-  assert.ok(openHtml.includes('On the 2 other questions, Claude named your business in none of 2. They are not counted toward your score.'));
+  assert.ok(openHtml.includes("On the 2 other questions, Claude didn't name you. They are not counted toward your score."));
   assert.ok(openHtml.includes('Claude (not counted toward your score): '));
 });
 
@@ -329,7 +329,7 @@ test('D1: extras that name the business do not raise the score either', async ()
   assert.equal(shownScore(grade), scoreBefore);
   assert.equal(grade.results.find(r => r.id === 'ai-named').result, 'fail');
   const html = reportPage(grade, { now: NOW, unlocked: true });
-  assert.ok(html.includes('On the 2 other questions, Claude named your business in 2 of 2.'));
+  assert.ok(html.includes('On the 2 other questions, Claude named you both times.'));
 });
 
 test('V151: free asks all fail and the extras answer: the AI part stays not checked, the score partial, the extras shown but not counted', async () => {
@@ -353,7 +353,7 @@ test('V151: free asks all fail and the extras answer: the AI part stays not chec
   assert.ok(html.includes("<p>Claude didn't answer this time. Please run the check again later.</p>"), 'the reason in the free part');
   assert.equal(html.includes('We just asked Claude'), false, 'an extra answer is not shown as the free answer');
   assert.ok(html.includes('Claude (not counted toward your score): '));
-  assert.ok(html.includes('On the 2 other questions, Claude named your business in 2 of 2.'));
+  assert.ok(html.includes('On the 2 other questions, Claude named you both times.'));
 });
 
 test('V152: the admin Grades list shows the report\'s number for old Grades, up and down', async () => {
@@ -403,7 +403,7 @@ test('D1: a repeat check that carries the extra answers still counts the free an
 });
 
 test('D1: a second opinion still never counts', async () => {
-  const g = oldGrade('secAAAAAAAAAAAAAAAAAAA', 'Second', [entry(FREE, false), second(FREE, true)], { id: 'ai-named', result: 'fail', detail: 'No. Claude did not name your business.', earned: 0 });
+  const g = oldGrade('secAAAAAAAAAAAAAAAAAAA', 'Second', [entry(FREE, false), second(FREE, true)], { id: 'ai-named', result: 'fail', detail: "No. Claude didn't name your business.", earned: 0 });
   const out = scoredResults(g).find(r => r.id === 'ai-named');
   assert.equal(out.result, 'fail');
   assert.equal(out.earned, 0);

@@ -35,8 +35,11 @@ export function serviceAreaText(facts) {
 /** Hours: a day word near a time, a time range, or round-the-clock wording. */
 const TIME = String.raw`\d{1,2}(?::\d{2})?\s?(?:(?:am|pm)(?![a-z])|a\.m\.|p\.m\.)`;
 const DAY = String.raw`\b(?:mon(?:day)?|tue(?:s(?:day)?)?|wed(?:nesday)?|thu(?:r(?:s(?:day)?)?)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)\b`;
+// A 24-hour time ("07:00", "18:30") counts only in a range after a day word ("Mon-Fri 07:00-18:00"), so a lone
+// "10:30" or a phone number is never taken for hours (V219).
+const TIME24 = String.raw`(?:[01]?\d|2[0-3]):[0-5]\d`;
 export const HOURS_PATTERN = new RegExp(
-  `${DAY}[\\s\\S]{0,40}?${TIME}|${TIME}\\s?(?:-|\u2013|\u2014|to)\\s?${TIME}|24/7|open 24 hours`,
+  `${DAY}[\\s\\S]{0,40}?${TIME}|${TIME}\\s?(?:-|\u2013|\u2014|to)\\s?${TIME}|${DAY}[\\s\\S]{0,40}?${TIME24}\\s?(?:-|\u2013|\u2014|to)\\s?${TIME24}|24/7|open 24 hours`,
   'i',
 );
 

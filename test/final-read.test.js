@@ -226,7 +226,7 @@ test('the draft page says review and approval, and the hours boxes have their hi
   assert.ok(page.includes('This is a draft. Nobody can see it until you send it for review and we approve it.'));
   assert.ok(!page.includes('until you confirm it'));
   assert.ok(page.includes(escapeHtml(HOURS_HINT)));
-  assert.equal(HOURS_HINT, "Leave a day blank if it varies. Type Closed if you're closed.");
+  assert.equal(HOURS_HINT, "Type Closed for days you're closed. Leave a day blank only if your hours change.");
 });
 
 test('displayHours: nothing filled gives []; otherwise every day, skipped days say "Call for hours"', () => {

@@ -48,7 +48,7 @@ test('E3: the lead line says how many times Claude was asked and in how many ans
   const none = render([
     answer(NOT_NAMED_TEXT, { ask: 1 }), answer(NOT_NAMED_TEXT, { ask: 2 }), answer(NOT_NAMED_TEXT, { ask: 3 }),
   ]);
-  assert.ok(none.includes('<p>We just asked Claude 3 times. Claude named your business in none of 3 answers.</p>'));
+  assert.ok(none.includes('<p>We just asked Claude 3 times. Claude didn\'t name your business in any of its 3 answers.</p>'));
 });
 
 test('E3: the list and outcome come from the first answer that named the business, with "This list is from answer 1, the first one that named you."', () => {
@@ -145,7 +145,7 @@ test('E3: the answers section counts questions, not answers, and says the first 
   assert.ok(html.includes('We asked Claude and ChatGPT the same 3 questions. Claude was asked the first one 3 times. ChatGPT\'s answers are below so you can compare.'));
   assert.equal(html.includes('the same 5 questions'), false);
   assert.ok(html.includes('Claude named your business in 2 of its 3 answers.'));
-  assert.ok(html.includes('On the 2 other questions, Claude named your business in none of 2. They are not counted toward your score.'));
+  assert.ok(html.includes("On the 2 other questions, Claude didn't name you. They are not counted toward your score."));
   assert.equal(html.includes('Named in 2 of 5 answers.'), false, 'the count is said once (V104)');
   assert.ok(html.includes('Claude, answer 1 of 3:') && html.includes('Claude, answer 3 of 3:'));
   assert.ok(html.includes('ChatGPT (for comparison only):'));
@@ -172,9 +172,9 @@ test('E3: with one answer per question the answers section reads as before', () 
 
 test('V100: fewer answers than asks: "and got 2 answers", counted "of the 2"', () => {
   const none = render([answer(NOT_NAMED_TEXT, { ask: 1 }), answer(NOT_NAMED_TEXT, { ask: 3 })]);
-  assert.ok(none.includes('<p>We just asked Claude 3 times and got 2 answers. Claude named your business in none of the 2.</p>'));
+  assert.ok(none.includes('<p>We just asked Claude 3 times and got 2 answers. Claude didn\'t name your business in either.</p>'));
   const both = render([ANSWER_1, ANSWER_2].map(a => ({ ...a, ask: a.ask + 1 })));
-  assert.ok(both.includes('<p>We just asked Claude 3 times and got 2 answers. Claude named your business in 2 of the 2.</p>'));
+  assert.ok(both.includes('<p>We just asked Claude 3 times and got 2 answers. Claude named your business in both.</p>'));
   const carried = render([answer(NAMED_TEXT, { named: true, position: 1, ask: 1 }), answer(NOT_NAMED_TEXT, { ask: 3 })]
     .map(a => ({ ...a, reusedFrom: '2026-11-19T15:00:00.000Z' })));
   assert.match(carried, /<p>We asked Claude 3 times on [^<]*Nov[^<]*19[^<]* and got 2 answers\. Claude named your business in 1 of the 2\.<\/p>/);
@@ -233,7 +233,7 @@ test('V100/V104: with ask 1 failed, "Every answer" also says Claude was asked 3 
 test('V106: ask numbers that are not whole numbers from 1 to 3 are ignored', () => {
   for (const bad of [99, 0, -1, 2.5, '3']) {
     const html = render([answer(NOT_NAMED_TEXT, { extra: { ask: bad } }), answer(NOT_NAMED_TEXT, { ask: 1 })], { leadGate: false });
-    assert.ok(html.includes('<p>We just asked Claude 2 times. Claude named your business in none of 2 answers.</p>'), String(bad));
+    assert.ok(html.includes("<p>We just asked Claude 2 times. Claude didn't name your business in any of its 2 answers.</p>"), String(bad));
     assert.equal(/asked Claude (99|3) times/.test(html), false, String(bad));
   }
 });
@@ -241,7 +241,7 @@ test('V106: ask numbers that are not whole numbers from 1 to 3 are ignored', () 
 // ---- the about page, escaping and wording ------------------------------------------------------------------
 
 test('E3: the about page says the first question is asked up to 3 times', () => {
-  assert.ok(aboutPage().includes('We ask Claude up to 3 questions about the best businesses of that kind in that city, and the first one up to 3 times, because AI answers change from one time to the next.'));
+  assert.ok(aboutPage().includes('We ask Claude up to 3 questions. We ask the first question up to 3 times, because AI answers change.'));
 });
 
 test('E3: everything is escaped', () => {

@@ -214,7 +214,7 @@ for (const [label, exp] of Object.entries(EXPECTED)) {
     assert.ok(html.includes(`<span class="num">${exp.score.score}</span>`), 'score shown');
     assert.ok(html.includes(`${exp.score.failed} of ${exp.score.counted} checks need work`));
     assert.ok(html.includes('Claim my free listing'));
-    assert.ok(html.includes('Nothing goes live until you do.'));
+    assert.ok(html.includes('Nothing goes live until you send it and we approve it.'));
     assert.ok(html.includes('days to weeks'));
     assert.ok(html.includes('Automated check'));
     assert.ok(html.includes('Demo answer (no AI connected)'), 'the mock answer is labeled');

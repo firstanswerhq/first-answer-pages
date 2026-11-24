@@ -35,6 +35,15 @@ export function emptyTradeText(label) {
   return `No ${what} listed yet. Own one?`;
 }
 
+/**
+ * Empty search for a city: "No plumbers in Nashville yet. Own one?" (a trade name gets "businesses", as in
+ * emptyTradeText; with no trade it reads "No businesses in Nashville yet. Own one?").
+ */
+export function emptyTradeInCityText(label, city) {
+  const what = emptyTradeText(label).replace(/^No (.*) listed yet\. Own one\?$/, '$1');
+  return `No ${what} in ${city} yet. Own one?`;
+}
+
 export function createHomeRouter(ctx) {
   const router = Router();
   const { store } = ctx;
@@ -82,6 +91,9 @@ export function createHomeRouter(ctx) {
     if (filtered.length === 0) {
       if (!city && (categoryLabel || !category)) {
         results = `<p class="no-results">${escapeHtml(emptyTradeText(categoryLabel))} <a href="/rise">List it free &rarr;</a></p>`;
+      } else if (city && (categoryLabel || !category)) {
+        // A search for a city (with a known trade, or none) that finds nothing says what was searched for (V217).
+        results = `<p class="no-results">${escapeHtml(emptyTradeInCityText(categoryLabel, city))} <a href="/rise">List it free &rarr;</a></p>`;
       } else {
         results = '<p class="no-results">No results found. Try a different category or city.</p>';
       }

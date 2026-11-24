@@ -65,17 +65,24 @@ const answersOf = html => /<section class="grade-all-answers">[^]*?<\/section>/.
 
 test('V157: the partial line says "Run a new check", linked to the form with this business filled in', () => {
   const failed = locked(grade({ state: 'failed' }));
-  assert.ok(failed.includes(`Partial score: Claude didn&#39;t answer this time, so the AI part isn&#39;t counted. <a href="/grade?from=${ID}">Run a new check</a> later for your full score.</p>`));
+  assert.ok(failed.includes(`Partial score: Claude didn&#39;t answer this time, so the AI part isn&#39;t counted. Come back later and press <a href="/grade?from=${ID}">Run a new check</a> to get your full score.</p>`));
   const limit = locked(grade({ state: 'limit', results: [...WEBSITE_ONLY, notChecked(AI_LIMIT_REACHED)] }));
-  assert.ok(limit.includes(`Partial score: the daily limit for AI checks was reached, so the AI part isn&#39;t counted. <a href="/grade?from=${ID}">Run a new check</a> tomorrow for your full score.</p>`));
+  assert.ok(limit.includes(`Partial score: the daily limit for AI checks was reached, so the AI part isn&#39;t counted. Come back tomorrow and press <a href="/grade?from=${ID}">Run a new check</a> to get your full score.</p>`));
   for (const html of [failed, limit]) {
     assert.equal(/Check again (later|tomorrow) for your full score/.test(html), false, 'no "Check again" in that line');
   }
 });
 
-test('V157: "Check again" stays as it is for a Grade with a website', () => {
-  const html = open(grade({ state: 'failed' }));
-  assert.ok(html.includes('Check again'));
+test('V157, V203: "Check again" stays for a Grade with a website; when the AI part is missing the button says what it does', () => {
+  const normal = open(grade({ ai: [entry(FREE, true)], results: [...WEBSITE_ONLY, pass('ai-named', { earned: 30 })], state: 'ok' }));
+  assert.ok(normal.includes('>Check again</button>'));
+  assert.equal(normal.includes('Recheck my website only'), false);
+  for (const state of ['failed', 'limit']) {
+    const html = open(grade({ state, results: [...WEBSITE_ONLY, notChecked(state === 'limit' ? AI_LIMIT_REACHED : AI_FAILED)] }));
+    assert.ok(html.includes('>Recheck my website only</button>'), state);
+    assert.equal(html.includes('>Check again</button>'), false, state);
+    assert.ok(html.includes('To ask AI again, press Run a new check at the top of this page.'), state);
+  }
 });
 
 // ---- the pages that need the app ----------------------------------------------------------------------------------
@@ -198,7 +205,7 @@ test('V158: the free question got no answer but the extras did, and ChatGPT answ
   ];
   const html = open(grade({ ai }));
   const section = answersOf(html);
-  assert.ok(section.includes("<p>Claude did not answer the first question, so this check has no AI score. The other answers are shown below but not counted toward your score.</p>"));
+  assert.ok(section.includes("<p>Claude didn't answer the first question, so this check has no AI score. The other answers are shown below but not counted toward your score.</p>"));
   assert.ok(section.includes("<p>We asked Claude and ChatGPT the same 3 questions. ChatGPT's answers are below so you can compare.</p>"), 'ChatGPT answered 3, not 2');
   assert.ok(section.includes('<p>On the 2 other questions, Claude named your business in 1 of 2. They are not counted toward your score.</p>'));
   assert.equal(section.includes('Your score counts only'), false, 'the first sentence already says it');
@@ -208,13 +215,13 @@ test('V158: the free question got no answer but the extras did, and ChatGPT answ
 test('V158: without ChatGPT the same plain sentence is there', () => {
   const html = open(grade({ ai: [entry(EXTRA_1, true, { extra: true }), entry(EXTRA_2, true, { extra: true })] }));
   const section = answersOf(html);
-  assert.ok(section.includes('Claude did not answer the first question, so this check has no AI score.'));
+  assert.ok(section.includes('Claude didn't answer the first question, so this check has no AI score.'));
   assert.equal(section.includes('We asked'), false);
 });
 
 test('V158: when nothing answered at all, the older sentence stays', () => {
   const html = open(grade({ ai: [second(FREE), second(EXTRA_1)] }));
-  assert.ok(answersOf(html).includes('Claude did not answer, so this check has no AI score. The answers from ChatGPT are here so you can compare.'));
+  assert.ok(answersOf(html).includes("Claude didn't answer, so this check has no AI score. The answers from ChatGPT are here so you can compare."));
 });
 
 // ---- V159 -------------------------------------------------------------------------------------------------------
@@ -245,21 +252,21 @@ const OK = { results: [...WEBSITE_ONLY, pass('ai-named', { earned: 30 })], state
 
 test('V160: with the gate on, the ending says it does not change when the report opens', () => {
   const html = open(grade({ ai: THREE, ...OK }));
-  assert.ok(html.includes("<p>Your score counts only Claude's answers to the first question, so it does not change when you open this report.</p>"));
+  assert.ok(html.includes("<p>Only Claude's answers to the first question count toward your score. The other answers are here to compare.</p>"));
 });
 
 test('V160: with the gate off, the ending says it stays the same as more answers come in', () => {
   const html = open(grade({ ai: THREE, ...OK }), { leadGate: false });
-  assert.ok(html.includes("<p>Your score counts only Claude's answers to the first question, so it stays the same as more answers come in.</p>"));
+  assert.ok(html.includes("<p>Only Claude's answers to the first question count toward your score. The other answers are here to compare.</p>"));
   assert.equal(html.includes('when you open this report'), false);
 });
 
 test('V160: while only one question has been asked, it says "this question"', () => {
   const ai = [entry(FREE, true), second(FREE)];
   const on = open(grade({ ai, ...OK }));
-  assert.ok(on.includes("<p>Your score counts only Claude's answers to this question, so it does not change when you open this report.</p>"));
+  assert.ok(on.includes("<p>Only Claude's answers to this question count toward your score. The other answers are here to compare.</p>"));
   const off = open(grade({ ai, ...OK }), { leadGate: false });
-  assert.ok(off.includes("<p>Your score counts only Claude's answers to this question, so it stays the same as more answers come in.</p>"));
+  assert.ok(off.includes("<p>Only Claude's answers to this question count toward your score. The other answers are here to compare.</p>"));
 });
 
 // ---- V161 -------------------------------------------------------------------------------------------------------
@@ -273,10 +280,10 @@ test('V161: an old Grade saved by the rescue line takes its reason from the AI s
     ai: [entry(EXTRA_1, true), entry(EXTRA_2, true)], results: [...WEBSITE_ONLY, stored], state: 'ok', steps,
   });
   const html = locked(old);
-  assert.ok(html.includes(`Partial score: the daily limit for AI checks was reached, so the AI part isn&#39;t counted. <a href="/grade?from=${ID}">Run a new check</a> tomorrow for your full score.</p>`));
+  assert.ok(html.includes(`Partial score: the daily limit for AI checks was reached, so the AI part isn&#39;t counted. Come back tomorrow and press <a href="/grade?from=${ID}">Run a new check</a> to get your full score.</p>`));
   assert.equal(html.includes('Claude didn&#39;t answer this time'), false);
   assert.ok(Number.isInteger(shownScore(old)), 'the website points still give a number');
-  assert.ok(open(old).includes('On the 2 other questions, Claude named your business in 2 of 2.'));
+  assert.ok(open(old).includes('On the 2 other questions, Claude named you both times.'));
   // Without that note the reason is the plain one.
   const plain = locked(grade({ ai: [entry(EXTRA_1, true), entry(EXTRA_2, true)], results: [...WEBSITE_ONLY, stored], state: 'ok' }));
   assert.ok(plain.includes('Partial score: Claude didn&#39;t answer this time'));
@@ -305,7 +312,7 @@ test('V162: the free question hit the daily limit, so the extra questions are no
 
   const html = open(grade);
   assert.ok(html.includes("The other questions were not asked because today's limit for AI checks was reached."));
-  assert.ok(html.includes('Run a new check</a> tomorrow for your full score.'));
+  assert.ok(html.includes('Run a new check</a> to get your full score.'));
 });
 
 test('V162: a free question that failed (not the limit) still has its extra questions asked', async () => {
@@ -338,7 +345,7 @@ test('V163: empty entries in the stored answers never crash the report', () => {
   const g = grade({ ai, ...OK });
   let html;
   assert.doesNotThrow(() => { html = open(g); });
-  assert.ok(html.includes('On the other question, Claude did not name your business.'));
+  assert.ok(html.includes("On the other question, Claude didn't name your business."));
   assert.doesNotThrow(() => locked(g));
   assert.doesNotThrow(() => open(grade({ ai: [null], ...OK })));
   assert.doesNotThrow(() => open(grade({ ai: [null], state: 'limit' })));

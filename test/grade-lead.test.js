@@ -272,9 +272,9 @@ test('gate on: the report shows the Lead_Form; a valid form stores one Lead, set
   }, 'the extra AI answers');
   assert.equal(assistant.calls, 3);
   assert.ok(grade.extraAiStartedAt);
-  assert.match(grade.results.find(r => r.id === 'ai-named').detail, /^No\. Claude did not name your business\.$/);
+  assert.match(grade.results.find(r => r.id === 'ai-named').detail, /^No\. Claude didn't name your business\.$/);
   const after = await (await get(env, `/grade/${id}`, { cookie })).text();
-  assert.ok(after.includes('On the 2 other questions, Claude named your business in none of 2.'));
+  assert.ok(after.includes("On the 2 other questions, Claude didn't name you."));
 });
 
 test('a forged unlock cookie does not open the report', async () => {
@@ -536,11 +536,11 @@ test('ChatGPT is asked the same questions as Claude, and both show in the report
   assert.equal(chatgpt.calls, 3);
   assert.equal(grade.ai.filter(a => a.provider === 'chatgpt').length, 3);
   const after = await (await get(env, `/grade/${id}`, { cookie })).text();
-  assert.ok(after.includes('On the 2 other questions, Claude named your business in none of 2.'));
+  assert.ok(after.includes("On the 2 other questions, Claude didn't name you."));
   assert.ok(after.includes("We asked Claude and ChatGPT the same 3 questions. ChatGPT's answers are below so you can compare."));
-  assert.ok(after.includes("Your score counts only Claude's answers to the first question, so it does not change when you open this report."));
+  assert.ok(after.includes("Only Claude's answers to the first question count toward your score. The other answers are here to compare."));
   // Only Claude's answers are scored, so ChatGPT naming the business does not change the score.
-  assert.equal(grade.results.find(r => r.id === 'ai-named').detail, 'No. Claude did not name your business.');
+  assert.equal(grade.results.find(r => r.id === 'ai-named').detail, "No. Claude didn't name your business.");
 });
 
 test('turning ChatGPT on later: a repeat check keeps Claude\'s stored answer and asks only ChatGPT', async () => {
@@ -595,7 +595,7 @@ test('with ChatGPT and Gemini on, all three answer; only Claude is scored', asyn
   const page = await (await get(env, `/grade/${id}`, { cookie })).text();
   assert.match(page, /Gemini, asked the same question:/);
   assert.ok(page.includes("We asked Claude, ChatGPT and Gemini the same 3 questions. The other assistants' answers are below so you can compare."));
-  assert.ok(page.includes("Your score counts only Claude's answers to the first question, so it does not change when you open this report."));
+  assert.ok(page.includes("Only Claude's answers to the first question count toward your score. The other answers are here to compare."));
   assert.match(page, /Gemini answered without a live web search\./);
   assert.match(page, /for comparison only \(not scored\)/);
 });
@@ -609,10 +609,10 @@ test('when Claude fails, every second opinion is shown and none is scored', asyn
   const page = await (await get(env, `/grade/${id}`)).text();
   assert.match(page, /We just asked ChatGPT\./);
   assert.match(page, /We just asked Gemini\./);
-  assert.match(page, /Claude did not answer this time/);
+  assert.match(page, /Claude didn't answer this time/);
   const ok = await post(env, `/grade/${id}/unlock`, LEAD);
   const full = await (await get(env, `/grade/${id}`, { cookie: cookieOf(ok) })).text();
-  assert.ok(full.includes("Claude did not answer, so this check has no AI score. The answers from ChatGPT and Gemini are here so you can compare."));
+  assert.ok(full.includes("Claude didn't answer, so this check has no AI score. The answers from ChatGPT and Gemini are here so you can compare."));
 });
 
 test('with the demo assistant in charge, ChatGPT is never asked', async () => {
