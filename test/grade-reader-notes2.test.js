@@ -310,7 +310,8 @@ test('V225-3: a filtered home page with no results is noindex; a page with resul
   for (const name of ['listings.json', 'categories.json']) {
     await fs.copyFile(path.join(REPO_DATA, name), path.join(dir, name));
   }
-  const app = createApp({ dataDir: dir, config: { baseUrl: 'http://example.test', graderSecret: 'test-secret', gradeMainAsks: 1 } });
+  // Demo mode off: demo mode adds its own noindex to every page, which is not what this test looks at.
+  const app = createApp({ dataDir: dir, config: { baseUrl: 'http://example.test', graderSecret: 'test-secret', gradeMainAsks: 1, demoMode: false } });
   const server = app.listen(0, '127.0.0.1');
   await new Promise((resolve, reject) => {
     server.once('listening', resolve);

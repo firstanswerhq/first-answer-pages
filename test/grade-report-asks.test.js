@@ -55,7 +55,7 @@ test('E3: the list and outcome come from the first answer that named the busines
   const html = render([ANSWER_1, ANSWER_2, ANSWER_3]);
   assert.ok(html.includes('<p class="hint">AI answers change from one time to the next, so we ask the same question 3 times. This list is from answer 1, the first one that named you.</p>'));
   // V206: named in some answers but not all, so the position and the others are said before the list.
-  assert.ok(html.includes('In the first answer that named you, you were 1st of 3. In the other answer, Claude didn&#39;t name you.'));
+  assert.ok(html.includes('In the first answer that named you, you were 1st of 3. In 1 answer, Claude didn&#39;t name you.'));
   assert.ok(html.includes('<li class="grade-you"><strong>Zephyr Plumbing</strong> (you)</li>'));
 
   // Only the second answer named it: that one is shown, with the later list read as in V52.

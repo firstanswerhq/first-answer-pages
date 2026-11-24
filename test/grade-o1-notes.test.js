@@ -350,7 +350,7 @@ test('V163: empty entries in the stored answers never crash the report', () => {
   const g = grade({ ai, ...OK });
   let html;
   assert.doesNotThrow(() => { html = open(g); });
-  assert.ok(html.includes("On the other question, Claude didn't name your business."));
+  assert.ok(html.includes("On the other question, Claude didn't name you."));
   assert.doesNotThrow(() => locked(g));
   assert.doesNotThrow(() => open(grade({ ai: [null], ...OK })));
   assert.doesNotThrow(() => open(grade({ ai: [null], state: 'limit' })));

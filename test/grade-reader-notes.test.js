@@ -158,14 +158,14 @@ test('V210: the listing text says who sends it and who approves it', () => {
 test('V212: the about page says plainly what is asked and who sees Google\'s live answer', () => {
   const html = aboutPage();
   assert.ok(html.includes('We ask Claude up to 3 questions. We ask the first question up to 3 times, because AI answers change.'));
-  assert.ok(html.includes("We use Google's Gemini as a checker to see whether each answer names the business."));
+  assert.ok(html.includes("When it's switched on, we use Google's Gemini as a checker to see whether each answer names the business."));
   assert.ok(html.includes("The person who ran the check can also see what Google's AI says right now. It is private to them, and we never save it, score it or share it."));
 });
 
 // ---- V213, V214, V216 -------------------------------------------------------------------------------------------
 
 test('V213: the draft form help reads plainly, and says when the category was guessed as Other', () => {
-  assert.equal(HOURS_HINT, "Type Closed for days you're closed. Leave a day blank only if your hours change.");
+  assert.equal(HOURS_HINT, "Type Closed for days you're closed. Leave a day blank only if your hours that day vary from week to week.");
   const draft = (provider, category) => ({
     id: 'draftAAAAAAAAAAAAAAAAAAAAA', status: 'draft', provider, missingFields: ['services'],
     fields: { name: 'Zephyr Plumbing', category, phone: '(615) 555-0100', services: [], city: 'Nashville', state: 'TN', hours: {} },
