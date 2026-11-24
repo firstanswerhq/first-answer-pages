@@ -11,8 +11,9 @@
  *   POST /grade/:id/recheck        read the website again, keep the AI answers
  *   POST /grade/:id/google-live    Google's live answer, shown once to the browser that ran the check
  *
- * Every /grade response is noindex and sends no referrer. With GRADER_ENABLED=off every
- * /grade path falls through to the site's 404. Logs hold only the Grade_Id.
+ * Every /grade response sends no referrer and is never cached. Every /grade page is noindex except the two open
+ * pages, /grade (the plain form) and /grade/about. With GRADER_ENABLED=off every /grade path falls through to the
+ * site's 404. Logs hold only the Grade_Id.
  */
 
 import express, { Router } from 'express';

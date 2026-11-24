@@ -950,6 +950,8 @@ export function createGrader({
   draftStore, notifier, clock, newId, config = {}, websiteBudgetMs = WEBSITE_BUDGET_MS, guard = null,
   // Injectable so tests need no real waiting: the pause before a retry and a second opinion's time limit.
   sleep = pause, secondOpinionTimeoutMs = SECOND_OPINION_TIMEOUT_MS,
+  // The main assistant's time limit (120 seconds); injectable so a test can cut it short.
+  aiTimeoutMs = AI_TIMEOUT_MS,
 }) {
   const grades = () => store.collection('grades');
   const leads = () => store.collection('leads');
@@ -1184,7 +1186,7 @@ export function createGrader({
       try {
         const raw = await withDeadline(
           signal => askWithRetry(plan, signal),
-          second ? secondOpinionTimeoutMs : AI_TIMEOUT_MS,
+          second ? secondOpinionTimeoutMs : aiTimeoutMs,
         );
         // An ask (2 and up) whose resend was refused counts as not run: nothing is kept from it.
         if (!second && plan.resendRefused) {

@@ -174,6 +174,22 @@ test('V201: a bare local node with no name and no telephone does not beat a full
   assert.equal(labeled(stub), false);
 });
 
+test('V222: a local node with hours or an area but no name and no telephone does not beat an organization (accepted)', () => {
+  const parent = { '@type': 'Corporation', name: 'Parent Co', telephone: '(800) 555-0100', address: ADDRESS };
+  const nameless = { '@type': 'Plumber', openingHours: 'Mo-Fr 08:00-17:00', areaServed: 'Nashville' };
+  for (const nodes of [[parent, nameless], [nameless, parent]]) {
+    const b = businessOf({ '@context': 'https://schema.org', '@graph': nodes });
+    assert.equal(b?.name, 'Parent Co');
+    assert.equal(b?.telephone, '(800) 555-0100');
+    assert.equal(b?.areaServed, '', 'the nameless node\'s area is not read');
+  }
+  // On its own, the nameless local node is still read, as before, and still fails the Check.
+  const alone = businessOf(nameless);
+  assert.equal(alone?.type, 'Plumber');
+  assert.equal(alone?.areaServed, 'Nashville');
+  assert.equal(labeled(nameless), false);
+});
+
 test('V198: a type that is only a schema.org address is left out, not shown as an empty type', () => {
   for (const type of ['schema:', 'https://schema.org/', 'http://schema.org/', '  ']) {
     const html = `<!doctype html><html><head><title>Home</title>

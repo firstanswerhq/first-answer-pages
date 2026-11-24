@@ -72,7 +72,7 @@ async function startEnv(assistant) {
     await aiBudget.flush?.();
     await fs.rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 }).catch(() => {});
   });
-  return { ctx: app.locals.ctx, clock, dir };
+  return { ctx: app.locals.ctx, clock, dir, base: `http://127.0.0.1:${server.address().port}` };
 }
 
 async function until(fn, what) {
@@ -90,6 +90,38 @@ async function finished(env, id) {
     return g && g.status !== 'running' ? g : null;
   }, 'the check');
 }
+
+test('Property 10 (V223): the first Grade\'s unlock cookie does not open the second Grade', async () => {
+  const assistant = fakeAssistant();
+  const env = await startEnv(assistant);
+  const input = { name: 'Unlock Plumbing', city: 'Nashville', state: 'TN', service: 'plumbers', website: '' };
+  const firstId = await env.ctx.grader.start(input);
+  await finished(env, firstId);
+
+  // The first visitor opens the full report with the contact form.
+  const unlock = await fetch(`${env.base}/grade/${firstId}/unlock`, {
+    method: 'POST',
+    redirect: 'manual',
+    body: new URLSearchParams({ name: 'Pat Visitor', email: 'pat@example.com', phone: '(615) 555-0100', okToContact: '1' }),
+  });
+  assert.equal(unlock.status, 303);
+  const cookie = (unlock.headers.get('set-cookie') ?? '').split(';')[0];
+  assert.match(cookie, new RegExp(`^g_${firstId}=`));
+  const open = await (await fetch(`${env.base}/grade/${firstId}`, { headers: { cookie } })).text();
+  assert.ok(open.includes('Your fix kit'), 'the cookie opens the first Grade');
+  // Wait for the two extra questions of the first Grade, so they are not still being written when the second starts.
+  await until(async () => (await env.ctx.grader.get(firstId)).ai.length >= 3, 'the extra questions');
+
+  env.clock.t += 1000;
+  const secondId = await env.ctx.grader.start(input);
+  const second = await finished(env, secondId);
+  assert.ok(second.ai.length > 0 && second.ai.every(a => a.reusedFrom), 'the second Grade reused answers');
+
+  // The same cookie sent to the second Grade: it is for another Grade, so the contact form still shows.
+  const page = await (await fetch(`${env.base}/grade/${secondId}`, { headers: { cookie } })).text();
+  assert.ok(page.includes('id="unlock"'), 'the lead form still shows');
+  assert.equal(page.includes('Your fix kit'), false, 'the full report stays closed');
+});
 
 test('Property 10: a Grade that reuses answers copies only the answers, never a visitor\'s state', async () => {
   const assistant = fakeAssistant();
