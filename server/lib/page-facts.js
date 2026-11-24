@@ -159,7 +159,9 @@ export function hasReviewSignal(facts) {
 
 // Every schema.org local-business type (see schema-types.js) plus the one non-standard name kept from before.
 // OnlineBusiness and OnlineStore are not here and not in ORGANIZATION_TYPES: they never count as local (V156).
-const BUSINESS_TYPES = new Set([...LOCAL_BUSINESS_TYPES, 'CleaningService']);
+// Two deliberate extras, neither a schema.org local-business type: `CleaningService` (kept from before) and
+// `VeterinaryCare` (a vet is local; in schema.org it sits under MedicalOrganization, which is not a local business).
+const BUSINESS_TYPES = new Set([...LOCAL_BUSINESS_TYPES, 'CleaningService', 'VeterinaryCare']);
 
 /** "https://schema.org/AutoWash", "http://schema.org/AutoWash" and "schema:AutoWash" are all "AutoWash" (V156). */
 const SCHEMA_PREFIX = /^\s*(?:https?:\/\/schema\.org\/|schema:)/i;
@@ -391,7 +393,7 @@ function str(v) {
 }
 
 function nodeTypes(node) {
-  return asArray(node['@type']).filter(t => typeof t === 'string').map(bareSchemaType);
+  return asArray(node['@type']).filter(t => typeof t === 'string').map(bareSchemaType).filter(Boolean);
 }
 
 /** Top object, each item of a top-level array, and each item of any @graph. */
@@ -489,6 +491,8 @@ function hasValue(v) {
 function readJsonLd(bodies) {
   const result = { blockCount: bodies.length, unreadableCount: 0, blocks: [], types: [], business: null };
   const seen = new Set();
+  let local = null;
+  let fallback = null;
   for (const body of bodies) {
     let value;
     try {
@@ -506,9 +510,14 @@ function readJsonLd(bodies) {
       for (const t of nodeTypes(node)) {
         if (!seen.has(t)) { seen.add(t); result.types.push(t); }
       }
-      if (!result.business && isBusinessNode(node)) result.business = readBusiness(node);
+      // The first node of a local-business type, from all blocks, is the business (V197); only when there is none,
+      // the first Organization-rule node (an Organization or a non-local subtype with a telephone and an address).
+      if (!local && nodeTypes(node).some(t => BUSINESS_TYPES.has(t))) local = node;
+      else if (!fallback && isBusinessNode(node)) fallback = node;
     }
   }
+  const chosen = local ?? fallback;
+  if (chosen) result.business = readBusiness(chosen);
   return result;
 }
 

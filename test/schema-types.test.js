@@ -44,21 +44,29 @@ test('the list: plain names, each once, and everything the Check knew before is 
   ];
   for (const name of before) assert.ok(LOCAL_BUSINESS_TYPES.has(name), name);
   // The two online types and the made-up and non-business ones are not on it.
-  for (const name of ['OnlineBusiness', 'OnlineStore', 'Organization', 'Corporation', 'NGO', 'Person', 'WebSite', 'MadeUpBusinessType', 'CleaningService']) {
+  for (const name of [
+    'OnlineBusiness', 'OnlineStore', 'OnlineMarketplace', 'Organization', 'Corporation', 'NGO', 'Person', 'WebSite',
+    'MadeUpBusinessType', 'CleaningService', 'MedicalOrganization', 'DiagnosticLab', 'VeterinaryCare',
+  ]) {
     assert.equal(LOCAL_BUSINESS_TYPES.has(name), false, name);
     assert.equal(LOCAL_BUSINESS_TYPE_LIST.includes(name), false, name);
   }
   // None of them is in the Organization list either, except Organization itself and the non-local subtypes.
   assert.equal(ORGANIZATION_TYPES.has('OnlineBusiness'), false);
   assert.equal(ORGANIZATION_TYPES.has('OnlineStore'), false);
+  assert.equal(ORGANIZATION_TYPES.has('OnlineMarketplace'), false);
+  assert.equal(ORGANIZATION_TYPES.has('VeterinaryCare'), false, 'a deliberate extra in page-facts.js, not an Organization type');
+  for (const name of ['MedicalOrganization', 'DiagnosticLab', 'Cooperative', 'FundingAgency', 'ResearchProject']) {
+    assert.ok(ORGANIZATION_TYPES.has(name), name);
+  }
   assert.ok(ORGANIZATION_TYPES.has('Organization') && ORGANIZATION_TYPES.has('Corporation') && ORGANIZATION_TYPES.has('NGO'));
   for (const name of ORGANIZATION_TYPES) assert.equal(LOCAL_BUSINESS_TYPES.has(name), false, name);
 });
 
 test('D5: types of every kind pass with a name and telephone, and fail without the telephone', () => {
   const types = [
-    'AutoWash', 'NailSalon', 'VeterinaryCare', 'ExerciseGym', 'Hotel', 'Florist', 'Pharmacy', 'AccountingService',
-    'Electrician', 'GeneralContractor', 'HVACBusiness', 'HousePainter', 'Locksmith', 'MovingCompany', 'Plumber',
+    'AutoWash', 'NailSalon', 'ExerciseGym', 'Hotel', 'Florist', 'Pharmacy', 'AccountingService', 'Audiology',
+    'Ophthalmology', 'Dentist', 'Electrician', 'GeneralContractor', 'HVACBusiness', 'HousePainter', 'Locksmith', 'MovingCompany', 'Plumber',
     'RoofingContractor', 'FireStation', 'Hospital', 'Library', 'TattooParlor', 'Notary', 'TireShop', 'PetStore',
   ];
   for (const type of types) {
@@ -94,7 +102,10 @@ test('V156: a schema.org address in front of the type is removed before the look
 });
 
 test('V156: Corporation and the other Organization subtypes count only with a telephone and an address', () => {
-  for (const type of ['Organization', 'Corporation', 'NGO', 'https://schema.org/Corporation']) {
+  for (const type of [
+    'Organization', 'Corporation', 'NGO', 'https://schema.org/Corporation', 'MedicalOrganization', 'DiagnosticLab',
+    'Cooperative', 'FundingAgency', 'ResearchProject',
+  ]) {
     assert.equal(labeled({ '@type': type, ...NAMED, address: ADDRESS }), true, `${type} with phone and address`);
     assert.equal(labeled({ '@type': type, ...NAMED }), false, `${type} without an address`);
     assert.equal(labeled({ '@type': type, name: NAMED.name, address: ADDRESS }), false, `${type} without a telephone`);
@@ -102,8 +113,59 @@ test('V156: Corporation and the other Organization subtypes count only with a te
   }
 });
 
+test('V194: VeterinaryCare counts as local (a deliberate extra, beside CleaningService), with a name and telephone', () => {
+  assert.equal(labeled({ '@type': 'VeterinaryCare', ...NAMED }), true);
+  assert.equal(labeled({ '@type': 'schema:VeterinaryCare', ...NAMED }), true);
+  assert.equal(labeled({ '@type': 'VeterinaryCare', name: NAMED.name }), false);
+  assert.equal(LOCAL_BUSINESS_TYPES.has('VeterinaryCare'), false, 'it is not a schema.org local-business type');
+});
+
+test('V194: MedicalOrganization and DiagnosticLab are not local; they need a telephone and an address like Organization', () => {
+  for (const type of ['MedicalOrganization', 'DiagnosticLab']) {
+    assert.equal(labeled({ '@type': type, ...NAMED }), false, `${type} with a phone and no address`);
+    assert.equal(labeled({ '@type': type, ...NAMED, address: ADDRESS }), true, `${type} with both`);
+  }
+  for (const type of ['Dentist', 'Hospital']) assert.equal(labeled({ '@type': type, ...NAMED }), true, type);
+});
+
+test('V196: the other Organization types count with a telephone and an address; OnlineMarketplace never counts', () => {
+  for (const type of ['Cooperative', 'FundingAgency', 'ResearchProject']) {
+    assert.equal(labeled({ '@type': type, ...NAMED }), false, type);
+    assert.equal(labeled({ '@type': type, ...NAMED, address: ADDRESS }), true, type);
+  }
+  assert.equal(labeled({ '@type': 'OnlineMarketplace', ...NAMED, address: ADDRESS }), false);
+});
+
+test('V197: the local business wins over a parent organization, in one block or in separate blocks', () => {
+  const parent = { '@type': 'Corporation', name: 'Parent Co', telephone: '(800) 555-0100', address: ADDRESS };
+  const joe = { '@type': 'Plumber', name: 'Joe Plumbing', telephone: '(615) 555-0188' };
+  for (const nodes of [[parent, joe], [joe, parent]]) {
+    const b = businessOf({ '@context': 'https://schema.org', '@graph': nodes });
+    assert.equal(b?.name, 'Joe Plumbing');
+    assert.equal(b?.telephone, '(615) 555-0188');
+    assert.equal(b?.type, 'Plumber');
+  }
+  // Separate blocks: the first block holds the parent.
+  const html = `<!doctype html><html><head><title>Home</title>
+<script type="application/ld+json">${JSON.stringify(parent)}</script>
+<script type="application/ld+json">${JSON.stringify(joe)}</script></head><body><h1>Home</h1></body></html>`;
+  assert.equal(readPageFacts(html).jsonLd.business?.name, 'Joe Plumbing');
+  // With no local-business node, the parent organization is still read, as before.
+  assert.equal(businessOf(parent)?.name, 'Parent Co');
+});
+
+test('V198: a type that is only a schema.org address is left out, not shown as an empty type', () => {
+  for (const type of ['schema:', 'https://schema.org/', 'http://schema.org/', '  ']) {
+    const html = `<!doctype html><html><head><title>Home</title>
+<script type="application/ld+json">${JSON.stringify({ '@type': [type, 'Plumber'], ...NAMED })}</script></head><body><h1>Home</h1></body></html>`;
+    const ld = readPageFacts(html).jsonLd;
+    assert.equal(ld.types.includes(''), false, JSON.stringify(type));
+    assert.deepEqual(ld.types, ['Plumber']);
+  }
+});
+
 test('V156: OnlineStore and OnlineBusiness never count as local', () => {
-  for (const type of ['OnlineStore', 'OnlineBusiness', 'schema:OnlineStore', 'https://schema.org/OnlineStore']) {
+  for (const type of ['OnlineStore', 'OnlineBusiness', 'OnlineMarketplace', 'schema:OnlineStore', 'https://schema.org/OnlineStore']) {
     assert.equal(labeled({ '@type': type, ...NAMED, address: ADDRESS }), false, type);
     assert.equal(labeled({ '@type': type, ...NAMED }), false, type);
   }

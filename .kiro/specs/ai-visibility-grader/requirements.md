@@ -514,13 +514,13 @@ Node.js 22, plain Express, plain JavaScript ES modules, JSON files under `DATA_D
 
 ### Requirement 30: The Business Label Check Knows Every Local-Business Type (D5)
 
-**Status: approved by the owner on Nov 23, 2026 (D5). Task O5. Built; the list was written by hand and awaits the reviewer's check against the live schema.org tree.**
+**Status: approved by the owner on Nov 23, 2026 (D5). Task O5. Built. The list was written by hand and checked against schema.org release 30.1 on Nov 23, 2026 (data/releases/30.1/schemaorg-current-https.jsonld, schemaorg/schemaorg on GitHub); the fixes of V194 to V200 are in.**
 
 **User Story:** As the owner of a car wash, a nail salon, a vet or a gym, I want my website's business label to be recognized, so that my site does not lose points for a label it already has.
 
 #### Acceptance Criteria
 
-1. THE `business-labeled` Check (Requirement 6.3) SHALL treat a JSON-LD block as describing the business WHEN one of its types is `LocalBusiness`, any schema.org subtype of it through any chain of parent types (for example `AutoWash`, `NailSalon`, `VeterinaryCare`, `ExerciseGym`, `Hotel`, `Florist`, `Pharmacy`, `AccountingService`), `CleaningService` (kept as today), or `Organization` together with a telephone and an address (as today). THE Check still passes only WHEN the block has the business's name and telephone.
+1. THE `business-labeled` Check (Requirement 6.3) SHALL treat a JSON-LD block as describing the business WHEN one of its types is `LocalBusiness`, any schema.org subtype of it through any chain of parent types (for example `AutoWash`, `NailSalon`, `ExerciseGym`, `Hotel`, `Florist`, `Pharmacy`, `AccountingService`), `CleaningService` (kept as today) and `VeterinaryCare` (the owner's deliberate extra: not a schema.org local-business type, but a vet is local; V194), or `Organization` or one of its subtypes that are not local businesses (`Corporation`, `NGO`, `MedicalOrganization`, `DiagnosticLab`) together with a telephone and an address (as today). WHEN a page has both a local-business node and a parent organization, THE local-business node SHALL be the business, whichever comes first (V197). THE Check still passes only WHEN the block has the business's name and telephone.
 2. THE list SHALL be fixed in the code (a file of type names), built by hand from the schema.org type tree, with the schema.org release it was taken from written at the top of the file. THE Grader SHALL NOT fetch anything to build or refresh it.
 3. A type that is not on the list ("MadeUpBusinessType", `Person`, `WebSite`) SHALL still fail. A leading `http://schema.org/`, `https://schema.org/` or `schema:` (any case) SHALL be removed from a type before the lookup. `Organization` subtypes that are not local businesses (`Corporation`, `NGO`) SHALL count like `Organization` (only with a telephone and an address), and `OnlineBusiness` and `OnlineStore` SHALL never count as local (V156).
 4. SITES with these types gain the Check's 8 points when the Check is next run (a new check, or "Check again"); the owner approved the higher scores.

@@ -711,6 +711,10 @@ From `review-2026-11-23-owner-decisions.md`: the owner approved D1 to D5 ("Yes t
   - `grader.js`: `schemaHours` and `readableHours` use `parseHoursRange` as the whole-range reader, so `12am-12am` means open all day everywhere (V190); `readableHours` shows other equal times as written (V191); V192 and V193 are accepted gaps written in the design, no code
   - Tests (`test/grade-claim-hours.test.js`): V190 and V191 lists
   - _Requirements: 29.4_
+- [x] O5b. The O5 review notes V194 to V198, V200 (V199 design note only), before O6
+  - `schema-types.js`: release 30.1 in the header (V200); `MedicalOrganization`, `DiagnosticLab` and `VeterinaryCare` out of the local list, the first two into `ORGANIZATION_TYPES`; `Audiology`, `Ophthalmology`, `Cooperative`, `FundingAgency`, `ResearchProject` added (V194 to V196); `page-facts.js`: `VeterinaryCare` as a deliberate extra, the local-business node wins over a parent organization, empty types dropped (V194, V197, V198)
+  - Tests (`test/schema-types.test.js`): the lists, VeterinaryCare, the two medical types, V196, the parent-organization scenario, empty types; `VeterinaryCare` moves out of the "on the list" loop of O5's own test
+  - _Requirements: 30.1, 30.2, 30.3_
 - [ ] O6. Checkpoint for the owner decisions
   - Wording check of every sentence O1 to O5 added (plain words, American spelling, no promise that a score, a listing or a fix will make an AI name a business, no dollar figure); confirm the stored Grade is never rewritten by a page view; confirm every older test line that changed is in the design's table with its reason and is listed in the summary; the full suite passes
   - _Requirements: 26.6, 27.2, 28.4, 29.3, 30.3_
