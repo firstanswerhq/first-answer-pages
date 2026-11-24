@@ -715,6 +715,29 @@ From `review-2026-11-23-owner-decisions.md`: the owner approved D1 to D5 ("Yes t
   - `schema-types.js`: release 30.1 in the header (V200); `MedicalOrganization`, `DiagnosticLab` and `VeterinaryCare` out of the local list, the first two into `ORGANIZATION_TYPES`; `Audiology`, `Ophthalmology`, `Cooperative`, `FundingAgency`, `ResearchProject` added (V194 to V196); `page-facts.js`: `VeterinaryCare` as a deliberate extra, the local-business node wins over a parent organization, empty types dropped (V194, V197, V198)
   - Tests (`test/schema-types.test.js`): the lists, VeterinaryCare, the two medical types, V196, the parent-organization scenario, empty types; `VeterinaryCare` moves out of the "on the list" loop of O5's own test
   - _Requirements: 30.1, 30.2, 30.3_
-- [ ] O6. Checkpoint for the owner decisions
+- [x] O6. Checkpoint for the owner decisions
   - Wording check of every sentence O1 to O5 added (plain words, American spelling, no promise that a score, a listing or a fix will make an AI name a business, no dollar figure); confirm the stored Grade is never rewritten by a page view; confirm every older test line that changed is in the design's table with its reason and is listed in the summary; the full suite passes
+  - Done, with the summary below. The full suite is run by the owner in the cloud.
   - _Requirements: 26.6, 27.2, 28.4, 29.3, 30.3_
+
+### Summary of the Nov 23 owner decisions (O1 to O5 and their review fixes)
+
+**What changed for an owner**
+- **D1, the score:** the AI part of the score counts only Claude's answers to the first question. Opening the full report, giving contact details and the two extra questions never change it. The report says which answers count and labels the others. Older Grades are worked out the same way when shown, so some go up, some go down, and one can go from a full score to a partial one. A day's limit for AI checks is now a reason the report names, and no sentence blames Claude for it.
+- **D2, "Partly":** a result where AI named the business in only some answers says "Partly" with its points, not "Pass". The points and the score do not change.
+- **D3, the home page:** one sentence says why this matters ("People now ask AI who to call. List your business free so AI can find it."). The "Check if AI can find your business" button is under the search form on the unfiltered home page only, as large as the search button, and absent with the grader off. The search button now renders at the same size, weight and height.
+- **D4, the claim:** a listing claimed from a report leaves Services empty, and confirm waits until the owner fills it. Hours are pre-filled as "7am-6pm", not "07:00-18:00". Hours written 24-hour now reach the listing's JSON-LD, the Fix Kit label and the readable hours, and an ambiguous range such as "8:00-5:00" is never read as 24-hour.
+- **D5, the business label:** every schema.org local-business type (checked against release 30.1) is recognized, so a car wash or a nail salon keeps its 8 points. Corporation and other Organization types count only with a telephone and an address, online stores never count, `VeterinaryCare` counts as a deliberate extra, and a real local business wins over a parent company.
+
+**Checkpoint findings (O6)**
+- **Wording:** no violation in the user-visible text of the grader, home, fix kit, form and type files (search for "guarantee", "Yellow Pages", "YP", dollar figures, British spellings, promises that AI will name a business). The sentences that mention what AI does describe what we ask or what AI can read. The ai-named fix says it can take days to weeks and that we can't promise AI will name you. The one sentence close to a promise, "List your business free so AI can find it.", is the owner's word for word (D3), says "find", not "name", and promises no result.
+- **Stored Grade:** rendering a report, the form with `?from=`, the admin Grades list and `status.json` never write or mutate a stored Grade (`reportPage` works on a copy; `get` re-reads the file; `peek` returns a clone). The one write on a view is old and deliberate: the first view of a full report starts the two extra questions and sets `extraAiStartedAt`; they only add answers and never change the score. A gap noted for later: no test fetches `GET /grade/:id` over HTTP and compares `grades.json` before and after.
+
+**Older test lines changed since a9ac809 (each is a row in the design's "Numbers that change in existing tests" table)**
+- `test/grade-lead.test.js` lines 539, 541 and 595 (D1 sentence and stored detail); line 320 (D4, services); lines 357 and 358 (D4, hours).
+- `test/grade-report-asks.test.js` lines 145, 147 and 165 (D1).
+- `test/grade-load.test.js` lines 288, 301 and 310 (V157, "Run a new check").
+- `test/review-final-pages.test.js` lines 218 and 220 (V157).
+- `test/grade-kit-claim.test.js` line 217 (D4, services given as the owner would type them).
+- `README.md`, the Lead gate paragraph (D1, docs).
+- Tests of this series changed by their own review notes, also in the table: `test/home-check.test.js` (V173, V174, V176), `test/grade-claim-hours.test.js` (V177, V179, V181, V186) and `test/schema-types.test.js` (V194 to V196).
