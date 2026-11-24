@@ -345,7 +345,7 @@ export function configFromEnv(env = process.env, opts = {}) {
     graderLeadGate: parseOnOff(env.GRADER_LEAD_GATE),
     gradeAiCallsPerDay: parseGradeAiCalls(env.GRADE_AI_CALLS_PER_DAY, opts.warn ?? console.warn),
     gradeMaxRunning: parseGradeMaxRunning(env.GRADE_MAX_RUNNING, opts.warn ?? console.warn),
-    // How many times the free question is asked of the main assistant (1 to 3, default 3). Used from task E2.
+    // How many times the free question is asked of the main assistant (1 to 3, default 3). The score counts only these answers.
     gradeMainAsks: parseGradeMainAsks(env.GRADE_MAIN_ASKS, opts.warn ?? console.warn),
     gradeNetworkPerDay: parseGradeNetworkPerDay(env.GRADE_NETWORK_PER_DAY, opts.warn ?? console.warn),
     // The human check on the check form (Cloudflare Turnstile). Off unless both keys are set.

@@ -93,7 +93,7 @@ sequenceDiagram
 | Method and path | Purpose | Limits |
 |---|---|---|
 | `GET /grade` | Form | none |
-| `POST /grade` | Validate, start, 303 to report | `grade` 5/hour, `grade-day` 6/day per client (each check can use 3 AI calls and the whole site shares 60 a day; lowered from 20 in review) |
+| `POST /grade` | Validate, start, 303 to report | `grade` 5/hour, `grade-day` 6/day per client (with the default `GRADE_MAIN_ASKS=3`, each check can use up to 5 Claude calls, plus one call per second-opinion key for each of its 3 questions, as the README says, and the whole site shares 60 a day; lowered from 20 in review) |
 | `GET /grade/about` | What the Grader reads and why | none |
 | `GET /grade/:id` | Scan screen or report | none |
 | `GET /grade/:id/status.json` | `{ status, steps, done }` for the script | none |

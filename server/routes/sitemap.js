@@ -15,9 +15,9 @@ const VERIFIED_PAGE = '/verified';
 export const GRADE_PAGES = Object.freeze(['/grade', '/grade/about']);
 
 /**
- * Whether `/grade` and `/grade/about` are listed yet. They still send `noindex, nofollow` until task F12 opens
- * them to search engines, and a sitemap may list only pages that are not noindex, so they stay out until then.
- * F12 turns this on together with the header change and the two existing tests the design names.
+ * Whether `/grade` and `/grade/about` are listed in the sitemap. They are open to search engines, so they are
+ * listed. A sitemap may list only pages that are not noindex; a report, a draft or an admin address is never listed.
+ * Setting this to false takes both pages out of the sitemap.
  */
 export const GRADE_PAGES_OPEN = true;
 

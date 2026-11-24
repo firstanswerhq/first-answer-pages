@@ -154,6 +154,26 @@ test('V197: the local business wins over a parent organization, in one block or 
   assert.equal(businessOf(parent)?.name, 'Parent Co');
 });
 
+test('V201: a bare local node with no name and no telephone does not beat a full organization', () => {
+  const parent = { '@type': 'Corporation', name: 'Parent Co', telephone: '(800) 555-0100', address: ADDRESS };
+  const stub = { '@type': 'Plumber', '@id': '#joe' };
+  for (const nodes of [[parent, stub], [stub, parent]]) {
+    const b = businessOf({ '@context': 'https://schema.org', '@graph': nodes });
+    assert.equal(b?.name, 'Parent Co');
+    assert.equal(b?.telephone, '(800) 555-0100');
+  }
+  // A local node that has a name or a telephone still wins over the organization, in either order.
+  const named = { '@type': 'Plumber', name: 'Joe Plumbing' };
+  for (const nodes of [[parent, named], [named, parent]]) {
+    assert.equal(businessOf({ '@graph': nodes })?.name, 'Joe Plumbing');
+  }
+  const phoneOnly = { '@type': 'Plumber', telephone: '(615) 555-0188' };
+  assert.equal(businessOf({ '@graph': [stub, phoneOnly, parent] })?.telephone, '(615) 555-0188');
+  // With nothing else, the bare local node is still the business, as before.
+  assert.equal(businessOf(stub)?.type, 'Plumber');
+  assert.equal(labeled(stub), false);
+});
+
 test('V198: a type that is only a schema.org address is left out, not shown as an empty type', () => {
   for (const type of ['schema:', 'https://schema.org/', 'http://schema.org/', '  ']) {
     const html = `<!doctype html><html><head><title>Home</title>

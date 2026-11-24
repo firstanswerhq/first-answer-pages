@@ -157,10 +157,11 @@ export function hasReviewSignal(facts) {
   return facts.jsonLd?.business?.hasReviewData === true;
 }
 
-// Every schema.org local-business type (see schema-types.js) plus the one non-standard name kept from before.
-// OnlineBusiness and OnlineStore are not here and not in ORGANIZATION_TYPES: they never count as local (V156).
-// Two deliberate extras, neither a schema.org local-business type: `CleaningService` (kept from before) and
-// `VeterinaryCare` (a vet is local; in schema.org it sits under MedicalOrganization, which is not a local business).
+// Every schema.org local-business type (see schema-types.js) plus two deliberate extras, neither a schema.org
+// local-business type: `CleaningService` (kept from before) and `VeterinaryCare` (a vet is local; in schema.org it
+// sits under MedicalOrganization, which is not a local business).
+// `OnlineBusiness`, `OnlineStore` and `OnlineMarketplace` are not here and not in ORGANIZATION_TYPES: they never
+// count as local (V156).
 const BUSINESS_TYPES = new Set([...LOCAL_BUSINESS_TYPES, 'CleaningService', 'VeterinaryCare']);
 
 /** "https://schema.org/AutoWash", "http://schema.org/AutoWash" and "schema:AutoWash" are all "AutoWash" (V156). */
@@ -493,6 +494,7 @@ function readJsonLd(bodies) {
   const seen = new Set();
   let local = null;
   let fallback = null;
+  let stub = null;
   for (const body of bodies) {
     let value;
     try {
@@ -512,11 +514,17 @@ function readJsonLd(bodies) {
       }
       // The first node of a local-business type, from all blocks, is the business (V197); only when there is none,
       // the first Organization-rule node (an Organization or a non-local subtype with a telephone and an address).
-      if (!local && nodeTypes(node).some(t => BUSINESS_TYPES.has(t))) local = node;
-      else if (!fallback && isBusinessNode(node)) fallback = node;
+      // A bare local node (no name and no telephone, such as {"@type":"Plumber","@id":"#joe"}) is kept only as a
+      // last local choice, so it cannot beat a full organization (V201).
+      if (nodeTypes(node).some(t => BUSINESS_TYPES.has(t))) {
+        if (!local && (str(node.name) || str(node.telephone))) local = node;
+        else if (!stub) stub = node;
+      } else if (!fallback && isBusinessNode(node)) {
+        fallback = node;
+      }
     }
   }
-  const chosen = local ?? fallback;
+  const chosen = local ?? fallback ?? stub;
   if (chosen) result.business = readBusiness(chosen);
   return result;
 }

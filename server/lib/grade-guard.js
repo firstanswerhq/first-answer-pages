@@ -32,7 +32,7 @@ const THRESHOLDS = [50, 90];
 const HUMAN_CHECK_MIN = 10;
 
 /**
- * @param {{ aiBudget: object, notifier?: object, store?: object, clock?: object, config?: object, log?: (line: string) => void }} deps
+ * @param {{ aiBudget: object, notifier?: object, log?: (line: string) => void }} deps
  */
 export function createGradeGuard({ aiBudget, notifier, log = () => {} } = {}) {
   const say = line => {

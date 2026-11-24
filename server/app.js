@@ -145,13 +145,10 @@ export function createApp(deps = {}) {
   ctx.newGradeId = deps.newGradeId ?? (() => randomBytes(16).toString('base64url'));
   // "Google's live answer" panel: null when off.
   ctx.googleLive = deps.googleLive !== undefined ? deps.googleLive : createGeminiLive(config);
-  // The day's bot-protection counts (kept in the AI budget) and, from task G4, the heads-up emails.
+  // The day's bot-protection counts (kept in the AI budget) and the heads-up emails to the owner.
   ctx.gradeGuard = deps.gradeGuard ?? createGradeGuard({
     aiBudget: ctx.aiBudget,
     notifier: ctx.notifier,
-    store,
-    clock,
-    config,
     log: line => process.stderr.write(`[grader] ${line}\n`),
   });
   ctx.grader = createGrader({

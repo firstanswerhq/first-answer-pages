@@ -268,7 +268,7 @@ Node.js 22, plain Express, plain JavaScript ES modules, JSON files under `DATA_D
 #### Acceptance Criteria
 
 1. THE AI_Budget SHALL count Grader calls under a new kind, `grade`, limited by `GRADE_AI_CALLS_PER_DAY` (default 60), and SHALL keep photo and grade calls together at or below the total minus a quarter, so the Seance's reserved quarter is unchanged.
-2. THE Rate_Limiter SHALL allow at most 5 new Grades per client per hour and 20 per client per day, and SHALL answer more with HTTP status 429 and a `Retry-After` header.
+2. THE Rate_Limiter SHALL allow at most 5 new Grades per client per hour and 6 per client per day, and SHALL answer more with HTTP status 429 and a `Retry-After` header.
 3. WHEN a new Grade has the same normalized name, city, state, service and website as a `done` Grade created in the last 7 days whose AI_Results exist, THE Grader SHALL copy those AI_Results into the new Grade, label them with their original time, and send no new AI_Question to an assistant that already has a copied answer to that question; an assistant switched on since (such as ChatGPT) SHALL still be asked.
 4. THE copy in criterion 3 SHALL NOT copy the earlier Grade's unlock state, Lead, or Draft.
 5. THE Server SHALL delete Grades and their Leads 90 days after creation, pruning at startup and whenever a new Grade starts.

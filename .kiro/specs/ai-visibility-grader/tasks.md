@@ -41,7 +41,7 @@ Every task also follows the design's "Implementation notes from the code review"
     - Follow up to 5 redirects by hand, checking each target from the top
     - Decompress gzip, deflate and br with `node:zlib`; stop past 2 MiB decompressed; one 10-second timer per fetch
     - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8_
-  - [ ]* 1.4 Write property and example tests for the safe fetcher
+  - [x]* 1.4 Write property and example tests for the safe fetcher (test/grade-safe-fetch.test.js)
     - **Property 2: Redirects never reach a refused address**
     - **Property 3: Size limit holds after decompression**
     - Examples: refused ports, credentials in URL, DNS answer mixing public and private addresses, timeout, a guard that fails the test if the real `http.request` is called
@@ -55,14 +55,14 @@ Every task also follows the design's "Implementation notes from the code review"
     - Remove elements and comments by `indexOf` scanning, never lazy regular expressions; never run page scripts
     - Export the hours, street-address and call-to-action patterns for the checks
     - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5_
-  - [ ]* 2.2 Write property tests for page reading
+  - [x]* 2.2 Write property tests for page reading (test/grade-page-facts.test.js)
     - **Property 4: Page reading never throws and stays fast** (random inputs up to 64 KiB, plus fixed 2 MiB worst cases: unclosed `<script`, `<!--` and `<a`)
     - **Validates: Requirements 4.1, 4.6**
   - [x] 2.3 Create `server/lib/robots.js`
     - Export `parseRobots(text)` and `mayFetchRoot(groups, agent)` as designed: grouped user agents, comments and unknown fields ignored, specific group before `*`, longest rule wins, `Allow` wins a tie, empty `Disallow` allows
     - Export `AI_AGENTS` with the eight crawler names from the glossary
     - _Requirements: 5.1, 5.2_
-  - [ ]* 2.4 Write property tests for robots reading
+  - [x]* 2.4 Write property tests for robots reading (test/grade-robots.test.js)
     - **Property 5: Robots answers are stable under formatting**
     - **Validates: Requirements 5.1, 5.2, 5.5**
 
@@ -108,7 +108,7 @@ Every task also follows the design's "Implementation notes from the code review"
     - Blocked when the total cap is reached, when `grade >= gradeCap`, or when `photo + grade >= cap - ceil(cap / 4)`
     - Existing photo and Seance behavior unchanged
     - _Requirements: 14.1_
-  - [ ]* 5.4 Write example tests for the budget change
+  - [ ]* 5.4 Write example tests for the budget change (left unticked: no test fills the photo and grade share and then shows the Séance quarter is still open; `test/grade-counts.test.js:139` loads an old file but does not assert the grade counter)
     - The Seance quarter stays available after photo and grade calls use their share; old budget files load
     - **Validates: Requirement 14.1**
   - [x] 5.5 Extend `server/lib/config.js` with `graderEnabled`, `graderLeadGate`, `gradeAiCallsPerDay` and `graderSecret`, with the defaults in the design; warn once when `GRADER_SECRET` is missing in production and use a random per-process key
@@ -175,7 +175,7 @@ The rebuild also removed `server/lib/assistant.js`, `server/lib/name-check.js` a
     - `isStale(grade, now)`: `running` and older than 4 minutes
     - Log only the Grade_Id, step names, counts and timings
     - _Requirements: 2.1, 2.2, 2.5, 2.6, 2.7, 2.8, 7.1, 7.8, 8.1, 14.3, 14.4, 14.6_
-  - [ ]* 6.2 Write property and example tests for the grader flow
+  - [ ]* 6.2 Write property and example tests for the grader flow (Property 10 is in `test/grade-reuse-property.test.js`; left unticked: no test makes the main AI call time out and checks `ai-named` is `not_checked`)
     - **Property 10: Reuse never copies a visitor's state**
     - Examples with the fixtures and the mock provider: a full run finishes `done`; an unreachable site gives `not_checked` website Checks and still a `done` Grade; an AI timeout gives `ai-named` `not_checked`; a stale Grade reads as failed
     - **Validates: Requirements 2.5, 2.6, 2.7, 14.3, 14.4**
@@ -199,7 +199,7 @@ The rebuild also removed `server/lib/assistant.js`, `server/lib/name-check.js` a
     - _Requirements: 2.4, 11.6_
   - [x] 7.4 Keep `/grade` out of `sitemap.xml`, `llms.txt`, the MCP tools and IndexNow, and add a plain link to `/grade` on the home page
     - _Requirements: 9.6_
-  - [ ]* 7.5 Write example tests for the pages and routes
+  - [x]* 7.5 Write example tests for the pages and routes (test/grade-flow.test.js)
     - Form 422s for each bad field, honeypot and too-fast stamp; 303 and Grade stored; refresh tag while running; report sections; noindex headers; 404 for unknown and malformed ids; sitemap and llms.txt free of `/grade`; no "Yellow Pages" or "YP" in any Grader page
     - **Validates: Requirements 1.1 to 1.7, 2.3, 9.1 to 9.8, 16.2**
 
@@ -222,7 +222,7 @@ The rebuild also removed `server/lib/assistant.js`, `server/lib/name-check.js` a
   - [x] 9.4 Admin pages
     - `GET /admin/grades`, `GET /admin/leads` (newest 100), `POST /admin/grades/:id/delete` (Grade and its Leads), all behind `requireAdmin`
     - _Requirements: 15.1, 15.2, 15.3, 15.4_
-  - [ ]* 9.5 Write example tests for unlock, claim, recheck and admin
+  - [x]* 9.5 Write example tests for unlock, claim, recheck and admin (test/grade-lead.test.js)
     - Gate on: Lead_Form shown, unlock stores one Lead, sets the cookie, shows the Full_Report only to that visitor; gate off: Full_Report for all
     - Claim twice creates one Draft and redirects to it; the Draft is not published
     - Recheck inside 2 minutes answers 429; recheck keeps AI results
@@ -741,3 +741,7 @@ From `review-2026-11-23-owner-decisions.md`: the owner approved D1 to D5 ("Yes t
 - `test/grade-kit-claim.test.js` line 217 (D4, services given as the owner would type them).
 - `README.md`, the Lead gate paragraph (D1, docs).
 - Tests of this series changed by their own review notes, also in the table: `test/home-check.test.js` (V173, V174, V176), `test/grade-claim-hours.test.js` (V177, V179, V181, V186) and `test/schema-types.test.js` (V194 to V196).
+
+- [x] O7. Cleanup: V146 to V149 (final code review) and V201, V202 (O5b notes)
+  - V146: requirements.md 14.2 says 6 a day per client; design.md and the `rate-limiter.js` comment no longer say "3 AI calls" a check. V147: new `test/grade-reuse-property.test.js` (Property 10, fast-check, fake assistant); tasks 1.4, 2.2, 2.4, 7.5 and 9.5 ticked with their test files named; 5.4 and 6.2 stay unticked (no test fills the photo and grade share and then shows the Séance quarter open; no test makes the main AI call time out). V148: sitemap comment, the "task E2" and "task G4" comments, `createGradeGuard` called with only `aiBudget`, `notifier` and `log`; `isNamed` and `extractCompetitors` (thin readers over `analyzeAnswer`, pinned by many tests) and `serviceAreaText` (the capped page-text reader, pinned by the limits tests) are left in place as public helpers, not removed. V149: README row for `GEMINI_NAME_CHECK` says the extra Gemini call is counted in neither daily cap. V201: a local node with no name and no telephone no longer beats a full organization (`readJsonLd`); V202: the comment above `BUSINESS_TYPES` says two deliberate extras and lists `OnlineMarketplace`.
+  - Tests: `test/grade-reuse-property.test.js` (new) and a V201 test in `test/schema-types.test.js`; no older test line changes.
