@@ -23,7 +23,7 @@ import {
   reviewsLinkHost, reviewsLinkOnPage, normalizeWebsite,
 } from './listing-fields.js';
 import { usAddressStyle } from './address-style.js';
-import { parseTwentyFourHourRange } from './schema.js';
+import { parseHoursRange, parseTwentyFourHourRange } from './schema.js';
 
 // ---- constants -------------------------------------------------------------------
 
@@ -517,7 +517,7 @@ export function schemaHours(lines) {
     // A whole 24-hour range that cannot mean anything else is read by the one shared reader (V177, V187: open all
     // day is 00:00-23:59, the same as the form and the JSON-LD). Otherwise each side is read on its own, and a
     // side with no am or pm is used only when its own hour cannot be a 12-hour time (V185).
-    const whole = parseTwentyFourHourRange(value);
+    const whole = parseHoursRange(value); // the same whole-range reader as the JSON-LD (V190)
     const a = whole ? whole.opens : (sideIsSure(open) ? schemaTime(open ?? '') : null);
     const b = whole ? whole.closes : (sideIsSure(close) ? schemaTime(close ?? '') : null);
     if (!a || !b || a === b) continue;
@@ -583,10 +583,10 @@ export function readableHours(lines) {
     const [open, close, extra] = byDay[days[i]].split('-');
     // Same rule as the Fix Kit label (V188): the shared 24-hour reader first; a side with no am or pm that could be
     // a 12-hour time makes the line show as found.
-    const whole = parseTwentyFourHourRange(byDay[days[i]]);
+    const whole = parseHoursRange(byDay[days[i]]); // the same whole-range reader as the JSON-LD (V190)
     const a = whole ? readableTime(whole.opens) : (sideIsSure(open) ? readableTime(open ?? '') : null);
     const b = whole ? readableTime(whole.closes) : (sideIsSure(close) ? readableTime(close ?? '') : null);
-    out.push(`${label}, ${a && b && extra === undefined ? `${a} to ${b}` : byDay[days[i]]}`);
+    out.push(`${label}, ${a && b && a !== b && extra === undefined ? `${a} to ${b}` : byDay[days[i]]}`);
     i = j + 1;
   }
   return out;

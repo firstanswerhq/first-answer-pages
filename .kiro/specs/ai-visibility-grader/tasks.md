@@ -707,6 +707,10 @@ From `review-2026-11-23-owner-decisions.md`: the owner approved D1 to D5 ("Yes t
   - New `server/lib/schema-types.js` with the fixed list built by hand from the schema.org type tree (release and source written at the top); `page-facts.js` builds `BUSINESS_TYPES` from it plus `CleaningService`, strips a leading `http://schema.org/`, `https://schema.org/` or `schema:` before the lookup, counts `Organization` subtypes like `Organization` and never counts `OnlineBusiness` or `OnlineStore` (V156); read the page behind `test/grade-checks.test.js` lines 55 to 58 first
   - Tests: new `test/schema-types.test.js` and Check tests, as listed in the design; no existing line changes
   - _Requirements: 30.1, 30.2, 30.3, 30.4_
+- [x] O5a. The notes V190 to V193 (before O6)
+  - `grader.js`: `schemaHours` and `readableHours` use `parseHoursRange` as the whole-range reader, so `12am-12am` means open all day everywhere (V190); `readableHours` shows other equal times as written (V191); V192 and V193 are accepted gaps written in the design, no code
+  - Tests (`test/grade-claim-hours.test.js`): V190 and V191 lists
+  - _Requirements: 29.4_
 - [ ] O6. Checkpoint for the owner decisions
   - Wording check of every sentence O1 to O5 added (plain words, American spelling, no promise that a score, a listing or a fix will make an AI name a business, no dollar figure); confirm the stored Grade is never rewritten by a page view; confirm every older test line that changed is in the design's table with its reason and is listed in the summary; the full suite passes
   - _Requirements: 26.6, 27.2, 28.4, 29.3, 30.3_

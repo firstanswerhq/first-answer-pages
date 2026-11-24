@@ -74,6 +74,22 @@ test('V188: the hours people read follow the same rule', () => {
   assert.deepEqual(readableHours(['Mo-Fr 9am-5pm']), ['Monday to Friday, 9:00 am to 5:00 pm']);
 });
 
+test('V190: "12am-12am" means open all day in the label and the readable hours, like the JSON-LD', () => {
+  assert.deepEqual(parseHoursRange('12am-12am'), { opens: '00:00', closes: '23:59' });
+  assert.deepEqual(schemaHours(['Mo-Fr 12am-12am']), ['Mo-Fr 00:00-23:59']);
+  assert.deepEqual(readableHours(['Mo-Fr 12am-12am']), ['Monday to Friday, 12:00 am to 11:59 pm']);
+  // The ordinary 12-hour and 24-hour ranges read as before.
+  assert.deepEqual(schemaHours(['Mo-Fr 9am-5pm']), ['Mo-Fr 09:00-17:00']);
+  assert.deepEqual(readableHours(['Mo-Fr 9am-5pm']), ['Monday to Friday, 9:00 am to 5:00 pm']);
+});
+
+test('V191: any other equal opening and closing time shows as written, and leaves the label', () => {
+  assert.deepEqual(readableHours(['Mo-Fr 9am-9am']), ['Monday to Friday, 9am-9am']);
+  assert.deepEqual(readableHours(['Mo-Fr 08:00-08:00']), ['Monday to Friday, 08:00-08:00']);
+  assert.deepEqual(schemaHours(['Mo-Fr 9am-9am']), []);
+  assert.deepEqual(schemaHours(['Mo-Fr 08:00-08:00']), []);
+});
+
 test('V177: the fix kit label reads 24-hour times only when they cannot be 12-hour times', () => {
   assert.deepEqual(schemaHours(['Mo-Fr 08:00-17:00']), ['Mo-Fr 08:00-17:00']);
   assert.deepEqual(schemaHours(['Mo-Fr 07:00-18:00']), ['Mo-Fr 07:00-18:00']);
