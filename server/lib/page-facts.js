@@ -5,6 +5,7 @@
 
 import { reviewsLinkOnPage } from './listing-fields.js';
 import { normalizeForMatch } from './seance.js';
+import { LOCAL_BUSINESS_TYPES, ORGANIZATION_TYPES } from './schema-types.js';
 
 const MAX_HTML = 2 * 1024 * 1024;
 const MAX_TAG = 4000; // longest tag text read for attributes
@@ -156,14 +157,15 @@ export function hasReviewSignal(facts) {
   return facts.jsonLd?.business?.hasReviewData === true;
 }
 
-const BUSINESS_TYPES = new Set([
-  'LocalBusiness', 'Restaurant', 'FoodEstablishment', 'CafeOrCoffeeShop', 'BarOrPub', 'Bakery',
-  'HomeAndConstructionBusiness', 'RoofingContractor', 'HVACBusiness', 'Plumber', 'Electrician',
-  'GeneralContractor', 'HousePainter', 'Locksmith', 'MovingCompany', 'AutomotiveBusiness', 'AutoRepair',
-  'HealthAndBeautyBusiness', 'HairSalon', 'BeautySalon', 'DaySpa', 'LegalService', 'Attorney',
-  'ProfessionalService', 'FinancialService', 'InsuranceAgency', 'RealEstateAgent', 'Dentist',
-  'MedicalBusiness', 'Store', 'CleaningService',
-]);
+// Every schema.org local-business type (see schema-types.js) plus the one non-standard name kept from before.
+// OnlineBusiness and OnlineStore are not here and not in ORGANIZATION_TYPES: they never count as local (V156).
+const BUSINESS_TYPES = new Set([...LOCAL_BUSINESS_TYPES, 'CleaningService']);
+
+/** "https://schema.org/AutoWash", "http://schema.org/AutoWash" and "schema:AutoWash" are all "AutoWash" (V156). */
+const SCHEMA_PREFIX = /^\s*(?:https?:\/\/schema\.org\/|schema:)/i;
+export function bareSchemaType(type) {
+  return typeof type === 'string' ? type.replace(SCHEMA_PREFIX, '').trim() : '';
+}
 
 const NAMED = {
   amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', ndash: '\u2013', mdash: '\u2014',
@@ -389,7 +391,7 @@ function str(v) {
 }
 
 function nodeTypes(node) {
-  return asArray(node['@type']).filter(t => typeof t === 'string');
+  return asArray(node['@type']).filter(t => typeof t === 'string').map(bareSchemaType);
 }
 
 /** Top object, each item of a top-level array, and each item of any @graph. */
@@ -410,7 +412,9 @@ function collectNodes(value) {
 function isBusinessNode(node) {
   const types = nodeTypes(node);
   if (types.some(t => BUSINESS_TYPES.has(t))) return true;
-  return types.includes('Organization') && Boolean(str(node.telephone)) && Boolean(node.address);
+  // Organization and its subtypes that are not local businesses (Corporation, NGO, ...) count only with a
+  // telephone and an address.
+  return types.some(t => ORGANIZATION_TYPES.has(t)) && Boolean(str(node.telephone)) && Boolean(node.address);
 }
 
 function readAddress(a) {

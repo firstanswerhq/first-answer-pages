@@ -514,7 +514,7 @@ Node.js 22, plain Express, plain JavaScript ES modules, JSON files under `DATA_D
 
 ### Requirement 30: The Business Label Check Knows Every Local-Business Type (D5)
 
-**Status: approved by the owner on Nov 23, 2026 (D5). Task O5. Not built yet.**
+**Status: approved by the owner on Nov 23, 2026 (D5). Task O5. Built; the list was written by hand and awaits the reviewer's check against the live schema.org tree.**
 
 **User Story:** As the owner of a car wash, a nail salon, a vet or a gym, I want my website's business label to be recognized, so that my site does not lose points for a label it already has.
 
