@@ -128,7 +128,7 @@ export const CHECKS = Object.freeze([
     label: 'What AI says about your business',
     passText: 'An AI assistant named your business.',
     failText: 'An AI assistant did not name your business.',
-    fix: 'Claim your free listing and work through the fixes below, so AI has more about you to read. AI assistants pick up changes over days to weeks. No one can make an AI assistant name a business.',
+    fix: 'Claim your free listing and work through the fixes below so AI has more to read. Changes take days to weeks. No one can make AI name a business.',
   },
   {
     id: 'google-profile', group: 'google_profile', points: 15,

@@ -256,7 +256,7 @@ test('gate on: the report shows the Lead_Form; a valid form stores one Lead, set
   const open = await (await get(env, `/grade/${id}`, { cookie })).text();
   assert.ok(open.includes('Your fix kit'));
   assert.equal(open.includes('Check again'), false, 'nothing to read again without a website');
-  assert.ok(open.includes('You did not give a website'));
+  assert.ok(open.includes("You didn't give a website"));
   const stillLocked = await (await get(env, `/grade/${id}`)).text();
   assert.equal(stillLocked.includes('Your fix kit'), false, 'another visitor still sees the form');
 
@@ -571,7 +571,7 @@ test('when Claude fails and ChatGPT answers, the report says there is no AI scor
   const grade = (await readJson(env, 'grades.json', [])).find(x => x.id === id);
   assert.equal(grade.results.find(r => r.id === 'ai-named').result, 'not_checked');
   const page = await (await get(env, `/grade/${id}`)).text();
-  assert.match(page, /Claude did not answer this time, so this check has no AI score\./);
+  assert.match(page, /Claude didn't answer this time, so this check has no AI score\./);
   assert.match(page, /for comparison only \(not scored\)/);
   assert.doesNotMatch(page, /AI named your business\./);
 });

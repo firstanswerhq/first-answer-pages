@@ -215,7 +215,7 @@ test('V158: the free question got no answer but the extras did, and ChatGPT answ
 test('V158: without ChatGPT the same plain sentence is there', () => {
   const html = open(grade({ ai: [entry(EXTRA_1, true, { extra: true }), entry(EXTRA_2, true, { extra: true })] }));
   const section = answersOf(html);
-  assert.ok(section.includes('Claude didn't answer the first question, so this check has no AI score.'));
+  assert.ok(section.includes("Claude didn't answer the first question, so this check has no AI score."));
   assert.equal(section.includes('We asked'), false);
 });
 

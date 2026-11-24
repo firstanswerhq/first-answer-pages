@@ -87,7 +87,7 @@ test('V205: the advice under a failed AI row is "What you can do:" and promises 
   });
   const row = aiRow(open(g));
   assert.ok(row.includes('<strong>What you can do:</strong>'));
-  assert.ok(row.includes('Claim your free listing and work through the fixes below, so AI has more about you to read. AI assistants pick up changes over days to weeks. No one can make an AI assistant name a business.'));
+  assert.ok(row.includes('Claim your free listing and work through the fixes below so AI has more to read. Changes take days to weeks. No one can make AI name a business.'));
   assert.equal(row.includes('Fix:'), false);
   assert.equal(row.includes("can&#39;t promise"), false);
 });

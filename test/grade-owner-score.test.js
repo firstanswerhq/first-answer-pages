@@ -177,7 +177,8 @@ test('D1: one other question reads in the singular; none named reads "none of"',
   assert.ok(zero.includes("On the 2 other questions, Claude didn't name you."));
   // Only the free question: no line about other questions, and no "does not change" sentence.
   const alone = reportPage(oldGrade('aloneAAAAAAAAAAAAAAAAAA', 'Alone', [entry(FREE, true), entry(FREE, false)], UP_STORED), { now: NOW, unlocked: true });
-  assert.equal(alone.includes('other question'), false);
+  // The line about the other questions' answers is not there (the "still being answered" note of V220 may be).
+  assert.equal(/On the (2 other questions|other question)/.test(alone), false);
   assert.equal(alone.includes('does not change when you open this report'), false);
 });
 
@@ -350,7 +351,7 @@ test('V151: free asks all fail and the extras answer: the AI part stays not chec
 
   const html = reportPage(grade, { now: NOW, unlocked: true });
   assert.ok(html.includes('Partial score: Claude didn&#39;t answer this time, so the AI part isn&#39;t counted.'));
-  assert.ok(html.includes("<p>Claude didn't answer this time. Please run the check again later.</p>"), 'the reason in the free part');
+  assert.ok(html.includes("<p>Claude didn't answer this time. Come back later and press Run a new check at the top of this page.</p>"), 'the reason in the free part');
   assert.equal(html.includes('We just asked Claude'), false, 'an extra answer is not shown as the free answer');
   assert.ok(html.includes('Claude (not counted toward your score): '));
   assert.ok(html.includes('On the 2 other questions, Claude named you both times.'));

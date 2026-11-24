@@ -71,7 +71,7 @@ test('D2: no answer named the business: "Needs work", with its fix, as before', 
   assert.ok(row.includes('<p>No. Claude named your business in none of its 3 answers.</p>'));
   // V205: the advice for the AI row reads "What you can do:", and it makes no promise.
   assert.ok(row.includes('<strong>What you can do:</strong>'));
-  assert.ok(row.includes('No one can make an AI assistant name a business.'));
+  assert.ok(row.includes('No one can make AI name a business.'));
   assert.equal(row.includes('<strong>Fix:</strong>'), false);
 });
 
@@ -106,7 +106,7 @@ test('D2: the label changes nothing else: the stored Grade, the score, the point
   assert.equal(s.failed, 0, 'Partly is not counted as a check that needs work');
   assert.ok(html.includes(`<span class="num">${s.score}</span>`));
   assert.ok(html.includes(`${s.failed} of ${s.counted} checks need work`));
-  assert.ok(html.includes(`${s.earned} of ${s.available}.`), 'the points line under "Score by area"');
+  assert.ok(html.includes(`You earned ${s.earned} of the ${s.available} points we checked. That is ${s.score} out of 100.`), 'the points line under "Score by area"');
   // The same Grade with all three answers named has the same count of checks that need work.
   const all = scoreGrade(grade(ALL).results);
   assert.equal(all.failed, s.failed);
