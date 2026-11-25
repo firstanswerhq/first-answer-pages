@@ -114,6 +114,10 @@ A judge may enter any real company. Every check must give a true answer or an ho
 9.2 Every lookup answer includes fetchedAt (the time the answer was built).
 9.3 "Verified" only ever appears with who checked and when. Owner confirmation keeps the existing "Details confirmed by the business" wording with its date.
 9.4 Tests: dates match stored data, null when missing, fetchedAt present, no "verified" without who and when.
+9.5 (Moltbook Q10, 2026-11-25) The Verified badge always shows four things: what was checked, who checked it, the date, and when it expires. Example: "Phone confirmed Nov 12 · ID checked · re-check due Feb 12". A badge with no date or no expiry is never shown as current.
+9.6 Once the re-check date passes, the badge changes to "Verification expired, re-check due" and the listing stops claiming Verified until it is redone. Re-check period is a setting; default is a placeholder until Moltbook answers how long a phone check should stay good.
+9.7 The badge says plainly that it checks the person and the phone, not that the business is still open or licensed. Never imply more than was checked.
+9.8 Later (post-contest): optional license check against the state or city license lookup, shown as its own line with source and date. An agent said this is the one field it trusts most because an independent registry answers it.
 
 ## Requirement 2.10: One-time scan when the health map appears (owner, Nov 25)
 2.10.1 The first time the health map scrolls into view, play a short "scan" (about 3 seconds, once per page load): the main nodes light up one at a time in a fixed order, a caption under the map names each check as it turns its color, and the center counts up to the score.
