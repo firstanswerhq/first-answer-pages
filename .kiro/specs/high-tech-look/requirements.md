@@ -115,6 +115,23 @@ A judge may enter any real company. Every check must give a true answer or an ho
 9.3 "Verified" only ever appears with who checked and when. Owner confirmation keeps the existing "Details confirmed by the business" wording with its date.
 9.4 Tests: dates match stored data, null when missing, fetchedAt present, no "verified" without who and when.
 
+## Requirement 2.10: One-time scan when the health map appears (owner, Nov 25)
+2.10.1 The first time the health map scrolls into view, play a short "scan" (about 3 seconds, once per page load): the main nodes light up one at a time in a fixed order, a caption under the map names each check as it turns its color, and the center counts up to the score.
+2.10.2 The final state is exactly the normal map; the scan never shows a status the list does not show, and never shows a different number from the score.
+2.10.3 Reduced motion, JavaScript off, or a hidden tab: no scan, the map shows its final state at once. The caption is aria-hidden (the list already has every fact).
+2.10.4 Tests: final state equals the no-scan state; reduced motion skips it; it runs once.
+
+## Requirement 11: Fair use of the AI part of the check (owner, Nov 25)
+Why: a new check asks several AI assistants and makes paid Google and Bing lookups, so repeated new checks on the same business cost real money. "Check again" (website only, no AI, no new paid lookup) stays free and unlimited.
+11.1 One full check with AI per business per 7 days. A business is the same when the website's registered domain matches (shared hosts like facebook.com or wixsite.com use the full page path, as in name-match SHARED_DOMAINS), or, with no website, the same name and city after normalizing.
+11.2 When someone starts a new check for a business that already has one from the last 7 days, do not run a new AI check. Show a short page: "This business was checked on <date>. Open that report and use Check again to see your website changes. AI assistants usually take days to weeks to notice changes, so we ask them again after <date>." with a button to that report. The report link is only shown to the person who ran it before (same browser cookie or the email they gave); anyone else sees the same message with no link and the date the AI can be asked again.
+11.3 The admin (owner) is never limited, so he can test.
+11.4 Verified listings are not limited for their own business (the monthly health watch in Requirement 10 also covers them).
+11.5 The existing limits stay: GRADE_NETWORK_PER_DAY, the daily AI budget and the bot check.
+11.6 The 7 days is one named setting, GRADE_AI_REPEAT_DAYS (default 7, 0 turns the limit off).
+11.7 Tests: same domain within 7 days is sent to the message; different page on a shared host is not; day 8 runs; admin and Verified are not limited; "Check again" is unaffected; the message is 160 characters or less per sentence, American spelling.
+11.8 A paid "ask AI again sooner" option is NOT built now; it waits until real cost per check is known from the provider dashboards.
+
 ## Requirement 4: Tests
 4.1 Unit tests for profile-link detection, including share buttons, tracking parameters, mixed case, www and m. subdomains, and pages with no links.
 4.2 Tests for the Google lookup with the key missing, a match, no match, an error and a timeout (fake the network; no real calls in tests).
@@ -125,5 +142,6 @@ A judge may enter any real company. Every check must give a true answer or an ho
 ## Order of work
 1. Requirement 3 (signals and saving them), with tests.
 2. Requirement 2 (health map), with tests.
-3. Requirement 1 (site look), with tests.
+3. Requirement 2.10 (scan) and Requirement 11 (fair use), with tests.
+4. Requirement 1 (site look), with tests.
 Stop after each step and tell me what changed, so I can run the tests and review before the next step.

@@ -16,6 +16,6 @@ Fix every item in both files, using their rewrites. Must-fix first:
 
 Then the low and polish items: V5-V7, V9-V12, H6-H13 (plain explanations for robots.txt, sitemap, llms.txt, business label, summary, share picture, Bing; no rows that repeat themselves; one word per idea; "N of 12 checks" wording that matches what a reader can count; speak to the owner; phone hint that bubbles can be tapped, tap stays near the map, map fills its box; "business hours" not "opening hours").
 
-Do NOT add the one-time "scan" animation (H, reader's suggestion) yet; the owner decides that.
+Do NOT add the one-time "scan" animation in this round; it is now Requirement 2.10 and comes next, with Requirement 11.
 
 Rules: keep the score and public SEO unchanged; every sentence 160 characters or less, American spelling, nothing promising AI will name a business; no report content added only by JavaScript; reduced motion = no animation. Add tests and record changes in the design table. Do not run any shell commands, including "exit". Stop when done and list the changed files.
