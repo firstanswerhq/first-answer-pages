@@ -157,10 +157,11 @@ export function sitemapSignal({ hasSite, sitemap }) {
   if (sitemap.error || !Number.isInteger(status) || status === 0) return unknown('sitemap', "We couldn't reach your sitemap this time.");
   if ([401, 403, 429].includes(status) || status >= 500) return unknown('sitemap', "Your website didn't let us look for a sitemap this time.");
   if (status >= 200 && status < 300) {
-    // A compressed sitemap (".xml.gz") the site serves is a sitemap; it is not unpacked here, but it is never red.
-    if (isGzipSitemap(sitemap)) return good('sitemap', 'Found', { url: sitemap.url ?? null, gzip: true });
+    // Read as XML first: a ".xml.gz" the fetcher already unpacked is plain XML (review T9).
     const info = parseSitemap(sitemap.text);
     if (info.isXml && info.entries > 0) return good('sitemap', 'Found', { url: sitemap.url ?? null });
+    // A compressed sitemap (".xml.gz") the site serves is a sitemap; it is not unpacked here, but it is never red.
+    if (!info.isXml && isGzipSitemap(sitemap)) return good('sitemap', 'Found', { url: sitemap.url ?? null, gzip: true });
     return missing('sitemap', 'Not found', FIXES.sitemap);
   }
   if (status === 404 || status === 410) return missing('sitemap', 'Not found', FIXES.sitemap);
@@ -187,7 +188,8 @@ function wordsInPageSignal({ input, facts, found }) {
 /** True when the page links to a questions page ("/faq", "FAQs", "Common questions"). */
 function linksToQuestions(links) {
   if (!Array.isArray(links)) return false;
-  return links.some(l => l && /\bfaqs?\b|questions/i.test(`${l.href ?? ''} ${l.text ?? ''}`));
+  // "Questions? Call us" pointing at /contact is not a questions page (review T8).
+  return links.some(l => l && /\bfaqs?\b|(?:common|frequently asked)\s+questions|\/questions\b/i.test(`${l.href ?? ''} ${l.text ?? ''}`));
 }
 
 function textSignal(id, ok, fix, { input, facts }) {
@@ -285,6 +287,36 @@ function websiteHoursByDay(websiteHours) {
   return out;
 }
 
+/** True when the words of `name` (without "and", "the", "LLC" and the like) are written together in the page text. */
+function nameInText(name, text) {
+  const wanted = nameTokens(name).join(' ');
+  return wanted !== '' && ` ${nameTokens(String(text ?? '').slice(0, 200000)).join(' ')} `.includes(` ${wanted} `);
+}
+
+/**
+ * "Name matches Google" (A3, review T2). The website's name is its own business label (schema) when it has one, never
+ * the name typed on the form. Google's name written in the page counts as a match. Without a label, the typed name is
+ * used only when the page shows it, and a clear difference is then gray, not red: red only when the site's own label
+ * differs from Google's.
+ */
+function nameMatchSignal({ input, facts, p }) {
+  if (!facts) return unknown('nameMatch', input.website ? REASONS.unreadable : REASONS.noWebsite);
+  if (nameInText(p.name, facts.text)) return good('nameMatch', 'Matches');
+  const label = typeof facts.jsonLd?.business?.name === 'string' ? facts.jsonLd.business.name.trim() : '';
+  const notFound = "We couldn't find your business name written on your website.";
+  let siteName = label;
+  if (!siteName) {
+    if (!nameInText(input.name, facts.text)) return unknown('nameMatch', notFound);
+    siteName = input.name;
+  }
+  const nm = compareNames(siteName, p.name);
+  if (nm === 'unknown') return unknown('nameMatch', "We couldn't read a business name on both sides.");
+  if (nm === 'match') return good('nameMatch', 'Matches');
+  if (nm === 'close') return partly('nameMatch', 'Close, not the same', FIXES.nameMatch, { website: siteName, google: p.name });
+  if (!label) return unknown('nameMatch', notFound);
+  return missing('nameMatch', "Doesn't match", FIXES.nameMatch, { website: siteName, google: p.name });
+}
+
 function googleSignals({ input, facts, found, places, websiteHours, now }) {
   const ids = ['found', 'open', 'category', 'hours', 'reviewCount', 'rating', 'newestReview', 'phoneMatch', 'addressMatch', 'nameMatch', 'hoursMatch', 'linksToWebsite'];
   const out = {};
@@ -350,13 +382,7 @@ function googleSignals({ input, facts, found, places, websiteHours, now }) {
   else if (addr === 'close') out.addressMatch = partly('addressMatch', 'Close, not the same', FIXES.addressMatch, { website: siteAddress, google: p.address });
   else out.addressMatch = missing('addressMatch', "Doesn't match", FIXES.addressMatch, { website: siteAddress, google: p.address });
 
-  const siteName = facts?.jsonLd?.business?.name || input.name;
-  let nm = compareNames(siteName, p.name);
-  if (nm === 'differ' && wholePhrase(facts?.text, p.name)) nm = 'match';
-  if (nm === 'unknown') out.nameMatch = unknown('nameMatch', "We couldn't read a business name on both sides.");
-  else if (nm === 'match') out.nameMatch = good('nameMatch', 'Matches');
-  else if (nm === 'close') out.nameMatch = partly('nameMatch', 'Close, not the same', FIXES.nameMatch, { website: siteName, google: p.name });
-  else out.nameMatch = missing('nameMatch', "Doesn't match", FIXES.nameMatch, { website: siteName, google: p.name });
+  out.nameMatch = nameMatchSignal({ input, facts, p });
 
   const siteHours = websiteHoursByDay(websiteHours);
   if (Object.keys(siteHours).length === 0) out.hoursMatch = unknown('hoursMatch', 'We found no hours we can read on your website.');
@@ -427,9 +453,14 @@ function linkSignals({ input, facts }) {
     return out;
   }
   const links = detectProfileLinks(facts.links);
-  // On a page built by scripts the links are usually added by the scripts, so "none found" can't be trusted.
-  if (facts.scriptBuilt && ids.every(id => !links[id])) {
-    for (const id of ids) out[id] = unknown(id, REASONS.script);
+  // On a page built by scripts the social links are usually added by the scripts, so "none of the three found" can't
+  // be trusted: the three and the Socials cluster are gray. Google and Yelp are read as usual (review T7).
+  const socialIds = ['facebook', 'instagram', 'tiktok'];
+  if (facts.scriptBuilt && socialIds.every(id => !links[id])) {
+    for (const id of ids) {
+      out[id] = socialIds.includes(id) ? unknown(id, REASONS.script)
+        : links[id] ? good(id, 'Linked from your website', { url: links[id] }) : partly(id, 'Not linked', fixes[id]);
+    }
     out.socials = unknown('socials', REASONS.script);
     return out;
   }
@@ -517,9 +548,12 @@ export function buildSignals(args = {}) {
   let sitemapInfo = null;
   try {
     const ok = args.sitemap && args.sitemap.status >= 200 && args.sitemap.status < 300;
-    // A compressed sitemap is not unpacked: it counts as found, but its pages and dates are not read.
-    if (ok && isGzipSitemap(args.sitemap)) sitemapInfo = { isXml: false, isIndex: false, entries: 0, locs: [], lastmods: [], gzip: true };
-    else sitemapInfo = ok ? parseSitemap(args.sitemap.text) : null;
+    // Read as XML first (review T9). A compressed sitemap that is not XML is not unpacked: it counts as found, but
+    // its pages and dates are not read.
+    sitemapInfo = ok ? parseSitemap(args.sitemap.text) : null;
+    if (sitemapInfo && !sitemapInfo.isXml && isGzipSitemap(args.sitemap)) {
+      sitemapInfo = { isXml: false, isIndex: false, entries: 0, locs: [], lastmods: [], gzip: true };
+    }
   } catch {
     sitemapInfo = null;
   }
@@ -539,6 +573,30 @@ export function buildSignals(args = {}) {
   part('links', () => linkSignals({ input, facts: args.facts ?? null }), ['google', 'yelp', 'facebook', 'instagram', 'tiktok', 'socials']);
   part('listing', () => listingSignals({ found: args.found, listingInfo: args.listingInfo, input }), ['listed', 'verified', 'matchesWebsite', 'linksToWebsite']);
   void ctx;
+  return out;
+}
+
+// ---- what may be saved ---------------------------------------------------------------------------------------------
+
+/** The fields of a Google or Bing signal that hold values read from the lookup (Places content). */
+const LOOKUP_VALUE_KEYS = ['google', 'bing', 'rating', 'count', 'newest'];
+
+/**
+ * A copy of the signals without any value read from Google or Bing (review T3): the other side of a mismatch, the star
+ * rating, the review count and the newest review date. The status, label, reason, fix and the website's own values
+ * stay. This is what is saved with a Grade; the lookups themselves are only kept in memory, for at most 30 days.
+ */
+export function withoutGoogleValues(signals) {
+  if (!signals || typeof signals !== 'object') return signals ?? null;
+  const out = structuredClone(signals);
+  for (const group of ['google', 'bing']) {
+    const entries = out[group];
+    if (!entries || typeof entries !== 'object') continue;
+    for (const s of Object.values(entries)) {
+      if (!s || typeof s !== 'object') continue;
+      for (const key of LOOKUP_VALUE_KEYS) delete s[key];
+    }
+  }
   return out;
 }
 

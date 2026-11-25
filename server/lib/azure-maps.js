@@ -5,7 +5,9 @@
  * Same rules as places.js: the key is never put in a result, a log line or an error; every outcome is an object with a
  * `status` ('found', 'not_found', 'unsure' or 'error') and, when not found, a safe one-line `reason`; it never throws;
  * `fetch` is injectable so tests make no real call. Azure Maps data is not Bing Places itself, so a miss here is never
- * shown red. Before go-live, confirm `search/poi/json?api-version=1.0` still answers with one real call.
+ * shown red. The key is a query parameter (the only way Search v1.0 documents it), so the request address is secret:
+ * it is never logged, stored, thrown or shown. Search v1 is "superseded by 2026-01-01" with no retirement date, and the
+ * 2026-01-01 API has no POI search. Before go-live, confirm `search/poi/json?api-version=1.0` answers with one real call.
  */
 
 import { LOOKUP_TIMEOUT_MS } from './health-constants.js';
@@ -42,13 +44,16 @@ export function createBingLookup({ apiKey, fetch: fetchImpl = globalThis.fetch, 
     async lookup({ name, city, state, website } = {}) {
       const controller = new AbortController();
       try {
-        // The key goes in a header, never in the address, so no log of the address can show it. The form is US-only.
+        // Microsoft documents `subscription-key` for Search POI v1.0 only as a query parameter (review T4), so the key
+        // is in the address. That address is held only in this function: it is never logged, never put in a result or
+        // an error, and never shown. Every failure below is replaced by one fixed sentence. The form is US-only.
         const query = new URLSearchParams({
           'api-version': '1.0', query: [name, city, state].filter(Boolean).join(' '), limit: '5', countrySet: 'US',
+          'subscription-key': key,
         });
         // One timer for the whole lookup (the request and reading its body).
         const work = async () => {
-          const res = await fetchImpl(`${ENDPOINT}?${query}`, { headers: { 'subscription-key': key }, signal: controller.signal });
+          const res = await fetchImpl(`${ENDPOINT}?${query}`, { signal: controller.signal });
           if (!res || res.ok !== true) return null;
           return res.json();
         };

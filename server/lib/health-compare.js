@@ -5,7 +5,7 @@
  * (high-tech-look Requirement 8).
  */
 
-import { registeredDomain } from './name-match.js';
+import { sameSite } from './name-match.js';
 
 // ---- phone -----------------------------------------------------------------------------------------------------
 
@@ -241,21 +241,23 @@ export function pickCandidate(candidates, wanted) {
   const list = Array.isArray(candidates) ? candidates.filter(c => c && typeof c === 'object') : [];
   if (list.length === 0) return { status: 'not_found', reason: 'No result came back for that name and city.' };
   // The website's domain is the strongest sign, so it is tried first (a unique match in the typed city is found).
-  const wantedDomain = registeredDomain(wanted.website);
-  if (wantedDomain) {
-    const sameSite = list.filter(c => registeredDomain(c.website) === wantedDomain);
-    if (sameSite.length === 1) {
-      const only = sameSite[0];
-      if (!norm(wanted.city) || inCity(only, wanted.city)) return { status: 'found', place: only };
-      return { status: 'unsure', reason: "A business with your website showed up in another place, so we didn't count it." };
-    }
+  // A shared host (a Facebook page, a wixsite.com site) is never proof (review T1): sameSite is false for those.
+  const bySite = list.filter(c => sameSite(wanted.website, c.website));
+  let siteElsewhere = false;
+  if (bySite.length === 1) {
+    const only = bySite[0];
+    if (!norm(wanted.city) || inCity(only, wanted.city)) return { status: 'found', place: only };
+    // In another city: the name rule below may still find the business in the typed city (review T5).
+    siteElsewhere = true;
   }
   const similar = list.filter(c => ['match', 'close'].includes(compareNames(c.name, wanted.name)));
   const here = similar.filter(c => inCity(c, wanted.city));
   if (here.length === 1) return { status: 'found', place: here[0] };
+  if (here.length === 0 && siteElsewhere) {
+    return { status: 'unsure', reason: "A business with your website showed up in another place, so we didn't count it." };
+  }
   if (here.length > 1) {
-    const domain = registeredDomain(wanted.website);
-    const byDomain = domain ? here.filter(c => registeredDomain(c.website) === domain) : [];
+    const byDomain = here.filter(c => sameSite(wanted.website, c.website));
     if (byDomain.length === 1) return { status: 'found', place: byDomain[0] };
     const exact = here.filter(c => compareNames(c.name, wanted.name) === 'match');
     if (exact.length === 1) return { status: 'found', place: exact[0] };

@@ -332,7 +332,10 @@ test('S5 and S14: a Grade from before the lookups existed, or one saved with raw
   const raw = { ...structuredClone(base), id: 'sgraw00000000000000001', profiles: GOOGLE_FOUND };
   delete raw.profilesAt;
   await fs.writeFile(file, JSON.stringify([...list, old, raw]));
-  const restarted = await startEnv({ site: fakeSite(defaultRoutes()), dir: env.dir });
+  // The restarted site has both lookups on (T6: with a lookup off, the reason says it is off instead).
+  const restarted = await startEnv({
+    site: fakeSite(defaultRoutes()), dir: env.dir, places: fakeLookup('places', GOOGLE_FOUND), bing: fakeLookup('bing', BING_FOUND),
+  });
   const oldAfter = await recheckDone(restarted, old.id);
   assert.equal(oldAfter.signals.google.found.reason, 'This report was made before this check existed. Run a new check to see it.');
   assert.equal(oldAfter.signals.bing.found.reason, 'This report was made before this check existed. Run a new check to see it.');
@@ -344,6 +347,66 @@ test('S5 and S14: a Grade from before the lookups existed, or one saved with raw
   assert.equal(JSON.stringify(saved).includes('Zephyr Plumbing LLC'), false);
   const rawRecheck = await recheckDone(restarted, raw.id);
   assert.equal(rawRecheck.signals.google.found.reason, 'Run a new check to look on Google again.');
+});
+
+test('T3: no value read from Google or Bing reaches grades.json, also on mismatches and after a recheck', async () => {
+  const google = {
+    status: 'found',
+    place: {
+      ...GOOGLE_FOUND.place, phone: '(615) 555-0199', address: '14 Main St, Nashville, TN 37203, USA',
+      name: 'Zephyr Plumbing and Heating Co', rating: 3.9, ratingCount: 7, newestReviewAt: '2026-01-02T03:04:05.000Z',
+      hoursByDay: { monday: { opens: '09:00', closes: '17:00' } },
+    },
+  };
+  const bingMismatch = { status: 'found', place: { name: 'Zephyr Plumbing', phone: '+1 615-555-0177', address: '77 Oak Ave, Nashville, TN 37203', website: '' } };
+  const env = await startEnv({ site: fakeSite(defaultRoutes()), places: fakeLookup('places', google), bing: fakeLookup('bing', bingMismatch) });
+  const g = await check(env);
+  assert.equal(g.signals.google.phoneMatch.status, 'missing', 'the mismatch is still shown');
+  assert.equal(g.signals.google.rating.status, 'partly');
+  const raws = ['555-0199', '14 Main St', 'Zephyr Plumbing and Heating', '2026-01-02T03:04:05', '555-0177', '77 Oak Ave'];
+  const assertClean = async when => {
+    const file = await fs.readFile(path.join(env.dir, 'grades.json'), 'utf8');
+    for (const raw of raws) assert.equal(file.includes(raw), false, `${when}: ${raw}`);
+    const saved = JSON.parse(file).find(x => x.id === g.id);
+    for (const group of ['google', 'bing']) {
+      for (const [id, entry] of Object.entries(saved.signals[group])) {
+        for (const key of ['google', 'bing', 'rating', 'count', 'newest']) assert.equal(key in entry, false, `${when}: ${group}.${id}.${key}`);
+      }
+    }
+  };
+  await assertClean('after the check');
+  await recheckDone(env, g.id);
+  await assertClean('after a recheck');
+});
+
+test('T3: signals saved with Google values before this fix are cleaned the first time a check runs', async () => {
+  const env = await startEnv({ site: fakeSite(defaultRoutes()) });
+  const g = await check(env);
+  const file = path.join(env.dir, 'grades.json');
+  const list = JSON.parse(await fs.readFile(file, 'utf8'));
+  // A copy saved by the earlier build, with Google values in its signals; it is not rechecked itself.
+  const dirty = { ...structuredClone(list.find(x => x.id === g.id)), id: 'sgdirty000000000000001' };
+  dirty.signals.google.phoneMatch = { id: 'phoneMatch', status: 'missing', label: "Doesn't match", fix: 'x', website: '(615) 555-0142', google: '(615) 555-0199' };
+  dirty.signals.google.rating = { id: 'rating', status: 'good', label: '4.3 or higher', rating: 4.6 };
+  await fs.writeFile(file, JSON.stringify([...list, dirty]));
+  const restarted = await startEnv({ site: fakeSite(defaultRoutes()), dir: env.dir });
+  // The first recheck after the start cleans every Grade.
+  await recheckDone(restarted, g.id);
+  const saved = JSON.parse(await fs.readFile(file, 'utf8')).find(x => x.id === dirty.id);
+  assert.equal('google' in saved.signals.google.phoneMatch, false);
+  assert.equal(saved.signals.google.phoneMatch.website, '(615) 555-0142');
+  assert.equal('rating' in saved.signals.google.rating, false);
+});
+
+test('T6: after a restart, a lookup with no key says it is off, not "run a new check"', async () => {
+  const first = await startEnv({ site: fakeSite(defaultRoutes()), places: fakeLookup('places', GOOGLE_FOUND), bing: fakeLookup('bing', BING_FOUND) });
+  const g = await check(first);
+  // Restarted with Google still on and Bing switched off.
+  const restarted = await startEnv({ site: fakeSite(defaultRoutes()), dir: first.dir, places: fakeLookup('places', GOOGLE_FOUND) });
+  const after = await recheckDone(restarted, g.id);
+  assert.equal(after.signals.google.found.reason, 'Run a new check to look on Google again.');
+  assert.equal(after.signals.bing.found.reason, "Bing lookups aren't turned on here.");
+  assert.equal(after.signals.bing.details.reason, "Bing lookups aren't turned on here.");
 });
 
 test('S6: each lookup\'s outcome is counted for the day (ok or error), with no key or body', async () => {

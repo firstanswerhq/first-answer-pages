@@ -10,6 +10,7 @@ import {
   phoneDigits, comparePhone, phonesInText, compareNames, addressParts, compareAddresses, addressInText,
   googleHoursByDay, compareHours, pickCandidate,
 } from '../server/lib/health-compare.js';
+import { sameSite, SHARED_DOMAINS, SKIP_DOMAINS } from '../server/lib/name-match.js';
 
 test('phone: digits only, a leading 1 is dropped, anything that is not 10 digits is unknown', () => {
   assert.equal(phoneDigits('(615) 555-0142'), '6155550142');
@@ -127,6 +128,48 @@ test('S1: the website domain is tried first, so a name Google writes differently
   for (const list of [[cand('A', '1 A St')], [cand('B', '', { website: 'https://b.example' })]]) {
     assert.notEqual(pickCandidate(list, joes).status, 'not_found');
   }
+});
+
+test('T1: a shared host (a Facebook page, a wixsite.com site and the like) is never proof that a result is the business', () => {
+  const joe = { name: 'Joe Plumbing', city: 'Nashville', website: 'https://www.facebook.com/joeplumbing' };
+  const bob = cand('Bob Smith Roofing', '4 Elm St, Nashville, TN', { website: 'https://www.facebook.com/bobsmithroofing' });
+  const picked = pickCandidate([bob], joe);
+  assert.notEqual(picked.status, 'found', 'another business on Facebook is not picked');
+  assert.equal(picked.status, 'unsure');
+  const wix = pickCandidate([cand('Bob Smith Roofing', '4 Elm St, Nashville, TN', { website: 'https://bobroofs.wixsite.com/home' })],
+    { ...joe, website: 'https://joeplumbing.wixsite.com/site' });
+  assert.equal(wix.status, 'unsure');
+  // With the right name, a shared host is fine: the name rule picks it, not the domain.
+  assert.equal(pickCandidate([cand('Joe Plumbing', '1 Oak St, Nashville, TN', { website: 'https://facebook.com/joeplumbing' })], joe).status, 'found');
+  // Two with the same name: a shared host does not break the tie.
+  const two = [
+    cand('Joe Plumbing', '1 Oak St, Nashville, TN', { website: 'https://facebook.com/joeplumbing' }),
+    cand('Joe Plumbing', '2 Pine St, Nashville, TN', { website: 'https://facebook.com/otherjoe' }),
+  ];
+  assert.equal(pickCandidate(two, joe).status, 'unsure');
+  for (const host of ['business.site', 'square.site', 'linktr.ee', 'carrd.co', 'my.canva.site', 'sites.google.com', 'wixsite.com', 'facebook.com']) {
+    assert.ok(SHARED_DOMAINS.has(host), host);
+    assert.equal(sameSite(`https://a.${host}/x`, `https://b.${host}/y`), false, host);
+    assert.equal(sameSite(`https://${host}/a`, `https://${host}/a`), false, `${host}: even the same page`);
+  }
+  for (const host of SKIP_DOMAINS) assert.ok(SHARED_DOMAINS.has(host), `${host} is shared too`);
+  assert.equal(sameSite('https://www.zephyr.example/', 'http://zephyr.example/contact'), true);
+  assert.equal(sameSite('', 'https://zephyr.example/'), false);
+});
+
+test('T5: the website\'s domain in another city does not hide a clear name match in the typed city', () => {
+  const wanted = { name: 'Joes Plumbing', city: 'Franklin', website: 'https://joes.example/' };
+  const list = [
+    cand('Joes Plumbing', '9 Main St, Nashville, TN', { website: 'https://joes.example/' }),
+    cand('Joes Plumbing', '3 Elm St, Franklin, TN'),
+  ];
+  const picked = pickCandidate(list, wanted);
+  assert.equal(picked.status, 'found');
+  assert.ok(picked.place.address.includes('Franklin'));
+  // Nothing in the typed city at all: unsure, with the reason about the website.
+  const away = pickCandidate([list[0]], wanted);
+  assert.equal(away.status, 'unsure');
+  assert.equal(away.reason, "A business with your website showed up in another place, so we didn't count it.");
 });
 
 test('S12: a suite number is not the street number, and a direction word alone is close, not a mismatch', () => {

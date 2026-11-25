@@ -16,7 +16,7 @@ import { normalizeForMatch } from './seance.js';
 import { readPageFacts, STREET_PATTERN } from './page-facts.js';
 import { runWebsiteChecks, CHECKS } from './grade-checks.js';
 import { scoreGrade } from './grade-score.js';
-import { analyzeAnswer, listedNames, looksLikeSameName, registeredDomain } from './name-match.js';
+import { analyzeAnswer, listedNames, looksLikeSameName, registeredDomain, sameSite } from './name-match.js';
 import { DROP_BELOW, NAMED_ABOVE } from './name-check.js';
 import {
   normalizePhone, normalizeState, tidyCity, mapCategory, validateFields, US_STATE_CODES, STATE_ERROR,
@@ -25,7 +25,8 @@ import {
 import { usAddressStyle } from './address-style.js';
 import { parseHoursRange, parseTwentyFourHourRange } from './schema.js';
 import {
-  buildSignals, OLD_REPORT_REASON, STALE_GOOGLE_REASON, STALE_BING_REASON, LOOKUP_RESERVE_REASON, LOOKUP_LIMIT_REASON,
+  buildSignals, withoutGoogleValues,
+  OLD_REPORT_REASON, STALE_GOOGLE_REASON, STALE_BING_REASON, LOOKUP_RESERVE_REASON, LOOKUP_LIMIT_REASON,
 } from './health-signals.js';
 import { compareNames } from './health-compare.js';
 import { sitemapAddress } from './sitemap-read.js';
@@ -1456,11 +1457,14 @@ export function createGrader({
     const kept = recentLookups.get(g.id);
     if (kept && clock.now() - kept.at <= LOOKUP_KEEP_MS) return kept.looked;
     if (kept) recentLookups.delete(g.id);
-    // A Grade from before these lookups existed has no lookup time; one made since then has one.
-    if (!g.profilesAt && !g.profiles) {
-      return { places: { status: 'off', reason: OLD_REPORT_REASON }, bing: { status: 'off', reason: OLD_REPORT_REASON } };
-    }
-    return { places: { status: 'off', reason: STALE_GOOGLE_REASON }, bing: { status: 'off', reason: STALE_BING_REASON } };
+    // A lookup that is off here (no key) would not look on a new check either, so it says it is off (review T6).
+    // Otherwise: a Grade from before these lookups existed has no lookup time; one made since then has one.
+    const old = !g.profilesAt && !g.profiles;
+    const offOr = (client, reason) => (client ? { status: 'off', reason } : { status: 'off' });
+    return {
+      places: offOr(placesLookup, old ? OLD_REPORT_REASON : STALE_GOOGLE_REASON),
+      bing: offOr(bingLookup, old ? OLD_REPORT_REASON : STALE_BING_REASON),
+    };
   }
 
   /**
@@ -1471,13 +1475,19 @@ export function createGrader({
   function purgeStoredProfiles() {
     if (!profilesPurged) {
       profilesPurged = (async () => {
+        // Also the Google and Bing values that signals saved before review T3 still hold.
+        const hasGoogleValues = s => Boolean(s) && JSON.stringify(withoutGoogleValues(s)) !== JSON.stringify(s);
+        const stale = g => g && typeof g === 'object' && ('profiles' in g || hasGoogleValues(g.signals));
         const list = await grades().read();
-        if (!Array.isArray(list) || !list.some(g => g && typeof g === 'object' && 'profiles' in g)) return;
+        if (!Array.isArray(list) || !list.some(stale)) return;
         await grades().update(all => {
           for (const g of all) {
-            if (!g || typeof g !== 'object' || !('profiles' in g)) continue;
-            if (!g.profilesAt) g.profilesAt = g.finishedAt ?? null;
-            delete g.profiles;
+            if (!stale(g)) continue;
+            if ('profiles' in g) {
+              if (!g.profilesAt) g.profilesAt = g.finishedAt ?? null;
+              delete g.profiles;
+            }
+            if (g.signals) g.signals = withoutGoogleValues(g.signals);
           }
         });
       })().catch(() => { log('profiles-purge-failed'); profilesPurged = null; });
@@ -1496,8 +1506,8 @@ export function createGrader({
         && (!state || !l.state || String(l.state).toUpperCase() === state)
         && ['match', 'close'].includes(compareNames(l.name, input.name)));
       if (matches.length > 1) {
-        const domain = registeredDomain(input.website);
-        const byDomain = domain ? matches.filter(l => registeredDomain(l.website) === domain) : [];
+        // A shared host (a Facebook page, a wixsite.com site) never picks the listing (review T1).
+        const byDomain = matches.filter(l => sameSite(input.website, l.website));
         if (byDomain.length === 1) matches = byDomain;
         else {
           const exact = matches.filter(l => compareNames(l.name, input.name) === 'match');
@@ -1521,10 +1531,13 @@ export function createGrader({
     return info;
   }
 
-  /** The health map's saved signals for one Grade, or null if they could not be worked out. Never throws. */
+  /**
+   * The health map's saved signals for one Grade, or null if they could not be worked out. Never throws. No value read
+   * from Google or Bing is in them (review T3); those stay only in the lookups kept in memory for at most 30 days.
+   */
   function signalsFor(input, web, looked) {
     try {
-      return buildSignals({
+      return withoutGoogleValues(buildSignals({
         input,
         facts: web?.facts ?? null,
         found: web?.found ?? {},
@@ -1535,7 +1548,7 @@ export function createGrader({
         listingInfo: listingInfoFor(input),
         websiteHours: hoursToObject(web?.found?.hours),
         now: clock.now(),
-      });
+      }));
     } catch {
       return null;
     }

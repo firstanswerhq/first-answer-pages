@@ -13,7 +13,7 @@ import fc from 'fast-check';
 import { readPageFacts } from '../server/lib/page-facts.js';
 import {
   buildSignals, sitemapSignal, signalRows, SIGNAL_ROWS, FIXES, textHasService, serviceWords,
-  LABELS, OLD_REPORT_REASON, STALE_GOOGLE_REASON, STALE_BING_REASON, LOOKUP_RESERVE_REASON, LOOKUP_LIMIT_REASON,
+  LABELS, withoutGoogleValues, OLD_REPORT_REASON, STALE_GOOGLE_REASON, STALE_BING_REASON, LOOKUP_RESERVE_REASON, LOOKUP_LIMIT_REASON,
 } from '../server/lib/health-signals.js';
 import { isGzipSitemap } from '../server/lib/sitemap-read.js';
 import { REVIEW_COUNT_GREEN, RATING_GREEN, RATING_AMBER, NEWEST_REVIEW_DAYS } from '../server/lib/health-constants.js';
@@ -517,10 +517,13 @@ test('S3: a script-built page with no profile links found is Not checked for eve
   const scripts = readPageFacts('<title>Zephyr</title><div id="root"></div><script src="app.js"></script>');
   assert.equal(scripts.scriptBuilt, true);
   const l = build({ facts: scripts }).links;
-  for (const id of ['google', 'yelp', 'facebook', 'instagram', 'tiktok', 'socials']) {
+  // T7: only the three socials and the Socials cluster are gray; Google and Yelp are read as usual.
+  for (const id of ['facebook', 'instagram', 'tiktok', 'socials']) {
     assert.equal(l[id].status, 'not_checked', id);
     assert.equal(l[id].reason, "Your page loads its words in a way this check can't read yet.", id);
   }
+  assert.equal(l.google.status, 'partly');
+  assert.equal(l.yelp.status, 'partly');
   // A script-built page that still shows a profile link is read as usual.
   const withLink = { ...scripts, links: [{ href: 'https://www.facebook.com/ZephyrPlumbing', text: 'Facebook' }] };
   const read = build({ facts: withLink }).links;
@@ -611,6 +614,74 @@ test('S16: a sitemap index is not counted as pages; with no service link it is N
   assert.equal(s.reason, "Your sitemap lists other sitemaps, so we couldn't count your pages.");
   const twoLinks = readPageFacts('<h1>Zephyr</h1><p>' + 'We are plumbers. '.repeat(20) + '</p><a href="/plumbing-repair">a</a><a href="/drain-plumbing">b</a>');
   assert.equal(build({ facts: twoLinks, sitemap: { status: 200, text: index } }).website.pagePerService.status, 'good');
+});
+
+// ---- second review fixes T2, T3, T7, T8, T9 ------------------------------------------------------------------------------
+
+test('T2: "Name matches Google" never compares the typed name with Google when the website does not show it', () => {
+  const pad = 'Call (615) 555-0142. ' + 'We fix pipes in Nashville. '.repeat(15);
+  const typed = { ...INPUT, name: 'Joes Plumbing' };
+  const josephs = found({ name: 'Josephs Plumbing Co' });
+  // Neither name on the page, no business label: gray, never red.
+  const neither = build({ input: typed, places: josephs, facts: readPageFacts(`<h1>Welcome</h1><p>${pad}</p>`) }).google.nameMatch;
+  assert.equal(neither.status, 'not_checked');
+  assert.equal(neither.reason, "We couldn't find your business name written on your website.");
+  assert.equal('website' in neither, false, 'the typed name is never shown as the website\'s name');
+  // Google's name written in the page: a match, whatever was typed.
+  assert.equal(build({ input: typed, places: josephs, facts: readPageFacts(`<h1>Josephs Plumbing</h1><p>${pad}</p>`) }).google.nameMatch.status, 'good');
+  // The typed name on the page, Google's clearly different, no business label: still gray, not red.
+  assert.equal(build({ input: typed, places: josephs, facts: readPageFacts(`<h1>Joes Plumbing</h1><p>${pad}</p>`) }).google.nameMatch.status, 'not_checked');
+  // The site's own business label differs clearly from Google's: red, showing the label.
+  const plain = readPageFacts(`<h1>Welcome</h1><p>${pad}</p>`);
+  const facts = { ...plain, jsonLd: { ...(plain.jsonLd ?? {}), business: { name: 'Ridgeline Roofing' } } };
+  const red = build({ input: typed, places: josephs, facts }).google.nameMatch;
+  assert.equal(red.status, 'missing');
+  assert.equal(red.website, 'Ridgeline Roofing');
+  // A label that is close to Google's is amber.
+  const closeFacts = { ...plain, jsonLd: { ...(plain.jsonLd ?? {}), business: { name: 'Josephs Plumbing Company and Sons' } } };
+  assert.notEqual(build({ input: typed, places: josephs, facts: closeFacts }).google.nameMatch.status, 'missing');
+  // No website read at all: gray.
+  assert.equal(build({ input: typed, places: josephs, facts: null }).google.nameMatch.status, 'not_checked');
+});
+
+test('T3: withoutGoogleValues drops every value read from Google or Bing and keeps the rest', () => {
+  const s = build({
+    places: found({ phone: '(615) 555-0199', address: '14 Main St, Nashville, TN 37203, USA', name: 'Zephyr Plumbing and Heating', rating: 4.1, ratingCount: 4, newestReviewAt: new Date(NOW - 200 * DAY).toISOString() }),
+  });
+  assert.equal(s.google.phoneMatch.google, '(615) 555-0199', 'the full signals have it (memory only)');
+  const saved = withoutGoogleValues(s);
+  const text = JSON.stringify(saved);
+  for (const raw of ['555-0199', '14 Main St', 'Zephyr Plumbing and Heating', '4.1']) {
+    assert.equal(text.includes(raw), false, raw);
+  }
+  for (const group of ['google', 'bing']) {
+    for (const [id, entry] of Object.entries(saved[group])) {
+      for (const key of ['google', 'bing', 'rating', 'count', 'newest']) assert.equal(key in entry, false, `${group}.${id}.${key}`);
+    }
+  }
+  assert.equal(saved.google.phoneMatch.status, 'missing');
+  assert.equal(saved.google.phoneMatch.website, '(615) 555-0142', 'the website\'s own value stays');
+  assert.equal(saved.google.rating.label, LABELS.ratingAmber);
+  assert.deepEqual(saved.website, s.website);
+  assert.deepEqual(saved.links, s.links);
+  assert.equal(s.google.phoneMatch.google, '(615) 555-0199', 'the input is not changed');
+  assert.equal(withoutGoogleValues(null), null);
+});
+
+test('T8: link text like "Questions? Call us" pointing at a contact page is not a questions page', () => {
+  const pad = '<p>' + 'We fix pipes in Nashville. '.repeat(20) + '</p>';
+  assert.equal(build({ facts: readPageFacts(`${pad}<a href="/contact">Questions? Call us</a>`) }).website.answersQuestions.status, 'missing');
+  for (const link of ['<a href="/questions">Help</a>', '<a href="/help">Frequently asked questions</a>']) {
+    assert.equal(build({ facts: readPageFacts(pad + link) }).website.answersQuestions.status, 'good', link);
+  }
+});
+
+test('T9: a .xml.gz address whose reply is already plain XML is read like any sitemap', () => {
+  const sitemap = { status: 200, text: SITEMAP_XML('2026-10-01'), contentType: 'application/xml', url: 'https://zephyr.example/sitemap.xml.gz' };
+  const s = sitemapSignal({ hasSite: true, sitemap });
+  assert.equal(s.status, 'good');
+  assert.equal('gzip' in s, false);
+  assert.equal(build({ sitemap }).website.recentlyUpdated.status, 'good');
 });
 
 test('a Grade saved before these signals existed reads "Not checked" with a reason on every row, never red', () => {

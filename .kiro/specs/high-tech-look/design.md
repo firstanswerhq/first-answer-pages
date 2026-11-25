@@ -83,7 +83,7 @@ B5 (profile links to the website) is the same fact as F2 and is shown once, unde
 Comparisons are tolerant (A1 digits only without a leading 1; A2 street number, street name and ZIP with St/Street and Ave/Avenue; A3 ignores case, punctuation, LLC and Inc). A mismatch is red only when both values are clearly readable; a near match is amber (see the decisions).
 29. `Phone matches Google` (A1, KEY): green "Matches" / red "Doesn't match" (shows both numbers) / gray "Not checked" (either side missing)
 30. `Address matches Google` (A2, KEY): green "Matches" / amber "Close, not the same" / red "Doesn't match" / gray "Not checked"
-31. `Name matches Google` (A3, KEY): green "Matches" / amber "Close, not the same" / red "Doesn't match" / gray "Not checked"
+31. `Name matches Google` (A3, KEY): green "Matches" (Google's name is written on the website) / amber "Close, not the same" / red "Doesn't match" only when the website's own business label differs clearly from Google's / gray "Not checked" (the website does not show a name to compare; the typed name is never compared on its own, T2)
 32. `Hours match Google` (A4, KEY): green "Match" / amber "Some days differ" / red "Don't match" / gray "Not checked" (either side not readable)
 33. `Your listing matches your website` (A5, ADD): green "Matches" / amber "Differs" / gray "Not checked" (no listing yet)
 34. `Found on Bing` (G2, KEY, `AZURE_MAPS_KEY`): green "Found on Bing" / amber "Not found in Bing map data" (only when the search returned no results) / gray "Not checked". Never red (S2): Azure Maps data is not Bing Places itself.
@@ -146,7 +146,7 @@ Step 1 covers Requirements 3, 6 and 7, with the rules of Requirements 5 and 8. T
 
 ## What is saved with a Grade
 
-Changed by the review (S5): the lookup results are no longer saved. `grade.profilesAt` is when the lookups were made, and `grade.signals` is the object `buildSignals` made: `website`, `google`, `bing`, `links` and `listing`, each signal `{ id, status, label, reason?, fix?, ... }`. `status` is `good`, `partly`, `missing` or `not_checked`. The lookup results stay in the grader's memory only, for at most 30 days (`LOOKUP_KEEP_MS`) and at most 2,000 Grades. A recheck reads the website again and makes no new paid lookup. It compares with the kept lookups when they are 30 days old or less. Otherwise (older, or after a restart) every Google and Bing signal is gray with "Run a new check to look on Google again." or "... on Bing again.". Grades saved by the first build of this step had `grade.profiles`; it is removed from every Grade the first time a check or recheck runs after a start, and `profilesAt` is set to the Grade's `finishedAt`. A Grade saved before this step has no signals; `signalRows` then gives every row "Not checked" with the reason "This report was made before this check existed. Run a new check to see it."
+Changed by the reviews (S5, T3): the lookup results are no longer saved, and the saved signals hold no value read from Google or Bing (`withoutGoogleValues`). `grade.profilesAt` is when the lookups were made, and `grade.signals` is the object `buildSignals` made: `website`, `google`, `bing`, `links` and `listing`, each signal `{ id, status, label, reason?, fix?, ... }`. `status` is `good`, `partly`, `missing` or `not_checked`. The lookup results stay in the grader's memory only, for at most 30 days (`LOOKUP_KEEP_MS`) and at most 2,000 Grades. A recheck reads the website again and makes no new paid lookup. It compares with the kept lookups when they are 30 days old or less. Otherwise (older, or after a restart) every Google and Bing signal is gray with "Run a new check to look on Google again." or "... on Bing again.". Grades saved by the first build of this step had `grade.profiles`; it is removed from every Grade the first time a check or recheck runs after a start, and `profilesAt` is set to the Grade's `finishedAt`. A Grade saved before this step has no signals; `signalRows` then gives every row "Not checked" with the reason "This report was made before this check existed. Run a new check to see it."
 
 ## The rules that were built
 
@@ -214,9 +214,33 @@ None of these changes the score or any public page. Every fix sentence is still 
 ## Before go-live (S6)
 
 - Make one real `places:searchText` call with the field mask above and confirm a 200. Asking for reviews puts every call on the Enterprise + Atmosphere price.
-- Make one real Azure Maps `search/poi/json?api-version=1.0` call with the key in the `subscription-key` header and confirm it still answers. Microsoft has been retiring Search v1. If it does not answer, move to the current API version or drop G2 and A6.
+- Make one real Azure Maps `search/poi/json?api-version=1.0` call with the key as the `subscription-key` query parameter (T4) and confirm it answers. Search v1 is "superseded by 2026-01-01" with no retirement date, and the 2026-01-01 API has no POI search. If v1 stops answering, drop G2 and A6.
 - Watch the "Lookups today" line on the admin page for the first days.
 
-## Open point for the owner
+## Open point for the owner (closed by T3)
 
-The saved signals still carry a few values read from Google for the rows that show them. On a mismatch, those are the phone, address and name side by side, plus the star rating, the review count and the newest review date. Existing tests use them, and Steps 2 and 3 may show them. If the Google terms are read strictly, these values should be dropped from the saved signals as well. That is a small change, and it is not made here because the review did not ask for it.
+The saved signals used to carry values read from Google (the other side of a mismatch, the star rating, the review count and the newest review date). Since T3 they are dropped before saving; see below.
+
+## Second review fixes T1 to T9 (review-2026-11-25-step1-pass2.md)
+
+None of these changes the score or any public page. Every new sentence is 160 characters or less.
+
+| Item | What changed | Where | Tests |
+|---|---|---|---|
+| T1 | `SKIP_DOMAINS` is exported from `name-match.js`, unchanged, because the AI answer reading uses it and the score must not move. A second set, `SHARED_DOMAINS`, adds `business.site`, `square.site`, `linktr.ee`, `carrd.co`, `canva.site` and `my.canva.site`, `sites.google.com`, `fb.com`, `fb.me`, `wix.com`, `editorx.io`, `webflow.io`, `squareup.com`, `godaddy.com` and `site123.me`. It is used only by the new `sameSite(a, b)`, which is false when the domain is a shared host. `pickCandidate`, in the domain-first step and the tie-break, and `listingInfoFor` both use `sameSite`, so a shared host is never proof. | `name-match.js`, `health-compare.js`, `grader.js` | `health-compare` (a Facebook website and a wixsite website pick nothing; the right name on a shared host is still found by the name rule; a tie is not broken by a shared host; every listed host) |
+| T2 | "Name matches Google" uses the website's own business label (schema). Google's name written in the page counts as a match. With no label, the typed name is used only when the page shows it. Then a close name is amber and a clear difference is gray "We couldn't find your business name written on your website.". Red only when the label differs clearly from Google's. The typed name is never shown as the website's name unless the page shows it. | `health-signals.js` (`nameMatchSignal`) | `health-signals` |
+| T3 | `withoutGoogleValues(signals)` drops `google`, `bing`, `rating`, `count` and `newest` from every Google and Bing signal. The status, label, reason, fix and the website's own value stay. `signalsFor` saves only that, on a check and on a recheck. The full values exist only while the signals are built from the lookups kept in memory (30 days at most). The purge that runs once per start also cleans signals saved before this fix. | `health-signals.js`, `grader.js` | `health-signals`, `grade-signals-flow` (mismatch fixtures: no Google or Bing value in `grades.json` after the check or after a recheck; old dirty signals are cleaned) |
+| T4 | The Azure key is back in the query string (`subscription-key`), the only way Search POI v1.0 documents it. That address stays inside the lookup function. It is never logged, put in a result or error, stored or shown, and every failure becomes one fixed sentence. Search v1 is "superseded by 2026-01-01" with no retirement date, and the 2026-01-01 API has no POI search. | `azure-maps.js` | `places-lookup` (the key is in the query and not in a header; failures whose message or body hold the address give only the fixed sentence; the module has no logging) |
+| T5 | When the one result with the website's domain is in another city, the name rule still runs. The "another place" reason is given only when the name rule finds nothing in the typed city either. | `health-compare.js` | `health-compare` |
+| T6 | After a restart, a recheck of a lookup that is off (no key) says it is off ("... lookups aren't turned on here."), not "Run a new check ...". The same applies to an old report. | `grader.js` | `grade-signals-flow` |
+| T7 | On a script-built page, only the three socials and the Socials cluster are gray when none of the three is found. Google and Yelp are read as usual. | `health-signals.js` | `health-signals` (S3 test updated) |
+| T8 | A questions link must say FAQ, "common questions" or "frequently asked questions", or point at `/questions`. "Questions? Call us" on `/contact` does not count. | `health-signals.js` | `health-signals` |
+| T9 | The sitemap reply is read as XML first. `isGzipSitemap` is used only when it is not XML, so a `.xml.gz` the fetcher already unpacked is read in full, dates included. | `health-signals.js` | `health-signals` |
+
+### Older test lines changed by T1 to T9
+
+| Where | Old | New | Why |
+|---|---|---|---|
+| `test/places-lookup.test.js` (Bing: one search) | key not in the address; `subscription-key` header equals the key | `subscription-key` query parameter equals the key; no header | T4 |
+| `test/health-signals.test.js` (the S3 test) | all six link rows gray on a script-built page with no links | the three socials and Socials gray; Google and Yelp amber "Not linked" | T7 |
+| `test/grade-signals-flow.test.js` (the S5 old-Grade test) | restarted with no lookups | restarted with both lookups on, so the old-report and stale reasons are still shown | T6 |

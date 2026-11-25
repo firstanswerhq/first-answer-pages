@@ -351,11 +351,33 @@ const BLOCK_WORDS = new Set([
   'thumbtack', 'facebook', 'nextdoor', 'reddit', 'bing', 'yahoo',
 ]);
 
-const SKIP_DOMAINS = new Set([
+/** Shared hosts: many businesses live on one of these domains, so the domain alone never says which one. */
+export const SKIP_DOMAINS = new Set([
   'facebook.com', 'instagram.com', 'yelp.com', 'linkedin.com', 'google.com', 'twitter.com', 'x.com',
   'youtube.com', 'tiktok.com', 'nextdoor.com', 'angi.com', 'homeadvisor.com', 'thumbtack.com',
   'bbb.org', 'wixsite.com', 'weebly.com', 'squarespace.com', 'wordpress.com', 'godaddysites.com',
 ]);
+
+/**
+ * SKIP_DOMAINS plus more site builders and link pages, for the health map only (review T1). Kept apart from
+ * SKIP_DOMAINS so the AI answer reading, and so the score, does not change. Registered domains: "my.canva.site" is
+ * "canva.site" and "sites.google.com" is "google.com".
+ */
+export const SHARED_DOMAINS = new Set([
+  ...SKIP_DOMAINS,
+  'business.site', 'square.site', 'linktr.ee', 'carrd.co', 'canva.site', 'my.canva.site', 'sites.google.com',
+  'fb.com', 'fb.me', 'wix.com', 'editorx.io', 'webflow.io', 'squareup.com', 'godaddy.com', 'site123.me',
+]);
+
+/**
+ * True when two website addresses are the same site: the same registered domain, and that domain is not a shared host
+ * (a Facebook page, a wixsite.com site, a business.site page...). A shared host is never proof of a match.
+ */
+export function sameSite(a, b) {
+  const da = registeredDomain(a);
+  if (!da || SHARED_DOMAINS.has(da)) return false;
+  return registeredDomain(b) === da;
+}
 
 const TWO_PART_SUFFIXES = new Set([
   'co.uk', 'org.uk', 'ac.uk', 'gov.uk', 'com.au', 'net.au', 'org.au', 'co.nz', 'co.za', 'com.br',

@@ -218,10 +218,9 @@ test('Bing: one search, and a match is reduced to name, phone, address and websi
   const url = new URL(f.calls[0].url);
   assert.equal(url.origin + url.pathname, 'https://atlas.microsoft.com/search/poi/json');
   assert.equal(url.searchParams.get('query'), 'Zephyr Plumbing Nashville TN');
-  // S8: the key is a header, never part of the address; the search is US-only.
-  assert.equal(f.calls[0].url.includes(AZURE_KEY), false, 'the key is not in the address');
-  assert.equal(url.searchParams.has('subscription-key'), false);
-  assert.equal(f.calls[0].init.headers['subscription-key'], AZURE_KEY);
+  // T4: Search v1.0 documents the key only as a query parameter, so it is there, and not in a header; US-only.
+  assert.equal(url.searchParams.get('subscription-key'), AZURE_KEY);
+  assert.equal(f.calls[0].init.headers?.['subscription-key'], undefined);
   assert.equal(url.searchParams.get('countrySet'), 'US');
   assert.equal(result.status, 'found');
   assert.deepEqual(result.place, {
@@ -250,4 +249,21 @@ test('Bing: no results, a different business, an error and a timeout never throw
   const hang = fakeFetch(() => new Promise(() => {}));
   const slow = await createBingLookup({ apiKey: AZURE_KEY, fetch: hang, timeoutMs: 30 }).lookup(QUERY);
   assert.equal(slow.status, 'error');
+});
+
+test('T4: the address with the key never leaves the lookup: every failure is one fixed sentence, never the address', async () => {
+  for (const f of [
+    // Failures whose message or body hold the whole address (and so the key).
+    fakeFetch(url => { throw new TypeError(`fetch failed: ${url}`); }),
+    fakeFetch(url => ({ ok: false, status: 401, url, json: async () => ({ error: { message: url } }) })),
+    fakeFetch(url => ({ ok: true, status: 200, url, json: async () => { throw new SyntaxError(`bad json from ${url}`); } })),
+    fakeFetch(url => new Promise((_, reject) => setTimeout(() => reject(new Error(`aborted ${url}`)), 5))),
+  ]) {
+    const r = await createBingLookup({ apiKey: AZURE_KEY, fetch: f }).lookup(QUERY);
+    assert.deepEqual(r, { status: 'error', reason: "We couldn't reach Bing this time." });
+    assert.equal(JSON.stringify(r).includes(AZURE_KEY), false);
+  }
+  // The lookup module has no logging at all, so the address cannot reach a log line from here.
+  const source = await import('node:fs/promises').then(fs => fs.readFile(new URL('../server/lib/azure-maps.js', import.meta.url), 'utf8'));
+  assert.equal(/console\.|process\.std(out|err)|\blog\(/.test(source), false);
 });
