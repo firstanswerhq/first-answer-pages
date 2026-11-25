@@ -32,7 +32,8 @@ export const NOT_CHECKED = 'Not checked';
 const REASONS = Object.freeze({
   noWebsite: 'No website given.',
   unreadable: "We couldn't read your home page.",
-  script: "Your page loads its words in a way this check can't read yet.",
+  // Q3: one wording for a page built by scripts, with no jargon, used on every row.
+  script: "Your page loads its words in a way some AI tools can't read.",
   failed: "We couldn't work this one out this time.",
   oldReport: 'This report was made before this check existed. Run a new check to see it.',
   // Reader review R11: about the owner's report, not about our setup.
@@ -41,10 +42,10 @@ const REASONS = Object.freeze({
   noListing: 'No listing yet.',
   staleGoogle: 'Run a new check to look on Google again.',
   staleBing: 'Run a new check to look on Bing again.',
-  // R2: the lookups run during a new check, so the reserve is kept for the AI questions, not "for new checks".
-  reserve: "We're almost at today's limit, so we saved the rest for the AI questions and skipped this one.",
-  // R12: a Google or Bing lookup is a check, not an AI question.
-  limit: "Today's limit for checks was reached, so we didn't look this up. Try again tomorrow.",
+  // R2, Q1: the reserve is kept for the AI test of a check, said to the owner, not about our setup.
+  reserve: 'Many checks ran today, so we skipped this to leave room for the AI test. Try again tomorrow.',
+  // R12, Q2: the limit is for the Google and Bing searches, which makes sense inside a check that ran.
+  limit: "We reached today's limit for Google and Bing searches, so we skipped this. Try again tomorrow.",
 });
 
 /** Reasons the grader passes in (as `{ status: 'off', reason }` or `{ status: 'limit', reason }`). */
@@ -64,7 +65,7 @@ export const LABELS = Object.freeze({
   ratingRed: `Below ${RATING_AMBER.toFixed(1)} stars`,
   // R16: Google shows only a few of the most relevant reviews, so "newest" is never claimed.
   newestGreen: `A review in the last ${NEWEST_REVIEW_DAYS} days`,
-  newestAmber: `No review seen from the last ${NEWEST_REVIEW_DAYS} days`,
+  newestAmber: `No review seen in the last ${NEWEST_REVIEW_DAYS} days`,
 });
 
 /** The fix sentences, each at most 160 characters. No promise that anything makes an AI assistant name a business. */
@@ -93,7 +94,8 @@ export const FIXES = Object.freeze({
   linkGoogle: 'Add a link to your Google profile on your website so people and AI can connect the two.',
   // R22: a business may not have these pages, so the fix does not assume it does.
   linkYelp: 'If you have a Yelp page, link to it from your website so people and AI can connect the two.',
-  linkFacebook: 'If you have a Facebook page, link to it from your website so people and AI can connect the two.',
+  // Q7: the same ending as the Instagram, TikTok and Socials fixes, which may sit next to it.
+  linkFacebook: 'If you have a Facebook page, link to it from your website so customers can find you.',
   linkInstagram: 'If you have an Instagram page, link to it from your website so customers can find you.',
   linkTikTok: 'If you have a TikTok page, link to it from your website so customers can find you.',
   listed: 'Claim your free listing on First Answer Pages so customers have one simple page with your details.',
@@ -186,9 +188,12 @@ function wordsInPageSignal({ input, facts, found }) {
   const phone = phoneDigits(found?.phone);
   const phoneIn = phone ? phonesInText(text, facts.telLinks).has(phone) : phonesInText(text, facts.telLinks).size > 0;
   if (nameIn && phoneIn && !facts.scriptBuilt) return good('wordsInPage', 'Found in the page');
-  // Never red: a page built by scripts cannot be told apart from a page that is missing the words. The reason says
-  // which case it is (reader review R5).
-  const reason = facts.scriptBuilt ? "Your page adds its words with scripts, which some AI tools can't read."
+  // Never red: a page built by scripts cannot be told apart from a page that is missing the words. The label and the
+  // reason say which case it is (reader reviews R5, Q3, Q4).
+  if (facts.scriptBuilt) {
+    return partly('wordsInPage', 'Hard for some AI tools to read', FIXES.wordsInPage, { reason: REASONS.script });
+  }
+  const reason = !nameIn && !phoneIn ? "We couldn't find your business name or phone number in your page's text."
     : !nameIn ? "We couldn't find your business name in your page's text."
       : "We couldn't find your phone number in your page's text.";
   return partly('wordsInPage', 'Not in the page text', FIXES.wordsInPage, { reason });

@@ -20,6 +20,7 @@ import {
 import { formatRunTime } from './seance-html.js';
 import { listedNames, splitLists } from './name-match.js';
 import { scoreGrade } from './grade-score.js';
+import { healthModel, healthMapHtml } from './health-map.js';
 import { DEFAULT_SITE_NAME } from './config.js';
 import {
   providerLabel, freeQuestion, extraQuestions, stepNames, foundOf, isSecondOpinion, schemaHours, readableHours, isPartialScore,
@@ -44,14 +45,14 @@ function turnstileBlock(siteKey, message = '') {
  * `noindex, nofollow`.
  */
 function page(title, body, {
-  refresh = false, turnstile = false, indexable = false, canonical = '', description = '',
+  refresh = false, turnstile = false, indexable = false, canonical = '', description = '', scripts = [],
 } = {}) {
   const open = indexable === true;
   const parts = [open ? '' : ROBOTS_META, refresh ? REFRESH_NOSCRIPT : '', turnstile ? TURNSTILE_SCRIPT : ''].filter(Boolean);
   return layout({
     title,
     body,
-    scripts: ['/js/grade.js'],
+    scripts: ['/js/grade.js', ...scripts],
     head: parts.join('\n  '),
     ...(open ? { canonical, description } : {}),
   });
@@ -1095,8 +1096,17 @@ export function reportPage(storedGrade, opts = {}) {
 </div>`
     : leadForm(grade, { values: leadValues, errors: leadErrors });
 
+  // The health map (high-tech-look Requirement 2): the plain list and the map of the same signals, right under the
+  // score. It shows the existing score and changes nothing; the fix sentences show only in the full report.
+  const healthMap = healthMapHtml(healthModel(grade, { score: scored ? s.score : null, ...aiHealth(grade) }), {
+    full,
+    // Every "Run a new check" in a reason is the report's own link (V244).
+    runNew: text => runNewLink(grade, text),
+  });
+
   const body = `<section class="grade-report">
 ${top}
+${healthMap}
 ${aiFree(grade, { googleLive, requester, now, secondPending })}
 ${claim}
 ${searchPreview(grade)}
@@ -1106,7 +1116,40 @@ ${foot}
 </section>`;
   return page(`AI Visibility Check for ${i.name}`, body, {
     refresh: rechecking || secondPending.length > 0 || body.includes('The other questions are still being answered.'),
+    // The orb's turning particles: a small script loaded after the page; the report reads the same without it.
+    scripts: [HEALTH_ORB_SCRIPT],
   });
+}
+
+/** The small script that turns the health map's orb (decoration only). */
+export const HEALTH_ORB_SCRIPT = '/js/health-orb.js';
+
+/**
+ * The AI answers node of the health map: one sub-node per answer to the free question, in the report's own words
+ * ("Named you" or "Didn't name you"), and the node's status from the `ai-named` row (Pass, Partly, Needs work).
+ */
+function aiHealth(grade) {
+  const answers = freeAnswersOf(Array.isArray(grade.ai) ? grade.ai : []);
+  const row = resultsOf(grade).find(r => r && r.id === 'ai-named');
+  const points = CHECKS.find(c => c.id === 'ai-named')?.points ?? 30;
+  let aiStatus = 'not_checked';
+  if (row?.result === 'pass') aiStatus = Number.isFinite(row.earned) && row.earned < points ? 'partly' : 'good';
+  else if (row?.result === 'fail') aiStatus = 'missing';
+  const aiRows = answers.map((a, k) => ({
+    name: `Answer ${k + 1} (${providerLabel(a.provider)})`,
+    status: a.named ? 'good' : 'missing',
+    label: a.named ? 'Named you' : "Didn't name you",
+  }));
+  if (aiRows.length === 0) {
+    const state = grade.aiMain?.state;
+    const who = grade.aiMain?.label || 'The AI assistant';
+    const reason = dailyLimitHit(grade) || state === 'limit'
+      ? "Today's limit for AI questions was reached, so there is no answer yet."
+      : state === 'not_connected' || state === 'off' ? "The AI check isn't connected yet."
+        : state === 'failed' ? `${who} didn't answer this time.` : 'There was no answer to read.';
+    aiRows.push({ name: 'Answer 1', status: 'not_checked', label: 'Not checked', reason });
+  }
+  return { aiRows, aiStatus };
 }
 
 // ---- Google's live answer ----------------------------------------------------------------------

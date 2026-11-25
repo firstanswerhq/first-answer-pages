@@ -1,6 +1,6 @@
 # High-tech look: design
 
-Status: Step 1, part A. This file holds only the list of main nodes and sub-nodes for the health map (Requirement 2.7 and 7.3). No code is written until the owner approves it. The rest of the design (signals, storage, tests) is added after the approval.
+Status: Step 1 (signals) done and reviewed GO. Step 2 (the health map, Requirement 2) built; see "Step 2 as built" at the end. Step 3 (site look) not started.
 
 ## How the list was made
 
@@ -306,6 +306,104 @@ Tests: `health-signals` (R1 every combination, R4 the three cases and the same-p
 | `test/grade-signals-flow.test.js` (no keys; failing lookup; reserve; T6) | `"Google lookups aren't turned on here."`; `"We couldn't reach the lookup this time."`; the old reserve sentence; `"Bing lookups aren't turned on here."` | the R11, R13 and R2 sentences | R11, R13, R2 |
 | `test/health-compare.test.js` (T5) | `"A business with your website showed up in another place, ..."` | the R15 sentence | R15 |
 | `test/admin-waive-fee.test.js` (S15) | `'No fee for this listing.'` | `'There is no fee for this listing.'`, plus the heading, no price hint and "fee: waived" | R27, R26 |
+
+## Second reader review Q1 to Q8 (review-2026-11-25-step1-reader2.md, verdict GO)
+
+| Item | Old | New | Where |
+|---|---|---|---|
+| Q1 | "We're almost at today's limit, so we saved the rest for the AI questions and skipped this one." | "Many checks ran today, so we skipped this to leave room for the AI test. Try again tomorrow." | `health-signals.js` (`LOOKUP_RESERVE_REASON`) |
+| Q2 | "Today's limit for checks was reached, so we didn't look this up. Try again tomorrow." | "We reached today's limit for Google and Bing searches, so we skipped this. Try again tomorrow." | `health-signals.js` (`LOOKUP_LIMIT_REASON`) |
+| Q3 | two wordings: "... in a way this check can't read yet." and "... adds its words with scripts ..." | one wording everywhere: "Your page loads its words in a way some AI tools can't read." | `health-signals.js` (`REASONS.script`, wordsInPage) |
+| Q4 | a scripted page always "Not in the page text"; both missing named only the name | a scripted page is "Hard for some AI tools to read" (true even when both were found); both missing: "We couldn't find your business name or phone number in your page's text." | `health-signals.js` |
+| Q5 | "No review seen from the last 90 days" | "No review seen in the last 90 days" | `LABELS.newestAmber` |
+| Q6 | "... in a different city, so we didn't use it." | "We found a business with your website in a different city than you typed. Check the city and try again." and the same with "your name" | `health-compare.js` |
+| Q7 | Facebook fix ended "... so people and AI can connect the two." | "If you have a Facebook page, link to it from your website so customers can find you." (the same ending as Instagram, TikTok and Socials) | `FIXES.linkFacebook` |
+| Q8 | "Founding spots still open" had no words around it | handled in Step 2: never a light; a plain line under Free listing: "Founding Member spots are still open. Founding Members pay once for the Verified stamp." | `health-map.js` |
+
+### Older test lines changed by Q1 to Q8
+
+| Where | Old | New | Why |
+|---|---|---|---|
+| `test/health-signals.test.js` (S3, script-built page) | reason "Your page loads its words in a way this check can't read yet." | "Your page loads its words in a way some AI tools can't read." | Q3 |
+| `test/health-signals.test.js` (words in the page itself) | label "Not in the page text", reason "... adds its words with scripts ..." | label "Hard for some AI tools to read", the Q3 reason | Q3, Q4 |
+| `test/health-signals.test.js` (R5 test) | the scripted reason | the Q3 reason and label, plus a new case for both missing | Q3, Q4 |
+| `test/health-signals.test.js` (S13, R16) | "No review seen from the last 90 days" | "No review seen in the last 90 days" | Q5 |
+| `test/health-signals.test.js` (S14) | the R2 and R12 sentences | the Q1 and Q2 sentences | Q1, Q2 |
+| `test/health-signals.test.js` (links) | `FIXES.linkFacebook` includes "AI" | `FIXES.linkFacebook` is the Q7 sentence (Instagram and TikTok still never mention AI) | Q7 |
+| `test/health-signals.test.js` (the old-words sweep) | one scenario passed the R15 sentence | the Q6 sentence; the sweep also bans the replaced Q wordings | Q6 |
+| `test/health-compare.test.js` (T5) | the R15 sentence | the Q6 sentence | Q6 |
+| `test/grade-signals-flow.test.js` (the reserve test) | the R2 sentence | the Q1 sentence | Q1 |
+
+---
+
+# Step 2 as built: the health map (Requirement 2)
+
+## Files
+
+| File | What it does |
+|---|---|
+| `server/lib/health-map.js` | `healthModel(grade, { score, aiRows, aiStatus })` works out the seven main nodes, their sub-nodes and statuses once; `healthMapHtml(model, { full, runNew })` writes the section: the plain list first, then the map. `mainStatus`, `linkSvg`, `MAIN_NODES`, `SUB_NODES`, `MAIN_WORDS`, `SYMBOLS`. |
+| `server/lib/grade-html.js` | `reportPage` adds the section right under the score block (after the `<h1>`, before "What AI says"), builds the AI answers rows (`aiHealth`) from the report's own answers and `ai-named` row, and loads `/js/health-orb.js` as one more module script. |
+| `public/css/style.css` | The "health map" block: the list, the dark map panel, nodes, lines, moving dots, reduced motion and the phone rules. All its colors are custom properties in one place (`.health`). |
+| `public/js/health-orb.js` | About 80 lines: a canvas of slowly turning particles behind the still orb. It adds no words; it does nothing with reduced motion or without canvas, stops when motion is switched to reduced, pauses when the tab is hidden, and starts again if the report's content is swapped in place. |
+
+## How it reads
+
+- **The plain list comes first** in the page and holds every fact: for each main node a heading "Website: Partly" and every sub-node "Sitemap: Found", with its reason line when gray, and its fix line only in the full report (the locked report shows the statuses and reasons; the fixes stay behind the lead form like the rest of the fix text). Socials is a cluster heading "Socials: 1 of 3 linked". The Website clusters are "AI can read it", "Speaks AI's language", "Search basics" and "Customer basics".
+- **The map** is `aria-hidden` (decoration; the list is what screen readers and search tools read): the orb in the center with the business name (escaped, up to two short lines) and "Health 68", the report's own score from `currentScore`, or "Health: not scored yet". The seven main nodes sit around it in the design's order; each sub-node fans out from its main node. On wide screens the map sits beside the list (sticky); on phones it sits above the list.
+- **Color is never the only cue.** Every main node says its name and status word ("Good", "Partly", "Needs work", "Not checked"; the AI answers node says "Pass" for green, as the report's row does). Every sub-node on the map has a status symbol (check, "!", cross, "?") and its short status word along its spoke; the list beside it has the full words. Every list row has the symbol and the words.
+- **Links** (CSS only, so they work with JavaScript off): green has small glowing dots moving steadily both ways; amber sends slow dots only partway that fade; red shows a break in the line and no dots; gray is dashed and still. Sub-node links behave the same at a smaller size. With `prefers-reduced-motion`, no dots are drawn and the orb canvas is hidden; the line colors, symbols and words show the status.
+- **Phones (390 px):** the map shows the main nodes only (sub-nodes hidden). Each main node is a link to its group in the plain list right below the map (the group is outlined when it is the target), so tapping a node opens its sub-nodes as a list below the map. The list always has every sub-node. Nothing in the section is wider than the screen.
+- **Contrast (AA):** the list uses the page's own text colors on the page surface; the map's words use light colors on its near-black panel. A test reads the colors from `style.css` and checks every pair is at least 4.5 to 1.
+- **JavaScript off:** the whole section is server HTML and CSS; only the turning particles need the script. No report content is added by JavaScript.
+- **Score and SEO:** nothing here is in `results` or the score; the report keeps its `noindex, nofollow` and title. No public page changed.
+
+## Main node status rules (as built)
+
+| Main node | Rule |
+|---|---|
+| Website | gray when nothing was checked; green when every checked sub-node is green; red when more than half of the checked ones are red; amber otherwise |
+| AI answers | the `ai-named` row: "Pass" (named in every counted answer), "Partly" (some), "Needs work" (none), "Not checked" |
+| Google profile | red when "Not found on Google"; green when every checked one is green; amber otherwise; gray when nothing was checked |
+| Reviews | green when the review count and star rating are green; red when there are no Google reviews and none shown on the website; otherwise green if every checked one is green, amber if not; gray when nothing was checked |
+| Details match | red when any checked detail is red; green when all match; amber otherwise; gray when nothing was compared |
+| Links | green when every checked link is there; amber otherwise (no link row is ever red); gray when nothing was checked |
+| Free listing | green when listed and Verified; amber otherwise; gray when not checked (several listings looked alike) |
+
+## Decisions made while building (for the owner)
+
+1. **AI answers sub-nodes** say "Named you" or "Didn't name you" (with the assistant, "Answer 1 (Claude)"), not the full outcome sentence the design listed. The full sentence is already in "What AI says" right below; repeating it on every row made the report longer and read twice. With no answer, the one row is gray with the reason (today's limit, not connected, or the assistant didn't answer).
+2. **HAVE rows that were not checked** (the existing Checks) say "We couldn't check this on your website this time." The existing check's own detail stays in the full list of checks.
+3. **Founding Member (Q8):** a Founding Member is a green sub-node. "Founding spots still open" is never a light or a node: it shows only under Free listing in the list as a plain line, "Founding Member spots are still open. Founding Members pay once for the Verified stamp."
+4. **"Run a new check"** in a reason is the report's own link to a new check (the report's rule V244: every mention of it is a link).
+5. **The section heading** is "Health of your setup" with the line "These lights don't change your score. Each one says what we found, or why we couldn't check it."
+
+## Tests
+
+- `test/health-map.test.js`:
+  - The list comes first and the map is aria-hidden, with no logos, icon fonts or scripts.
+  - The seven main nodes are in order in the list and on the map, with the same status words and statuses in both.
+  - Every sub-node of the design is a list row with its words, and is a map node with the same status.
+  - Every row and node has a symbol and words.
+  - The orb shows the name (escaped) and the report's score, or "not scored yet".
+  - Link drawing: green moves both ways, amber moves slowly partway, red is broken, gray is dashed. Sub-node links behave the same.
+  - The CSS: reduced motion stops the dots and hides the orb canvas, phones hide the sub-nodes, nothing is wider than 390 px and there are no outside images.
+  - AA contrast for every color pair.
+  - The main status rules.
+  - Q8.
+  - A report from before the signals.
+  - Fixes only in the full report.
+  - The "Run a new check" link.
+  - The wording rules.
+  - The orb script adds no words.
+- `test/grade-signals-flow.test.js` (a real check through the grader):
+  - The section sits under the score and before "What AI says". The orb shows the stored score, and the score is unchanged.
+  - The AI answers node reads the report's answers. Google and Facebook rows read the saved signals.
+  - The orb script is a module script, and noindex and the title are unchanged.
+  - The locked report has no fixes and the full report has them.
+  - An old report still shows the map, with "Not checked" rows, links for "Run a new check", and the same score.
+
+No older test line changed for Step 2.
 
 ### Older test lines changed by T1 to T9
 

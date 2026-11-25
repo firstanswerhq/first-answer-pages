@@ -169,8 +169,8 @@ test('words in the page itself: never red; a page built by scripts is amber with
   assert.equal(scripts.scriptBuilt, true);
   const amber = build({ facts: scripts }).website;
   assert.equal(amber.wordsInPage.status, 'partly');
-  assert.equal(amber.wordsInPage.label, 'Not in the page text');
-  assert.equal(amber.wordsInPage.reason, "Your page adds its words with scripts, which some AI tools can't read.");
+  assert.equal(amber.wordsInPage.label, 'Hard for some AI tools to read');
+  assert.equal(amber.wordsInPage.reason, "Your page loads its words in a way some AI tools can't read.");
   // The text-based signals are gray on such a page, not red.
   for (const id of ['saysWhatYouDo', 'saysWhereYouWork', 'answersQuestions']) assert.equal(amber[id].status, 'not_checked', id);
   const noPhone = readPageFacts('<h1>Zephyr Plumbing</h1><p>' + 'We fix pipes in Nashville. '.repeat(15) + '</p>');
@@ -359,8 +359,8 @@ test('links: Google, Yelp and the three socials are Linked or Not linked; the so
   const zero = readPageFacts('<a href="/about">About</a>');
   assert.equal(build({ facts: zero }).links.socials.status, 'partly', 'R22: none linked is amber, never red');
   assert.equal(build({ facts: zero }).links.socials.label, '0 of 3 linked');
-  // Only Facebook's fix may say it helps AI connect the business.
-  assert.ok(FIXES.linkFacebook.includes('AI'));
+  // Only Facebook's fix may say it helps AI connect the business; since Q7 it has the same ending as the others.
+  assert.equal(FIXES.linkFacebook, 'If you have a Facebook page, link to it from your website so customers can find you.');
   assert.equal(/\bAI\b/.test(FIXES.linkInstagram), false);
   assert.equal(/\bAI\b/.test(FIXES.linkTikTok), false);
 });
@@ -522,7 +522,7 @@ test('S3: a script-built page with no profile links found is Not checked for eve
   // T7: only the three socials and the Socials cluster are gray; Google and Yelp are read as usual.
   for (const id of ['facebook', 'instagram', 'tiktok', 'socials']) {
     assert.equal(l[id].status, 'not_checked', id);
-    assert.equal(l[id].reason, "Your page loads its words in a way this check can't read yet.", id);
+    assert.equal(l[id].reason, "Your page loads its words in a way some AI tools can't read.", id);
   }
   assert.equal(l.google.status, 'partly');
   assert.equal(l.yelp.status, 'partly');
@@ -587,7 +587,7 @@ test('S13: the threshold labels are built from health-constants.js and read the 
   // The defaults keep the words already shown.
   assert.deepEqual(
     [LABELS.reviewsGreen, LABELS.reviewsAmber, LABELS.ratingGreen, LABELS.ratingAmber, LABELS.ratingRed, LABELS.newestGreen, LABELS.newestAmber],
-    ['10 or more reviews', '1 to 9 reviews', '4.3 stars or higher', '3.8 to 4.2 stars', 'Below 3.8 stars', 'A review in the last 90 days', 'No review seen from the last 90 days'],
+    ['10 or more reviews', '1 to 9 reviews', '4.3 stars or higher', '3.8 to 4.2 stars', 'Below 3.8 stars', 'A review in the last 90 days', 'No review seen in the last 90 days'],
   );
   const g = build({ places: found({ ratingCount: 3, rating: 4.0 }) }).google;
   assert.equal(g.reviewCount.label, LABELS.reviewsAmber);
@@ -599,9 +599,9 @@ test('S14: the reason says what really happened (an old report, the reserve, the
   assert.equal(old.google.found.reason, OLD_REPORT_REASON);
   assert.equal(old.bing.found.reason, OLD_REPORT_REASON);
   assert.equal(build({ places: { status: 'limit', reason: LOOKUP_RESERVE_REASON } }).google.found.reason, LOOKUP_RESERVE_REASON);
-  assert.equal(LOOKUP_RESERVE_REASON, "We're almost at today's limit, so we saved the rest for the AI questions and skipped this one.");
+  assert.equal(LOOKUP_RESERVE_REASON, 'Many checks ran today, so we skipped this to leave room for the AI test. Try again tomorrow.');
   assert.equal(build({ places: { status: 'limit' } }).google.found.reason, LOOKUP_LIMIT_REASON);
-  assert.equal(LOOKUP_LIMIT_REASON, "Today's limit for checks was reached, so we didn't look this up. Try again tomorrow.");
+  assert.equal(LOOKUP_LIMIT_REASON, "We reached today's limit for Google and Bing searches, so we skipped this. Try again tomorrow.");
   assert.equal(build({ places: { status: 'off' } }).google.found.reason, "We didn't check Google this time.");
   assert.equal(build({ bing: { status: 'off' } }).bing.details.reason, "We didn't check Bing this time.");
   const stale = build({ places: { status: 'off', reason: STALE_GOOGLE_REASON }, bing: { status: 'off', reason: STALE_BING_REASON } });
@@ -756,13 +756,21 @@ test('R5: the words-in-page reason says which case it is, and the label has no j
   const noPhone = build({ facts: readPageFacts(`<h1>Zephyr Plumbing</h1><p>${pad}</p>`) }).website.wordsInPage;
   assert.equal(noPhone.reason, "We couldn't find your phone number in your page's text.");
   const scripted = { ...readPageFacts(`<h1>Zephyr Plumbing</h1><p>Call (615) 555-0142. ${pad}</p>`), scriptBuilt: true };
-  assert.equal(build({ facts: scripted }).website.wordsInPage.reason, "Your page adds its words with scripts, which some AI tools can't read.");
+  const s = build({ facts: scripted }).website.wordsInPage;
+  // Q3 and Q4: the one script wording, and a label that is true even when both were found.
+  assert.equal(s.reason, "Your page loads its words in a way some AI tools can't read.");
+  assert.equal(s.label, 'Hard for some AI tools to read');
+  assert.equal(s.status, 'partly');
+  // Q4: both missing names both.
+  const neither = build({ facts: readPageFacts(`<h1>Welcome</h1><p>${pad}</p>`) }).website.wordsInPage;
+  assert.equal(neither.label, 'Not in the page text');
+  assert.equal(neither.reason, "We couldn't find your business name or phone number in your page's text.");
 });
 
 test('R16 and R20: the review labels never claim "newest" and the rating labels say stars', () => {
   const at = extra => build({ places: found(extra) }).google;
   assert.equal(at({}).newestReview.label, 'A review in the last 90 days');
-  assert.equal(at({ newestReviewAt: new Date(NOW - 200 * DAY).toISOString() }).newestReview.label, 'No review seen from the last 90 days');
+  assert.equal(at({ newestReviewAt: new Date(NOW - 200 * DAY).toISOString() }).newestReview.label, 'No review seen in the last 90 days');
   assert.equal(at({ rating: 4.6 }).rating.label, '4.3 stars or higher');
   assert.equal(at({ rating: 4.0 }).rating.label, '3.8 to 4.2 stars');
   assert.equal(at({ rating: 3.0 }).rating.label, 'Below 3.8 stars');
@@ -782,12 +790,12 @@ test('R17: "Founding spots still open" is information, with no health color and 
 });
 
 test('R5 to R25: no signal sentence uses the old jargon or talks about our setup', () => {
-  const banned = /page code|opening hours|turned on here|the lookup\b|AI questions was reached|returned \(up to 5\)|on both sides|another place|didn't mark it|lists other sitemaps|One page only|Category differs|\bDiffers\b|one plain page|Not updated in a year|Newest review/i;
+  const banned = /page code|opening hours|the AI questions|limit for checks|adds its words with scripts|seen from the last|this check can't read|so we didn't use it|turned on here|the lookup\b|AI questions was reached|returned \(up to 5\)|on both sides|another place|didn't mark it|lists other sitemaps|One page only|Category differs|\bDiffers\b|one plain page|Not updated in a year|Newest review/i;
   const scenarios = [
     build(),
     build({ places: null, bing: null, facts: null, sitemap: null }),
     build({ places: { status: 'limit' }, bing: { status: 'limit' } }),
-    build({ places: { status: 'unsure', reason: "We found a business with your name in a different city, so we didn't use it." } }),
+    build({ places: { status: 'unsure', reason: 'We found a business with your name in a different city than you typed. Check the city and try again.' } }),
     build({ places: found({ ratingCount: 0, rating: 3, businessStatus: 'CLOSED_TEMPORARILY', phone: '(615) 555-0100', primaryType: 'bakery', hasHours: false, hoursByDay: {}, address: 'Nashville', newestReviewAt: '2024-01-01T00:00:00Z' }) }),
     build({ sitemap: { status: 200, text: SITEMAP_XML('2024-01-01') }, listingInfo: { state: 'listed', listing: { id: 'z', phone: '(615) 555-0100', address: '', website: '' }, foundersOpen: true } }),
   ];

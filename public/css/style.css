@@ -2514,3 +2514,102 @@ a.tel,
   margin: 0.1rem 0;
   line-height: 1.35;
 }
+
+/* ---- The health map on the report (high-tech-look Requirement 2) ------------------------------------------------
+   The plain list comes first in the page and holds every fact; the map beside it (above it on phones) is decoration
+   (aria-hidden). Status is always said in words and with a symbol, never by color alone. Colors meet WCAG AA:
+   the list uses the page's own text colors; the map's light colors sit on its near-black panel. */
+.health {
+  --health-panel: #0B1020;
+  --health-node-fill: #111A30;
+  --health-ink: #E8ECF4;
+  --health-good: #4ADE80;
+  --health-partly: #FBBF24;
+  --health-missing: #F87171;
+  --health-gray: #A3ADBB;
+  --health-glow: #67E8F9;
+  margin: 1.5rem 0;
+}
+.health-layout { display: grid; gap: 1.25rem; }
+.health-map { order: -1; position: relative; max-width: 40rem; width: 100%; margin: 0 auto; background: var(--health-panel); border-radius: 12px; overflow: hidden; }
+@media (min-width: 900px) {
+  .health-layout { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+  .health-map { position: sticky; top: 1rem; }
+}
+.health-svg { display: block; width: 100%; height: auto; position: relative; z-index: 1; }
+.health-orb-host { position: absolute; left: 39%; top: 39%; width: 22%; height: 22%; z-index: 0; }
+.health-orb-host canvas { width: 100%; height: 100%; display: block; }
+
+/* The list */
+.health-group { margin: 0 0 1rem; padding: 0.6rem 0.8rem; border-left: 4px solid var(--color-text-muted); background: var(--color-surface); }
+.health-group h3 { margin: 0 0 0.35rem; font-size: 1.05rem; }
+.health-group:target { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+.health-cluster { margin: 0.5rem 0 0.2rem; font-size: 0.9rem; color: var(--color-text-muted); }
+.health-rows { list-style: none; margin: 0; padding: 0; }
+.health-row { margin: 0.2rem 0; line-height: 1.4; }
+.health-sym { display: inline-block; width: 1.2em; font-weight: 700; }
+.health-status { font-weight: 700; }
+.health-why, .health-fix { display: block; margin-left: 1.2em; font-size: 0.875rem; color: var(--color-text-muted); }
+.health-note { margin: 0.4rem 0 0; font-size: 0.9rem; color: var(--color-text); }
+.health-good > h3 .health-status, .health-row.health-good .health-status, .health-row.health-good .health-sym, .health-cluster.health-good .health-status { color: var(--color-success); }
+.health-partly > h3 .health-status, .health-row.health-partly .health-status, .health-row.health-partly .health-sym, .health-cluster.health-partly .health-status { color: var(--color-partly-text); }
+.health-missing > h3 .health-status, .health-row.health-missing .health-status, .health-row.health-missing .health-sym, .health-cluster.health-missing .health-status { color: var(--color-fail); }
+.health-not_checked > h3 .health-status, .health-row.health-not_checked .health-status, .health-row.health-not_checked .health-sym { color: var(--color-text-muted); }
+.health-group.health-good { border-left-color: var(--color-success); }
+.health-group.health-partly { border-left-color: var(--color-partly); }
+.health-group.health-missing { border-left-color: var(--color-fail); }
+.health-group.health-not_checked { border-left-style: dashed; }
+
+/* The map: the orb */
+.health-orb { fill: url(#health-orb-glow); stroke: var(--health-glow); stroke-width: 2; }
+.health-orb-halo { fill: none; stroke: var(--health-glow); stroke-opacity: 0.25; stroke-width: 1; }
+.health-orb-name { fill: var(--health-ink); font-size: 24px; font-weight: 700; text-anchor: middle; paint-order: stroke; stroke: var(--health-panel); stroke-width: 4px; }
+.health-orb-score { fill: var(--health-glow); font-size: 30px; font-weight: 700; text-anchor: middle; paint-order: stroke; stroke: var(--health-panel); stroke-width: 4px; }
+.health-orb-score-none { font-size: 17px; }
+
+/* The map: nodes */
+.health-node-ring { fill: var(--health-node-fill); stroke-width: 3; }
+.health-node-name { fill: var(--health-ink); font-size: 14px; font-weight: 700; text-anchor: middle; }
+.health-node-status, .health-node-sym { font-size: 14px; font-weight: 700; text-anchor: middle; }
+.health-node-sym { font-size: 16px; }
+.health-dot-node { fill: var(--health-node-fill); stroke-width: 2; }
+.health-sub-sym { font-size: 12px; font-weight: 700; text-anchor: middle; }
+.health-sub-word { font-size: 11px; fill: var(--health-ink); }
+.health-node-good .health-node-ring, .health-sub-good .health-dot-node { stroke: var(--health-good); }
+.health-node-partly .health-node-ring, .health-sub-partly .health-dot-node { stroke: var(--health-partly); }
+.health-node-missing .health-node-ring, .health-sub-missing .health-dot-node { stroke: var(--health-missing); }
+.health-node-not_checked .health-node-ring, .health-sub-not_checked .health-dot-node { stroke: var(--health-gray); stroke-dasharray: 5 4; }
+.health-node-good text.health-node-status, .health-node-good .health-node-sym, .health-sub-good .health-sub-sym { fill: var(--health-good); }
+.health-node-partly text.health-node-status, .health-node-partly .health-node-sym, .health-sub-partly .health-sub-sym { fill: var(--health-partly); }
+.health-node-missing text.health-node-status, .health-node-missing .health-node-sym, .health-sub-missing .health-sub-sym { fill: var(--health-missing); }
+.health-node-not_checked text.health-node-status, .health-node-not_checked .health-node-sym, .health-sub-not_checked .health-sub-sym { fill: var(--health-gray); }
+.health-node-link { cursor: pointer; }
+
+/* The map: links. Green: steady dots both ways. Amber: slow dots that fade partway. Red: a break. Gray: dashed, still. */
+.health-line { stroke-linecap: round; }
+.health-line-main { stroke-width: 2.5; }
+.health-line-sub { stroke-width: 1.5; }
+.health-line-good { stroke: var(--health-good); stroke-opacity: 0.55; }
+.health-line-partly { stroke: var(--health-partly); stroke-opacity: 0.5; }
+.health-line-missing { stroke: var(--health-missing); stroke-opacity: 0.8; }
+.health-line-gray { stroke: var(--health-gray); stroke-opacity: 0.6; stroke-dasharray: 6 7; }
+.health-flow { fill: none; stroke: var(--health-glow); stroke-linecap: round; stroke-dasharray: 0.5 26; }
+.health-flow-main { stroke-width: 5; }
+.health-flow-sub { stroke-width: 3; stroke-dasharray: 0.5 18; }
+.health-flow-out { animation: health-flow 2.6s linear infinite; }
+.health-flow-in { animation: health-flow 2.6s linear infinite; animation-delay: -1.3s; }
+.health-flow-slow { stroke: var(--health-partly); animation: health-flow 7s linear infinite, health-fade 7s ease-in-out infinite; }
+@keyframes health-flow { to { stroke-dashoffset: -53; } }
+@keyframes health-fade { 0%, 100% { opacity: 0.9; } 55% { opacity: 0.15; } 75% { opacity: 0; } }
+
+/* Phones: the map shows the main nodes only; tapping one goes to its sub-nodes in the list below the map. */
+@media (max-width: 600px) {
+  .health-sub { display: none; }
+  .health-node-name, .health-node-status { font-size: 16px; }
+}
+
+/* Reduced motion: no dots move and the orb stays still; the line colors and the words show the status. */
+@media (prefers-reduced-motion: reduce) {
+  .health-flow { animation: none; display: none; }
+  .health-orb-host { display: none; }
+}

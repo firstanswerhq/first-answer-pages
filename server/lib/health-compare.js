@@ -254,7 +254,7 @@ export function pickCandidate(candidates, wanted) {
   const here = similar.filter(c => inCity(c, wanted.city));
   if (here.length === 1) return { status: 'found', place: here[0] };
   if (here.length === 0 && siteElsewhere) {
-    return { status: 'unsure', reason: "We found a business with your website in a different city, so we didn't use it." };
+    return { status: 'unsure', reason: 'We found a business with your website in a different city than you typed. Check the city and try again.' };
   }
   if (here.length > 1) {
     const byDomain = here.filter(c => sameSite(wanted.website, c.website));
@@ -264,7 +264,7 @@ export function pickCandidate(candidates, wanted) {
     return { status: 'unsure', reason: "More than one result looked like your business, so we didn't pick one." };
   }
   if (similar.length > 0) {
-    return { status: 'unsure', reason: "We found a business with your name in a different city, so we didn't use it." };
+    return { status: 'unsure', reason: 'We found a business with your name in a different city than you typed. Check the city and try again.' };
   }
   // Results came back but none matched the name. That is not proof the business is missing.
   return { status: 'unsure', reason: "We couldn't tell which result is your business, so we didn't pick one." };

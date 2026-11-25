@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 
 import { createApp } from '../server/app.js';
 import { createAiBudget } from '../server/lib/ai-budget.js';
+import { reportPage, HEALTH_ORB_SCRIPT } from '../server/lib/grade-html.js';
 
 const NOW = Date.UTC(2026, 10, 24, 18, 0, 0);
 const REPO_DATA = fileURLToPath(new URL('../data/', import.meta.url));
@@ -244,8 +245,8 @@ test('the lookups never use the day\'s last calls: with 12 left they are skipped
   assert.equal(g.signals.google.found.status, 'not_checked');
   // S14: only the reserve held them back, so the reason says that, not that the limit was reached.
   // R2: the reserve is kept for the AI questions, which is true during a new check.
-  assert.equal(g.signals.google.found.reason, "We're almost at today's limit, so we saved the rest for the AI questions and skipped this one.");
-  assert.equal(g.signals.bing.found.reason, "We're almost at today's limit, so we saved the rest for the AI questions and skipped this one.");
+  assert.equal(g.signals.google.found.reason, 'Many checks ran today, so we skipped this to leave room for the AI test. Try again tomorrow.');
+  assert.equal(g.signals.bing.found.reason, 'Many checks ran today, so we skipped this to leave room for the AI test. Try again tomorrow.');
   assert.equal(env.claude.calls, 1, 'the AI question was asked');
   assert.equal(g.ai.length, 1);
 });
@@ -348,6 +349,63 @@ test('S5 and S14: a Grade from before the lookups existed, or one saved with raw
   assert.equal(JSON.stringify(saved).includes('Zephyr Plumbing LLC'), false);
   const rawRecheck = await recheckDone(restarted, raw.id);
   assert.equal(rawRecheck.signals.google.found.reason, 'Run a new check to look on Google again.');
+});
+
+test('Step 2: the report shows the health map under the score, with the report\'s own score and the same statuses', async () => {
+  const env = await startEnv({ site: fakeSite(defaultRoutes()), places: fakeLookup('places', GOOGLE_FOUND), bing: fakeLookup('bing', BING_FOUND) });
+  const g = await check(env);
+  const html = reportPage(g, { leadGate: false });
+  const score = /<span class="num">(\d+)<\/span>/.exec(html)?.[1];
+  assert.ok(score, 'the report has a score');
+  assert.equal(Number(score), g.score.score, 'the score is the stored one: the map changes nothing');
+  assert.ok(html.includes(`class="health-orb-score">Health ${score}</text>`), 'the orb shows the same number');
+  // Order: the heading, then the health map, then "What AI says".
+  assert.ok(html.indexOf('<h1>Zephyr Plumbing</h1>') < html.indexOf('<section class="health"'));
+  assert.ok(html.indexOf('<section class="health"') < html.indexOf('<h2>What AI says</h2>'));
+  // The AI answers node reads the report's own answers: the stub named other businesses only.
+  assert.match(html, /<span class="health-group-name">AI answers:<\/span> <span class="health-status">Needs work<\/span>/);
+  assert.match(html, /<strong class="health-row-name">Answer 1 \(Claude\):<\/strong> <span class="health-status">Didn(?:'|&#39;|&#x27;)t name you<\/span>/);
+  assert.match(html, /<strong class="health-row-name">Found on Google:<\/strong> <span class="health-status">Found on Google<\/span>/);
+  assert.match(html, /<strong class="health-row-name">Facebook:<\/strong> <span class="health-status">Linked from your website<\/span>/);
+  // Decoration only, after the content; the page keeps its noindex and title.
+  assert.match(html, /<div class="health-map" aria-hidden="true">/);
+  // A module script, so it runs only after the page is read (deferred).
+  assert.ok(html.includes(`<script type="module" src="${HEALTH_ORB_SCRIPT}"></script>`));
+  assert.match(html, /<meta name="robots" content="noindex, nofollow">/);
+  assert.match(html, /<title>AI Visibility Check for Zephyr Plumbing/);
+  // The orb script file is there and is small.
+  const js = await fs.readFile(fileURLToPath(new URL(`../public${HEALTH_ORB_SCRIPT}`, import.meta.url)), 'utf8');
+  assert.ok(js.length > 0 && js.length < 6000);
+});
+
+test('Step 2: the locked report shows the map and the statuses without the fixes; the full report adds the fixes', async () => {
+  const env = await startEnv({ site: fakeSite(defaultRoutes()), places: fakeLookup('places', GOOGLE_FOUND), bing: fakeLookup('bing', { status: 'not_found' }) });
+  const g = await check(env);
+  const locked = reportPage(g, { leadGate: true, unlocked: false });
+  const full = reportPage(g, { leadGate: true, unlocked: true });
+  const section = html => /<section class="health"[\s\S]*?<\/section>/.exec(html)?.[0] ?? '';
+  assert.ok(section(locked).includes('Not found in Bing map data'));
+  assert.equal(section(locked).includes('<strong>Fix:</strong>'), false);
+  assert.ok(section(full).includes('<strong>Fix:</strong>'));
+  // The same score either way.
+  assert.equal(/<span class="num">(\d+)<\/span>/.exec(locked)?.[1], /<span class="num">(\d+)<\/span>/.exec(full)?.[1]);
+});
+
+test('Step 2: a report saved before the signals still shows the map, every new row Not checked, and the same score', async () => {
+  const env = await startEnv({ site: fakeSite(defaultRoutes()) });
+  const g = await check(env);
+  const old = structuredClone(g);
+  delete old.signals;
+  delete old.profilesAt;
+  const a = reportPage(g, { leadGate: false });
+  const b = reportPage(old, { leadGate: false });
+  assert.equal(/<span class="num">(\d+)<\/span>/.exec(a)?.[1], /<span class="num">(\d+)<\/span>/.exec(b)?.[1]);
+  // The reason's "Run a new check" is the report's own link (V244: every mention of it is a link).
+  assert.match(b, /<strong class="health-row-name">Sitemap:<\/strong> <span class="health-status">Not checked<\/span> <span class="health-why">This report was made before this check existed\. <a [^>]*>Run a new check<\/a> to see it\.<\/span>/);
+  const healthSection = /<section class="health"[\s\S]*?<\/section>/.exec(b)?.[0] ?? '';
+  assert.equal(/run a new check/i.test(healthSection.replace(/<a [^>]*>[^<]*<\/a>/g, '')), false);
+  // Every section of the report is still there (nothing moved behind JavaScript).
+  for (const heading of ['What AI says', 'Score by area', 'Health of your setup']) assert.ok(b.includes(heading), heading);
 });
 
 test('U4: lookups older than 30 days are dropped from memory when new ones are kept, even without a recheck', async () => {

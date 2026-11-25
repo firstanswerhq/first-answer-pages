@@ -183,7 +183,7 @@ test('T5: the website\'s domain in another city does not hide a clear name match
   // Nothing in the typed city at all: unsure, with the reason about the website.
   const away = pickCandidate([list[0]], wanted);
   assert.equal(away.status, 'unsure');
-  assert.equal(away.reason, "We found a business with your website in a different city, so we didn't use it.");
+  assert.equal(away.reason, 'We found a business with your website in a different city than you typed. Check the city and try again.');
 });
 
 test('S12: a suite number is not the street number, and a direction word alone is close, not a mismatch', () => {
