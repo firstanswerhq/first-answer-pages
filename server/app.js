@@ -154,16 +154,20 @@ export function createApp(deps = {}) {
     notifier: ctx.notifier,
     log: line => process.stderr.write(`[grader] ${line}\n`),
   });
+  // The health map's one Google Places lookup and one Azure Maps (Bing) search per check. Off without their keys
+  // and in test runs; a test passes a fake client, or null.
+  const placesLookup = deps.placesLookup !== undefined ? deps.placesLookup : (config.testRun ? null : createPlacesLookup(config.places ?? {}));
+  const bingLookup = deps.bingLookup !== undefined ? deps.bingLookup : (config.testRun ? null : createBingLookup(config.azureMaps ?? {}));
+  // Only whether each lookup is on, for the admin page's daily count line (never the client or its key).
+  ctx.lookupsOn = { places: Boolean(placesLookup), bing: Boolean(bingLookup) };
   ctx.grader = createGrader({
     guard: ctx.gradeGuard,
     store,
     assistantProvider: ctx.assistantProvider,
     extraAssistants: deps.extraAssistants ?? createExtraAssistants(config),
     nameChecker: deps.nameChecker !== undefined ? deps.nameChecker : createNameCheck(config),
-    // The health map's one Google Places lookup and one Azure Maps (Bing) search per check. Off without their keys
-    // and in test runs; a test passes a fake client, or null.
-    placesLookup: deps.placesLookup !== undefined ? deps.placesLookup : (config.testRun ? null : createPlacesLookup(config.places ?? {})),
-    bingLookup: deps.bingLookup !== undefined ? deps.bingLookup : (config.testRun ? null : createBingLookup(config.azureMaps ?? {})),
+    placesLookup,
+    bingLookup,
     aiBudget: ctx.aiBudget,
     safeFetcher: ctx.safeFetcher,
     draftStore: createDraftStore({ store, clock, newId: ctx.newId }),

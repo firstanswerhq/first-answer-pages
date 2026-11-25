@@ -94,20 +94,32 @@ const ABBREVIATIONS = new Map([
   ['southeast', 'se'], ['southwest', 'sw'], ['suite', 'ste'], ['apartment', 'apt'], ['floor', 'fl'],
 ]);
 
+/** Words after which a number is a suite, unit or floor, never the street number ("Suite 200, 123 Main St"). */
+const UNIT_WORDS = new Set(['ste', 'suite', 'apt', 'apartment', 'unit', '#', 'fl', 'floor', 'rm', 'room']);
+
+/** Direction words, after ABBREVIATIONS ("North" is "n"). */
+const DIRECTIONS = new Set(['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw']);
+
+/** Lower case words, with "." and "," as spaces and "#" kept as its own word. */
+function addressWords(text) {
+  return String(text ?? '').toLowerCase().replace(/[.,]/g, ' ').replace(/#/g, ' # ').split(/\s+/).filter(Boolean);
+}
+
+const isStreetNumber = t => /^\d{1,6}[a-z]?$/.test(t);
+
 /** The pieces of a street address that count: the number, the street words, and the ZIP. */
 export function addressParts(address) {
-  const text = String(address ?? '').toLowerCase().replace(/[.,#]/g, ' ').replace(/\s+/g, ' ').trim();
-  if (!text) return null;
-  const zip = /\b(\d{5})(?:-\d{4})?\b\s*$/.exec(text)?.[1] ?? '';
-  const first = text.split(/\s+/);
-  const numberAt = first.findIndex(t => /^\d{1,6}[a-z]?$/.test(t));
+  const first = addressWords(address);
+  if (first.length === 0) return null;
+  const zip = /\b(\d{5})(?:-\d{4})?\b\s*$/.exec(first.join(' '))?.[1] ?? '';
+  const numberAt = first.findIndex((t, i) => isStreetNumber(t) && !(i > 0 && UNIT_WORDS.has(first[i - 1])));
   if (numberAt === -1) return null;
   const number = first[numberAt];
   const rest = first.slice(numberAt + 1).map(t => ABBREVIATIONS.get(t) ?? t);
-  // The street name is what follows the number up to the suite, city or state (stop at "ste", "apt" or a ZIP).
+  // The street name is what follows the number up to the suite, city or state (stop at a unit word or a ZIP).
   const street = [];
   for (const t of rest) {
-    if (t === 'ste' || t === 'apt' || t === 'fl' || /^\d{5}$/.test(t)) break;
+    if (UNIT_WORDS.has(t) || /^\d{5}$/.test(t)) break;
     street.push(t);
     if (street.length >= 4) break;
   }
@@ -115,30 +127,44 @@ export function addressParts(address) {
   return { number, street: street.join(' '), zip };
 }
 
+const sameStreet = (a, b) => a === b || a.startsWith(b) || b.startsWith(a);
+const withoutDirections = street => street.split(' ').filter(t => !DIRECTIONS.has(t)).join(' ');
+
 /**
  * 'match' when the street number and street name are the same (St or Street, Ave or Avenue, case and punctuation
- * ignored); 'close' when they are the same but the ZIP differs; 'differ' when the number or the street is
- * different; 'unknown' when either side has no street number and street name to read.
+ * ignored); 'close' when they are the same but the ZIP differs, or only a direction word ("N") differs; 'differ' when
+ * the number or the street is different; 'unknown' when either side has no street number and street name to read.
  */
 export function compareAddresses(a, b) {
   const x = addressParts(a);
   const y = addressParts(b);
   if (!x || !y) return 'unknown';
-  const streetSame = x.street === y.street
-    || x.street.startsWith(y.street) || y.street.startsWith(x.street);
-  if (x.number === y.number && streetSame) {
+  if (x.number !== y.number) return 'differ';
+  if (sameStreet(x.street, y.street)) {
     return x.zip && y.zip && x.zip !== y.zip ? 'close' : 'match';
   }
+  const bareX = withoutDirections(x.street);
+  const bareY = withoutDirections(y.street);
+  if (bareX && bareY && sameStreet(bareX, bareY)) return 'close';
   return 'differ';
 }
 
-/** True when the street number and street name of `address` are written anywhere in `text`. */
+/**
+ * True when the street number and street name of `address` are written anywhere in `text`. The street word is the
+ * first one that is not a direction, and it may come one or two words after the number ("12 N Main St").
+ */
 export function addressInText(address, text) {
   const parts = addressParts(address);
   if (!parts) return false;
-  const body = ` ${String(text ?? '').slice(0, 200000).toLowerCase().replace(/[.,#]/g, ' ').replace(/\s+/g, ' ')} `;
-  const normalized = body.split(' ').map(t => ABBREVIATIONS.get(t) ?? t).join(' ');
-  return normalized.includes(` ${parts.number} ${parts.street.split(' ')[0]} `);
+  const word = parts.street.split(' ').find(t => !DIRECTIONS.has(t));
+  if (!word) return false;
+  const tokens = addressWords(String(text ?? '').slice(0, 200000)).map(t => ABBREVIATIONS.get(t) ?? t);
+  for (let i = 0; i < tokens.length; i += 1) {
+    if (tokens[i] !== parts.number) continue;
+    if (tokens[i + 1] === word) return true;
+    if (DIRECTIONS.has(tokens[i + 1]) && tokens[i + 2] === word) return true;
+  }
+  return false;
 }
 
 // ---- hours ------------------------------------------------------------------------------------------------------
@@ -214,6 +240,16 @@ function inCity(candidate, city) {
 export function pickCandidate(candidates, wanted) {
   const list = Array.isArray(candidates) ? candidates.filter(c => c && typeof c === 'object') : [];
   if (list.length === 0) return { status: 'not_found', reason: 'No result came back for that name and city.' };
+  // The website's domain is the strongest sign, so it is tried first (a unique match in the typed city is found).
+  const wantedDomain = registeredDomain(wanted.website);
+  if (wantedDomain) {
+    const sameSite = list.filter(c => registeredDomain(c.website) === wantedDomain);
+    if (sameSite.length === 1) {
+      const only = sameSite[0];
+      if (!norm(wanted.city) || inCity(only, wanted.city)) return { status: 'found', place: only };
+      return { status: 'unsure', reason: "A business with your website showed up in another place, so we didn't count it." };
+    }
+  }
   const similar = list.filter(c => ['match', 'close'].includes(compareNames(c.name, wanted.name)));
   const here = similar.filter(c => inCity(c, wanted.city));
   if (here.length === 1) return { status: 'found', place: here[0] };
@@ -228,5 +264,6 @@ export function pickCandidate(candidates, wanted) {
   if (similar.length > 0) {
     return { status: 'unsure', reason: "A business with your name showed up in another place, so we didn't count it." };
   }
-  return { status: 'not_found', reason: 'None of the results looked like your business.' };
+  // Results came back but none matched the name. That is not proof the business is missing.
+  return { status: 'unsure', reason: "We couldn't tell which result is your business, so we didn't pick one." };
 }

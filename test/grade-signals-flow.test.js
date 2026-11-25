@@ -83,13 +83,16 @@ const BING_FOUND = {
   place: { name: 'Zephyr Plumbing', phone: '+1 615-555-0142', address: '12 Main Street, Nashville, TN 37203', website: 'https://zephyr.example' },
 };
 
-async function startEnv({ site, places = null, bing = null, gradeLimit = 100000, published } = {}) {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'fap-signals-'));
-  for (const name of ['listings.json', 'categories.json']) {
-    await fs.copyFile(path.join(REPO_DATA, name), path.join(dir, name));
+async function startEnv({ site, places = null, bing = null, gradeLimit = 100000, published, dir: reuseDir, at = NOW } = {}) {
+  // `dir` reuses another env's data folder: a restart of the same site (what was in memory is gone).
+  const dir = reuseDir ?? await fs.mkdtemp(path.join(os.tmpdir(), 'fap-signals-'));
+  if (!reuseDir) {
+    for (const name of ['listings.json', 'categories.json']) {
+      await fs.copyFile(path.join(REPO_DATA, name), path.join(dir, name));
+    }
   }
   if (published) await fs.writeFile(path.join(dir, 'published.json'), JSON.stringify(published));
-  const clock = { t: NOW, now() { return this.t; } };
+  const clock = { t: at, now() { return this.t; } };
   const aiBudget = createAiBudget({ clock, limit: 100000, gradeLimit });
   const claude = { name: 'anthropic', calls: 0, async ask() { claude.calls += 1; return { answer: NOT_NAMED, provider: 'anthropic', model: 'stub', webSearch: true }; } };
   let n = 0;
@@ -114,7 +117,17 @@ async function startEnv({ site, places = null, bing = null, gradeLimit = 100000,
     await aiBudget.flush?.();
     await fs.rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 }).catch(() => {});
   });
-  return { ctx: app.locals.ctx, claude, aiBudget, clock };
+  return { ctx: app.locals.ctx, claude, aiBudget, clock, dir, app };
+}
+
+/** Recheck a Grade and wait until it is done. */
+async function recheckDone(env, id) {
+  const before = (await env.ctx.grader.get(id)).recheckedAt ?? null;
+  assert.deepEqual(await env.ctx.grader.recheck(id), { started: true });
+  return until(async () => {
+    const x = await env.ctx.grader.get(id);
+    return x.recheckedAt && x.recheckedAt !== before && !x.recheckRunning ? x : null;
+  }, 'the recheck');
 }
 
 async function until(fn, what) {
@@ -147,9 +160,9 @@ test('the signals are saved with the Grade: one Google lookup, one Bing search, 
   // The sitemap: the address in robots.txt, asked for once, and /sitemap.xml not asked for.
   assert.equal(site.calls.filter(u => u.endsWith('/sitemap-main.xml')).length, 1);
   assert.equal(site.calls.some(u => u.endsWith('/sitemap.xml')), false);
-  // What was saved.
-  assert.equal(g.profiles.places.status, 'found');
-  assert.equal(g.profiles.bing.status, 'found');
+  // What was saved: the signals and when the lookups were made, never the lookup results themselves (S5).
+  assert.equal('profiles' in g, false);
+  assert.equal(g.profilesAt, new Date(NOW).toISOString());
   assert.equal(g.signals.version, 1);
   assert.equal(g.signals.website.sitemap.label, 'Found');
   assert.equal(g.signals.website.answersQuestions.status, 'good');
@@ -202,8 +215,7 @@ test('the signals never change the score or the Checks: the same site with and w
 
 test('without keys (no lookups) every Google and Bing signal is Not checked, and the check is the same otherwise', async () => {
   const g = await check(await startEnv({ site: fakeSite(defaultRoutes()) }));
-  assert.equal(g.profiles.places.status, 'off');
-  assert.equal(g.profiles.bing.status, 'off');
+  assert.equal('profiles' in g, false);
   for (const [id, s] of Object.entries(g.signals.google)) assert.equal(s.status, 'not_checked', id);
   for (const [id, s] of Object.entries(g.signals.bing)) assert.equal(s.status, 'not_checked', id);
   assert.equal(g.signals.google.found.reason, "Google lookups aren't turned on here.");
@@ -214,7 +226,8 @@ test('a lookup that fails or throws never stops the report, and nothing about it
   const bing = fakeLookup('bing', { status: 'error', reason: "We couldn't reach Bing this time." });
   const g = await check(await startEnv({ site: fakeSite(defaultRoutes()), places, bing }));
   assert.equal(g.status, 'done');
-  assert.equal(g.profiles.places.status, 'error');
+  assert.equal('profiles' in g, false);
+  assert.equal(g.signals.google.found.reason, "We couldn't reach the lookup this time.");
   assert.equal(JSON.stringify(g).includes('secret details'), false, 'no raw error text is saved');
   for (const [id, s] of Object.entries(g.signals.google)) assert.equal(s.status, 'not_checked', id);
   assert.equal(g.signals.bing.found.reason, "We couldn't reach Bing this time.");
@@ -228,9 +241,10 @@ test('the lookups never use the day\'s last calls: with 12 left they are skipped
   const g = await check(env);
   assert.equal(places.calls.length, 0);
   assert.equal(bing.calls.length, 0);
-  assert.equal(g.profiles.places.status, 'limit');
   assert.equal(g.signals.google.found.status, 'not_checked');
-  assert.match(g.signals.google.found.reason, /Today's limit for AI questions/);
+  // S14: only the reserve held them back, so the reason says that, not that the limit was reached.
+  assert.equal(g.signals.google.found.reason, "We kept today's last lookups for new checks, so we didn't look this up.");
+  assert.equal(g.signals.bing.found.reason, "We kept today's last lookups for new checks, so we didn't look this up.");
   assert.equal(env.claude.calls, 1, 'the AI question was asked');
   assert.equal(g.ai.length, 1);
 });
@@ -253,7 +267,131 @@ test('a recheck reads the website again and reuses the saved lookups: no second 
   assert.equal(env.aiBudget.usage({ kind: 'grade' }).used, before, 'no new paid call');
   assert.equal(site.calls.filter(u => u.endsWith('/sitemap-main.xml')).length, sitemapAsks + 1, 'the website is read again');
   assert.equal(after.signals.google.found.status, 'good');
-  assert.deepEqual(after.profiles, g.profiles);
+  assert.equal('profiles' in after, false, 'the lookup results are still not saved');
+  assert.equal(after.profilesAt, g.profilesAt);
+});
+
+test('S5: the saved Grade holds no Google or Bing details; only the signals and the lookup time', async () => {
+  const env = await startEnv({ site: fakeSite(defaultRoutes()), places: fakeLookup('places', GOOGLE_FOUND), bing: fakeLookup('bing', BING_FOUND) });
+  const g = await check(env);
+  const file = await fs.readFile(path.join(env.dir, 'grades.json'), 'utf8');
+  // Google's own wording of the name and address, and its rating count, appear nowhere in the saved file.
+  for (const raw of ['Zephyr Plumbing LLC', '12 Main St, Nashville, TN 37203, USA', '"ratingCount"', '"businessStatus"', '"primaryType"']) {
+    assert.equal(file.includes(raw), false, raw);
+  }
+  assert.equal(g.signals.google.found.status, 'good');
+});
+
+test('S5: a recheck more than 30 days later makes no lookup and says to run a new check', async () => {
+  const places = fakeLookup('places', GOOGLE_FOUND);
+  const bing = fakeLookup('bing', BING_FOUND);
+  const env = await startEnv({ site: fakeSite(defaultRoutes()), places, bing });
+  const g = await check(env);
+  // Exactly 30 days later the kept lookups are still used.
+  env.clock.t = NOW + 30 * 86400000;
+  const within = await recheckDone(env, g.id);
+  assert.equal(within.signals.google.found.status, 'good');
+  // A day later they are too old.
+  env.clock.t = NOW + 31 * 86400000;
+  const late = await recheckDone(env, g.id);
+  assert.equal(places.calls.length, 1, 'no new Google lookup');
+  assert.equal(bing.calls.length, 1, 'no new Bing search');
+  for (const [id, s] of Object.entries(late.signals.google)) {
+    assert.equal(s.status, 'not_checked', id);
+    assert.equal(s.reason, 'Run a new check to look on Google again.', id);
+  }
+  for (const [id, s] of Object.entries(late.signals.bing)) {
+    assert.equal(s.status, 'not_checked', id);
+    assert.equal(s.reason, 'Run a new check to look on Bing again.', id);
+  }
+  // The website signals are still read again.
+  assert.equal(late.signals.website.sitemap.status, 'good');
+});
+
+test('S5: after a restart nothing of the lookups is left, so a recheck says to run a new check', async () => {
+  const places = fakeLookup('places', GOOGLE_FOUND);
+  const first = await startEnv({ site: fakeSite(defaultRoutes()), places });
+  const g = await check(first);
+  await first.aiBudget.flush?.();
+  const restarted = await startEnv({ site: fakeSite(defaultRoutes()), places, dir: first.dir });
+  const after = await recheckDone(restarted, g.id);
+  assert.equal(places.calls.length, 1);
+  assert.equal(after.signals.google.phoneMatch.reason, 'Run a new check to look on Google again.');
+});
+
+test('S5 and S14: a Grade from before the lookups existed, or one saved with raw lookups, is cleaned and read right', async () => {
+  const env = await startEnv({ site: fakeSite(defaultRoutes()) });
+  const g = await check(env);
+  // Make two Grades by hand: one from before this step (no lookup time), one saved by the first build (raw lookups).
+  const file = path.join(env.dir, 'grades.json');
+  const list = JSON.parse(await fs.readFile(file, 'utf8'));
+  const base = list.find(x => x.id === g.id);
+  const old = { ...structuredClone(base), id: 'sgold00000000000000001' };
+  delete old.profilesAt;
+  delete old.signals;
+  const raw = { ...structuredClone(base), id: 'sgraw00000000000000001', profiles: GOOGLE_FOUND };
+  delete raw.profilesAt;
+  await fs.writeFile(file, JSON.stringify([...list, old, raw]));
+  const restarted = await startEnv({ site: fakeSite(defaultRoutes()), dir: env.dir });
+  const oldAfter = await recheckDone(restarted, old.id);
+  assert.equal(oldAfter.signals.google.found.reason, 'This report was made before this check existed. Run a new check to see it.');
+  assert.equal(oldAfter.signals.bing.found.reason, 'This report was made before this check existed. Run a new check to see it.');
+  // The raw lookups saved by the first build are removed from every Grade, and their time is kept.
+  const saved = JSON.parse(await fs.readFile(file, 'utf8'));
+  const rawAfter = saved.find(x => x.id === raw.id);
+  assert.equal('profiles' in rawAfter, false);
+  assert.equal(rawAfter.profilesAt, raw.finishedAt);
+  assert.equal(JSON.stringify(saved).includes('Zephyr Plumbing LLC'), false);
+  const rawRecheck = await recheckDone(restarted, raw.id);
+  assert.equal(rawRecheck.signals.google.found.reason, 'Run a new check to look on Google again.');
+});
+
+test('S6: each lookup\'s outcome is counted for the day (ok or error), with no key or body', async () => {
+  const env = await startEnv({
+    site: fakeSite(defaultRoutes()),
+    places: fakeLookup('places', GOOGLE_FOUND),
+    bing: fakeLookup('bing', { status: 'error', reason: "We couldn't reach Bing this time." }),
+  });
+  await check(env);
+  await check(env, { ...INPUT, name: 'Zephyr Plumbing Two' });
+  const notes = env.aiBudget.notes();
+  assert.equal(notes.placesOk, 2);
+  assert.equal(notes.placesError ?? 0, 0);
+  assert.equal(notes.bingOk ?? 0, 0);
+  assert.equal(notes.bingError, 2);
+  const summary = env.ctx.gradeGuard.summary();
+  assert.deepEqual(summary.lookups, { placesOk: 2, placesError: 0, bingOk: 0, bingError: 2 });
+  // Not found and unsure are answers, so they count as ok; a lookup that is off or held back is not counted.
+  const env2 = await startEnv({
+    site: fakeSite(defaultRoutes()),
+    places: fakeLookup('places', { status: 'not_found', reason: 'x' }),
+    bing: fakeLookup('bing', { status: 'unsure', reason: 'x' }),
+  });
+  await check(env2);
+  assert.deepEqual(env2.ctx.gradeGuard.summary().lookups, { placesOk: 1, placesError: 0, bingOk: 1, bingError: 0 });
+  const off = await startEnv({ site: fakeSite(defaultRoutes()) });
+  await check(off);
+  assert.deepEqual(off.ctx.gradeGuard.summary().lookups, { placesOk: 0, placesError: 0, bingOk: 0, bingError: 0 });
+});
+
+test('S6: the admin page shows the lookup count line when a lookup is on, and not when none is', async () => {
+  const env = await startEnv({ site: fakeSite(defaultRoutes()), places: fakeLookup('places', GOOGLE_FOUND), bing: fakeLookup('bing', BING_FOUND) });
+  await check(env);
+  const server = env.app.listen(0, '127.0.0.1');
+  cleanups.push(() => new Promise(r => server.close(r)));
+  await new Promise(r => server.once('listening', r));
+  const page = await fetch(`http://127.0.0.1:${server.address().port}/admin/grades`, { headers: { authorization: 'Bearer signals-token', accept: 'text/html' } });
+  assert.equal(page.status, 200);
+  const text = await page.text();
+  assert.ok(text.includes('Lookups today: Google 1 ok, 0 errors; Bing 1 ok, 0 errors.'), 'the line is shown');
+  assert.equal(/AIza|subscription-key/i.test(text), false, 'no key');
+
+  const none = await startEnv({ site: fakeSite(defaultRoutes()) });
+  const server2 = none.app.listen(0, '127.0.0.1');
+  cleanups.push(() => new Promise(r => server2.close(r)));
+  await new Promise(r => server2.once('listening', r));
+  const page2 = await fetch(`http://127.0.0.1:${server2.address().port}/admin/grades`, { headers: { authorization: 'Bearer signals-token', accept: 'text/html' } });
+  assert.equal((await page2.text()).includes('Lookups today'), false);
 });
 
 test('a site that times out or blocks us gives gray website signals, and the lookups still work', async () => {

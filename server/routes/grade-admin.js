@@ -65,6 +65,12 @@ function protectionBlock(ctx) {
     `Human check today: ${whole(counts.humanPass)} passed, ${whole(counts.human)} turned away.`,
     `Limits today: ${whole(counts.limit)} turned away by the per-address limits, ${whole(counts.network)} by the per-network limit.`,
   ];
+  // The Google and Bing lookups' health today, only when a lookup is set up, so a day when every one fails shows up.
+  if (ctx.lookupsOn?.places || ctx.lookupsOn?.bing) {
+    const lookups = summary.lookups ?? {};
+    const errors = n => `${whole(n)} ${whole(n) === 1 ? 'error' : 'errors'}`;
+    lines.push(`Lookups today: Google ${whole(lookups.placesOk)} ok, ${errors(lookups.placesError)}; Bing ${whole(lookups.bingOk)} ok, ${errors(lookups.bingError)}.`);
+  }
   return `<ul class="admin-protection">\n${lines.map(l => `    <li>${escapeHtml(l)}</li>`).join('\n')}\n  </ul>`;
 }
 

@@ -32,6 +32,17 @@ export function sitemapAddress(robotsText, base) {
   }
 }
 
+/**
+ * True when a sitemap reply is gzip-compressed (a ".xml.gz" sitemap): the address ends in .gz, the content type says
+ * gzip, or the body starts with the gzip magic bytes (read as text, the second byte may come back as U+FFFD).
+ * Such a sitemap is not unpacked here; it still counts as found.
+ */
+export function isGzipSitemap({ url, contentType, text } = {}) {
+  if (typeof url === 'string' && /\.gz(?:$|[?#])/i.test(url)) return true;
+  if (typeof contentType === 'string' && /gzip/i.test(contentType)) return true;
+  return typeof text === 'string' && /^\u001f[\u008b\ufffd]/.test(text);
+}
+
 const dateMs = text => {
   const ms = Date.parse(String(text).trim());
   return Number.isFinite(ms) ? ms : null;

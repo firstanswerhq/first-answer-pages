@@ -4,7 +4,8 @@
  *
  * Same rules as places.js: the key is never put in a result, a log line or an error; every outcome is an object with a
  * `status` ('found', 'not_found', 'unsure' or 'error') and, when not found, a safe one-line `reason`; it never throws;
- * `fetch` is injectable so tests make no real call.
+ * `fetch` is injectable so tests make no real call. Azure Maps data is not Bing Places itself, so a miss here is never
+ * shown red. Before go-live, confirm `search/poi/json?api-version=1.0` still answers with one real call.
  */
 
 import { LOOKUP_TIMEOUT_MS } from './health-constants.js';
@@ -41,12 +42,18 @@ export function createBingLookup({ apiKey, fetch: fetchImpl = globalThis.fetch, 
     async lookup({ name, city, state, website } = {}) {
       const controller = new AbortController();
       try {
+        // The key goes in a header, never in the address, so no log of the address can show it. The form is US-only.
         const query = new URLSearchParams({
-          'api-version': '1.0', query: [name, city, state].filter(Boolean).join(' '), limit: '5', 'subscription-key': key,
+          'api-version': '1.0', query: [name, city, state].filter(Boolean).join(' '), limit: '5', countrySet: 'US',
         });
-        const res = await withTimeout(fetchImpl(`${ENDPOINT}?${query}`, { signal: controller.signal }), timeoutMs, () => controller.abort());
-        if (!res || res.ok !== true) return { status: 'error', reason: BING_ERROR_REASON };
-        const data = await withTimeout(res.json(), timeoutMs, () => controller.abort());
+        // One timer for the whole lookup (the request and reading its body).
+        const work = async () => {
+          const res = await fetchImpl(`${ENDPOINT}?${query}`, { headers: { 'subscription-key': key }, signal: controller.signal });
+          if (!res || res.ok !== true) return null;
+          return res.json();
+        };
+        const data = await withTimeout(work(), timeoutMs, () => controller.abort());
+        if (data === null || data === undefined) return { status: 'error', reason: BING_ERROR_REASON };
         const places = (Array.isArray(data?.results) ? data.results : []).slice(0, 10).map(reduceBingResult);
         const picked = pickCandidate(places, { name, city, website });
         return picked.status === 'found' ? { status: 'found', place: picked.place } : picked;

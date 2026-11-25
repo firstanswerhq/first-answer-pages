@@ -60,8 +60,9 @@ test('Places: one request, with only the fields the health map uses, and the key
   for (const wanted of [
     'places.displayName', 'places.formattedAddress', 'places.nationalPhoneNumber', 'places.websiteUri',
     'places.regularOpeningHours', 'places.businessStatus', 'places.primaryType', 'places.rating',
-    'places.userRatingCount', 'places.reviews.publishTime',
+    'places.userRatingCount', 'places.reviews',
   ]) assert.ok(fields.includes(wanted), wanted);
+  assert.equal(fields.includes('places.reviews.publishTime'), false, 'S6: no nested review mask');
   assert.equal(fields.length, 10, 'no other field is asked for');
   assert.equal(result.status, 'found');
   assert.equal(JSON.stringify(result).includes(KEY), false);
@@ -94,14 +95,41 @@ test('Places: a place with no reviews and no hours reads as zero reviews and no 
   assert.deepEqual(reducePlace(null).hoursByDay, {});
 });
 
-test('Places: no results is "not found"; results that are nothing like the business is "not found"', async () => {
+test('Places: no results is "not found"; results that are nothing like the business are "unsure", never "not found" (S1)', async () => {
   const none = await createPlacesLookup({ apiKey: KEY, fetch: fakeFetch(() => ok({})) }).lookup(QUERY);
   assert.equal(none.status, 'not_found');
   const other = await createPlacesLookup({
     apiKey: KEY,
-    fetch: fakeFetch(() => ok({ places: [googlePlace({ displayName: { text: 'Ridgeline Roofing' } })] })),
+    fetch: fakeFetch(() => ok({ places: [googlePlace({ displayName: { text: 'Ridgeline Roofing' }, websiteUri: 'https://ridgeline.example/' })] })),
   }).lookup(QUERY);
-  assert.equal(other.status, 'not_found');
+  assert.equal(other.status, 'unsure');
+  assert.equal(other.reason, "We couldn't tell which result is your business, so we didn't pick one.");
+  assert.equal('place' in other, false);
+});
+
+test('S1: a result with the same website is found even when Google spells the name differently', async () => {
+  const joes = { name: "Joe's Plumbing", city: 'Nashville', state: 'TN', website: 'https://www.joesplumbing.example/' };
+  const listed = googlePlace({ displayName: { text: "Joseph's Plumbing Co" }, websiteUri: 'https://joesplumbing.example/contact' });
+  const found = await createPlacesLookup({ apiKey: KEY, fetch: fakeFetch(() => ok({ places: [listed] })) }).lookup(joes);
+  assert.equal(found.status, 'found');
+  assert.equal(found.place.name, "Joseph's Plumbing Co");
+  // Without the website there is nothing to tie the result to the business: unsure, not red.
+  const noSite = await createPlacesLookup({ apiKey: KEY, fetch: fakeFetch(() => ok({ places: [listed] })) }).lookup({ ...joes, website: '' });
+  assert.equal(noSite.status, 'unsure');
+  // The same website in another city is not counted.
+  const elsewhere = googlePlace({ displayName: { text: "Joseph's Plumbing Co" }, websiteUri: 'https://joesplumbing.example/', formattedAddress: '9 Elm St, Memphis, TN 38103, USA' });
+  const away = await createPlacesLookup({ apiKey: KEY, fetch: fakeFetch(() => ok({ places: [elsewhere] })) }).lookup(joes);
+  assert.equal(away.status, 'unsure');
+});
+
+test('S7: the time limit covers the request and the body together (a slow body is cut off within one limit)', async () => {
+  const slowBody = fakeFetch(() => new Promise(resolve => setTimeout(() => resolve({
+    ok: true, status: 200, json: () => new Promise(r => setTimeout(() => r({ places: [googlePlace()] }), 60)),
+  }), 60)));
+  const started = Date.now();
+  const result = await createPlacesLookup({ apiKey: KEY, fetch: slowBody, timeoutMs: 90 }).lookup(QUERY);
+  assert.equal(result.status, 'error', 'request 60 ms plus body 60 ms is past the one 90 ms limit');
+  assert.ok(Date.now() - started < 1000);
 });
 
 test('Places: two close results, or the right name in another city, are "unsure" and nothing is picked', async () => {
@@ -190,6 +218,11 @@ test('Bing: one search, and a match is reduced to name, phone, address and websi
   const url = new URL(f.calls[0].url);
   assert.equal(url.origin + url.pathname, 'https://atlas.microsoft.com/search/poi/json');
   assert.equal(url.searchParams.get('query'), 'Zephyr Plumbing Nashville TN');
+  // S8: the key is a header, never part of the address; the search is US-only.
+  assert.equal(f.calls[0].url.includes(AZURE_KEY), false, 'the key is not in the address');
+  assert.equal(url.searchParams.has('subscription-key'), false);
+  assert.equal(f.calls[0].init.headers['subscription-key'], AZURE_KEY);
+  assert.equal(url.searchParams.get('countrySet'), 'US');
   assert.equal(result.status, 'found');
   assert.deepEqual(result.place, {
     name: 'Zephyr Plumbing', address: '12 Main Street, Nashville, TN 37203', city: 'Nashville',
@@ -204,7 +237,7 @@ test('Bing: no results, a different business, an error and a timeout never throw
   assert.equal((await createBingLookup({
     apiKey: AZURE_KEY,
     fetch: fakeFetch(() => ok({ results: [azureResult({ poi: { name: 'Ridgeline Roofing' } })] })),
-  }).lookup(QUERY)).status, 'not_found');
+  }).lookup(QUERY)).status, 'unsure', 'S1: results that do not match are unsure, not "not found"');
   for (const f of [
     fakeFetch(() => ({ ok: false, status: 401, json: async () => ({}) })),
     fakeFetch(() => { throw new Error(`fetch failed for subscription-key=${AZURE_KEY}`); }),

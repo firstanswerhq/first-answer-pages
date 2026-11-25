@@ -90,8 +90,10 @@ test('picking a result: one clear match is found; none is not found; several or 
   assert.equal(pickCandidate([cand('Zephyr Plumbing LLC', '12 Main St, Nashville, TN'), cand('Other Co', '1 Oak, Nashville, TN')], wanted).status, 'found');
   // nothing came back
   assert.equal(pickCandidate([], wanted).status, 'not_found');
-  // results came back but none looks like the business
-  assert.equal(pickCandidate([cand('Ridgeline Roofing', '1 Oak, Nashville, TN')], wanted).status, 'not_found');
+  // results came back but none looks like the business: that is not proof it is missing, so it is unsure (S1)
+  const none = pickCandidate([cand('Ridgeline Roofing', '1 Oak, Nashville, TN')], wanted);
+  assert.equal(none.status, 'unsure');
+  assert.equal(none.reason, "We couldn't tell which result is your business, so we didn't pick one.");
   // a chain: the right name in another city is not counted, and nothing is guessed
   const chain = pickCandidate([cand('Zephyr Plumbing', '9 Elm, Memphis, TN'), cand('Zephyr Plumbing', '3 Pine, Knoxville, TN')], wanted);
   assert.equal(chain.status, 'unsure');
@@ -112,4 +114,36 @@ test('picking a result: one clear match is found; none is not found; several or 
   assert.equal(pickCandidate([cand('Zephyr Plumbing', '12 Main St, Nashville, TN')], { name: 'Zephyr Plumbing', city: 'Nashvile' }).status, 'unsure');
   // a business outside the US matches by the city field when the address has none
   assert.equal(pickCandidate([cand('Zephyr Plumbing', '12 King St', { city: 'Toronto' })], { name: 'Zephyr Plumbing', city: 'Toronto' }).status, 'found');
+});
+
+test('S1: the website domain is tried first, so a name Google writes differently is still found', () => {
+  const joes = { name: "Joe's Plumbing", city: 'Nashville', website: 'https://joesplumbing.example/' };
+  const listed = cand("Joseph's Plumbing Co", '12 Main St, Nashville, TN', { website: 'http://www.joesplumbing.example/home' });
+  assert.equal(pickCandidate([listed, cand('Ridgeline Roofing', '1 Oak, Nashville, TN')], joes).status, 'found');
+  assert.equal(pickCandidate([listed], { ...joes, website: '' }).status, 'unsure', 'no website to tie it to');
+  assert.equal(pickCandidate([listed], { ...joes, city: '' }).status, 'found', 'no city typed: the domain alone counts');
+  assert.equal(pickCandidate([cand("Joseph's Plumbing Co", '9 Elm, Memphis, TN', { website: 'https://joesplumbing.example' })], joes).status, 'unsure');
+  // "not_found" only when nothing came back at all
+  for (const list of [[cand('A', '1 A St')], [cand('B', '', { website: 'https://b.example' })]]) {
+    assert.notEqual(pickCandidate(list, joes).status, 'not_found');
+  }
+});
+
+test('S12: a suite number is not the street number, and a direction word alone is close, not a mismatch', () => {
+  assert.equal(addressParts('Suite 200, 123 Main St, Nashville, TN 37203').number, '123');
+  assert.equal(addressParts('#4 210 Oak Ave').number, '210');
+  assert.equal(addressParts('Unit 7, 55 Elm Rd').number, '55');
+  assert.equal(addressParts('Apt 3B 88 Pine St').number, '88');
+  assert.equal(addressParts('Floor 2, 9 Lake Dr').number, '9');
+  assert.equal(addressParts('Room 101, 77 Hill Ct').number, '77');
+  assert.equal(addressParts('123 Main St #200, Nashville').street, 'main st');
+  assert.equal(compareAddresses('Suite 200, 123 Main St, Nashville, TN', '123 Main St, Nashville, TN'), 'match');
+  assert.equal(compareAddresses('123 N Main St, Nashville, TN', '123 Main St, Nashville, TN'), 'close');
+  assert.equal(compareAddresses('123 North Main Street', '123 S Main St'), 'close');
+  assert.equal(compareAddresses('123 N Main St', '124 Main St'), 'differ');
+  assert.equal(compareAddresses('123 N Main St', '123 Oak St'), 'differ');
+  assert.equal(addressInText('123 N Main St, Nashville', 'Find us at 123 Main Street.'), true);
+  assert.equal(addressInText('123 Main St, Nashville', 'Find us at 123 N. Main Street.'), true);
+  assert.equal(addressInText('Suite 200, 123 Main St', 'Find us at 123 Main Street, Suite 200.'), true);
+  assert.equal(addressInText('123 Main St', 'Find us at 200 Main Street.'), false);
 });

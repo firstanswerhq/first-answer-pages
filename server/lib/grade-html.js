@@ -961,15 +961,15 @@ function leadForm(grade, { values = {}, errors = {} } = {}) {
 }
 
 function recheckBlock(grade, rechecking) {
+  // One sentence, used under the recheck button and on a report with no website (V251, V257, S17).
+  const askAgain = `To ask AI again after your changes, ${runNewLink(grade, 'run a new check')}.`;
   if (!grade.input.website) {
-    // The same sentence as under the recheck button of every other report (V251, V257).
-    return `<p class="hint">You didn't give a website, so there is nothing to check again. Your fix kit still has a draft you can use. To ask AI again after your changes, ${runNewLink(grade, 'run a new check')}.</p>`;
+    return `<p class="hint">You didn't give a website, so there is nothing to check again. Your fix kit still has a draft you can use. ${askAgain}</p>`;
   }
   // When the AI part is what is missing, "Check again" would not bring it back; the button says what it does (V203).
   // A Grade saved by the old rescue line says "ok" but is still partial, so the state alone is not used (V225-4).
   const aiState = grade.aiMain?.state;
   const aiMissing = dailyLimitHit(grade) || (isPartialScore(grade) && aiState !== 'not_connected' && aiState !== 'off');
-  const askAgain = `To ask AI again after your changes, ${runNewLink(grade, 'run a new check')}.`;
   const parts = [];
   if (rechecking) {
     parts.push('<p class="notice" role="status" data-grade-rechecking>Checking your website again. This page updates by itself.</p>');

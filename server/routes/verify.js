@@ -70,6 +70,9 @@ export function verifyPage({ draftId, listing, status, price, fees, note, testMo
   let payStep;
   if (status.removed) {
     payStep = `<p>Verification for this listing has been turned off. Please ${contact}.</p>`;
+  } else if (status.waived) {
+    // The admin waived the fee: nothing was paid, so the page never says "Fee paid".
+    payStep = `<p>${done} No fee for this listing.</p>`;
   } else if (status.paid && !status.canRenew) {
     payStep = status.plan === 'yearly'
       ? `<p>${done} Fee paid. Paid through ${escapeHtml(formatDay(status.paidThrough))}. It will not renew by itself. Come back to this page to pay for another year.</p>`

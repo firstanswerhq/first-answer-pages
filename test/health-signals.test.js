@@ -13,7 +13,10 @@ import fc from 'fast-check';
 import { readPageFacts } from '../server/lib/page-facts.js';
 import {
   buildSignals, sitemapSignal, signalRows, SIGNAL_ROWS, FIXES, textHasService, serviceWords,
+  LABELS, OLD_REPORT_REASON, STALE_GOOGLE_REASON, STALE_BING_REASON, LOOKUP_RESERVE_REASON, LOOKUP_LIMIT_REASON,
 } from '../server/lib/health-signals.js';
+import { isGzipSitemap } from '../server/lib/sitemap-read.js';
+import { REVIEW_COUNT_GREEN, RATING_GREEN, RATING_AMBER, NEWEST_REVIEW_DAYS } from '../server/lib/health-constants.js';
 
 const NOW = Date.UTC(2026, 10, 24, 18, 0, 0);
 const DAY = 86400000;
@@ -181,7 +184,9 @@ test('a page for each service: counted from the sitemap and the links; one page 
   const one = readPageFacts('<h1>Zephyr</h1><p>' + 'We are plumbers. '.repeat(20) + '</p><a href="/contact">Contact</a>');
   const noSitemap = null;
   assert.equal(build({ facts: one, sitemap: noSitemap }).website.pagePerService.status, 'partly');
-  assert.equal(build({ facts: one, sitemap: noSitemap }).website.pagePerService.label, 'One page only');
+  assert.equal(build({ facts: one, sitemap: noSitemap }).website.pagePerService.label, 'No separate service pages found', 'S16: 0 service pages');
+  const single = readPageFacts('<h1>Zephyr</h1><p>' + 'We are plumbers. '.repeat(20) + '</p><a href="/plumbing-repair">Repairs</a>');
+  assert.equal(build({ facts: single, sitemap: noSitemap }).website.pagePerService.label, 'One page only', 'S16: 1 service page');
   const bare = readPageFacts('<h1>Zephyr</h1><p>' + 'We are plumbers. '.repeat(20) + '</p>');
   assert.equal(build({ facts: bare, sitemap: noSitemap }).website.pagePerService.status, 'not_checked');
   // The sitemap alone can show the service pages.
@@ -315,11 +320,16 @@ test('Bing: found, and the details match, differ closely, or differ clearly; no 
   assert.equal(build().bing.found.label, 'Found on Bing');
   assert.equal(build().bing.details.status, 'good');
   const bing = place => ({ status: 'found', place: { name: 'Zephyr Plumbing', phone: '+1 615-555-0142', address: '12 Main Street, Nashville, TN 37203', website: '', ...place } });
-  assert.equal(build({ bing: bing({ phone: '+1 615-555-0100' }) }).bing.details.status, 'missing');
+  // S2: Azure Maps is not Bing Places, so a clear mismatch is amber, never red.
+  const differs = build({ bing: bing({ phone: '+1 615-555-0100' }) }).bing.details;
+  assert.equal(differs.status, 'partly');
+  assert.equal(differs.label, "Don't match");
   assert.equal(build({ bing: bing({ name: 'Zephyr Plumbing and Heating' }) }).bing.details.status, 'partly');
   assert.equal(build({ bing: bing({ phone: '', address: '', name: '' }) }).bing.details.status, 'not_checked');
   const gone = build({ bing: { status: 'not_found', reason: 'x' } }).bing;
-  assert.equal(gone.found.status, 'missing');
+  assert.equal(gone.found.status, 'partly', 'S2: not in the Bing map data is amber, never red');
+  assert.equal(gone.found.label, 'Not found in Bing map data');
+  assert.equal(gone.found.fix, FIXES.bingFound);
   assert.equal(gone.details.status, 'not_checked');
   for (const bingResult of [null, { status: 'off' }, { status: 'error', reason: "We couldn't reach Bing this time." }, { status: 'unsure', reason: 'x' }]) {
     const b = build({ bing: bingResult }).bing;
@@ -487,6 +497,120 @@ test('the rows come in the design\'s order, each once, with where they sit, and 
   assert.equal(rows.find(r => r.checklist === 'E2').main, 'website');
   assert.equal(rows.find(r => r.checklist === 'A6').main, 'details');
   assert.equal(rows.find(r => r.path === 'links.facebook').cluster, 'Socials');
+});
+
+// ---- review fixes S2, S3, S4, S9, S11, S13, S14, S16 -------------------------------------------------------------------
+
+test('S2: nothing about Bing is ever red, whatever the Bing lookup gives', () => {
+  const bingPlace = extra => ({ status: 'found', place: { name: 'Zephyr Plumbing', phone: '+1 615-555-0142', address: '12 Main Street, Nashville, TN 37203', website: '', ...extra } });
+  for (const bing of [
+    { status: 'not_found' }, bingPlace({ phone: '+1 615-555-0100' }), bingPlace({ name: 'Ridgeline Roofing' }),
+    bingPlace({ address: '99 Oak Ave, Memphis, TN 38103' }), bingPlace({ phone: '+1 615-555-0100', name: 'Other', address: '1 Elm St' }),
+  ]) {
+    const b = build({ bing }).bing;
+    for (const [id, s] of Object.entries(b)) assert.notEqual(s.status, 'missing', `${JSON.stringify(bing)} ${id}`);
+  }
+  assert.ok(FIXES.bingFound.length <= 160);
+});
+
+test('S3: a script-built page with no profile links found is Not checked for every link and the socials, never red', () => {
+  const scripts = readPageFacts('<title>Zephyr</title><div id="root"></div><script src="app.js"></script>');
+  assert.equal(scripts.scriptBuilt, true);
+  const l = build({ facts: scripts }).links;
+  for (const id of ['google', 'yelp', 'facebook', 'instagram', 'tiktok', 'socials']) {
+    assert.equal(l[id].status, 'not_checked', id);
+    assert.equal(l[id].reason, "Your page loads its words in a way this check can't read yet.", id);
+  }
+  // A script-built page that still shows a profile link is read as usual.
+  const withLink = { ...scripts, links: [{ href: 'https://www.facebook.com/ZephyrPlumbing', text: 'Facebook' }] };
+  const read = build({ facts: withLink }).links;
+  assert.equal(read.facebook.status, 'good');
+  assert.equal(read.socials.label, '1 of 3 linked');
+  // A plain page with no links is still counted (0 of 3 is a real answer there).
+  const plain = { ...readPageFacts('<a href="/about">About</a>'), scriptBuilt: false };
+  assert.equal(build({ facts: plain }).links.socials.status, 'missing');
+});
+
+test('S4: a compressed sitemap the site serves is Found, never Not found; its dates are gray', () => {
+  const gz = '\u001f\u008b\u0008\u0000binary';
+  const replies = [
+    { status: 200, text: gz, contentType: 'application/x-gzip', url: 'https://zephyr.example/sitemap.xml.gz' },
+    { status: 200, text: '\u001f\ufffd\u0008junk', contentType: 'application/octet-stream', url: 'https://zephyr.example/sitemap' },
+    { status: 200, text: 'junk', contentType: 'application/gzip', url: 'https://zephyr.example/sitemap' },
+    { status: 200, text: 'junk', contentType: '', url: 'https://zephyr.example/sitemap.xml.gz?v=2' },
+  ];
+  for (const sitemap of replies) {
+    const s = sitemapSignal({ hasSite: true, sitemap });
+    assert.equal(s.status, 'good', JSON.stringify(sitemap.url));
+    assert.equal(s.label, 'Found');
+    assert.equal(s.gzip, true);
+    const w = build({ sitemap }).website;
+    assert.equal(w.sitemap.status, 'good');
+    assert.equal(w.recentlyUpdated.status, 'not_checked');
+    assert.equal(w.recentlyUpdated.reason, "Your sitemap is compressed, so we couldn't read its dates.");
+  }
+  assert.equal(isGzipSitemap({ url: 'https://zephyr.example/sitemap.xml', contentType: 'application/xml', text: '<?xml' }), false);
+  // A missing .gz is still Not found (the site said so).
+  assert.equal(sitemapSignal({ hasSite: true, sitemap: { status: 404, text: '', url: 'https://zephyr.example/sitemap.xml.gz' } }).status, 'missing');
+});
+
+test('S9: a link to a questions page counts as answering common questions', () => {
+  const pad = '<p>' + 'We fix pipes in Nashville. '.repeat(20) + '</p>';
+  for (const link of ['<a href="/faq">Help</a>', '<a href="/faqs/">Help</a>', '<a href="/help">FAQ</a>', '<a href="/help">Common questions</a>']) {
+    assert.equal(build({ facts: readPageFacts(pad + link) }).website.answersQuestions.status, 'good', link);
+  }
+  assert.equal(build({ facts: readPageFacts(`${pad}<a href="/about">About</a>`) }).website.answersQuestions.status, 'missing');
+});
+
+test('S11: the name check reads "&", "and", "the" and "LLC" the same way on both sides', () => {
+  const html = '<h1>Smith & Sons Plumbing, LLC</h1><p>Call (615) 555-0142. ' + 'We fix pipes in Nashville. '.repeat(15) + '</p>';
+  const input = { ...INPUT, name: 'Smith and Sons Plumbing' };
+  assert.equal(build({ input, facts: readPageFacts(html) }).website.wordsInPage.status, 'good');
+  const theHtml = '<h1>The Smith and Sons Plumbing</h1><p>Call (615) 555-0142. ' + 'We fix pipes in Nashville. '.repeat(15) + '</p>';
+  assert.equal(build({ input: { ...INPUT, name: 'Smith & Sons Plumbing LLC' }, facts: readPageFacts(theHtml) }).website.wordsInPage.status, 'good');
+  // A different name on the page is still amber, never red.
+  const other = '<h1>Ridgeline Roofing</h1><p>Call (615) 555-0142. ' + 'We fix roofs. '.repeat(15) + '</p>';
+  assert.equal(build({ input, facts: readPageFacts(other) }).website.wordsInPage.status, 'partly');
+});
+
+test('S13: the threshold labels are built from health-constants.js and read the same at the default values', () => {
+  assert.equal(LABELS.reviewsGreen, `${REVIEW_COUNT_GREEN} or more reviews`);
+  assert.equal(LABELS.ratingGreen, `${RATING_GREEN.toFixed(1)} or higher`);
+  assert.equal(LABELS.ratingRed, `Below ${RATING_AMBER.toFixed(1)}`);
+  assert.ok(LABELS.ratingAmber.startsWith(`${RATING_AMBER.toFixed(1)} to `));
+  assert.ok(LABELS.newestGreen.includes(String(NEWEST_REVIEW_DAYS)));
+  // The defaults keep the words already shown.
+  assert.deepEqual(
+    [LABELS.reviewsGreen, LABELS.reviewsAmber, LABELS.ratingGreen, LABELS.ratingAmber, LABELS.ratingRed, LABELS.newestGreen, LABELS.newestAmber],
+    ['10 or more reviews', '1 to 9 reviews', '4.3 or higher', '3.8 to 4.2', 'Below 3.8', 'Newest review within 90 days', 'Newest review is older than 90 days'],
+  );
+  const g = build({ places: found({ ratingCount: 3, rating: 4.0 }) }).google;
+  assert.equal(g.reviewCount.label, LABELS.reviewsAmber);
+  assert.equal(g.rating.label, LABELS.ratingAmber);
+});
+
+test('S14: the reason says what really happened (an old report, the reserve, the daily limit, no key)', () => {
+  const old = build({ places: { status: 'off', reason: OLD_REPORT_REASON }, bing: { status: 'off', reason: OLD_REPORT_REASON } });
+  assert.equal(old.google.found.reason, OLD_REPORT_REASON);
+  assert.equal(old.bing.found.reason, OLD_REPORT_REASON);
+  assert.equal(build({ places: { status: 'limit', reason: LOOKUP_RESERVE_REASON } }).google.found.reason, LOOKUP_RESERVE_REASON);
+  assert.equal(LOOKUP_RESERVE_REASON, "We kept today's last lookups for new checks, so we didn't look this up.");
+  assert.equal(build({ places: { status: 'limit' } }).google.found.reason, LOOKUP_LIMIT_REASON);
+  assert.equal(build({ places: { status: 'off' } }).google.found.reason, "Google lookups aren't turned on here.");
+  assert.equal(build({ bing: { status: 'off' } }).bing.details.reason, "Bing lookups aren't turned on here.");
+  const stale = build({ places: { status: 'off', reason: STALE_GOOGLE_REASON }, bing: { status: 'off', reason: STALE_BING_REASON } });
+  assert.equal(stale.google.phoneMatch.reason, 'Run a new check to look on Google again.');
+  assert.equal(stale.bing.found.reason, 'Run a new check to look on Bing again.');
+});
+
+test('S16: a sitemap index is not counted as pages; with no service link it is Not checked', () => {
+  const bare = readPageFacts('<h1>Zephyr</h1><p>' + 'We are plumbers. '.repeat(20) + '</p><a href="/contact">Contact</a>');
+  const index = `<?xml version="1.0"?><sitemapindex><sitemap><loc>https://zephyr.example/plumbing-sitemap.xml</loc></sitemap><sitemap><loc>https://zephyr.example/drain-plumbing-sitemap.xml</loc></sitemap></sitemapindex>`;
+  const s = build({ facts: bare, sitemap: { status: 200, text: index } }).website.pagePerService;
+  assert.equal(s.status, 'not_checked');
+  assert.equal(s.reason, "Your sitemap lists other sitemaps, so we couldn't count your pages.");
+  const twoLinks = readPageFacts('<h1>Zephyr</h1><p>' + 'We are plumbers. '.repeat(20) + '</p><a href="/plumbing-repair">a</a><a href="/drain-plumbing">b</a>');
+  assert.equal(build({ facts: twoLinks, sitemap: { status: 200, text: index } }).website.pagePerService.status, 'good');
 });
 
 test('a Grade saved before these signals existed reads "Not checked" with a reason on every row, never red', () => {

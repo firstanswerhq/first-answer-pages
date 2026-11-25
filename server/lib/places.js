@@ -5,10 +5,10 @@
  * The key is sent in a header and is never put in a result, a log line or an error. Every outcome is an object with a
  * `status` and, when it is not 'found', a one-line `reason` that is safe to show:
  *   'found'      one result clearly is the business; `place` holds the reduced result
- *   'not_found'  Google answered and nothing looks like the business
- *   'unsure'     more than one result could be it, or the match is in another place; nothing is picked
- *   'error'      the lookup failed or timed out
- * It never throws. `fetch` is injectable so tests make no real call.
+ *   'not_found'  Google answered with no results at all
+ *   'unsure'     results came back but none is clearly the business; nothing is picked
+ *   'error'      the lookup failed or ran past the one overall time limit (request and body together)
+ * It never throws. Before go-live, confirm the field mask with one real call (a refused mask makes every check gray). `fetch` is injectable so tests make no real call.
  */
 
 import { LOOKUP_TIMEOUT_MS } from './health-constants.js';
@@ -18,7 +18,9 @@ const ENDPOINT = 'https://places.googleapis.com/v1/places:searchText';
 const FIELDS = [
   'places.displayName', 'places.formattedAddress', 'places.nationalPhoneNumber', 'places.websiteUri',
   'places.regularOpeningHours', 'places.businessStatus', 'places.primaryType', 'places.rating',
-  'places.userRatingCount', 'places.reviews.publishTime',
+  // `places.reviews` rather than the nested `places.reviews.publishTime`: the nested mask may be refused with a 400, and
+  // both are the same price. Only each review's publishTime is read (reducePlace); nothing else of a review is kept.
+  'places.userRatingCount', 'places.reviews',
 ].join(',');
 
 export const PLACES_ERROR_REASON = "We couldn't reach Google this time.";
@@ -71,14 +73,19 @@ export function createPlacesLookup({ apiKey, fetch: fetchImpl = globalThis.fetch
       const controller = new AbortController();
       try {
         const body = JSON.stringify({ textQuery: [name, city, state].filter(Boolean).join(' '), languageCode: 'en' });
-        const res = await withTimeout(fetchImpl(ENDPOINT, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': key, 'X-Goog-FieldMask': FIELDS },
-          body,
-          signal: controller.signal,
-        }), timeoutMs, () => controller.abort());
-        if (!res || res.ok !== true) return { status: 'error', reason: PLACES_ERROR_REASON };
-        const data = await withTimeout(res.json(), timeoutMs, () => controller.abort());
+        // One timer for the whole lookup (the request and reading its body), so it never runs past timeoutMs.
+        const work = async () => {
+          const res = await fetchImpl(ENDPOINT, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': key, 'X-Goog-FieldMask': FIELDS },
+            body,
+            signal: controller.signal,
+          });
+          if (!res || res.ok !== true) return null;
+          return res.json();
+        };
+        const data = await withTimeout(work(), timeoutMs, () => controller.abort());
+        if (data === null || data === undefined) return { status: 'error', reason: PLACES_ERROR_REASON };
         const places = (Array.isArray(data?.places) ? data.places : []).slice(0, 10).map(reducePlace);
         const picked = pickCandidate(places, { name, city, website });
         return picked.status === 'found' ? { status: 'found', place: picked.place } : picked;

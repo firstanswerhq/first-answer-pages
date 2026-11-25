@@ -24,7 +24,9 @@ import {
 } from './listing-fields.js';
 import { usAddressStyle } from './address-style.js';
 import { parseHoursRange, parseTwentyFourHourRange } from './schema.js';
-import { buildSignals } from './health-signals.js';
+import {
+  buildSignals, OLD_REPORT_REASON, STALE_GOOGLE_REASON, STALE_BING_REASON, LOOKUP_RESERVE_REASON, LOOKUP_LIMIT_REASON,
+} from './health-signals.js';
 import { compareNames } from './health-compare.js';
 import { sitemapAddress } from './sitemap-read.js';
 
@@ -51,6 +53,10 @@ const SECOND_OPINION_RESERVE = 12; // second opinions never use the day's last c
 const SECOND_OPINION_FAILS = 3;
 const SECOND_OPINION_PAUSE_MS = 15 * 60 * 1000;
 const MAX_TEXT_FOR_PATTERNS = 200000;
+// Google and Bing lookup results are kept in memory only (never saved with the Grade), for at most this long, so a
+// recheck can compare the website with them again. After that, or after a restart, a recheck says to run a new check.
+export const LOOKUP_KEEP_MS = 30 * 24 * 60 * 60 * 1000;
+const LOOKUP_KEEP_MAX = 2000; // the most Grades whose lookups are kept in memory at once
 
 // The two "website could not be read" findings. The report reads the stored step findings to tell them apart (V134).
 export const HOME_UNREADABLE = "We couldn't read your home page.";
@@ -1402,21 +1408,81 @@ export function createGrader({
    */
   async function lookupProfiles(input) {
     const query = { name: input.name, city: input.city, state: input.state, website: input.website || undefined };
-    const one = async client => {
+    const one = async (client, counter) => {
       if (!client) return { status: 'off' };
       // Like a second opinion, a lookup never uses the day's last calls: they stay for the AI question of a new check.
-      if (aiBudget.peek({ kind: 'grade' }).remaining <= SECOND_OPINION_RESERVE || aiBudget.consume({ kind: 'grade' }).allowed !== true) {
-        return { status: 'limit', reason: "Today's limit for AI questions was reached, so we didn't look this up." };
-      }
+      if (aiBudget.peek({ kind: 'grade' }).remaining <= SECOND_OPINION_RESERVE) return { status: 'limit', reason: LOOKUP_RESERVE_REASON };
+      if (aiBudget.consume({ kind: 'grade' }).allowed !== true) return { status: 'limit', reason: LOOKUP_LIMIT_REASON };
       watchGuard();
+      let result;
       try {
-        return await client.lookup(query);
+        result = await client.lookup(query);
       } catch {
-        return { status: 'error', reason: "We couldn't reach the lookup this time." };
+        result = { status: 'error', reason: "We couldn't reach the lookup this time." };
       }
+      // A daily ok / error count per lookup for the admin page (no key, no body, no typed input), so a day when
+      // every lookup fails shows up instead of every check quietly reading "Not checked".
+      noteLookup(counter, result);
+      return result;
     };
-    const [places, bing] = await Promise.all([one(placesLookup), one(bingLookup)]);
+    const [places, bing] = await Promise.all([one(placesLookup, 'places'), one(bingLookup, 'bing')]);
     return { places, bing };
+  }
+
+  /** Count one lookup's outcome: an answer (found, not found or unsure) is ok; a failure or timeout is an error. */
+  function noteLookup(counter, result) {
+    try {
+      const status = result?.status;
+      if (['found', 'not_found', 'unsure'].includes(status)) aiBudget.note?.(`${counter}Ok`);
+      else if (status === 'error' || !status) aiBudget.note?.(`${counter}Error`);
+    } catch { /* a count that fails never stops the check */ }
+  }
+
+  // ---- lookup results kept in memory only (review S5) ----------------------------------------------------------------
+
+  const recentLookups = new Map(); // Grade id -> { looked, at (ms) }
+
+  function keepLookups(id, looked) {
+    recentLookups.delete(id);
+    recentLookups.set(id, { looked, at: clock.now() });
+    while (recentLookups.size > LOOKUP_KEEP_MAX) recentLookups.delete(recentLookups.keys().next().value);
+  }
+
+  /**
+   * The lookups a recheck may compare with: the ones kept in memory when they are no older than LOOKUP_KEEP_MS.
+   * Otherwise no new lookup is made; the Google and Bing signals say why they were not checked.
+   */
+  function lookupsForRecheck(g) {
+    const kept = recentLookups.get(g.id);
+    if (kept && clock.now() - kept.at <= LOOKUP_KEEP_MS) return kept.looked;
+    if (kept) recentLookups.delete(g.id);
+    // A Grade from before these lookups existed has no lookup time; one made since then has one.
+    if (!g.profilesAt && !g.profiles) {
+      return { places: { status: 'off', reason: OLD_REPORT_REASON }, bing: { status: 'off', reason: OLD_REPORT_REASON } };
+    }
+    return { places: { status: 'off', reason: STALE_GOOGLE_REASON }, bing: { status: 'off', reason: STALE_BING_REASON } };
+  }
+
+  /**
+   * Grades saved by the first build of the health map kept the raw lookup results (`profiles`). They are removed,
+   * once per process, the first time a check starts or a recheck runs. Only the derived signals stay.
+   */
+  let profilesPurged = null;
+  function purgeStoredProfiles() {
+    if (!profilesPurged) {
+      profilesPurged = (async () => {
+        const list = await grades().read();
+        if (!Array.isArray(list) || !list.some(g => g && typeof g === 'object' && 'profiles' in g)) return;
+        await grades().update(all => {
+          for (const g of all) {
+            if (!g || typeof g !== 'object' || !('profiles' in g)) continue;
+            if (!g.profilesAt) g.profilesAt = g.finishedAt ?? null;
+            delete g.profiles;
+          }
+        });
+      })().catch(() => { log('profiles-purge-failed'); profilesPurged = null; });
+    }
+    return profilesPurged;
   }
 
   /** The published listing for this business, if one clearly is it (same name and city, same state when both have one). */
@@ -1497,6 +1563,7 @@ export function createGrader({
     const grade = await get(id);
     if (!grade || grade.status !== 'running') return;
     const { input } = grade;
+    await purgeStoredProfiles();
     // The stale clock starts here, when the check really begins (it may have waited in line before this).
     const startedAt = nowIso();
     live.set(id, { ...structuredClone(grade), startedAt });
@@ -1583,6 +1650,8 @@ export function createGrader({
     })();
 
     const [web, aiOut, looked] = await Promise.all([website, aiBranch, profiles]);
+    const lookedAt = nowIso();
+    keepLookups(id, looked);
     const signals = signalsFor(input, web, looked);
 
     const t = clock.now();
@@ -1606,9 +1675,11 @@ export function createGrader({
       g.finishedAt = nowIso();
       g.facts = storedFacts(web.facts, web.found);
       g.found = web.found;
-      // What the Google and Bing lookups returned, and the health map's signals worked out from them. Saved with the
-      // Grade so the report, a recheck and the claim flow read the same facts; neither changes the score.
-      g.profiles = looked;
+      // Only the health map's signals worked out from the Google and Bing lookups are saved, with the time of the
+      // lookups. The lookup results themselves are never saved (review S5); they stay in memory for at most 30 days so
+      // a recheck can compare again. Neither changes the score.
+      delete g.profiles;
+      g.profilesAt = lookedAt;
       g.signals = signals;
       const has = new Set(aiOut.ai.map(a => `${a.prompt}|${a.provider}`));
       g.ai = [...aiOut.ai, ...late.entries.filter(a => !has.has(`${a.prompt}|${a.provider}`))];
@@ -1946,6 +2017,7 @@ export function createGrader({
 
     background(id, 'recheck', async () => {
       try {
+        await purgeStoredProfiles();
         const web = await readWebsite(grade.input, async () => {});
         await grades().update(list => {
           const g = list.find(x => x && x.id === id);
@@ -1963,9 +2035,10 @@ export function createGrader({
           g.previousScore = isPartialScore({ ...g, results: scoredResults(g) }) || !hadReviewsCheck ? null : shownScore(g);
           g.facts = storedFacts(web.facts, web.found);
           g.found = web.found;
-          // The website signals are read again; the saved Google and Bing results are reused, so a recheck makes no
-          // second paid lookup.
-          g.signals = signalsFor(g.input, web, g.profiles) ?? g.signals ?? null;
+          // The website signals are read again. A recheck makes no new paid lookup: the Google and Bing results kept in
+          // memory are reused when they are 30 days old or less; otherwise those signals say to run a new check.
+          g.signals = signalsFor(g.input, web, lookupsForRecheck(g)) ?? g.signals ?? null;
+          delete g.profiles;
           g.results = assemble(web.results, g.ai, g.aiMain);
           g.score = scoreOf(g.results);
           g.recheckedAt = nowIso();

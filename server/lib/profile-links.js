@@ -44,7 +44,7 @@ function isYelp(url) {
   return seg[0]?.toLowerCase() === 'biz' && Boolean(seg[1]);
 }
 
-/** A Facebook page: facebook.com/<name>, /pages/<name>/<id>, /people/<name>/<id> or profile.php?id=. */
+/** A Facebook page: facebook.com/<name>, /p/<name-id>, /pages/<name>/<id>, /people/<name>/<id> or profile.php?id=. */
 function isFacebook(url) {
   const host = bareHost(url);
   if (host !== 'facebook.com' && host !== 'fb.com' && host !== 'fb.me') return false;
@@ -53,6 +53,8 @@ function isFacebook(url) {
   const first = seg[0].toLowerCase();
   if (first === 'profile.php') return /^\d{5,}$/.test(url.searchParams.get('id') ?? '');
   if (first === 'pages' || first === 'people') return seg.length >= 3;
+  // New-style page links: facebook.com/p/<Business-Name-1000...>/.
+  if (first === 'p') return seg.length >= 2;
   if (FACEBOOK_NOT_A_PAGE.has(first)) return false;
   return /^[a-z0-9.\-]{3,}$/i.test(seg[0]);
 }

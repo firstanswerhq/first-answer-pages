@@ -81,6 +81,13 @@ test('Facebook pages written the other ways count, and Facebook\'s own pages do 
   assert.equal(detectProfileLinks(links('https://www.facebook.com/profile.php')).facebook, null, 'no id');
 });
 
+test('S10: new-style Facebook page links (facebook.com/p/<name-id>/) count; a bare /p/ does not', () => {
+  const href = 'https://www.facebook.com/p/Zephyr-Plumbing-100063512345678/';
+  assert.equal(detectProfileLinks(links(href)).facebook, href);
+  assert.equal(detectProfileLinks(links('https://www.facebook.com/p/')).facebook, null);
+  assert.equal(detectProfileLinks(links('https://www.facebook.com/p')).facebook, null);
+});
+
 test('a link to another site, a look-alike host or a relative link does not count', () => {
   assert.deepEqual(detectProfileLinks(links(
     'https://notfacebook.com/zephyr', 'https://facebook.com.evil.example/zephyr', 'https://example.com/facebook.com/zephyr',

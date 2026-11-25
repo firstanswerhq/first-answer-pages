@@ -593,8 +593,9 @@ test('with ChatGPT and Gemini on, all three answer; only Claude is scored', asyn
   }, 'three assistants on three questions');
   const page = await (await get(env, `/grade/${id}`, { cookie })).text();
   assert.match(page, /Gemini, asked the same question:/);
-  // The whole paragraph, in order (V254), whether Claude named the business or not.
-  assert.match(page, /<p>We asked Claude 3 questions\. Only its answer to the first question counts toward your score\. Claude (?:named|didn't name) you\. On the 2 other questions, Claude (?:named you(?: both times)?|didn't name you|named you in 1 of 2)\. The other assistants' answers are here to compare\.<\/p>/);
+  // The whole paragraph, in order (V254). The stub never names the business (the score check above is "fail"), so
+  // the one sentence it gives is pinned (S17).
+  assert.match(page, /<p>We asked Claude 3 questions\. Only its answer to the first question counts toward your score\. Claude didn't name you\. On the 2 other questions, Claude didn't name you\. The other assistants' answers are here to compare\.<\/p>/);
   assert.match(page, /Gemini answered without a live web search\./);
   assert.match(page, /for comparison only \(not scored\)/);
 });

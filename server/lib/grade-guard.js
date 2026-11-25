@@ -26,6 +26,7 @@
  */
 
 const COUNTS = ['checks', 'humanPass', 'human', 'limit', 'network'];
+const LOOKUP_COUNTS = ['placesOk', 'placesError', 'bingOk', 'bingError'];
 const TURNED_AWAY = new Set(['human', 'limit', 'network']);
 const MISCONFIGURED = 'misconfigured';
 const THRESHOLDS = [50, 90];
@@ -147,7 +148,10 @@ export function createGradeGuard({ aiBudget, notifier, log = () => {} } = {}) {
       }
       const counts = {};
       for (const name of COUNTS) counts[name] = count(notes, name);
-      return { usage, counts, misconfigured: count(notes, MISCONFIGURED) > 0 };
+      // The Google and Bing lookups' ok / error counts for today (the grader notes them; no key, no body).
+      const lookups = {};
+      for (const name of LOOKUP_COUNTS) lookups[name] = count(notes, name);
+      return { usage, counts, lookups, misconfigured: count(notes, MISCONFIGURED) > 0 };
     },
   };
   return guard;

@@ -33,16 +33,16 @@ Format: `sub-node` (checklist item, status HAVE/ADD/KEY, existing check id if an
 
 **Cluster "AI can read it"**
 1. `robots.txt lets AI assistants in` (E1, HAVE, `ai-bots-allowed`): green "Open to AI assistants" / red "Blocks some AI assistants" (names them) / gray "Not checked"
-2. `Sitemap` (E2, ADD, Requirement 3.9): green "Found" / red "Not found" / gray "Not checked"
+2. `Sitemap` (E2, ADD, Requirement 3.9): green "Found" (also a compressed `.xml.gz` sitemap the site serves, S4) / red "Not found" / gray "Not checked"
 3. `Words are in the page itself` (E3, ADD): green "Found in the page" / amber "Not found in the page code", never red, because a page built by scripts cannot be told apart from a page that is missing the words; the reason line is "Your name and phone weren't in the page's own text. Some AI tools can't read text added by scripts." / gray "Not checked" only when the page could not be read
 4. `Business label` (E4, HAVE, `business-labeled`): green "Found" / red "Not found" / gray "Not checked"
 
 **Cluster "Speaks AI's language"** (Requirement 3.11 and checklist D)
 5. `Says what you do` (D1, ADD): green "Found" / red "Not found" / gray "Not checked"
 6. `Says where you work` (D2, ADD): green "Found" / red "Not found" / gray "Not checked"
-7. `Answers common questions` (D3, ADD): green "Found" / red "Not found" / gray "Not checked"
-8. `A page for each service` (D4, ADD): green "Several service pages" / amber "One page only" / gray "Not checked" (no sitemap and too few links to tell)
-9. `Recently updated` (D5, ADD): green "Updated in the last 12 months" / amber "Not updated in a year" / gray "Not checked" (no dates in the sitemap)
+7. `Answers common questions` (D3, ADD): green "Found" (a questions section, or a link to a FAQ or questions page, S9) / red "Not found" / gray "Not checked"
+8. `A page for each service` (D4, ADD): green "Several service pages" / amber "One page only" (1 found) or "No separate service pages found" (0 found, S16) / gray "Not checked" (no sitemap and too few links to tell, or a sitemap index with no service link found)
+9. `Recently updated` (D5, ADD): green "Updated in the last 12 months" / amber "Not updated in a year" / gray "Not checked" (no dates in the sitemap, or a compressed sitemap)
 10. `AI info sheet (llms.txt)` (E5, HAVE, `info-sheet`): green "Found" / red "Not found" / gray "Not checked"
 
 **Cluster "Search basics"**
@@ -66,7 +66,7 @@ One sub-node per answer to the first question, as many as were asked (1 to 3, `G
 The two extra questions and the second opinions stay in the report's "Every answer" list; they are not sub-nodes because they do not count toward the score.
 
 ### 3. Google profile (all KEY, one Places lookup; replaces the hidden `google-profile` check, Requirement 3.10)
-21. `Found on Google` (B1): green "Found on Google" / red "Not found on Google" (only on a clear no-match) / gray "Not checked" (no key, lookup failed or timed out, or several close results and no clear match)
+21. `Found on Google` (B1): green "Found on Google" / red "Not found on Google" (only when Google returned no results at all, S1) / gray "Not checked" (no key, lookup failed or timed out, several close results, or results came back but none is clearly the business)
 22. `Open for business` (B2): green "Open" / red "Marked closed" / gray "Not checked"
 23. `Category fits` (B3): green "Category fits" / amber "Category differs" / gray "Not checked"
 24. `Hours listed` (B4): green "Hours listed" / red "No hours listed" / gray "Not checked"
@@ -86,8 +86,8 @@ Comparisons are tolerant (A1 digits only without a leading 1; A2 street number, 
 31. `Name matches Google` (A3, KEY): green "Matches" / amber "Close, not the same" / red "Doesn't match" / gray "Not checked"
 32. `Hours match Google` (A4, KEY): green "Match" / amber "Some days differ" / red "Don't match" / gray "Not checked" (either side not readable)
 33. `Your listing matches your website` (A5, ADD): green "Matches" / amber "Differs" / gray "Not checked" (no listing yet)
-34. `Found on Bing` (G2, KEY, `AZURE_MAPS_KEY`): green "Found on Bing" / red "Not found on Bing" (only on a clear no-match) / gray "Not checked"
-35. `Details match on Bing` (A6, KEY, same Azure search as 34): green "Match" / amber "Close, not the same" / red "Don't match" / gray "Not checked"
+34. `Found on Bing` (G2, KEY, `AZURE_MAPS_KEY`): green "Found on Bing" / amber "Not found in Bing map data" (only when the search returned no results) / gray "Not checked". Never red (S2): Azure Maps data is not Bing Places itself.
+35. `Details match on Bing` (A6, KEY, same Azure search as 34): green "Match" / amber "Close, not the same" or "Don't match" / gray "Not checked". Never red (S2).
 
 ### 6. Links
 36. `Website links to your Google profile` (F1, ADD): green "Linked from your website" / amber "Not linked" / gray "Not checked"
@@ -95,7 +95,7 @@ Comparisons are tolerant (A1 digits only without a leading 1; A2 street number, 
 38. `Google profile links to your website` (F2 and B5, KEY): green "Links to your website" / amber "Doesn't link to your website" / gray "Not checked"
 39. `Your listing links to your website` (F5, HAVE): green "Linked" / amber "No website on the listing" / gray "Not checked" (no listing)
 
-**Cluster "Socials"** (F4, ADD, Requirement 3.1 and 2.6 item 7): the cluster shows "2 of 3 linked" and is green at 3, amber at 1 or 2, red at 0, gray when the site could not be read. Facebook first.
+**Cluster "Socials"** (F4, ADD, Requirement 3.1 and 2.6 item 7): the cluster shows "2 of 3 linked" and is green at 3, amber at 1 or 2, red at 0, gray when the site could not be read, or when the page is built by scripts and no profile link was found (S3: every link row is gray then too). Facebook first.
 40. `Facebook`: green "Linked from your website" / amber "Not linked" / gray "Not checked"
 41. `Instagram`: same words
 42. `TikTok`: same words
@@ -146,13 +146,13 @@ Step 1 covers Requirements 3, 6 and 7, with the rules of Requirements 5 and 8. T
 
 ## What is saved with a Grade
 
-`grade.profiles` is what the two lookups returned (`{ places, bing }`, each `{ status, place?, reason? }` with no key in it), and `grade.signals` is the object `buildSignals` made: `website`, `google`, `bing`, `links` and `listing`, each signal `{ id, status, label, reason?, fix?, ... }`. `status` is `good`, `partly`, `missing` or `not_checked`. A recheck reads the website again, rebuilds the signals from the saved lookups and makes no second paid lookup. A Grade saved before this step has neither field; `signalRows` then gives every row "Not checked" with the reason "This report was made before this check existed. Run a new check to see it."
+Changed by the review (S5): the lookup results are no longer saved. `grade.profilesAt` is when the lookups were made, and `grade.signals` is the object `buildSignals` made: `website`, `google`, `bing`, `links` and `listing`, each signal `{ id, status, label, reason?, fix?, ... }`. `status` is `good`, `partly`, `missing` or `not_checked`. The lookup results stay in the grader's memory only, for at most 30 days (`LOOKUP_KEEP_MS`) and at most 2,000 Grades. A recheck reads the website again and makes no new paid lookup. It compares with the kept lookups when they are 30 days old or less. Otherwise (older, or after a restart) every Google and Bing signal is gray with "Run a new check to look on Google again." or "... on Bing again.". Grades saved by the first build of this step had `grade.profiles`; it is removed from every Grade the first time a check or recheck runs after a start, and `profilesAt` is set to the Grade's `finishedAt`. A Grade saved before this step has no signals; `signalRows` then gives every row "Not checked" with the reason "This report was made before this check existed. Run a new check to see it."
 
 ## The rules that were built
 
 - **Never a false red.** `missing` is only for when the check looked and it is truly not there. A lookup that is off, failed, timed out, hit the daily limit or found several close results gives gray "Not checked" with a reason, for every Google or Bing signal at once. A near match is amber, never red. The newest-review signal is amber (never red) and says it is based on the up to 5 reviews Google returned.
 - **One Google lookup, one Bing search.** Each counts as one paid call from the Grader's daily share, and, like a second opinion, never uses the day's last 12 calls (they stay for the AI question of a new check). Each is skipped without its key (`GOOGLE_PLACES_API_KEY`, `AZURE_MAPS_KEY`) and in test runs.
-- **Picking the business.** A result counts when its name matches or nearly matches (case, punctuation, LLC and Inc ignored, a small typo allowed) and it is in the typed city. Several that do are narrowed by the website's domain, then by an exact name; if more than one is left, nothing is picked ("unsure", gray). The right name in another city is "unsure", never "not found". "Not found" only when Google answered and nothing looked like the business.
+- **Picking the business** (changed by S1). The website's domain is tried first: one result with the same registered domain is the business, when it is in the typed city (or no city was typed); in another city it is "unsure". Otherwise a result counts when its name matches or nearly matches (case, punctuation, LLC and Inc ignored, a small typo allowed) and it is in the typed city. Several that do are narrowed by the domain, then by an exact name; if more than one is left, nothing is picked ("unsure", gray). The right name in another city is "unsure". Results that come back but match nothing are "unsure" ("We couldn't tell which result is your business, so we didn't pick one."). "Not found" only when no result came back at all.
 - **Sitemap.** One request, through the safe fetcher, in the same shared deadline as llms.txt. Found = real XML with at least one entry. Not found = a 404, a 410, or a reply that is not a sitemap. Blocked (401, 403, 429, 5xx), an error or a timeout = gray.
 - **"Words are in the page itself" is never red.** A page built by scripts cannot be told apart from a page that is missing the words, so it is amber "Not found in the page code" with the reason, and gray only when the page could not be read. The text-based signals ("Says what you do", "Says where you work", "Answers common questions") are gray on a page built by scripts, with the same reason the existing text checks use.
 - **Founding Member** has no row unless it says something true: green when the listing is a Founding Member, amber "Founding spots still open" when it is not and spots are open, otherwise left out.
@@ -177,3 +177,46 @@ Step 1 covers Requirements 3, 6 and 7, with the rules of Requirements 5 and 8. T
 | `test/grade-report-asks.test.js` line 167 | `…Only that answer counts toward your score. Claude didn't name you. …` | `…Only its answer to the first question counts toward your score. …` | V252 |
 | `test/grade-reader-notes2.test.js` (the V251 test, no website) | `To ask AI again, <link>.` | `To ask AI again after your changes, <link>.` | V257 |
 | `test/grade-reader-notes2.test.js` (the V225-3 home test) | a plain data folder | a published plumber in Nashville, and two more checks (an answered search is indexable; the title and description cut a long city at 60 characters) | V255, V256 |
+| `test/places-lookup.test.js` (the field mask test) | `places.reviews.publishTime` in the list of 10 fields | `places.reviews`, and the nested mask is not asked for | S6 |
+| `test/places-lookup.test.js` line 97 ("results that are nothing like the business") | `other.status` is `'not_found'` | `'unsure'`, with the new reason and no place | S1 |
+| `test/places-lookup.test.js` (Bing: "a different business") | `'not_found'` | `'unsure'` | S1 |
+| `test/health-compare.test.js` (picking a result: Ridgeline Roofing) | `'not_found'` | `'unsure'`, with the new reason | S1 |
+| `test/health-signals.test.js` (Bing: details differ clearly; not found) | `details.status` `'missing'`; `found.status` `'missing'` | `'partly'` "Don't match"; `'partly'` "Not found in Bing map data" | S2 |
+| `test/health-signals.test.js` (a page for each service, 0 service pages) | label `'One page only'` | `'No separate service pages found'`; a new line keeps `'One page only'` for 1 page | S16 |
+| `test/grade-signals-flow.test.js` (saved with the Grade; no keys; a failing lookup; the recheck) | `g.profiles.places.status` is `found`, `off`, `error`; `after.profiles` equals `g.profiles` | `profiles` is not on the Grade; `profilesAt` is the check time; the failing lookup's reason is read from the signals | S5 |
+| `test/grade-signals-flow.test.js` (the lookups never use the day's last 12 calls) | `g.profiles.places.status` is `limit`; reason matches `/Today's limit for AI questions/` | the reason is "We kept today's last lookups for new checks, so we didn't look this up." for Google and Bing | S14 |
+| `test/grade-lead.test.js` line 597 (V254, Claude, ChatGPT and Gemini) | a regular expression that allowed four outcomes | the one outcome the stub gives: `Claude didn't name you. On the 2 other questions, Claude didn't name you.` | S17 |
+
+## Review fixes S1 to S17 (review-2026-11-24-step1.md)
+
+None of these changes the score or any public page. Every fix sentence is still at most 160 characters (the `FIXES` test).
+
+| Item | What changed | Where | Tests |
+|---|---|---|---|
+| S1 | `pickCandidate` tries the website's registered domain first (found when in the typed city or no city typed; "unsure" in another city). Results that match nothing are "unsure", not "not found". "Not found" only for zero results. | `health-compare.js` | `places-lookup` (Joe's typed, "Joseph's Plumbing Co" listed: with the domain found, without it unsure, in another city unsure), `health-compare` (domain first; "not_found" only for an empty list) |
+| S2 | Bing is never red: no results is amber "Not found in Bing map data"; a clear mismatch is amber "Don't match". `FIXES.bingFound` now says to check Bing Places. Rows 34 and 35 above updated. | `health-signals.js` | `health-signals` (a never-red loop over Bing outcomes) |
+| S3 | On a script-built page with no profile link found, every link row and Socials are gray with the script reason. A script-built page that does show a link is read as usual. | `health-signals.js` | `health-signals` |
+| S4 | `isGzipSitemap` (`.gz` address, a gzip content type, or the gzip bytes at the start). A 2xx gzip sitemap is green "Found" with `gzip: true`; its pages and dates are not read, and "Recently updated" is gray "Your sitemap is compressed, so we couldn't read its dates." | `sitemap-read.js`, `health-signals.js` | `health-signals` |
+| S5 | Lookup results are never saved with the Grade: only `signals` and `profilesAt`. They are kept in memory for at most 30 days for rechecks; older, or after a restart, the Google and Bing signals say "Run a new check to look on Google again." (or Bing). No new lookup on a recheck. Old stored `profiles` are purged once per process. | `grader.js` | `grade-signals-flow` (nothing of Google's in `grades.json`; a recheck at 30 days reuses, at 31 days says run a new check; a restart; an old Grade; the purge) |
+| S6 | Field mask `places.reviews` (not the nested mask). Each lookup's outcome is counted per day with `aiBudget.note`: `placesOk`, `placesError`, `bingOk`, `bingError` (found, not found and unsure are ok; error is an error; off and held back are not counted). The admin protection block shows "Lookups today: Google N ok, N errors; Bing N ok, N errors." when a lookup is on. `gradeGuard.summary()` returns them as `lookups`. | `places.js`, `grader.js`, `grade-guard.js`, `grade-admin.js`, `app.js` (`ctx.lookupsOn`, true/false only) | `places-lookup`, `grade-signals-flow` (counts, summary, the admin line, no key on the page) |
+| S7 | One timer for the whole lookup (request and body), so it never runs past 5 seconds. | `places.js`, `azure-maps.js` | `places-lookup` (60 ms request plus 60 ms body is cut off by one 90 ms limit) |
+| S8 | The Azure key is sent in the `subscription-key` header, never in the address; `countrySet=US` is added. | `azure-maps.js` | `places-lookup` |
+| S9 | "Answers common questions" is also found when the page links to a FAQ or questions page. | `health-signals.js` | `health-signals` |
+| S10 | `facebook.com/p/<name-id>/` counts as a Facebook page. | `profile-links.js` | `profile-links` |
+| S11 | E3 compares the typed name with the page text after both lose "and", "&", "the", "LLC" and the like. | `health-signals.js` | `health-signals` |
+| S12 | A number right after Suite, Ste, Apt, Apartment, Unit, #, Fl, Floor, Rm or Room is not the street number. A difference of only a direction word (N, S, E, W, NE, NW, SE, SW) is "close" (amber). `addressInText` allows a direction word between the number and the street. | `health-compare.js` | `health-compare` |
+| S13 | The threshold labels are built from `health-constants.js` (`LABELS`); at the default values they read as before. | `health-signals.js` | `health-signals` |
+| S14 | The reserve reason is "We kept today's last lookups for new checks, so we didn't look this up."; a refused call keeps "Today's limit for AI questions was reached, ...". The signals use the reason the grader passes for `off` and `limit`. A recheck of a Grade from before this step says the old-report reason. | `grader.js`, `health-signals.js` | `health-signals`, `grade-signals-flow` |
+| S15 | The owner's verify page says "No fee for this listing." for a waived fee, never "Fee paid". Note: on a Stripe test key, `lockedByMode` locks a listing with a waived (real) record, because only practice records can be used in test mode. That is fine for production. | `routes/verify.js` | `admin-waive-fee` |
+| S16 | 0 service pages reads "No separate service pages found" (amber); 1 stays "One page only". A sitemap index's addresses are not counted as pages; with no service link found it is gray "Your sitemap lists other sitemaps, so we couldn't count your pages." | `health-signals.js` | `health-signals` |
+| S17 | The "To ask AI again after your changes" sentence is one constant used in both places of `recheckBlock`. The V254 test is pinned. | `grade-html.js` | `grade-lead` |
+
+## Before go-live (S6)
+
+- Make one real `places:searchText` call with the field mask above and confirm a 200. Asking for reviews puts every call on the Enterprise + Atmosphere price.
+- Make one real Azure Maps `search/poi/json?api-version=1.0` call with the key in the `subscription-key` header and confirm it still answers. Microsoft has been retiring Search v1. If it does not answer, move to the current API version or drop G2 and A6.
+- Watch the "Lookups today" line on the admin page for the first days.
+
+## Open point for the owner
+
+The saved signals still carry a few values read from Google for the rows that show them. On a mismatch, those are the phone, address and name side by side, plus the star rating, the review count and the newest review date. Existing tests use them, and Steps 2 and 3 may show them. If the Google terms are read strictly, these values should be dropped from the saved signals as well. That is a small change, and it is not made here because the review did not ask for it.

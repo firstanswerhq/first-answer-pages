@@ -145,6 +145,16 @@ test('the payment step is skipped: no checkout is made, but the phone code and t
   assert.equal(s.f.state.checkouts.size, 0, 'still no payment');
 });
 
+test('S15: the owner\'s verify page says "No fee for this listing." after a waiver, never "Fee paid"', async () => {
+  const s = await site();
+  const before = (await s.get(s.V)).text;
+  assert.equal(before.includes('No fee for this listing.'), false);
+  await s.post(`/admin/listings/${s.id}/waive-fee`, undefined, ADMIN);
+  const page = (await s.get(s.V)).text;
+  assert.ok(page.includes('No fee for this listing.'));
+  assert.equal(/Fee paid/.test(page), false);
+});
+
 test('without the phone code, a passed photo ID does not make the stamp either', async () => {
   const s = await site();
   await s.post(`/admin/listings/${s.id}/waive-fee`, undefined, ADMIN);

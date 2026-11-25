@@ -16,7 +16,7 @@
 import { registeredDomain } from './name-match.js';
 import { parseHoursRange } from './schema.js';
 import { detectProfileLinks } from './profile-links.js';
-import { parseSitemap } from './sitemap-read.js';
+import { parseSitemap, isGzipSitemap } from './sitemap-read.js';
 import {
   comparePhone, phoneDigits, phonesInText, compareNames, compareAddresses, addressInText, compareHours, nameTokens,
 } from './health-compare.js';
@@ -37,6 +37,28 @@ const REASONS = Object.freeze({
   noGoogleKey: "Google lookups aren't turned on here.",
   noBingKey: "Bing lookups aren't turned on here.",
   noListing: 'No listing yet.',
+  staleGoogle: 'Run a new check to look on Google again.',
+  staleBing: 'Run a new check to look on Bing again.',
+  reserve: "We kept today's last lookups for new checks, so we didn't look this up.",
+  limit: "Today's limit for AI questions was reached, so we didn't look this up.",
+});
+
+/** Reasons the grader passes in (as `{ status: 'off', reason }` or `{ status: 'limit', reason }`). */
+export const OLD_REPORT_REASON = REASONS.oldReport;
+export const STALE_GOOGLE_REASON = REASONS.staleGoogle;
+export const STALE_BING_REASON = REASONS.staleBing;
+export const LOOKUP_RESERVE_REASON = REASONS.reserve;
+export const LOOKUP_LIMIT_REASON = REASONS.limit;
+
+/** The labels that carry a threshold, built from health-constants.js so they always say the real number. */
+export const LABELS = Object.freeze({
+  reviewsGreen: `${REVIEW_COUNT_GREEN} or more reviews`,
+  reviewsAmber: REVIEW_COUNT_GREEN - 1 > 1 ? `1 to ${REVIEW_COUNT_GREEN - 1} reviews` : '1 review',
+  ratingGreen: `${RATING_GREEN.toFixed(1)} or higher`,
+  ratingAmber: `${RATING_AMBER.toFixed(1)} to ${(Math.round((RATING_GREEN - 0.1) * 10) / 10).toFixed(1)}`,
+  ratingRed: `Below ${RATING_AMBER.toFixed(1)}`,
+  newestGreen: `Newest review within ${NEWEST_REVIEW_DAYS} days`,
+  newestAmber: `Newest review is older than ${NEWEST_REVIEW_DAYS} days`,
 });
 
 /** The fix sentences, each at most 160 characters. No promise that anything makes an AI assistant name a business. */
@@ -60,7 +82,7 @@ export const FIXES = Object.freeze({
   nameMatch: 'Use your business name the same way on your website and on your Google profile.',
   hoursMatch: 'Make your opening hours the same on your website and on your Google profile.',
   googleLinksToWebsite: 'Add your website address to your Google Business Profile so people can go from Google to your site.',
-  bingFound: 'Add your business to Bing Places so it shows on Bing Maps.',
+  bingFound: 'Check that your business is on Bing Places, so it shows on Bing Maps. Add it there if it is not.',
   bingDetails: 'Use the same name, phone number and address on Bing as on your website.',
   linkGoogle: 'Add a link to your Google profile on your website so people and AI can connect the two.',
   linkYelp: 'Add a link to your Yelp page on your website so people and AI can connect the two.',
@@ -135,6 +157,8 @@ export function sitemapSignal({ hasSite, sitemap }) {
   if (sitemap.error || !Number.isInteger(status) || status === 0) return unknown('sitemap', "We couldn't reach your sitemap this time.");
   if ([401, 403, 429].includes(status) || status >= 500) return unknown('sitemap', "Your website didn't let us look for a sitemap this time.");
   if (status >= 200 && status < 300) {
+    // A compressed sitemap (".xml.gz") the site serves is a sitemap; it is not unpacked here, but it is never red.
+    if (isGzipSitemap(sitemap)) return good('sitemap', 'Found', { url: sitemap.url ?? null, gzip: true });
     const info = parseSitemap(sitemap.text);
     if (info.isXml && info.entries > 0) return good('sitemap', 'Found', { url: sitemap.url ?? null });
     return missing('sitemap', 'Not found', FIXES.sitemap);
@@ -147,8 +171,10 @@ function wordsInPageSignal({ input, facts, found }) {
   if (!input.website) return unknown('wordsInPage', REASONS.noWebsite);
   if (!facts) return unknown('wordsInPage', REASONS.unreadable);
   const text = String(facts.text ?? '');
+  // Both sides lose "and", "&", "the", "LLC" and the like the same way, so "Smith & Sons" matches "Smith and Sons LLC".
   const nameTokensList = nameTokens(input.name);
-  const nameIn = nameTokensList.length > 0 && wholePhrase(text, nameTokensList.join(' '));
+  const nameIn = nameTokensList.length > 0
+    && ` ${nameTokens(text.slice(0, 200000)).join(' ')} `.includes(` ${nameTokensList.join(' ')} `);
   const phone = phoneDigits(found?.phone);
   const phoneIn = phone ? phonesInText(text, facts.telLinks).has(phone) : phonesInText(text, facts.telLinks).size > 0;
   if (nameIn && phoneIn && !facts.scriptBuilt) return good('wordsInPage', 'Found in the page');
@@ -156,6 +182,12 @@ function wordsInPageSignal({ input, facts, found }) {
   return partly('wordsInPage', 'Not found in the page code', FIXES.wordsInPage, {
     reason: "Your name and phone weren't in the page's own text. Some AI tools can't read text added by scripts.",
   });
+}
+
+/** True when the page links to a questions page ("/faq", "FAQs", "Common questions"). */
+function linksToQuestions(links) {
+  if (!Array.isArray(links)) return false;
+  return links.some(l => l && /\bfaqs?\b|questions/i.test(`${l.href ?? ''} ${l.text ?? ''}`));
 }
 
 function textSignal(id, ok, fix, { input, facts }) {
@@ -183,7 +215,8 @@ function internalPages({ input, facts, sitemapInfo }) {
       pages.push({ path: url.pathname.replace(/\/+$/, '') || '/', text });
     } catch { /* not an address */ }
   };
-  for (const loc of sitemapInfo?.locs ?? []) add(loc, '');
+  // A sitemap index lists other sitemaps, not pages, so its addresses are not counted as pages.
+  if (!sitemapInfo?.isIndex) for (const loc of sitemapInfo?.locs ?? []) add(loc, '');
   for (const link of facts?.links ?? []) add(link.href, link.text ?? '');
   return pages;
 }
@@ -192,19 +225,26 @@ function pagePerServiceSignal({ input, facts, sitemapInfo }) {
   if (!input.website) return unknown('pagePerService', REASONS.noWebsite);
   if (!facts) return unknown('pagePerService', REASONS.unreadable);
   const pages = internalPages({ input, facts, sitemapInfo });
-  if (pages.length === 0) return unknown('pagePerService', "We couldn't see enough of your website to tell.");
+  const indexReason = "Your sitemap lists other sitemaps, so we couldn't count your pages.";
+  if (pages.length === 0) {
+    return unknown('pagePerService', sitemapInfo?.isIndex ? indexReason : "We couldn't see enough of your website to tell.");
+  }
   const servicePaths = new Set();
   for (const page of pages) {
     if (page.path === '/') continue;
     if (textHasService(`${page.path.replace(/[-_/]+/g, ' ')} ${page.text}`, input.service)) servicePaths.add(page.path.toLowerCase());
   }
-  return servicePaths.size >= SERVICE_PAGES_GREEN
-    ? good('pagePerService', 'Several service pages', { count: servicePaths.size })
-    : partly('pagePerService', 'One page only', FIXES.pagePerService, { count: servicePaths.size });
+  if (servicePaths.size >= SERVICE_PAGES_GREEN) return good('pagePerService', 'Several service pages', { count: servicePaths.size });
+  // The pages behind a sitemap index were not seen, so "none found" from the links alone is not sure.
+  if (sitemapInfo?.isIndex && servicePaths.size === 0) return unknown('pagePerService', indexReason);
+  return servicePaths.size === 1
+    ? partly('pagePerService', 'One page only', FIXES.pagePerService, { count: 1 })
+    : partly('pagePerService', 'No separate service pages found', FIXES.pagePerService, { count: 0 });
 }
 
 function recentlyUpdatedSignal({ input, sitemapInfo, now }) {
   if (!input.website) return unknown('recentlyUpdated', REASONS.noWebsite);
+  if (sitemapInfo?.gzip) return unknown('recentlyUpdated', "Your sitemap is compressed, so we couldn't read its dates.");
   if (!sitemapInfo || !sitemapInfo.isXml || sitemapInfo.entries === 0) return unknown('recentlyUpdated', 'No sitemap, so no dates to read.');
   if (sitemapInfo.lastmods.length === 0) return unknown('recentlyUpdated', 'Your sitemap has no dates.');
   const newest = Math.max(...sitemapInfo.lastmods);
@@ -218,8 +258,9 @@ function recentlyUpdatedSignal({ input, sitemapInfo, now }) {
 
 /** Why a lookup gave nothing to read, in one line. */
 function lookupReason(result, offReason) {
-  if (!result || result.status === 'off') return offReason;
-  if (result.status === 'limit') return "Today's limit for AI questions was reached, so we didn't look this up.";
+  // The grader says why a lookup was off or held back (no key, an old report, the reserve, the daily limit).
+  if (!result || result.status === 'off') return result?.reason || offReason;
+  if (result.status === 'limit') return result.reason || REASONS.limit;
   if (result.status === 'not_found') return 'No profile was found to read.';
   return result.reason || REASONS.failed;
 }
@@ -250,7 +291,7 @@ function googleSignals({ input, facts, found, places, websiteHours, now }) {
   const base = place => place;
   const allUnknown = reason => { for (const id of ids) out[id] = unknown(id, reason); return out; };
 
-  if (!places || places.status === 'off') return allUnknown(REASONS.noGoogleKey);
+  if (!places || places.status === 'off') return allUnknown(lookupReason(places, REASONS.noGoogleKey));
   if (places.status !== 'found' || !places.place) {
     if (places.status === 'not_found') {
       out.found = missing('found', 'Not found on Google', FIXES.googleFound);
@@ -273,20 +314,20 @@ function googleSignals({ input, facts, found, places, websiteHours, now }) {
   out.hours = p.hasHours ? good('hours', 'Hours listed') : missing('hours', 'No hours listed', FIXES.googleHours);
 
   const count = Number.isInteger(p.ratingCount) ? p.ratingCount : 0;
-  if (count >= REVIEW_COUNT_GREEN) out.reviewCount = good('reviewCount', '10 or more reviews', { count });
-  else if (count >= 1) out.reviewCount = partly('reviewCount', '1 to 9 reviews', FIXES.reviewCount, { count });
+  if (count >= REVIEW_COUNT_GREEN) out.reviewCount = good('reviewCount', LABELS.reviewsGreen, { count });
+  else if (count >= 1) out.reviewCount = partly('reviewCount', LABELS.reviewsAmber, FIXES.reviewCount, { count });
   else out.reviewCount = missing('reviewCount', 'No reviews', FIXES.reviewCount, { count: 0 });
 
   if (!Number.isFinite(p.rating)) out.rating = unknown('rating', 'Google shows no star rating yet.');
-  else if (p.rating >= RATING_GREEN) out.rating = good('rating', '4.3 or higher', { rating: p.rating });
-  else if (p.rating >= RATING_AMBER) out.rating = partly('rating', '3.8 to 4.2', FIXES.rating, { rating: p.rating });
-  else out.rating = missing('rating', 'Below 3.8', FIXES.rating, { rating: p.rating });
+  else if (p.rating >= RATING_GREEN) out.rating = good('rating', LABELS.ratingGreen, { rating: p.rating });
+  else if (p.rating >= RATING_AMBER) out.rating = partly('rating', LABELS.ratingAmber, FIXES.rating, { rating: p.rating });
+  else out.rating = missing('rating', LABELS.ratingRed, FIXES.rating, { rating: p.rating });
 
   const newest = Date.parse(p.newestReviewAt ?? '');
   if (!Number.isFinite(newest)) out.newestReview = unknown('newestReview', 'Google gave no review dates to read.');
-  else if ((now - newest) / 86400000 <= NEWEST_REVIEW_DAYS) out.newestReview = good('newestReview', 'Newest review within 90 days', { newest: p.newestReviewAt });
+  else if ((now - newest) / 86400000 <= NEWEST_REVIEW_DAYS) out.newestReview = good('newestReview', LABELS.newestGreen, { newest: p.newestReviewAt });
   else {
-    out.newestReview = partly('newestReview', 'Newest review is older than 90 days', FIXES.newestReview, {
+    out.newestReview = partly('newestReview', LABELS.newestAmber, FIXES.newestReview, {
       newest: p.newestReviewAt, reason: 'Based on the reviews Google returned (up to 5).',
     });
   }
@@ -341,10 +382,15 @@ function googleSignals({ input, facts, found, places, websiteHours, now }) {
 // ---- Bing ----------------------------------------------------------------------------------------------------------
 
 function bingSignals({ input, found, bing }) {
-  if (!bing || bing.status === 'off') return { found: unknown('found', REASONS.noBingKey), details: unknown('details', REASONS.noBingKey) };
+  // Azure Maps data is not Bing Places itself: small businesses are often missing from it or out of date there even
+  // when their Bing Places listing is fine. So nothing about Bing is ever red; amber at most.
+  if (!bing || bing.status === 'off') {
+    const reason = lookupReason(bing, REASONS.noBingKey);
+    return { found: unknown('found', reason), details: unknown('details', reason) };
+  }
   if (bing.status === 'not_found') {
     return {
-      found: missing('found', 'Not found on Bing', FIXES.bingFound),
+      found: partly('found', 'Not found in Bing map data', FIXES.bingFound),
       details: unknown('details', 'No Bing listing was found to compare.'),
     };
   }
@@ -362,7 +408,7 @@ function bingSignals({ input, found, bing }) {
   if (name !== 'unknown') results.push(name);
   let details;
   if (results.length === 0) details = unknown('details', "We couldn't compare anything with the Bing listing.");
-  else if (results.includes('differ')) details = missing('details', "Don't match", FIXES.bingDetails);
+  else if (results.includes('differ')) details = partly('details', "Don't match", FIXES.bingDetails);
   else if (results.includes('close')) details = partly('details', 'Close, not the same', FIXES.bingDetails);
   else details = good('details', 'Match');
   return { found: good('found', 'Found on Bing'), details };
@@ -381,6 +427,12 @@ function linkSignals({ input, facts }) {
     return out;
   }
   const links = detectProfileLinks(facts.links);
+  // On a page built by scripts the links are usually added by the scripts, so "none found" can't be trusted.
+  if (facts.scriptBuilt && ids.every(id => !links[id])) {
+    for (const id of ids) out[id] = unknown(id, REASONS.script);
+    out.socials = unknown('socials', REASONS.script);
+    return out;
+  }
   for (const id of ids) {
     out[id] = links[id]
       ? good(id, 'Linked from your website', { url: links[id] })
@@ -464,7 +516,10 @@ export function buildSignals(args = {}) {
 
   let sitemapInfo = null;
   try {
-    sitemapInfo = args.sitemap && args.sitemap.status >= 200 && args.sitemap.status < 300 ? parseSitemap(args.sitemap.text) : null;
+    const ok = args.sitemap && args.sitemap.status >= 200 && args.sitemap.status < 300;
+    // A compressed sitemap is not unpacked: it counts as found, but its pages and dates are not read.
+    if (ok && isGzipSitemap(args.sitemap)) sitemapInfo = { isXml: false, isIndex: false, entries: 0, locs: [], lastmods: [], gzip: true };
+    else sitemapInfo = ok ? parseSitemap(args.sitemap.text) : null;
   } catch {
     sitemapInfo = null;
   }
@@ -474,7 +529,7 @@ export function buildSignals(args = {}) {
     wordsInPage: wordsInPageSignal({ input, facts: args.facts ?? null, found: args.found }),
     saysWhatYouDo: textSignal('saysWhatYouDo', () => textHasService(args.facts.text, input.service), FIXES.saysWhatYouDo, { input, facts: args.facts ?? null }),
     saysWhereYouWork: textSignal('saysWhereYouWork', () => wholePhrase(args.facts.text, input.city), FIXES.saysWhereYouWork, { input, facts: args.facts ?? null }),
-    answersQuestions: textSignal('answersQuestions', () => args.facts.faq === true, FIXES.answersQuestions, { input, facts: args.facts ?? null }),
+    answersQuestions: textSignal('answersQuestions', () => args.facts.faq === true || linksToQuestions(args.facts.links), FIXES.answersQuestions, { input, facts: args.facts ?? null }),
     pagePerService: pagePerServiceSignal({ input, facts: args.facts ?? null, sitemapInfo }),
     recentlyUpdated: recentlyUpdatedSignal({ input, sitemapInfo, now }),
   }), websiteIds);
