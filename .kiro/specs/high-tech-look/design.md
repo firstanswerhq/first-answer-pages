@@ -299,6 +299,7 @@ Tests: `health-signals` (R1 every combination, R4 the three cases and the same-p
 | `test/health-signals.test.js` (open, category) | `CLOSED_TEMPORARILY` label `'Marked closed'`; `'Category differs'` | `'Marked temporarily closed'`; `'Category may not fit what you do'` | R24, R21 |
 | `test/health-signals.test.js` (no key; Bing null; S14) | `"Google lookups aren't turned on here."`, `"Bing lookups aren't turned on here."`, the old reserve sentence | `"We didn't check Google this time."`, `"We didn't check Bing this time."`, the new reserve sentence, and the limit sentence pinned | R11, R2, R12 |
 | `test/health-signals.test.js` (links) | `'0 of 3 linked'` status `'missing'` | `'partly'` | R22 |
+| `test/health-signals.test.js` line 536 (the S3 test, a plain page with no links) | `socials.status` `'missing'`, comment "0 of 3 is a real answer there" | `'partly'`, comment adds "amber since R22, never red" | R22 |
 | `test/health-signals.test.js` (listing) | Founding spots status `'partly'`; label `'Differs'` | `'info'`; `"Doesn't match"` | R17, R18 |
 | `test/health-signals.test.js` (S13) | the old rating and review label strings | the new ones with "stars", "A review in the last 90 days" and "No review seen from the last 90 days" | R20, R16 |
 | `test/health-signals.test.js` (S16 index; U2) | the old index reason; the old U2 sentence | the R9 and R3 sentences | R9, R3 |

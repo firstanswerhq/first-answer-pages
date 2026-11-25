@@ -531,9 +531,9 @@ test('S3: a script-built page with no profile links found is Not checked for eve
   const read = build({ facts: withLink }).links;
   assert.equal(read.facebook.status, 'good');
   assert.equal(read.socials.label, '1 of 3 linked');
-  // A plain page with no links is still counted (0 of 3 is a real answer there).
+  // A plain page with no links is still counted (0 of 3 is a real answer there), amber since R22, never red.
   const plain = { ...readPageFacts('<a href="/about">About</a>'), scriptBuilt: false };
-  assert.equal(build({ facts: plain }).links.socials.status, 'missing');
+  assert.equal(build({ facts: plain }).links.socials.status, 'partly');
 });
 
 test('S4: a compressed sitemap the site serves is Found, never Not found; its dates are gray', () => {
