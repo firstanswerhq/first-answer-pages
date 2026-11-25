@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 
 import { createApp } from '../server/app.js';
 import { configFromEnv, parseGradeAiRepeatDays, DEFAULT_GRADE_AI_REPEAT_DAYS } from '../server/lib/config.js';
-import { sameBusinessInput } from '../server/lib/grader.js';
+import { sameBusinessInput, normalizeGradeInput } from '../server/lib/grader.js';
 import { repeatCheckLines, fairUseDay } from '../server/lib/grade-html.js';
 import { gradeAdminCookieValue, isGradeAdmin, GRADE_ADMIN_COOKIE } from '../server/lib/admin-auth.js';
 
@@ -194,6 +194,22 @@ test('11.5: "Check again" (website only) is not limited', async () => {
   }
   assert.equal((await env.ctx.grader.get(id)).status, 'done');
   assert.deepEqual(await env.ctx.grader.recheck(id), { started: true });
+});
+
+test('11.1: on a shared host the typed page is kept beside the home page the check reads (which is unchanged)', () => {
+  const form = website => normalizeGradeInput({ name: 'Joe Plumbing', city: 'Nashville', state: 'TN', service: 'plumbers', website }).input;
+  const joe = form('https://www.facebook.com/joeplumbing');
+  const bob = form('https://www.facebook.com/bobroofing/');
+  assert.equal(joe.website, 'https://www.facebook.com/', 'the check still reads the same home page');
+  assert.equal(joe.websitePage, 'https://www.facebook.com/joeplumbing');
+  assert.equal(sameBusinessInput(joe, bob), false, 'different Facebook pages are different businesses');
+  assert.equal(sameBusinessInput(joe, form('https://m.facebook.com/JoePlumbing/')), true);
+  assert.equal(sameBusinessInput(joe, form('https://www.facebook.com/')), false, 'facebook.com alone says nothing');
+  // An own domain keeps only its home page, as before.
+  const own = form('https://zephyr.example/about');
+  assert.equal(own.website, 'https://zephyr.example/');
+  assert.equal('websitePage' in own, false);
+  assert.equal(form('https://facebook.com/profile.php?id=7').websitePage, 'https://facebook.com/profile.php?id=7');
 });
 
 test('11.7: the business match follows the rules; the page sentences are short and plain', () => {

@@ -29,6 +29,7 @@ import { normalizeGradeInput, freeQuestion, recheckIsRunning } from '../lib/grad
 import { normalizeEmail, normalizePhone } from '../lib/listing-fields.js';
 import {
   gradeFormPage, scanPage, reportPage, failedPage, aboutPage, googleLivePage, messagePage, notFoundPage, repeatCheckPage,
+  printPage, reportCsvFor,
 } from '../lib/grade-html.js';
 
 const ID_PATTERN = /^[A-Za-z0-9_-]{22}$/;
@@ -373,6 +374,48 @@ export function createGradeRouter(ctx) {
   });
 
   // ---- check again -------------------------------------------------------------------------------------------
+  // ---- Requirement 13: download for clients, and "Prepared by" (full report only, same access rule) ----------------
+
+  const fullAccess = (req, grade) => grade?.status === 'done' && (!leadGate() || hasCookie('unlock', grade.id, req));
+
+  router.get('/grade/:id/print', async (req, res, next) => {
+    try {
+      const grade = await load(req.params.id);
+      if (!grade) return notFound(res);
+      if (!fullAccess(req, grade)) return res.redirect(303, `/grade/${grade.id}`);
+      return html(res, 200, printPage(grade, reportOptions(req, grade, { unlocked: true })));
+    } catch (err) {
+      return next(err);
+    }
+  });
+
+  router.get('/grade/:id/data.csv', async (req, res, next) => {
+    try {
+      const grade = await load(req.params.id);
+      if (!grade) return notFound(res);
+      if (!fullAccess(req, grade)) return res.redirect(303, `/grade/${grade.id}`);
+      res.set('Content-Disposition', `attachment; filename="ai-visibility-check-${grade.id}.csv"`);
+      return res.status(200).type('text/csv; charset=utf-8').send(reportCsvFor(grade));
+    } catch (err) {
+      return next(err);
+    }
+  });
+
+  router.post('/grade/:id/prepared-by', form, async (req, res, next) => {
+    try {
+      const grade = await load(req.params.id);
+      if (!grade) return notFound(res);
+      const back = `/grade/${grade.id}#full-report`;
+      if (!fullAccess(req, grade)) return res.redirect(303, `/grade/${grade.id}`);
+      const limited = ctx.rateLimiter.consume(`grade-prepared:${req.ip}`, RULES['grade-unlock']);
+      if (!limited.allowed) return tooMany(res, limited.retryAfterSeconds);
+      await ctx.grader.setPreparedBy(grade.id, req.body?.preparedBy);
+      return res.redirect(303, back);
+    } catch (err) {
+      return next(err);
+    }
+  });
+
   router.post('/grade/:id/recheck', async (req, res, next) => {
     try {
       const grade = await load(req.params.id);

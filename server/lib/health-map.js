@@ -361,7 +361,8 @@ export const MAP_SIZES = Object.freeze({
   // W3: the real narrowest widths: 530 px for the wide drawing (two columns from 960 px), 323 px for the phone drawing
   // on a 360 px screen (the common Android width).
   full: { view: 1000, minShownPx: 530, rMain: 280, rNode: 86, nameFont: 24, statusFont: 24, symbolFont: 26, orbFont: 24 },
-  phone: { view: 700, minShownPx: 323, rMain: 255, rNode: 94, nameFont: 26, statusFont: 26, symbolFont: 28, orbFont: 26 },
+  // Phone words at 27 units are 12.5 px at 323 px (26 was 11.997 px, just under 12); radius 96 fits "Not checked".
+  phone: { view: 700, minShownPx: 323, rMain: 253, rNode: 96, nameFont: 27, statusFont: 27, symbolFont: 28, orbFont: 27 },
 });
 const MID = 500;
 const R_ORB = 110;

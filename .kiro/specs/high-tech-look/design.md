@@ -526,6 +526,31 @@ Note: a report swapped in place onto the scan page (a scan finishing while you w
 | `test/health-map.test.js` (W2 test) | the tap hint right after the drawings | the aria-hidden caption between them | 2.10 |
 | `test/grade-signals-flow.test.js` (Step 2 test) | `class="health-orb-score">Score N/100` | with `data-score="N"` | 2.10 |
 
+## Fixes after the Part A and B cloud run (1829 of 1834)
+
+| Failure | Cause | Fix |
+|---|---|---|
+| `test/app.test.js:213` | The README did not mention `GRADE_AI_REPEAT_DAYS`. | A row in the README settings table: default 7, 0 turns the limit off, off in test runs unless set. |
+| `test/grade-fair-use.test.js:110` (a real 11.1 bug) | The check form keeps only a website's home page (`https://www.facebook.com/`), so every Facebook page looked like one business. | On a shared host the typed page is kept as `input.websitePage` (host plus path, and the `id` for profile.php). `sameBusinessInput` compares those pages. The shared host's own home page alone never matches. The check still reads the same home page as before, so the Checks and the score are unchanged. |
+| `test/health-map.test.js:116` | The phone name was 26 units × 323 / 700 = 11.997 px, just under 12. | The phone drawing's words are 27 units (12.5 px). The node radius is 96 so "Not checked" fits, and the ring is 253 so it stays in view. The test keeps `>= 12`. |
+| `test/health-map.test.js:354` | The J6 note "These checks don't count..." has an apostrophe and is escaped in the page; the test compared the raw text. | The test compares the escaped heading and note. The page already shows the note right under the heading. |
+| `test/health-map.test.js:444` | The test measured the whole intro (215 characters) against the per-sentence rule. | The tests split every text at its sentence ends and check each sentence (the longest intro sentence is 88). |
+
+# Requirement 13: agency-grade report (requirement-13-agency-grade.md)
+
+The data comes from what the check already stores; there are no new paid calls. Nothing here changes the score. Reports, the print page and the CSV stay noindex and no-store (the /grade router's headers). Nothing is added only by JavaScript. Every sentence is 160 characters or less, in American spelling.
+
+| Line | As built | Where |
+|---|---|---|
+| 13.1 | "Who AI named, across N answers", right under "What AI says" on the full report: a table of every business named across all answers that came back (main, extra questions, second opinions), with "N of M". It uses only the names each answer already listed (`competitors`, and `named` for the business). Each business counts once per answer, case ignored. The checked business is always a row, even at 0, and highlighted "(you)". Answers with no text are skipped. | `agency-report.js` (`shareOfVoice`), `grade-html.js` (`voiceSection`) |
+| 13.2 | "Sites AI used to answer": each source domain from the stored `sources`, with how many answers cited it and a link to the first address stored (http and https only). The business's own website is marked "(your website)". For a cited directory that profile-links recognizes (Yelp, Facebook, Instagram, TikTok, Google), one line appears when the website is known not to link there ("AI read Yelp for 2 answers. Your website doesn't link to a Yelp page."). There is no line when it links or wasn't checked. With no sources: "These answers didn't list their sources." | `agency-report.js` (`sitesUsed`), `grade-html.js` (`sitesSection`) |
+| 13.3 | Each answer in "Every answer" (full report) has "Evidence: Claude (model ...), asked Nov 24, 2026, 12:00 PM CT, with a live web search." The exact question is the heading right above it in the same block. Repeating it on every answer would make the list twice as long. The CSV has the exact question on every answer row. | `agency-report.js` (`evidence`), `grade-html.js` (`answersSection`) |
+| 13.4 | The full report has "Download report" (`/grade/:id/print`) and "Download data (CSV)" (`/grade/:id/data.csv`). Both need full access, the same rule as the full report. The print page is the full report with every answer opened, "Prepared by" at the top, and a print stylesheet. It hides the menu, footer, buttons, forms, orb canvas, dots, hints and animation, shows the map as the wide still drawing, and starts each section on a new page. The browser's own print window saves the PDF, so no JavaScript is needed. The CSV has one row per health row and one per answer, in fixed columns (`section, group, item, status, detail, engine, model, question, named, date`). Cells are quoted as needed and never start a spreadsheet formula. | `grade-html.js` (`printPage`, `reportCsvFor`), `agency-report.js` (`reportCsv`), `routes/grade.js`, `style.css` |
+| 13.5 | "Prepared by" on the full report: a short form (POST `/grade/:id/prepared-by`, full access, rate limited). The value is text only, with no tags, control or direction marks, on one line, 60 characters at most. An empty value clears it. It is stored with the report only and shown only on the full report's form, the print page and the first line of the CSV. It is never on public pages and is escaped everywhere. | `agency-report.js` (`cleanPreparedBy`), `grader.js` (`setPreparedBy`), `routes/grade.js` |
+| 13.6 | Tests: `test/agency-report.test.js` covers the counts, the checked business at 0, skipped answers, escaping, no sources, the business's own site, gaps only when known, the evidence wording, CSV columns, rows, quoting and formula safety, the print page and print stylesheet, and "Prepared by" cleaning, the cap and escaping. `test/grade-signals-flow.test.js` runs a real check through the routes: share of voice, evidence, the download links, nothing on the locked report, saving "Prepared by", and the print page and CSV with their headers. | |
+
+No older test line changed for Requirement 13.
+
 ### Older test lines changed by T1 to T9
 
 | Where | Old | New | Why |

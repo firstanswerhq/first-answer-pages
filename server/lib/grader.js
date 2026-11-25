@@ -33,6 +33,7 @@ import {
 import { compareNames } from './health-compare.js';
 import { sitemapAddress } from './sitemap-read.js';
 import { PLACES_ERROR_REASON } from './places.js';
+import { cleanPreparedBy } from './agency-report.js';
 import { BING_ERROR_REASON } from './azure-maps.js';
 
 // ---- constants -------------------------------------------------------------------
@@ -112,7 +113,13 @@ function readWebsiteInput(text) {
   }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return { error: MESSAGES.website };
   if (url.username || url.password || !url.hostname.includes('.')) return { error: MESSAGES.website };
-  return { value: `${url.protocol}//${url.host}/` };
+  // On a shared host (a Facebook page, a wixsite.com site) the page itself says which business it is, so it is kept
+  // beside the home page the check reads (high-tech-look 11.1). The check still reads the same home page as before.
+  const domain = registeredDomain(url.href);
+  const path = url.pathname.replace(/\/+$/, '');
+  const id = /\/profile\.php$/i.test(path) && url.searchParams.get('id') ? `?id=${encodeURIComponent(url.searchParams.get('id'))}` : '';
+  const page = domain && SHARED_DOMAINS.has(domain) && path !== '' ? `${url.protocol}//${url.host}${path}${id}` : null;
+  return { value: `${url.protocol}//${url.host}/`, ...(page ? { page } : {}) };
 }
 
 /**
@@ -143,6 +150,7 @@ export function normalizeGradeInput(raw) {
   if (site.error) errors.website = site.error;
   if (Object.keys(errors).length > 0) return { ok: false, values, errors };
   const input = { name, city, state, service, website: site.value };
+  if (site.page) input.websitePage = site.page;
   if (noStorefront) input.noStorefront = true;
   return { ok: true, values, errors, input };
 }
@@ -157,7 +165,14 @@ export function sameBusinessInput(earlier, next) {
   if (wanted) {
     const domain = registeredDomain(wanted);
     if (!domain || !earlier?.website) return false;
-    if (SHARED_DOMAINS.has(domain)) return pageKey(wanted) !== '' && pageKey(wanted) === pageKey(earlier.website);
+    if (SHARED_DOMAINS.has(domain)) {
+      // The page typed on the form (`websitePage`), since `website` is only the shared host's home page.
+      const a = pageKey(next.websitePage || wanted);
+      const b = pageKey(earlier.websitePage || earlier.website);
+      // The shared host's own home page alone says nothing about which business it is.
+      if (a === '' || a === pageKey(`https://${domain}/`)) return false;
+      return a === b;
+    }
     return registeredDomain(earlier.website) === domain;
   }
   const name = normalizeForMatch(next?.name);
@@ -2158,9 +2173,27 @@ export function createGrader({
     return found;
   }
 
+  /**
+   * 13.5: the optional "Prepared by" name, stored with the report only (text, 60 characters at most; '' clears it).
+   * @returns {Promise<boolean>} false when there is no such finished Grade
+   */
+  async function setPreparedBy(id, value) {
+    const text = cleanPreparedBy(value);
+    let found = false;
+    await grades().update(list => {
+      const g = list.find(x => x && x.id === id && x.status === 'done');
+      if (!g) return;
+      found = true;
+      if (text) g.preparedBy = text;
+      else delete g.preparedBy;
+    });
+    return found;
+  }
+
   return {
     start,
     repeatCheck,
+    setPreparedBy,
     run: id => { startRun(id); return active.get(id) ?? Promise.resolve(); },
     get,
     peek: id => (live.has(id) ? structuredClone(live.get(id)) : undefined),

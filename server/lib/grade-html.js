@@ -21,6 +21,9 @@ import { formatRunTime } from './seance-html.js';
 import { listedNames, splitLists } from './name-match.js';
 import { scoreGrade } from './grade-score.js';
 import { healthModel, healthMapHtml } from './health-map.js';
+import {
+  shareOfVoice, sitesUsed, evidence, reportCsv, cleanPreparedBy, PREPARED_BY_MAX,
+} from './agency-report.js';
 import { DEFAULT_SITE_NAME } from './config.js';
 import {
   providerLabel, freeQuestion, extraQuestions, stepNames, foundOf, isSecondOpinion, schemaHours, readableHours, isPartialScore,
@@ -899,8 +902,10 @@ function answersSection(grade, { now } = {}) {
       if (!counted.has(a)) return `${name} (not counted toward your score)`;
       return mains.length > 1 ? `${name}, answer ${mains.indexOf(a) + 1} of ${mains.length}` : name;
     };
+    // 13.3: the evidence for each answer, right under the question it answers.
     return `<li><strong>${h(p)}</strong>${entries.map(a => `
       <p>${label(a)}: ${h(outcome(a, grade.input))}</p>
+      <p class="hint grade-evidence">${h(evidence(a, providerLabel(a.provider)))}</p>
       ${answerBlock(a)}`).join('')}</li>`;
   }).join('\n    ');
   return `<section class="grade-all-answers">
@@ -1109,6 +1114,7 @@ export function reportPage(storedGrade, opts = {}) {
   const fullPart = full
     ? `<div class="grade-full" id="full-report">
   ${justOpened}
+  ${downloadBlock(grade)}
   ${allChecks(grade)}
   ${answersSection(grade, { now })}
   ${fixKit(grade, contactEmail)}
@@ -1125,10 +1131,14 @@ export function reportPage(storedGrade, opts = {}) {
     runNew: text => runNewLink(grade, text),
   });
 
+  // Requirement 13 (full report): who AI named across every answer, and the sites the answers used.
+  const agency = full ? `${voiceSection(grade)}\n${sitesSection(grade)}` : '';
+
   const body = `<section class="grade-report">
 ${top}
 ${healthMap}
 ${aiFree(grade, { googleLive, requester, now, secondPending })}
+${agency}
 ${claim}
 ${searchPreview(grade)}
 ${groupLines(grade, s)}
@@ -1147,6 +1157,92 @@ export const HEALTH_SCAN_SCRIPT = '/js/health-scan.js';
 
 /** The small script that turns the health map's orb (decoration only). */
 export const HEALTH_ORB_SCRIPT = '/js/health-orb.js';
+
+// ---- Requirement 13: the agency-grade parts of the full report --------------------------------------------------------
+
+/** 13.1: "Who AI named, across N answers", with the checked business always a row (even at 0), highlighted. */
+export function voiceSection(grade) {
+  const { total, rows } = shareOfVoice(grade);
+  if (total === 0) return '';
+  const body = rows.map(r => (r.own
+    ? `<tr class="grade-voice-you"><td><strong>${h(r.name)}</strong> (you)</td><td>${r.count} of ${total}</td></tr>`
+    : `<tr><td>${h(r.name)}</td><td>${r.count} of ${total}</td></tr>`)).join('\n      ');
+  return `<section class="grade-voice">
+  <h2>${h(`Who AI named, across ${total} ${total === 1 ? 'answer' : 'answers'}`)}</h2>
+  <table class="grade-voice-table">
+    <thead><tr><th scope="col">Business</th><th scope="col">Answers that named it</th></tr></thead>
+    <tbody>
+      ${body}
+    </tbody>
+  </table>
+</section>`;
+}
+
+/** 13.2: "Sites AI used to answer", only from the sources stored on the answers. */
+export function sitesSection(grade) {
+  const { hasSources, rows, gaps } = sitesUsed(grade);
+  if ((Array.isArray(grade.ai) ? grade.ai : []).length === 0) return '';
+  if (!hasSources) {
+    return `<section class="grade-sites">
+  <h2>Sites AI used to answer</h2>
+  <p>These answers didn't list their sources.</p>
+</section>`;
+  }
+  const items = rows.map(r => `<li><a href="${h(r.url)}" rel="nofollow noopener noreferrer">${h(r.domain)}</a>: ${r.count === 1 ? 'cited in 1 answer' : `cited in ${r.count} answers`}${r.own ? ' <strong>(your website)</strong>' : ''}</li>`).join('\n    ');
+  const gapLines = gaps.map(g => `<p class="grade-sites-gap">${h(g)}</p>`).join('\n  ');
+  return `<section class="grade-sites">
+  <h2>Sites AI used to answer</h2>
+  <ul class="grade-sites-list">
+    ${items}
+  </ul>${gapLines ? `\n  ${gapLines}` : ''}
+</section>`;
+}
+
+/** 13.4 and 13.5: the download links and the optional "Prepared by" name. */
+function downloadBlock(grade) {
+  const id = h(grade.id);
+  const prepared = cleanPreparedBy(grade.preparedBy);
+  return `<section class="grade-download">
+  <h2>Share this report</h2>
+  <p><a class="button" href="/grade/${id}/print">Download report</a> <a href="/grade/${id}/data.csv">Download data (CSV)</a></p>
+  <p class="hint">"Download report" opens a clean page for printing. Choose "Save as PDF" in your browser's print window.</p>
+  <form method="POST" action="/grade/${id}/prepared-by" class="grade-prepared">
+    <label for="prepared-by">Prepared by (optional, shows on the downloaded report)</label>
+    <input id="prepared-by" name="preparedBy" type="text" maxlength="${PREPARED_BY_MAX}" value="${h(prepared)}" autocomplete="organization">
+    <button type="submit" class="button-secondary">Save</button>
+  </form>
+</section>`;
+}
+
+/**
+ * 13.4: the printable page: the full report with every answer opened, "Prepared by" at the top, and a print
+ * stylesheet that hides the site's menu, buttons, forms and animation. The browser's own print window saves the PDF.
+ */
+export function printPage(grade, opts = {}) {
+  const page = reportPage(grade, { ...opts, leadGate: false });
+  const prepared = cleanPreparedBy(grade.preparedBy);
+  const head = `<div class="grade-print-head">${prepared ? `<p class="grade-prepared-by">Prepared by ${h(prepared)}</p>` : ''}
+  <p class="hint grade-print-note">Use your browser's Print button and choose "Save as PDF".</p>
+</div>`;
+  return page
+    .replace('<section class="grade-report">', `<section class="grade-report grade-print">\n${head}`)
+    .replace(/<details>/g, '<details open>');
+}
+
+/** 13.4: the report's data as CSV: one row per health row, one per answer. The same facts as the page. */
+export function reportCsvFor(grade) {
+  const g = { ...grade, results: scoredResults(grade) };
+  const model = healthModel(g, { score: null, found: foundOf(g), ...aiHealth(g) });
+  const health = model.mains.flatMap(m => m.subs.map(s => ({ group: m.name, item: s.name, status: s.label, detail: s.reason ?? '' })));
+  const answers = aiOf(g).map(a => ({
+    engine: providerLabel(a.provider),
+    model: typeof a.model === 'string' ? a.model : '',
+    question: String(a.prompt ?? ''),
+    named: a.named === true,
+    date: typeof a.at === 'string' ? a.at : '',
+  }));
+  return reportCsv({ preparedBy: grade.preparedBy, health, answers });
+}
 
 /**
  * Under "N of M checks need work": what the count is, said about the owner's report (Step 2 reader reviews H10, J9):

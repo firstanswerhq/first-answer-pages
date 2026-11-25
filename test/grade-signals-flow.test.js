@@ -458,6 +458,52 @@ test('Requirement 12: the certificate date from the home page request is read, a
   assert.ok(html.includes(`<script type="module" src="${HEALTH_SCAN_SCRIPT}"></script>`), 'the scan script is loaded (2.10)');
 });
 
+test('Requirement 13: the full report has share of voice, evidence and downloads; "Prepared by" is saved and printed', async () => {
+  const env = await startEnv({ site: fakeSite(defaultRoutes()) });
+  const g = await check(env);
+  const server = env.app.listen(0, '127.0.0.1');
+  cleanups.push(() => new Promise(r => server.close(r)));
+  await new Promise(r => server.once('listening', r));
+  const base = `http://127.0.0.1:${server.address().port}`;
+
+  const report = await (await fetch(`${base}/grade/${g.id}`)).text();
+  assert.match(report, /<h2>Who AI named, across 1 answer<\/h2>/);
+  assert.match(report, /<tr class="grade-voice-you"><td><strong>Zephyr Plumbing<\/strong> \(you\)<\/td><td>0 of 1<\/td><\/tr>/);
+  assert.match(report, /<p class="hint grade-evidence">Evidence: Claude \(model stub\), asked [^<]+ CT, with a live web search\.<\/p>/);
+  assert.ok(report.includes(`href="/grade/${g.id}/print">Download report</a>`));
+  assert.ok(report.includes(`href="/grade/${g.id}/data.csv">Download data (CSV)</a>`));
+  assert.ok(report.includes("<p>These answers didn't list their sources.</p>"));
+  // The locked report has none of these.
+  const locked = reportPage(g, { leadGate: true, unlocked: false });
+  assert.equal(locked.includes('Download report'), false);
+  assert.equal(locked.includes('Who AI named'), false);
+
+  const saved = await fetch(`${base}/grade/${g.id}/prepared-by`, {
+    method: 'POST', redirect: 'manual', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ preparedBy: `<b>Acme</b> Agency ${'x'.repeat(80)}` }),
+  });
+  assert.equal(saved.status, 303);
+  const stored = await env.ctx.grader.get(g.id);
+  assert.equal(stored.preparedBy, `bAcme/b Agency ${'x'.repeat(80)}`.slice(0, 60));
+  assert.ok(Array.from(stored.preparedBy).length <= 60);
+
+  const print = await fetch(`${base}/grade/${g.id}/print`);
+  assert.equal(print.status, 200);
+  assert.match(print.headers.get('x-robots-tag') ?? '', /noindex/);
+  const printText = await print.text();
+  assert.ok(printText.includes(`<p class="grade-prepared-by">Prepared by ${stored.preparedBy}</p>`));
+  assert.equal(printText.includes('<b>Acme'), false);
+
+  const csv = await fetch(`${base}/grade/${g.id}/data.csv`);
+  assert.equal(csv.status, 200);
+  assert.match(csv.headers.get('content-type') ?? '', /^text\/csv/);
+  assert.match(csv.headers.get('content-disposition') ?? '', /attachment; filename="ai-visibility-check-/);
+  const lines = (await csv.text()).split('\r\n');
+  assert.equal(lines[0], `Prepared by,${stored.preparedBy}`);
+  assert.equal(lines[2], 'section,group,item,status,detail,engine,model,question,named,date');
+  assert.ok(lines.some(l => /^answer,,,,,Claude,stub,.*,no,/.test(l)));
+});
+
 test('U4: lookups older than 30 days are dropped from memory when new ones are kept, even without a recheck', async () => {
   const places = fakeLookup('places', GOOGLE_FOUND);
   const env = await startEnv({ site: fakeSite(defaultRoutes()), places });

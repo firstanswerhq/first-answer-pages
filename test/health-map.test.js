@@ -78,7 +78,7 @@ test('the section: the plain list comes first, the map after it, and the map is 
 test('H1: the intro says what the colors mean, and the orb shows the score in the report\'s own form', () => {
   assert.equal(MAP_INTRO, "Every check we ran, at a glance. Green is good, yellow is partway there, red needs work, gray means we couldn't check it. The i marks your free listing: information, not health. Your score is at the top of the page.");
   // Every sentence 160 characters or less (J10: "partway"; J4/W7: the "i" is explained).
-  for (const s of MAP_INTRO.split(/(?<=\.) /)) assert.ok(s.length <= 160, s);
+  for (const s of MAP_INTRO.split(/(?<=[.!?])\s+/)) assert.ok(s.length <= 160, s);
   assert.equal(/part way/.test(MAP_INTRO), false);
   const html = healthMapHtml(model());
   assert.equal(/Health \d/.test(html), false, 'no second name for the score');
@@ -351,9 +351,8 @@ test('J5, J6, J10: hover titles, a desktop click hint, a note on the unscored cl
   assert.match(fullMapOf(html), /<g class="health-node health-node-\w+" data-name="Website"><title>Website: [^<]+<\/title>/);
   assert.ok(mapOf(html).includes(`<p class="health-click">${CLICK_HINT}</p>`));
   const website = /<div class="health-group[^"]*" id="health-g-website">([\s\S]*?)<\/div>/.exec(html)[1];
-  assert.ok(website.includes(`<h4 class="health-cluster">Speaks AI&#39;s language</h4>\n  <p class="health-why">${SPEAKS_NOTE}</p>`)
-    || website.includes(`<h4 class="health-cluster">Speaks AI's language</h4>\n  <p class="health-why">${SPEAKS_NOTE}</p>`)
-    || website.includes(`<h4 class="health-cluster">Speaks AI&#x27;s language</h4>\n  <p class="health-why">${SPEAKS_NOTE}</p>`));
+  // The note sits right under its heading; both are escaped like every other line ("don't" has an apostrophe).
+  assert.ok(website.includes(`<h4 class="health-cluster">${escapeHtml("Speaks AI's language")}</h4>\n  <p class="health-why">${escapeHtml(SPEAKS_NOTE)}</p>`));
   // The scored info file sits with the scored "Can AI read your website" checks.
   const readCluster = website.slice(website.indexOf('Can AI read your website'), website.indexOf('Speaks AI'));
   assert.ok(readCluster.includes('A short info file for AI (llms.txt):'));
@@ -388,6 +387,8 @@ test('W2, W3: the canvas shares a box with the drawings; two columns only from 9
   // The size test uses the real narrowest widths: 530 px beside the list, 323 px on a 360 px phone.
   assert.equal(MAP_SIZES.full.minShownPx, 530);
   assert.equal(MAP_SIZES.phone.minShownPx, 323);
+  // The phone drawing stays inside its view (150 to 850) with its bigger nodes.
+  assert.ok(MAP_SIZES.phone.rMain + MAP_SIZES.phone.rNode <= 350);
 });
 
 test('H5: no AI answer is one plain line with a link, not an empty "Answer 1" row', () => {
@@ -441,7 +442,10 @@ test('fix sentences show only in the full report; the locked report shows the st
 test('the words follow the rules: plain, no promise, no "did not", every sentence 160 characters or less', () => {
   const text = textOf(healthMapHtml(model(), { full: true }));
   assert.equal(/guarantee|yellow pages|\bYP\b|\$\d|\bdid not\b|will (?:name|recommend|mention)|opening hours/i.test(text), false);
-  for (const sentence of [MAP_INTRO, FOUNDING_NOTE, TAP_HINT, OLD_REPORT_NOTE]) assert.ok(sentence.length <= 160);
+  // The rule is per sentence: split each text at its sentence ends.
+  for (const text of [MAP_INTRO, FOUNDING_NOTE, TAP_HINT, OLD_REPORT_NOTE, CLICK_HINT, SPEAKS_NOTE]) {
+    for (const sentence of text.split(/(?<=[.!?])\s+/)) assert.ok(sentence.length <= 160, sentence);
+  }
 });
 
 test('V1/V6: the orb script never leaks a loop, cleans up its listeners, and pauses off screen', async () => {

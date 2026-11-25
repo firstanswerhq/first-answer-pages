@@ -2515,6 +2515,33 @@ a.tel,
   line-height: 1.35;
 }
 
+/* ---- Requirement 13: share of voice, sites AI used, evidence, download and print -------------------------------- */
+.grade-voice-table { width: 100%; border-collapse: collapse; }
+.grade-voice-table th, .grade-voice-table td { padding: 0.35rem 0.5rem; border-bottom: 1px solid var(--color-divider); text-align: left; }
+.grade-voice-you { background: var(--color-success-bg); }
+.grade-sites-list { padding-left: 1.2rem; }
+.grade-sites-gap { margin: 0.3rem 0; }
+.grade-evidence { margin: 0.1rem 0 0.4rem; }
+.grade-prepared { display: flex; flex-wrap: wrap; align-items: end; gap: 0.5rem; }
+.grade-prepared label { flex-basis: 100%; font-weight: 600; }
+.grade-prepared input { min-height: 2.5rem; max-width: 22rem; width: 100%; padding: 0 0.5rem; }
+.grade-prepared-by { font-weight: 700; font-size: 1.1rem; }
+
+/* The downloaded report (13.4): the browser's print-to-PDF. No menu, no buttons or forms, no animation; the map is a
+   still picture (the wide drawing); every answer is open; each section starts on a new page. */
+@media print {
+  .grade-download, .grade-print-note, form, .health-orb-host, .health-flow, .health-tap, .health-click,
+  .health-caption, .health-back, .health-svg-phone, .grade-recheck, .grade-offer { display: none !important; }
+  .health-svg-full { display: block !important; }
+  .health-map { position: static !important; max-width: 32rem; break-inside: avoid; }
+  .health-layout { display: block; }
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  .health-scanning .health-branch { opacity: 1 !important; }
+  .grade-report > section, .grade-full > section { break-before: page; }
+  .health-row, .grade-voice-table tr, .grade-sites-list li { break-inside: avoid; }
+  a[href^="http"]::after { content: " (" attr(href) ")"; font-size: 0.8em; }
+}
+
 /* The note under "N of M checks need work" sits right under it (Step 2 reader review H10). */
 .grade-score .grade-failed-note { order: 4; margin-top: 0; }
 
