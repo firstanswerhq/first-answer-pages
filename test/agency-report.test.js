@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   shareOfVoice, sitesUsed, evidence, evidenceTime, reportCsv, csvCell, cleanPreparedBy, CSV_COLUMNS, PREPARED_BY_MAX,
+  answersOf, isGoogleProfileUrl,
 } from '../server/lib/agency-report.js';
 import { voiceSection, sitesSection, printPage, reportCsvFor } from '../server/lib/grade-html.js';
 
@@ -72,6 +73,58 @@ test('13.2: the sites AI used come only from the stored sources; the own website
   const none = sitesSection(grade([answer()]));
   assert.ok(none.includes("<p>These answers didn't list their sources.</p>"));
   for (const gap of s.gaps) assert.ok(gap.length <= 160);
+});
+
+test('batch 4 Y1: on a shared host only the business\'s own page is "(your website)", never every page there', () => {
+  const fbInput = { ...INPUT, website: 'https://www.facebook.com/', websitePage: 'https://www.facebook.com/zephyrplumbing' };
+  const competitor = grade([
+    answer({ sources: [{ url: 'https://www.facebook.com/someothercompetitor', title: 'Other' }] }),
+  ], { input: fbInput });
+  assert.deepEqual(sitesUsed(competitor).rows.map(r => [r.domain, r.own]), [['facebook.com', false]]);
+  assert.equal(sitesSection(competitor).includes('(your website)'), false);
+  // Its own page (www., m., case and a trailing slash ignored) is marked, even after a competitor's page.
+  const own = grade([
+    answer({ sources: [{ url: 'https://www.facebook.com/someothercompetitor' }, { url: 'https://m.facebook.com/ZephyrPlumbing/' }] }),
+  ], { input: fbInput });
+  assert.deepEqual(sitesUsed(own).rows.map(r => [r.domain, r.count, r.own]), [['facebook.com', 1, true]]);
+  // A shared-host website with no page kept is never marked.
+  const bare = grade([answer({ sources: [{ url: 'https://www.facebook.com/zephyrplumbing' }] })], { input: { ...INPUT, website: 'https://www.facebook.com/' } });
+  assert.equal(sitesUsed(bare).rows[0].own, false);
+});
+
+test('batch 4 Y3: the Google line counts only Google Business Profile or Maps pages', () => {
+  const links = { signals: { links: { google: { status: 'partly' } } } };
+  const g = grade([
+    answer({ sources: [{ url: 'https://support.google.com/business/answer/1' }] }),
+    answer({ provider: 'chatgpt', sources: [{ url: 'https://www.google.com/search?q=zephyr' }] }),
+    answer({ provider: 'grok', sources: [{ url: 'https://www.google.com/maps/place/Zephyr+Plumbing' }] }),
+  ], links);
+  const s = sitesUsed(g);
+  assert.equal(s.rows.find(r => r.domain === 'google.com').count, 3, 'the domain row is unchanged');
+  assert.deepEqual(s.gaps, ["AI read Google for one answer. Your website doesn't link to your Google profile."]);
+  // No profile page among the sources: no Google line.
+  const plain = grade([answer({ sources: [{ url: 'https://support.google.com/x' }] })], links);
+  assert.deepEqual(sitesUsed(plain).gaps, []);
+  // A g.page or maps.app.goo.gl link is a profile too.
+  const short = grade([answer({ sources: [{ url: 'https://g.page/zephyr' }] }), answer({ sources: [{ url: 'https://maps.app.goo.gl/abc' }] })], links);
+  assert.deepEqual(sitesUsed(short).gaps, ["AI read Google for 2 answers. Your website doesn't link to your Google profile."]);
+  assert.equal(isGoogleProfileUrl('https://business.google.com/x'), true);
+  assert.equal(isGoogleProfileUrl('https://maps.google.com/?cid=1'), true);
+  assert.equal(isGoogleProfileUrl('https://www.google.com/mapsearch'), false);
+  assert.equal(isGoogleProfileUrl('javascript:alert(1)'), false);
+});
+
+test('batch 4 Y4: the CSV has the same answers as "across N answers" (an answer with no text is skipped)', () => {
+  const g = grade([
+    answer({ named: true }),
+    answer({ provider: 'chatgpt' }),
+    answer({ provider: 'gemini', answer: '   ' }),
+    answer({ provider: 'grok', answer: '' }),
+  ]);
+  const rows = reportCsvFor(g).split('\r\n').filter(line => line.startsWith('answer,'));
+  assert.equal(rows.length, shareOfVoice(g).total);
+  assert.equal(rows.length, 2);
+  assert.equal(answersOf(g).length, 2);
 });
 
 test('13.3: the evidence says who answered, the model, when, and whether it searched the web live', () => {

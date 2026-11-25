@@ -9,8 +9,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
-import { scanPlan, shouldScan, SCAN_MS, SCAN_TARGET, SCAN_THRESHOLD } from '../public/js/health-scan.js';
-import { scanPage, HEALTH_SCAN_SCRIPT, HEALTH_ORB_SCRIPT, markedAnswer } from '../server/lib/grade-html.js';
+import { scanPlan, shouldScan, SCAN_MS, SCAN_TARGET, SCAN_THRESHOLD, PRINT_PAGE } from '../public/js/health-scan.js';
+import {
+  scanPage, printPage, reportPage, HEALTH_SCAN_SCRIPT, HEALTH_ORB_SCRIPT, markedAnswer,
+} from '../server/lib/grade-html.js';
 import { healthModel, healthMapHtml, MAIN_NODES } from '../server/lib/health-map.js';
 
 const NODES = MAIN_NODES.map(n => ({ id: n.id, caption: `${n.name}: Good` }));
@@ -75,6 +77,34 @@ test('batch 3 X2: the Checking page loads the scan, which waits for the report t
   assert.match(js, /observe\(document\.body, \{ childList: true, subtree: true \}\)/);
   assert.match(js, /waiting\.disconnect\(\)/);
   assert.match(js, /if \(!played && !waiting/, 'a later swap never replays it');
+});
+
+test('batch 4 Y2: the print page never loads the scan; the script also stops on the print page and before printing', async () => {
+  const g = {
+    id: 'print000000000000000001', status: 'done', createdAt: '2026-11-24T18:00:00.000Z', finishedAt: '2026-11-24T18:00:00.000Z',
+    input: { name: 'Zephyr Plumbing', city: 'Nashville', state: 'TN', service: 'plumbers', website: 'https://zephyr.example/' },
+    ai: [], results: [], steps: [], facts: null, found: { phone: '', address: '', hours: [] }, score: null,
+    aiMain: { provider: 'anthropic', label: 'Claude', state: 'ok' },
+  };
+  const print = printPage(g);
+  assert.equal(print.includes(HEALTH_SCAN_SCRIPT), false, 'no scan script on the print page');
+  assert.ok(print.includes('grade-print'));
+  assert.ok(reportPage(g, { leadGate: false }).includes(`<script type="module" src="${HEALTH_SCAN_SCRIPT}"></script>`), 'the report still has it');
+  assert.equal(PRINT_PAGE, '.grade-print');
+  const js = await fs.readFile(fileURLToPath(new URL('../public/js/health-scan.js', import.meta.url)), 'utf8');
+  assert.match(js, /if \(document\.querySelector\(PRINT_PAGE\)\) return;/);
+  assert.match(js, /addEventListener\?\.\('beforeprint'/);
+  assert.match(js, /stopScan = finish;/);
+});
+
+test('batch 4 Y6: a swapped-in map is watched instead of the removed one, until the scan has played', async () => {
+  const js = await fs.readFile(fileURLToPath(new URL('../public/js/health-scan.js', import.meta.url)), 'utf8');
+  assert.match(js, /if \(!now \|\| now === watched\) return;/, 'a new .health node is noticed');
+  assert.match(js, /if \(observer\) observer\.disconnect\(\);/, 'the old map is no longer watched');
+  assert.match(js, /watched = section;/);
+  assert.match(js, /if \(!section\.isConnected \|\| document\.querySelector\(PRINT_PAGE\)\) return;/);
+  // Once played, nothing waits any more, so a later swap never replays it.
+  assert.match(js, /stopWaiting\(\);\s*\/\/ Checked again/);
 });
 
 test('batch 3 X12: the scan clears its timers and its motion listener; the caption keeps one height', async () => {

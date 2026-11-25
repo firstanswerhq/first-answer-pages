@@ -70,6 +70,7 @@ function run(section) {
     scoreTexts.forEach((t, i) => { t.textContent = original[i]; });
     if (caption) caption.textContent = '';
   }
+  stopScan = finish; // batch 4 Y2: printing mid-scan shows the final state at once
   section.classList.add('health-scanning');
   if (caption) caption.textContent = '';
   for (const step of steps) {
@@ -89,37 +90,63 @@ function run(section) {
 export const SCAN_TARGET = '.health-map';
 export const SCAN_THRESHOLD = 0.5;
 
-let waiting = null;
+/** The printable report (13.4) never plays the scan (batch 4 Y2). */
+export const PRINT_PAGE = '.grade-print';
+
+let waiting = null; // the MutationObserver that waits for a map, or for a new one after a swap
+let observer = null; // the IntersectionObserver on the map being watched
+let watched = null; // the `.health` section being watched
+let stopScan = null; // ends a scan that is playing
+
+function stopWaiting() {
+  if (waiting) {
+    waiting.disconnect();
+    waiting = null;
+  }
+}
 
 function watch() {
-  const section = document.querySelector('.health');
-  if (!section) {
-    // Batch 3 X2: on the "Checking..." page the report is swapped in when the check finishes, so wait for the map.
-    if (!played && !waiting && window.MutationObserver) {
-      waiting = new MutationObserver(() => {
-        if (!document.querySelector('.health')) return;
-        waiting.disconnect();
-        waiting = null;
-        watch();
-      });
-      waiting.observe(document.body, { childList: true, subtree: true });
-    }
-    return;
+  if (document.querySelector(PRINT_PAGE)) return;
+  // Batch 3 X2 and batch 4 Y6: until the scan has played, watch the page for a map that appears (the "Checking..."
+  // page swaps the report in) or is replaced ("Check again" swaps the report), and watch the new map instead.
+  if (!played && !waiting && window.MutationObserver) {
+    waiting = new MutationObserver(() => {
+      const now = document.querySelector('.health');
+      if (!now || now === watched) return;
+      if (observer) observer.disconnect();
+      observer = null;
+      watched = null;
+      watch();
+    });
+    waiting.observe(document.body, { childList: true, subtree: true });
   }
+  const section = document.querySelector('.health');
+  if (!section || section === watched) return;
   const reducedMotion = Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
   const hasObserver = typeof window.IntersectionObserver === 'function';
-  if (!shouldScan({ reducedMotion, hidden: document.hidden, hasObserver, played })) return;
+  if (!shouldScan({ reducedMotion, hidden: document.hidden, hasObserver, played })) {
+    stopWaiting();
+    return;
+  }
   const target = section.querySelector(SCAN_TARGET) ?? section;
-  const observer = new IntersectionObserver(entries => {
+  watched = section;
+  observer = new IntersectionObserver(entries => {
     if (!entries.some(e => e.isIntersecting)) return;
     observer.disconnect();
+    observer = null;
+    stopWaiting();
     // Checked again at the moment it comes into view: a hidden tab or reduced motion means no scan.
     const motionNow = Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
     if (!shouldScan({ reducedMotion: motionNow, hidden: document.hidden, hasObserver, played })) return;
+    if (!section.isConnected || document.querySelector(PRINT_PAGE)) return;
     played = true; // once per page load, so a later "Check again" swap doesn't replay it
     run(section);
   }, { threshold: SCAN_THRESHOLD });
   observer.observe(target);
 }
 
-if (typeof window !== 'undefined' && typeof document !== 'undefined') watch();
+if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+  // Printing while the scan plays shows the final map, with the real score.
+  window.addEventListener?.('beforeprint', () => { if (stopScan) stopScan(); });
+  watch();
+}

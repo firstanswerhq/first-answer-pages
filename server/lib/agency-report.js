@@ -13,9 +13,10 @@
  */
 
 import { normalizeForMatch } from './seance.js';
-import { registeredDomain, sameSite } from './name-match.js';
+import { registeredDomain, sameSite, pageKey, SHARED_DOMAINS } from './name-match.js';
 
-const answersOf = grade => (Array.isArray(grade?.ai) ? grade.ai : [])
+/** The answers that came back with text: the same set for share of voice, sites, and the CSV (batch 4 Y4). */
+export const answersOf = grade => (Array.isArray(grade?.ai) ? grade.ai : [])
   .filter(a => a && typeof a === 'object' && !Array.isArray(a) && typeof a.answer === 'string' && a.answer.trim() !== '');
 
 /**
@@ -52,8 +53,36 @@ const DIRECTORIES = Object.freeze([
   { domain: 'facebook.com', name: 'Facebook', link: 'facebook', page: 'a Facebook page' },
   { domain: 'instagram.com', name: 'Instagram', link: 'instagram', page: 'an Instagram page' },
   { domain: 'tiktok.com', name: 'TikTok', link: 'tiktok', page: 'a TikTok page' },
-  { domain: 'google.com', name: 'Google', link: 'google', page: 'your Google profile' },
+  // Batch 4 Y3: only a Google Business Profile or Maps page counts for this line, never any google.com page.
+  { domain: 'google.com', name: 'Google', link: 'google', page: 'your Google profile', profileOnly: true },
 ]);
+
+/** True for a Google Business Profile or Maps address (maps.google.com, business.google.com, google.com/maps, g.page, maps.app.goo.gl). */
+export function isGoogleProfileUrl(url) {
+  let u;
+  try {
+    u = new URL(String(url));
+  } catch {
+    return false;
+  }
+  if (!/^https?:$/.test(u.protocol)) return false;
+  const host = u.hostname.toLowerCase().replace(/\.$/, '').replace(/^www\./, '');
+  if (host === 'maps.google.com' || host === 'business.google.com' || host === 'g.page' || host === 'maps.app.goo.gl') return true;
+  return /^google\.[a-z.]+$/.test(host) && /^\/maps(?:\/|$)/i.test(u.pathname);
+}
+
+/**
+ * True when a source is the business's own website (batch 4 Y1). An own domain matches by `sameSite`. On a shared host
+ * (a Facebook page as the website) only the business's own page matches, never every page on that host.
+ */
+function ownSource(input, url) {
+  const website = input?.website ?? '';
+  if (!website) return false;
+  if (sameSite(website, url)) return true;
+  if (!SHARED_DOMAINS.has(registeredDomain(website))) return false;
+  const page = pageKey(String(input?.websitePage ?? ''));
+  return page !== '' && page === pageKey(url);
+}
 
 /**
  * 13.2: the sites AI used, from the `sources` stored on each answer (never anything else).
@@ -61,20 +90,26 @@ const DIRECTORIES = Object.freeze([
  */
 export function sitesUsed(grade) {
   const answers = answersOf(grade);
-  const website = grade?.input?.website ?? '';
+  const input = grade?.input ?? {};
   const byDomain = new Map();
+  let googleProfileAnswers = 0;
   for (const a of answers) {
     const seen = new Set();
+    let googleProfile = false;
     for (const s of Array.isArray(a.sources) ? a.sources : []) {
       if (!s || typeof s.url !== 'string' || !/^https?:\/\//i.test(s.url)) continue;
       const domain = registeredDomain(s.url);
-      if (!domain || seen.has(domain)) continue;
+      if (!domain) continue;
+      if (isGoogleProfileUrl(s.url)) googleProfile = true;
+      if (!byDomain.has(domain)) byDomain.set(domain, { domain, url: s.url, count: 0, own: false });
+      const row = byDomain.get(domain);
+      // The row is the business's own website when at least one of its sources is (Y1).
+      if (!row.own && ownSource(input, s.url)) row.own = true;
+      if (seen.has(domain)) continue;
       seen.add(domain);
-      if (!byDomain.has(domain)) {
-        byDomain.set(domain, { domain, url: s.url, count: 0, own: Boolean(website) && (sameSite(website, s.url) || registeredDomain(website) === domain) });
-      }
-      byDomain.get(domain).count += 1;
+      row.count += 1;
     }
+    if (googleProfile) googleProfileAnswers += 1;
   }
   const rows = [...byDomain.values()].sort((x, y) => y.count - x.count || x.domain.localeCompare(y.domain));
   const links = grade?.signals?.links ?? {};
@@ -82,8 +117,11 @@ export function sitesUsed(grade) {
   for (const d of DIRECTORIES) {
     const row = byDomain.get(d.domain);
     // Only when we know the website doesn't link there (a checked "Not linked"), never a guess.
-    if (!row || links[d.link]?.status !== 'partly') continue;
-    const forWhat = row.count === 1 ? 'for one answer' : `for ${row.count} answers`;
+    if (links[d.link]?.status !== 'partly') continue;
+    // Google: the answers that cited a profile or Maps page (g.page and maps.app.goo.gl have no google.com row).
+    const count = d.profileOnly ? googleProfileAnswers : (row?.count ?? 0);
+    if (count === 0) continue;
+    const forWhat = count === 1 ? 'for one answer' : `for ${count} answers`;
     gaps.push(`AI read ${d.name} ${forWhat}. Your website doesn't link to ${d.page}.`);
   }
   return { hasSources: rows.length > 0, rows, gaps };

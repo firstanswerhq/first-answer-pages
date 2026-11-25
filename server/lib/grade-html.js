@@ -22,7 +22,7 @@ import { listedNames, splitLists } from './name-match.js';
 import { scoreGrade } from './grade-score.js';
 import { healthModel, healthMapHtml } from './health-map.js';
 import {
-  shareOfVoice, sitesUsed, evidence, reportCsv, cleanPreparedBy, PREPARED_BY_MAX,
+  shareOfVoice, sitesUsed, evidence, reportCsv, cleanPreparedBy, PREPARED_BY_MAX, answersOf,
 } from './agency-report.js';
 import { DEFAULT_SITE_NAME } from './config.js';
 import {
@@ -1250,7 +1250,10 @@ export function printPage(grade, opts = {}) {
   const head = `<div class="grade-print-head">${prepared ? `<p class="grade-prepared-by">Prepared by ${h(prepared)}</p>` : ''}
   <p class="hint grade-print-note">Use your browser's Print button and choose "Save as PDF".</p>
 </div>`;
+  // Batch 4 Y2: the print page never loads the scan, so a quick print never shows a counting score in the map.
+  const scanTag = `<script type="module" src="${HEALTH_SCAN_SCRIPT}"></script>`;
   return page
+    .split(scanTag).join('')
     .replace('<section class="grade-report">', `<section class="grade-report grade-print">\n${head}`)
     .replace(/<details>/g, '<details open>');
 }
@@ -1260,7 +1263,8 @@ export function reportCsvFor(grade) {
   const g = { ...grade, results: scoredResults(grade) };
   const model = healthModel(g, { score: null, found: foundOf(g), ...aiHealth(g) });
   const health = model.mains.flatMap(m => m.subs.map(s => ({ group: m.name, item: s.name, status: s.label, detail: s.reason ?? '' })));
-  const answers = aiOf(g).map(a => ({
+  // Batch 4 Y4: the same answers as "Who AI named, across N answers" (an answer with no text is skipped).
+  const answers = answersOf({ ai: aiOf(g) }).map(a => ({
     engine: providerLabel(a.provider),
     model: typeof a.model === 'string' ? a.model : '',
     question: String(a.prompt ?? ''),

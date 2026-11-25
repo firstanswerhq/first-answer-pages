@@ -233,7 +233,12 @@ test('F9: the admin row, publishing, and the page, llms.txt and MCP output with 
   })).json();
   const text = JSON.stringify(mcp.result.structuredContent);
   assert.ok(text.includes(`"website":"${SITE}"`));
-  assert.equal((text.match(/"website":/g) ?? []).length, 1);
+  // Only the listing's own website field counts; each listing's receipts also have a "website" key (Requirement 9).
+  const found = mcp.result.structuredContent.listings;
+  assert.equal(found.filter(l => Object.hasOwn(l, 'website')).length, 1);
+  assert.equal(found.find(l => l.id === zephyr.id).website, SITE);
+  assert.equal(text.split(SITE).length - 1, 1, 'the website value appears once');
+  for (const l of found) assert.ok(l.receipts && Object.hasOwn(l.receipts, 'website'), l.id);
 });
 
 test('F9: a hand-edited bad website is dropped from the admin row, the page, llms.txt, JSON-LD and MCP', async () => {

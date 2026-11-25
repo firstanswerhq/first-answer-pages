@@ -601,6 +601,7 @@ The score, the Checks and every public page (robots.txt, sitemap, JSON-LD, noind
 | 12.1a | red "Expired on <date>" | red "Expired" with no date when the certificate was refused | X8: the date can't be read without loosening TLS. |
 | 12.1b | red after two "not found" answers | gray when only www. resolves | X10: the address may work with www. in front. |
 | 12.2 | the fix sentence | "...spelled right, works with and without www, and that your domain name is still paid for." | X10 |
+| 13.3 | the exact question on each Evidence line | the question is the heading right above its answers on the page, and on every CSV row | Batch 4 Y7, approved by the owner: it would repeat the same question up to 9 times. |
 
 ## Older test lines changed in batch 3
 
@@ -640,4 +641,25 @@ Built in `server/lib/mcp.js`. The data comes from what the store already holds (
 | Free | Both lookup tool descriptions start with "Free: there is no charge for this lookup." and name the receipts and `fetchedAt`. |
 | 9.4 | `test/mcp-receipts.test.js`: dates match the stored data (both record shapes), null when missing or unconfirmed, the Verified phone receipt and stamp, a practice run gets none, `fetchedAt` on every answer (also an empty search), no "verified" anywhere without who and when, and the free note. |
 
-No older test line changed for Requirement 9: `test/mcp.test.js` still passes as written (the unconfirmed `verification` shape is unchanged).
+`test/mcp.test.js` still passes as written (the unconfirmed `verification` shape is unchanged). Two other older tests changed after the cloud run (1855 of 1857):
+
+| Where | Old | New | Why |
+|---|---|---|---|
+| `test/listing-website.test.js:236` | counts `"website":` in the whole search answer and expects 1 | exactly one listing has its own `website` field, it is the site, the site's address appears once, and every listing has `receipts.website` | 9.1: each listing's receipts also have a `website` key |
+| `test/production-samples.test.js:206` | the empty search equals `{ listings: [], count: 0 }` | `fetchedAt` is an ISO time, and the rest equals `{ listings: [], count: 0 }` | 9.2 |
+
+# Batch 4 fixes Y1 to Y7 (review-2026-11-25-batch3-pass2.md, batch4-fixes-2026-11-25.md)
+
+The score, the Checks and every public page are unchanged. No report content is added only by JavaScript.
+
+| Item | As built | Where |
+|---|---|---|
+| Y1 | A row in "Sites AI used to answer" is "(your website)" only when one of its sources is the business's own website: `sameSite` for an own domain, or, on a shared host, the same page as the kept `websitePage` (`pageKey`: www., m., case and a trailing slash ignored). A competitor's facebook.com page is never marked. | `agency-report.js` (`ownSource`, `sitesUsed`) |
+| Y2 | The print page leaves out the scan script, so it never loads or plays. The scan script also returns at once on a page with `.grade-print`, and on `beforeprint` it ends a scan that is playing, so a print always shows the final map with the real score. | `grade-html.js` (`printPage`), `health-scan.js` (`PRINT_PAGE`, `stopScan`) |
+| Y3 | "Your website doesn't link to your Google profile" counts only answers that cited a Google Business Profile or Maps page (`maps.google.com`, `business.google.com`, `google.com/maps`, `g.page`, `maps.app.goo.gl`). The google.com row itself is unchanged. | `agency-report.js` (`isGoogleProfileUrl`) |
+| Y4 | The CSV answer rows use the same answers as share of voice (`answersOf`, exported): an answer with no text is skipped, so the CSV count matches "across N answers". | `agency-report.js`, `grade-html.js` (`reportCsvFor`) |
+| Y5 | Kept as written (owner decision): a tab that is hidden when the map appears gets no scan (2.10.3). | |
+| Y6 | Until the scan has played, a MutationObserver watches the page. When a different `.health` appears ("Check again" swaps the report), the old IntersectionObserver is disconnected and the new map is watched. Once played, nothing waits any more, so it never replays. | `health-scan.js` |
+| Y7 | Approved by the owner and added to the deviations table above. | |
+
+Tests: `test/agency-report.test.js` (Y1 competitor and own Facebook page, a shared host with no page; Y3 support and search pages, Maps, g.page and maps.app.goo.gl; Y4 CSV count), `test/health-scan.test.js` (Y2 print page and guards; Y6 re-watching). No older test line changed for batch 4.
