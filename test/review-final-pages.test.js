@@ -164,8 +164,9 @@ test('V136: the labels read right for a pass and for a fail', () => {
   assert.equal(labels['title-city-service'], 'Page title');
   assert.equal(labels['one-headline'], 'Main headline on the home page');
   assert.equal(labels.summary, 'Page summary');
-  assert.equal(labels['reviews-visible'], 'Can AI see your reviews?');
-  assert.equal(checkById('reviews-visible').label, 'Can AI see your reviews?');
+  // high-tech-look J7: a plain label like the others, not a question.
+  assert.equal(labels['reviews-visible'], 'Reviews on your website');
+  assert.equal(checkById('reviews-visible').label, 'Reviews on your website');
   assert.equal(new Set(CHECKS.map(c => c.label)).size, CHECKS.length, 'every label is different');
 });
 
@@ -173,7 +174,7 @@ test('V136: a stored Grade shows the new labels (labels are read when the page i
   const g = grade({ results: [pass('ai-bots-allowed'), fail('business-labeled'), fail('title-city-service'), fail('reviews-visible')] });
   for (const result of g.results) assert.equal(Object.hasOwn(result, 'label'), false);
   const html = open(g);
-  for (const label of ['Can AI assistants get in?', 'Business label for AI', 'Page title', 'Can AI see your reviews?']) {
+  for (const label of ['Can AI assistants get in?', 'Business label for AI', 'Page title', 'Reviews on your website']) {
     assert.ok(html.includes(`<strong>${label}</strong>`), label);
   }
 });

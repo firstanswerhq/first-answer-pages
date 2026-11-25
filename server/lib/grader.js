@@ -16,7 +16,9 @@ import { normalizeForMatch } from './seance.js';
 import { readPageFacts, STREET_PATTERN } from './page-facts.js';
 import { runWebsiteChecks, CHECKS } from './grade-checks.js';
 import { scoreGrade } from './grade-score.js';
-import { analyzeAnswer, listedNames, looksLikeSameName, registeredDomain, sameSite } from './name-match.js';
+import {
+  analyzeAnswer, listedNames, looksLikeSameName, registeredDomain, sameSite, SHARED_DOMAINS, pageKey,
+} from './name-match.js';
 import { DROP_BELOW, NAMED_ABOVE } from './name-check.js';
 import {
   normalizePhone, normalizeState, tidyCity, mapCategory, validateFields, US_STATE_CODES, STATE_ERROR,
@@ -143,6 +145,24 @@ export function normalizeGradeInput(raw) {
   const input = { name, city, state, service, website: site.value };
   if (noStorefront) input.noStorefront = true;
   return { ok: true, values, errors, input };
+}
+
+/**
+ * Fair use (high-tech-look 11.1): is an earlier check about the same business as a new one? With a website, the
+ * registered domain matches; on a shared host (a Facebook page, a wixsite.com site) the whole page must match.
+ * With no website, the same name and city after normalizing.
+ */
+export function sameBusinessInput(earlier, next) {
+  const wanted = String(next?.website ?? '').trim();
+  if (wanted) {
+    const domain = registeredDomain(wanted);
+    if (!domain || !earlier?.website) return false;
+    if (SHARED_DOMAINS.has(domain)) return pageKey(wanted) !== '' && pageKey(wanted) === pageKey(earlier.website);
+    return registeredDomain(earlier.website) === domain;
+  }
+  const name = normalizeForMatch(next?.name);
+  const city = normalizeForMatch(next?.city);
+  return name !== '' && city !== '' && normalizeForMatch(earlier?.name) === name && normalizeForMatch(earlier?.city) === city;
 }
 
 /** The key two Grades share when they are about the same business. */
@@ -1322,12 +1342,21 @@ export function createGrader({
     let home = null;
     let failure;
     let t = clock.now();
+    // "Website is reachable" (high-tech-look 12.1), from this same request: no extra call.
+    let alive = { reached: false, https: /^https:/i.test(String(input.website ?? '')) };
     try {
       const res = await within(budget, safeFetcher.fetchText(input.website, { strictSize: true }));
+      alive = {
+        reached: true,
+        https: /^https:/i.test(String(res.finalUrl ?? input.website ?? '')),
+        certValidTo: typeof res.certValidTo === 'string' ? res.certValidTo : null,
+      };
       if (res.status < 200 || res.status >= 300 || !looksLikeHtml(res)) failure = HOME_UNREADABLE;
       else home = res;
     } catch (err) {
       failure = failureFor(err);
+      if (err?.dns === 'not_found') alive.dnsNotFound = true;
+      if (err?.tls === 'expired') alive.certExpired = true;
     }
     await step(0, home ? 'done' : 'failed', home ? 'Reached your website' : (failure ?? WEBSITE_UNREACHED), clock.now() - t);
 
@@ -1400,7 +1429,7 @@ export function createGrader({
       await step(2, 'failed', bots?.detail ?? "We couldn't read your robots.txt file.", clock.now() - t);
     }
 
-    return { facts, found: foundFromFacts(facts, input), results, robots, sitemap, homeOk: Boolean(home && facts) };
+    return { facts, found: foundFromFacts(facts, input), results, robots, sitemap, alive, homeOk: Boolean(home && facts) };
   }
 
   // ---- the health map's signals (high-tech-look Requirements 3 and 7) -------------------------------------------------
@@ -1552,6 +1581,7 @@ export function createGrader({
         found: web?.found ?? {},
         robots: web?.robots ?? null,
         sitemap: web?.sitemap ?? null,
+        alive: web?.alive ?? null,
         places: looked?.places ?? null,
         bing: looked?.bing ?? null,
         listingInfo: listingInfoFor(input),
@@ -1811,6 +1841,35 @@ export function createGrader({
    * Start a Grade. `rawInput` is the posted form; it is cleaned again here.
    * @returns {Promise<string>} the Grade_Id
    */
+  /**
+   * Fair use (high-tech-look Requirement 11): the newest check with AI of the same business in the last
+   * GRADE_AI_REPEAT_DAYS days (default 7; 0 turns the rule off), or null when a new one may run. A check still
+   * running counts. A Verified listing's own business is never limited (11.4). The admin is let through by the route.
+   * @returns {Promise<{ gradeId: string, checkedAt: string, againAt: string } | null>}
+   */
+  async function repeatCheck(rawInput) {
+    const days = Number.isInteger(config.gradeAiRepeatDays) ? config.gradeAiRepeatDays : 7;
+    if (days <= 0) return null;
+    const checked = normalizeGradeInput(rawInput);
+    if (!checked.ok) return null;
+    const { input } = checked;
+    const info = listingInfoFor(input);
+    if (info.state === 'listed' && info.verified === true) return null;
+    const list = await grades().read();
+    if (!Array.isArray(list)) return null;
+    const windowMs = days * 24 * 60 * 60 * 1000;
+    const cutoff = clock.now() - windowMs;
+    const askedAi = g => g.status === 'running'
+      || freeAnswersOf(Array.isArray(g.ai) ? g.ai : []).some(a => !a.reusedFrom);
+    const earlier = list
+      .filter(g => g && typeof g === 'object' && ['running', 'done'].includes(g.status)
+        && Date.parse(g.createdAt) >= cutoff && sameBusinessInput(g.input, input) && askedAi(g))
+      .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0];
+    if (!earlier) return null;
+    const at = Date.parse(earlier.createdAt);
+    return { gradeId: earlier.id, checkedAt: new Date(at).toISOString(), againAt: new Date(at + windowMs).toISOString() };
+  }
+
   async function start(rawInput) {
     const checked = normalizeGradeInput(rawInput);
     if (!checked.ok) throw new TypeError('Invalid grade input');
@@ -2101,6 +2160,7 @@ export function createGrader({
 
   return {
     start,
+    repeatCheck,
     run: id => { startRun(id); return active.get(id) ?? Promise.resolve(); },
     get,
     peek: id => (live.has(id) ? structuredClone(live.get(id)) : undefined),

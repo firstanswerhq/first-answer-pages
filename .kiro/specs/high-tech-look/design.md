@@ -350,10 +350,10 @@ Tests: `health-signals` (R1 every combination, R4 the three cases and the same-p
 ## How it reads
 
 - **The plain list comes first** in the page and holds every fact: for each main node a heading "Website: Partly" and every sub-node "Sitemap: Found", with its reason line when gray, and its fix line only in the full report (the locked report shows the statuses and reasons; the fixes stay behind the lead form like the rest of the fix text). Socials is a cluster heading "Socials: 1 of 3 linked". The Website clusters are "AI can read it", "Speaks AI's language", "Search basics" and "Customer basics".
-- **The map** is `aria-hidden` (decoration; the list is what screen readers and search tools read): the orb in the center with the business name (escaped, up to two short lines) and "Health 68", the report's own score from `currentScore`, or "Health: not scored yet". The seven main nodes sit around it in the design's order; each sub-node fans out from its main node. On wide screens the map sits beside the list (sticky); on phones it sits above the list.
+- **The map** is `aria-hidden` (decoration; the list is what screen readers and search tools read): the orb in the center with the business name (escaped, up to two short lines) and "Score 68/100", the report's own score from `currentScore`. With no score it reads "Not enough to score yet", the same words as the top of the page (H1, W10). The seven main nodes sit around it in the design's order; each sub-node fans out from its main node. On wide screens the map sits beside the list (sticky); on phones it sits above the list.
 - **Color is never the only cue.** Every main node says its name and status word ("Good", "Partly", "Needs work", "Not checked"; the AI answers node says "Pass" for green, as the report's row does). Every sub-node on the map has a status symbol (check, "!", cross, "?") and its short status word along its spoke; the list beside it has the full words. Every list row has the symbol and the words.
 - **Links** (CSS only, so they work with JavaScript off): green has small glowing dots moving steadily both ways; amber sends slow dots only partway that fade; red shows a break in the line and no dots; gray is dashed and still. Sub-node links behave the same at a smaller size. With `prefers-reduced-motion`, no dots are drawn and the orb canvas is hidden; the line colors, symbols and words show the status.
-- **Phones (390 px):** the map shows the main nodes only (sub-nodes hidden). Each main node is a link to its group in the plain list right below the map (the group is outlined when it is the target), so tapping a node opens its sub-nodes as a list below the map. The list always has every sub-node. Nothing in the section is wider than the screen.
+- **Phones (360 px and up):** the map shows the main nodes only, in their own drawing, with "Tap a circle to see its checks." under it. Desktop says "Click a circle to see its checks." (J5). Each main node is a link to its group in the plain list right below the map (the group is outlined when it is the target), so tapping a node opens its sub-nodes as a list below the map. The list always has every sub-node. Nothing in the section is wider than the screen.
 - **Contrast (AA):** the list uses the page's own text colors on the page surface; the map's words use light colors on its near-black panel. A test reads the colors from `style.css` and checks every pair is at least 4.5 to 1.
 - **JavaScript off:** the whole section is server HTML and CSS; only the turning particles need the script. No report content is added by JavaScript.
 - **Score and SEO:** nothing here is in `results` or the score; the report keeps its `noindex, nofollow` and title. No public page changed.
@@ -368,15 +368,15 @@ Tests: `health-signals` (R1 every combination, R4 the three cases and the same-p
 | Reviews | green when the review count and star rating are green; red when there are no Google reviews and none shown on the website; otherwise green if every checked one is green, amber if not; gray when nothing was checked |
 | Details match | red when any checked detail is red; green when all match; amber otherwise; gray when nothing was compared |
 | Links | green when every checked link is there; amber otherwise (no link row is ever red); gray when nothing was checked |
-| Free listing | green when listed and Verified; amber otherwise; gray when not checked (several listings looked alike) |
+| Free listing | information, never a health color (status `info`, the "i"): "Not started", "Listed", "Verified" or "Not sure" (several listings looked alike); gray "Not checked" only on a report from before these checks (W7). It holds the two listing rows that used to sit in Details match and Links (J4, W4). |
 
 ## Decisions made while building (for the owner)
 
 1. **AI answers sub-nodes** say "Named you" or "Didn't name you" (with the assistant, "Answer 1 (Claude)"), not the full outcome sentence the design listed. The full sentence is already in "What AI says" right below; repeating it on every row made the report longer and read twice. With no answer, the one row is gray with the reason (today's limit, not connected, or the assistant didn't answer).
-2. **HAVE rows that were not checked** (the existing Checks) say "We couldn't check this on your website this time." The existing check's own detail stays in the full list of checks.
-3. **Founding Member (Q8):** a Founding Member is a green sub-node. "Founding spots still open" is never a light or a node: it shows only under Free listing in the list as a plain line, "Founding Member spots are still open. Founding Members pay once for the Verified stamp."
+2. **HAVE rows that were not checked** (the existing Checks) use the check's own reason, ending with a period (V9, W9). The fallback is "Couldn't check this time. Run a new check later." (H11).
+3. **Founding Member (Q8):** a Founding Member is an information row under Free listing: "Founding Member: Yes, member No. N" (W5). "Founding spots still open" is never a light or a node. It shows only under Free listing as a plain line: "When we ran this check, Founding Member spots were still open. Listing is free; Founding Members pay once for the optional Verified stamp." (V3).
 4. **"Run a new check"** in a reason is the report's own link to a new check (the report's rule V244: every mention of it is a link).
-5. **The section heading** is "Health of your setup" with the line "These lights don't change your score. Each one says what we found, or why we couldn't check it."
+5. **The section heading** is "Health of your setup", with the intro "Every check we ran, at a glance. Green is good, yellow is partway there, red needs work, gray means we couldn't check it. The i marks your free listing: information, not health. Your score is at the top of the page." (H1, J10, W7).
 
 ## Tests
 
@@ -412,7 +412,7 @@ Nothing here changes the score or any public page. Every new sentence is 160 cha
 | Item | What changed | Where |
 |---|---|---|
 | V1 | The orb's drawing loop stops for good when its orb leaves the page (`host.isConnected`). A frame already asked for is cancelled before a new one is asked for, so there is never more than one loop. The visibility, motion and on-screen listeners are named and removed in `stop()`. The MutationObserver watches the body, and the new orb starts after an in-place swap. | `public/js/health-orb.js` |
-| V2, H4 | The main node words are readable. The wide drawing (viewBox 1000) has bigger nodes (radius 86), names on one or two lines ("Google / profile") and font 24 for the name and status. The map column is wider (`3fr` to `2fr`). Phones get their own main-nodes-only drawing (viewBox 150 150 700 700, radius 86, name 26, status 24) that fills the box. At the narrowest width each drawing is shown at (540 px, and 353 px on a 390 px phone) the words are 12 px or more. A test pins this from `MAP_SIZES`. Font sizes are set on the words, not in the CSS. | `health-map.js`, `style.css` |
+| V2, H4 | The main node words are readable. The wide drawing (viewBox 1000) has bigger nodes (radius 86), names on one or two lines ("Google / profile") and font 24 for the name and status. The map column is wider (`3fr` to `2fr`). Phones get their own main-nodes-only drawing that fills the box. Since W3 it uses viewBox 150 150 700 700, radius 94, ring 255, and font 26 for the name, status and orb. At the narrowest width each drawing is shown at the words are 12 px or more. Since W3 those widths are 530 px for two columns from 960 px, and 323 px on a 360 px phone. A test pins this from `MAP_SIZES`. Font sizes are set on the words, not in the CSS. | `health-map.js`, `style.css` |
 | V3, H8 | The Founding note is true at any later time: "When we ran this check, Founding Member spots were still open. Listing is free; Founding Members pay once for the optional Verified stamp." The Free listing node and its rows are information (status `info`): no health color, no fix, a neutral ring and line, and plain words. The node reads "Not started", "Listed" or "Verified". The rows read "Listed on First Answer Pages: Not yet. It's free, claim it below." and "Verified stamp: Available after you claim your listing." | `health-map.js`, `style.css` |
 | V4, H3 | Sub-nodes on the map show the symbol and the list's own color only, with no words. The generic words ("Partly" for "Not linked") are gone. `R_SUB` is 14 and the symbol is 20. "Not found" is red everywhere; the amber Bing row now says "Not on Bing Maps yet". **Deviation from 2.2, for the owner to accept:** on the map, sub-nodes are decoration (symbol and color). Their names and status words are in the list beside it, and every main node still says its status in words. | `health-map.js` |
 | V5 | The sub-node dots use the main period (dasharray 0.5 26), so the keyframe moves two whole periods and the dots no longer jump. | `style.css` |
@@ -443,6 +443,88 @@ Nothing here changes the score or any public page. Every new sentence is 160 cha
 | `test/health-signals.test.js` (R14 and R15) | "We need a street address on both your website and Google to compare." | "Google doesn't show a street address for you.", plus new lines for the website side, the hours reason and the Bing details reason | H2, H11 |
 | `test/grade-reviews-check.test.js` line 98 | "Your page loads its words in a way this check can't read yet." | "Your page loads its words in a way some AI tools can't read." | V9 (Q3) |
 | `test/grade-no-storefront.test.js` (F4) | `empty.includes('Add your address')` | `empty.includes('Add your street address')`, and the no-storefront page also never says it | H2 |
+
+## Finishing Step 2 (next-batch-2026-11-25.md, Part A: J1 to J10, W1 to W10)
+
+Nothing here changes the score or any public page. Every new sentence is 160 characters or less.
+
+| Item | What changed | Where |
+|---|---|---|
+| J1, J2, W6 | The listing card and the health rows read the same facts (`foundOf`). The card shows what was found and says "Add your ..." only for what wasn't. When the page passed a Check but the value could not be read, the card says so: "Add your phone number (we saw a tap-to-call link but couldn't read the number)" and "Add your street address (we saw one on your website but couldn't copy it)". When Google lists hours: "Add your hours (Google shows hours for you)". Google's own values are never copied (T3). The rows agree: "Tap-to-call phone number: Found a link, but not the number" and "Street address on the home page: Found, but not on one line" (yellow, with what to do). "Good" is shown only when the value could be read. Tests cover a full sample and a sparse one. | `grade-html.js` (`previewCard`), `health-map.js` (`checkSub`) |
+| J3 | "What AI says" shows "The question we asked: ...". "This list is from answer N" shows only when a list is shown. An outcome line that only repeats the lead ("It named your business in its answer." or "It didn't name your business.") is left out. The business name is not highlighted inside the answers: that would change the answer text existing tests compare. | `grade-html.js` (`aiFree`, `severalAnswers`) |
+| J4, W4 | The two listing rows moved into Free listing as information: "Listing matches your website" and "Listing links to your website", "After you claim your listing." until there is one. The intro explains the "i". | `health-map.js` |
+| W5, J8 | No row repeats its own name: "Open for business: Yes", "Updated in the last 12 months: Yes", "Facebook: Linked", "Listed on First Answer Pages: Yes", "Verified stamp: Yes", "Founding Member: Yes, member No. N". A test checks every row. | `health-map.js` |
+| W1 | `init()` first stops every orb whose host left the page, so an orb swapped out while paused drops its listeners and its old page at once. | `health-orb.js` |
+| W2 | The orb canvas and both drawings share one box (`.health-art`), with the hints outside it, so the canvas stays on the orb on phones. | `health-map.js`, `style.css` |
+| W3 | Two columns start at 960 px. The size test uses the real narrowest widths: 530 px, and 323 px on a 360 px phone. The phone drawing uses font 26 (status and orb name), radius 94 and ring 255. | `health-map.js`, `style.css` |
+| J5 | Every node on the map has a hover title with the list row's own words. Desktop shows "Click a circle to see its checks." | `health-map.js`, `style.css` |
+| J6 | The info file for AI (llms.txt) sits under "Can AI read your website", where Score by area counts it. **Deviation from 3.11**, recorded here. "Speaks AI's language" has the note "These checks don't count toward your score yet." | `health-map.js` |
+| J7 | The Check label is "Reviews on your website" (a plain label, no longer a question). The business label fix reads: "Add the business label (a few lines of code in your full report) to your home page, so AI can read your name, phone and address." | `grade-checks.js` |
+| J9 | Under the score: "13 checks make up your score. The lights below also show extra checks that don't count toward it." The address reason reads: "Write your full street address on one line, like "123 Main St, Nashville, TN 37201", so we can compare it with Google." | `grade-html.js` (`failedNote`), `health-signals.js` |
+| J10 | The intro says "yellow is partway there". With more than one answer, the AI answers circle and heading say how many named the business ("2 of 3"). | `health-map.js` |
+| W7 | On a report from before these checks, the free listing node and its rows are gray "Not checked" like everything else. | `health-map.js` |
+| W8 | The design text above is brought up to date: the Free listing rule, decisions 2, 3 and 5, the map and phone bullets, and the V2 row. | `design.md` |
+| W9 | A Check's reason shown in the list ends with a period. | `health-map.js` |
+| W10 | With no score, the orb says "Not enough / to score yet", the same words as the top of the page. | `health-map.js` |
+
+### Older test lines changed in Part A
+
+| Where | Old | New | Why |
+|---|---|---|---|
+| `test/review-final-pages.test.js` (V136, two tests) | `'Can AI see your reviews?'` | `'Reviews on your website'` | J7 |
+| `test/grade-reviews-check.test.js` (F3 label) | `'Can AI see your reviews?'` | `'Reviews on your website'` | J7 |
+| `test/grade-old-grades.test.js` (two lines) | `includes('Can AI see your reviews?')` (absent, then present) | `includes('<strong>Reviews on your website</strong>')` | J7 |
+| `test/health-signals.test.js` (R14 and R15) | the H2 website-side address sentence | the J9 sentence | J9 |
+| `test/health-map.test.js` | the Step 2 fix tests | updated for the intro, the no-score words, hover titles, the listing rows moved into Free listing, the "Yes" labels, the 960 px breakpoint and the real widths, plus new tests for J2, J5, J6, J10, W1, W2, W3, W7 and W9 | Part A |
+| `test/grade-signals-flow.test.js` (Step 2 test) | "Facebook: Linked from your website" | "Facebook: Linked", plus the card has the phone, the tap-to-call row agrees, and the question is shown; a new sparse-sample test | J1, J2, J3, J8 |
+
+# Part B: Requirements 2.10, 11 and 12
+
+None of these changes the score or any public page. No report content comes only from JavaScript. Every new sentence is 160 characters or less, in American spelling, with no promise that AI will name a business.
+
+## Requirement 2.10: the one-time scan
+
+| Line | As built |
+|---|---|
+| 2.10.1 | `public/js/health-scan.js` (a small module, loaded after the page, report only). The first time the section is a third in view, it plays once per page load for 3 seconds (`SCAN_MS`). The main nodes light up one at a time in the design's fixed order: each main node and its checks are one `<g class="health-branch" data-main>`. The caption under the map (`<p class="health-caption" aria-hidden="true">`) shows each node's own words ("Website: Partly"), and the center counts up to the score. |
+| 2.10.2 | `scanPlan(nodes, score)` is pure. Its last step is every node lit, no caption, and exactly the score. At the end the script removes every class it added and puts back the score text the server wrote, so the final state is the normal map. The captions are the nodes' own titles, the same words as the list. |
+| 2.10.3 | `shouldScan` is false for reduced motion, a hidden tab or no IntersectionObserver, and it is checked again the moment the map comes into view. Without the script nothing is dimmed: only the class the script adds dims the branches, and reduced motion undoes it in CSS too. The caption and the whole map are aria-hidden. |
+| 2.10.4 | `test/health-scan.test.js`: the final state equals the no-scan state for scores 0, 1, 68, 100 and none; the fixed order and count-up; reduced motion, hidden tab and no observer skip it; it runs once; the page has the pieces; the script adds no content. |
+
+Note: a report swapped in place onto the scan page (a scan finishing while you watch) does not play the scan, since it plays once per page load. The orb still turns (V12).
+
+## Requirement 11: fair use of the AI part of the check
+
+| Line | As built |
+|---|---|
+| 11.1 | `grader.repeatCheck(input)` finds the newest check with AI of the same business in the last `GRADE_AI_REPEAT_DAYS` days. A check that is still running counts. A done check counts only when its free question was really asked (answers not carried from an earlier check). `sameBusinessInput` decides what counts as the same business. With a website, the registered domain must match; on a shared host (`SHARED_DOMAINS`) the whole page must match (`pageKey`: host without www. and m., the full path, the `id` for profile.php). With no website, the same name and city after normalizing. |
+| 11.2 | `POST /grade` asks this right after the form and human checks, before any limit is counted, so a refused new check spends nothing. It shows `repeatCheckPage` with the owner's sentences. The button "Open that report" shows only to the browser that ran it, through a new signed cookie (`gr_mine`, Path=/grade, HttpOnly, SameSite=Lax, 90 days, the last 20 checks). This cookie is needed because the per-report cookie only goes to `/grade/<id>`. Anyone else sees the same words and dates and no link. **Deviation:** "or the email they gave" is not used. An email typed into a form proves nothing about who is asking, so it can't safely unlock a link to someone's report. |
+| 11.3 | The admin is never limited: either the bearer token, or a short signed `fap_grade_admin` cookie for `/grade`. A signed-in admin's browser page views set that cookie. It is valid for 12 hours, never holds the token, and stops working when ADMIN_TOKEN changes. |
+| 11.4 | A Verified listing's own business (the claim flow's listing match, with `verified`) is not limited. |
+| 11.5 | The address, network and daily AI limits and the bot check are unchanged. |
+| 11.6 | `GRADE_AI_REPEAT_DAYS` (0 to 365; default 7; 0 turns it off; a bad value warns without echoing it and gives 7). Like the paid lookups, it is off in test runs unless set, so older tests that check one business twice (`grade-flow` "a second Grade with the same details reuses the AI answer", `grade-no-storefront` F4) keep running. The fair-use tests turn it on. |
+| 11.7 | `test/grade-fair-use.test.js`: same domain within 7 days gets the message, and the link only for the runner; a different page on a shared host runs; day 8 runs; no website matches by name and city; admin by token and cookie; Verified; 0 is off; "Check again" is unaffected; the business-match rules; sentence length and wording. |
+| 11.8 | No paid "ask again sooner" option is built. |
+
+## Requirement 12: website still alive
+
+| Line | As built |
+|---|---|
+| 12.1a | The safe fetcher reads the certificate's end date from the same connection: `res.socket.getPeerCertificate().valid_to`, https only, returned as `certValidTo`. Nothing is loosened. An expired certificate is still refused, and the error is only marked `tls: 'expired'`. The date of a refused certificate can't be read without a second, unverified connection, which grader-safety forbids. So that case is red "Expired" with no date; a date we could read is "Expired on <date>". The certificate is green "Valid" for more than 30 days (`CERT_WARN_DAYS`), and yellow "Expires in N days" for 30 or fewer. It is "Not checked" for http-only or an unreadable date. |
+| 12.1b | A name that does not resolve (ENOTFOUND) is looked up once more. Only two "not found" answers make `dns: 'not_found'`, which is red "Your website address doesn't load". "Works" when the site answered. A timeout or any other error is "Not checked". |
+| 12.1 | The rows sit in a new cluster "Website is reachable" at the top of the Website node ("Security certificate", "Website address works"). They are saved as signals and never in the score. |
+| 12.2 | The fix sentences say what to do: "Renew your website's security certificate so browsers and AI can open your site." and "Check that your website address is spelled right and that your domain name is still paid for with the company you bought it from." Nothing says the business may have closed. |
+| 12.3 | The admin listings page shows "Website may be down: ..." under a listing when the newest check of its business found an expired certificate or an address that doesn't load (`websiteDownNotes`). It is never shown publicly. |
+| 12.4 | No WHOIS or RDAP lookups. |
+| 12.5 | `test/website-alive.test.js` (fake connection): valid, expiring, expired by date and by error, http-only, NXDOMAIN twice, NXDOMAIN once then OK, other DNS errors not retried, the address guard still applies, timeout, wording, and the admin note. `test/grade-signals-flow.test.js` shows the score unchanged and the rows in the report. |
+
+### Older test lines changed in Part B
+
+| Where | Old | New | Why |
+|---|---|---|---|
+| `test/health-map.test.js` (H1 test) | `class="health-orb-score">Score 61/100` | `class="health-orb-score" data-score="61">Score 61/100` | 2.10 (the scan reads the score) |
+| `test/health-map.test.js` (W2 test) | the tap hint right after the drawings | the aria-hidden caption between them | 2.10 |
+| `test/grade-signals-flow.test.js` (Step 2 test) | `class="health-orb-score">Score N/100` | with `data-score="N"` | 2.10 |
 
 ### Older test lines changed by T1 to T9
 

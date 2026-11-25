@@ -16,7 +16,7 @@ import { buildSignals } from '../server/lib/health-signals.js';
 import { escapeHtml } from '../server/lib/html.js';
 import {
   healthModel, healthMapHtml, mainStatus, linkSvg, MAIN_NODES, SUB_NODES, MAIN_WORDS, SYMBOLS, FOUNDING_NOTE, MAP_INTRO,
-  MAP_SIZES, TAP_HINT, OLD_REPORT_NOTE,
+  MAP_SIZES, TAP_HINT, OLD_REPORT_NOTE, CLICK_HINT, SPEAKS_NOTE, ADDRESS_ONE_LINE, PHONE_AS_TEXT,
 } from '../server/lib/health-map.js';
 
 const NOW = Date.UTC(2026, 10, 24, 18, 0, 0);
@@ -76,13 +76,16 @@ test('the section: the plain list comes first, the map after it, and the map is 
 });
 
 test('H1: the intro says what the colors mean, and the orb shows the score in the report\'s own form', () => {
-  assert.equal(MAP_INTRO, "Every check we ran, at a glance. Green is good, amber is part way there, red needs work, gray means we couldn't check it. Your score is at the top of the page.");
-  assert.ok(MAP_INTRO.length <= 160);
+  assert.equal(MAP_INTRO, "Every check we ran, at a glance. Green is good, yellow is partway there, red needs work, gray means we couldn't check it. The i marks your free listing: information, not health. Your score is at the top of the page.");
+  // Every sentence 160 characters or less (J10: "partway"; J4/W7: the "i" is explained).
+  for (const s of MAP_INTRO.split(/(?<=\.) /)) assert.ok(s.length <= 160, s);
+  assert.equal(/part way/.test(MAP_INTRO), false);
   const html = healthMapHtml(model());
   assert.equal(/Health \d/.test(html), false, 'no second name for the score');
-  assert.match(fullMapOf(html), /class="health-orb-score">Score 61\/100<\/text>/);
-  assert.match(phoneMapOf(html), /class="health-orb-score">Score 61\/100<\/text>/);
-  assert.match(fullMapOf(healthMapHtml(model(grade(), { score: null }))), /Not scored yet/);
+  assert.match(fullMapOf(html), /class="health-orb-score" data-score="61">Score 61\/100<\/text>/);
+  assert.match(phoneMapOf(html), /class="health-orb-score" data-score="61">Score 61\/100<\/text>/);
+  // W10: the same words as the top of the page.
+  assert.match(fullMapOf(healthMapHtml(model(grade(), { score: null }))), /<tspan[^>]*>Not enough<\/tspan><tspan[^>]*>to score yet<\/tspan>/);
   assert.match(fullMapOf(html), /class="health-orb-name" font-size="24">Zephyr Plumbing<\/text>/);
   const odd = healthMapHtml(model(grade({ input: { ...INPUT, name: '<script>x</script> & Co' } })));
   assert.equal(odd.includes('<script>'), false);
@@ -134,7 +137,10 @@ test('V4/H3: sub-nodes on the map have a symbol and the list\'s color, and no wo
   mapSubs.forEach((x, i) => {
     assert.equal(x[1], subs[i].status, subs[i].name);
     assert.ok(x[2].includes(`class="health-sub-sym">${SYMBOLS[x[1]]}<`), 'a symbol');
-    assert.equal(/health-sub-word|Good<|Partly<|Needs work<|Not checked</.test(x[2]), false, 'no status words on sub-nodes');
+    // J5: the hover title is the list row's own words.
+    assert.ok(x[2].includes(`<title>${escapeHtml(subs[i].name)}: ${escapeHtml(subs[i].label)}</title>`), subs[i].name);
+    const drawn = x[2].replace(/<title>[\s\S]*?<\/title>/, '');
+    assert.equal(/health-sub-word|Good<|Partly<|Needs work<|Not checked</.test(drawn), false, 'no status words drawn on sub-nodes');
   });
   // The same words never carry two severities: "Not found" is always red; Bing is "Not on Bing Maps yet".
   const list = listOf(html);
@@ -150,8 +156,10 @@ test('every sub-node of the design is a row in the list with its words; rows do 
   for (const def of SUB_NODES.filter(d => d.path !== 'listing.founding')) assert.ok(list.includes(`${def.name}:`), def.name);
   for (const sub of m.mains.flatMap(x => x.subs)) {
     assert.ok(list.includes(`${sub.name}: ${sub.label}`), `${sub.name}: ${sub.label}`);
-    assert.notEqual(sub.name, sub.label, `${sub.name} repeats itself`);
+    // W5, J8: a status never repeats the start of its own name ("Open for business: Open").
+    assert.equal(sub.name.toLowerCase().startsWith(sub.label.toLowerCase()), false, `${sub.name}: ${sub.label}`);
   }
+  for (const pair of ['Open for business: Yes', 'Updated in the last 12 months: Yes', 'Facebook: Linked']) assert.ok(list.includes(pair), pair);
   for (const pair of ['On Google: Yes', 'Category: Fits', 'Hours on Google: Listed', 'Google links to your site: Yes', 'Your website lets AI assistants read it (robots.txt): Yes']) {
     assert.ok(list.includes(pair), pair);
   }
@@ -161,7 +169,7 @@ test('every sub-node of the design is a row in the list with its words; rows do 
     assert.ok(list.includes(`${name}:`), name);
   }
   // H9: one word per idea.
-  for (const name of ['Your First Answer Pages listing matches your website', 'Your First Answer Pages listing links to your website', 'Hours on the home page', 'Tap-to-call phone number', 'Call or book button on the home page']) {
+  for (const name of ['Listing matches your website', 'Listing links to your website', 'Hours on the home page', 'Tap-to-call phone number', 'Call or book button on the home page']) {
     assert.ok(list.includes(`${name}:`), name);
   }
   assert.equal(/Hours on the page:|Tap to call:|Call button:/.test(list), false);
@@ -288,10 +296,16 @@ test('V3/H8: the free listing has no health color; plain words; the Founding not
   const listing = notListed.mains.find(x => x.id === 'listing');
   assert.equal(listing.status, 'info');
   assert.equal(listing.label, 'Not started');
+  // J4, W4: the two listing rows sit here, as information, never as gray "couldn't check" rows in health groups.
   assert.deepEqual(listing.subs.map(x => [x.name, x.status, x.label]), [
     ['Listed on First Answer Pages', 'info', "Not yet. It's free, claim it below."],
     ['Verified stamp', 'info', 'Available after you claim your listing.'],
+    ['Listing matches your website', 'info', 'After you claim your listing.'],
+    ['Listing links to your website', 'info', 'After you claim your listing.'],
   ]);
+  for (const id of ['details', 'links']) {
+    assert.equal(notListed.mains.find(x => x.id === id).subs.some(s => /listing/i.test(s.name)), false, id);
+  }
   const html = healthMapHtml(notListed, { full: true });
   const group = /<div class="health-group health-info" id="health-g-listing">([\s\S]*?)<\/div>/.exec(html)?.[1] ?? '';
   assert.ok(group, 'the listing group has no health class');
@@ -309,7 +323,71 @@ test('V3/H8: the free listing has no health color; plain words; the Founding not
   const member = model(grade({ signals: signals({ listingInfo: { state: 'listed', listing: { id: 'z', phone: '(615) 555-0142', address: '', website: 'https://zephyr.example/' }, verified: true, founder: { number: 3 } } }) }));
   const ml = member.mains.find(x => x.id === 'listing');
   assert.equal(ml.label, 'Verified');
-  assert.deepEqual(ml.subs.map(x => [x.label, x.status]), [['Listed', 'info'], ['Verified', 'info'], ['Founding Member', 'info']]);
+  // W5: no row repeats its own name ("Founding Member: Founding Member").
+  assert.deepEqual(ml.subs.map(x => [x.name, x.label, x.status]), [
+    ['Listed on First Answer Pages', 'Yes', 'info'], ['Verified stamp', 'Yes', 'info'],
+    ['Listing matches your website', 'Yes', 'info'], ['Listing links to your website', 'Yes', 'info'],
+    ['Founding Member', 'Yes, member No. 3', 'info'],
+  ]);
+});
+
+test('J2: a home-page address or phone that could not be read is amber, with what to do, never "Good"', () => {
+  const results = RESULTS.map(r => (['address-shown', 'tap-to-call'].includes(r.id) ? { ...r, result: 'pass' } : r));
+  const sparse = model(grade({ results }), { found: { phone: '', address: '', hours: [] } });
+  const web = sparse.mains.find(x => x.id === 'website').subs;
+  const address = web.find(s => s.name === 'Street address on the home page');
+  assert.deepEqual([address.status, address.label, address.reason], ['partly', 'Found, but not on one line', ADDRESS_ONE_LINE]);
+  const phone = web.find(s => s.name === 'Tap-to-call phone number');
+  assert.deepEqual([phone.status, phone.label, phone.reason], ['partly', 'Found a link, but not the number', PHONE_AS_TEXT]);
+  const full = model(grade({ results }), { found: { phone: '(615) 555-0142', address: '12 Main St, Nashville, TN 37203', hours: [] } });
+  const fw = full.mains.find(x => x.id === 'website').subs;
+  assert.equal(fw.find(s => s.name === 'Street address on the home page').label, 'Good');
+  assert.equal(fw.find(s => s.name === 'Tap-to-call phone number').label, 'Good');
+  for (const s of [ADDRESS_ONE_LINE, PHONE_AS_TEXT]) assert.ok(s.length <= 160);
+});
+
+test('J5, J6, J10: hover titles, a desktop click hint, a note on the unscored cluster, and "2 of 3" on the AI circle', () => {
+  const html = healthMapHtml(model());
+  assert.match(fullMapOf(html), /<g class="health-node health-node-\w+" data-name="Website"><title>Website: [^<]+<\/title>/);
+  assert.ok(mapOf(html).includes(`<p class="health-click">${CLICK_HINT}</p>`));
+  const website = /<div class="health-group[^"]*" id="health-g-website">([\s\S]*?)<\/div>/.exec(html)[1];
+  assert.ok(website.includes(`<h4 class="health-cluster">Speaks AI&#39;s language</h4>\n  <p class="health-why">${SPEAKS_NOTE}</p>`)
+    || website.includes(`<h4 class="health-cluster">Speaks AI's language</h4>\n  <p class="health-why">${SPEAKS_NOTE}</p>`)
+    || website.includes(`<h4 class="health-cluster">Speaks AI&#x27;s language</h4>\n  <p class="health-why">${SPEAKS_NOTE}</p>`));
+  // The scored info file sits with the scored "Can AI read your website" checks.
+  const readCluster = website.slice(website.indexOf('Can AI read your website'), website.indexOf('Speaks AI'));
+  assert.ok(readCluster.includes('A short info file for AI (llms.txt):'));
+  const three = model(grade(), { aiStatus: 'partly', aiRows: [
+    { name: 'Answer 1 (Claude)', status: 'good', label: 'Named you' },
+    { name: 'Answer 2 (Claude)', status: 'missing', label: "Didn't name you" },
+    { name: 'Answer 3 (Claude)', status: 'good', label: 'Named you' },
+  ] });
+  const ai = three.mains.find(x => x.id === 'ai');
+  assert.equal(ai.label, '2 of 3');
+  assert.equal(ai.status, 'partly');
+  assert.match(fullMapOf(healthMapHtml(three)), /class="health-node-status" font-size="24">2 of 3<\/text>/);
+});
+
+test('W7, W9: an old report shows the free listing gray like the rest; reasons end with a period', () => {
+  const old = model(grade({ signals: undefined }));
+  const listing = old.mains.find(x => x.id === 'listing');
+  assert.equal(listing.status, 'not_checked');
+  for (const s of listing.subs) assert.equal(s.status, 'not_checked');
+  const noSite = model(grade({ results: [{ id: 'summary', result: 'not_checked', detail: 'No website given' }] }));
+  assert.equal(noSite.mains[0].subs.find(s => s.name.startsWith('Search summary')).reason, 'No website given.');
+});
+
+test('W2, W3: the canvas shares a box with the drawings; two columns only from 960 px', async () => {
+  const html = healthMapHtml(model());
+  assert.match(mapOf(html), /<div class="health-art">\s*<div class="health-orb-host" data-health-orb><\/div>\s*<svg class="health-svg health-svg-full"[\s\S]*<svg class="health-svg health-svg-phone"[\s\S]*?<\/svg>\s*<\/div>\s*<p class="health-caption" aria-hidden="true" data-health-caption><\/p>\s*<p class="health-tap">/);
+  const css = await fs.readFile(fileURLToPath(new URL('../public/css/style.css', import.meta.url)), 'utf8');
+  const block = css.slice(css.indexOf('/* ---- The health map on the report'));
+  assert.match(block, /\.health-art \{ position: relative; \}/);
+  assert.match(block, /@media \(min-width: 960px\) \{\s*\/\*[\s\S]*?\*\/\s*\.health-layout \{ grid-template-columns: minmax\(0, 3fr\) minmax\(0, 2fr\)/);
+  assert.equal(/@media \(min-width: 900px\)/.test(block), false);
+  // The size test uses the real narrowest widths: 530 px beside the list, 323 px on a 360 px phone.
+  assert.equal(MAP_SIZES.full.minShownPx, 530);
+  assert.equal(MAP_SIZES.phone.minShownPx, 323);
 });
 
 test('H5: no AI answer is one plain line with a link, not an empty "Answer 1" row', () => {
@@ -377,5 +455,8 @@ test('V1/V6: the orb script never leaks a loop, cleans up its listeners, and pau
   assert.match(js, /removeEventListener\('change', onMotion\)/);
   assert.match(js, /IntersectionObserver/);
   assert.match(js, /health-paused/);
+  // W1: init first stops every orb whose host left the page (even one paused off screen).
+  assert.match(js, /function init\(\) \{[\s\S]*?for \(const \[host, stop\] of \[\.\.\.orbs\]\) if \(!host\.isConnected\) stop\(\);/);
+  assert.match(js, /orbs\.delete\(host\)/);
   assert.ok(js.length < 6000, 'small');
 });

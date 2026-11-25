@@ -24,6 +24,7 @@
 import express, { Router } from 'express';
 import {
   requireAdmin, plainTokenMatches, setAdminCookie, clearAdminCookie, throttled, sameOrigin, cookieMatches,
+  GRADE_ADMIN_COOKIE, gradeAdminCookieValue, ADMIN_COOKIE_MAX_AGE,
 } from '../lib/admin-auth.js';
 import { layout, escapeHtml } from '../lib/html.js';
 import { mountGradeAdmin } from './grade-admin.js';
@@ -34,6 +35,27 @@ import { DAYS, normalizeWebsite, reviewsLinkHost } from '../lib/listing-fields.j
 import { markQuoteHandled } from '../lib/quotes.js';
 import { runSeanceForListing } from './seance.js';
 import { DEFAULT_SITE_NAME } from '../lib/config.js';
+import { sameSite } from '../lib/name-match.js';
+
+/**
+ * Listings whose website looked down on the newest check of the same business (high-tech-look 12.3): an expired
+ * security certificate, or an address that no longer loads. Admin only, never shown publicly. Never says closed.
+ * @returns {Map<string, string>} listing id -> note
+ */
+export function websiteDownNotes(listings, grades) {
+  const out = new Map();
+  const list = Array.isArray(grades) ? grades.filter(g => g && typeof g === 'object' && g.signals?.website) : [];
+  for (const l of Array.isArray(listings) ? listings : []) {
+    const mine = list.filter(g => g.signals?.listing?.listed?.listingId === l.id
+      || (l.website && g.input?.website && sameSite(l.website, g.input.website)));
+    const newest = mine.sort((a, b) => Date.parse(b.finishedAt ?? b.createdAt ?? 0) - Date.parse(a.finishedAt ?? a.createdAt ?? 0))[0];
+    const w = newest?.signals?.website;
+    if (!w) continue;
+    if (w.addressWorks?.status === 'missing') out.set(l.id, "Website may be down: the last check found its address doesn't load. Look before trusting this listing.");
+    else if (w.certificate?.status === 'missing') out.set(l.id, 'Website may be down: the last check found an expired security certificate. Look before trusting this listing.');
+  }
+  return out;
+}
 
 /** Fixed notes for /admin/pending?note=...; never echo the query value. */
 const NOTES = Object.freeze({
@@ -220,6 +242,16 @@ export function createAdminRouter(ctx) {
 
   router.use('/admin', requireAdmin(ctx, { cookie: true }));
 
+  // A signed-in admin's browser page view also gets the short /grade cookie, so the owner's own new checks are never
+  // held to the 7-day fair-use rule (high-tech-look 11.3). Only page views by a signed-in admin reach this line.
+  router.use('/admin', (req, res, next) => {
+    if (req.method === 'GET' && wantsHtml(req) && ctx.config.adminToken) {
+      const value = gradeAdminCookieValue(ctx.config.adminToken, ctx.clock?.now?.() ?? Date.now());
+      res.append('Set-Cookie', `${GRADE_ADMIN_COOKIE}=${value}; Path=/grade; HttpOnly; SameSite=Lax; Max-Age=${ADMIN_COOKIE_MAX_AGE}${ctx.config.production ? '; Secure' : ''}`);
+    }
+    next();
+  });
+
   // Grader pages (grades, leads, delete) sit behind the same gate.
   mountGradeAdmin(router, ctx, { adminNav, wantsHtml, form });
 
@@ -254,6 +286,8 @@ export function createAdminRouter(ctx) {
       const byId = new Map((Array.isArray(drafts) ? drafts : []).map(d => [d.id, d]));
       // Owner listings that are live now (the store's snapshot; sample listings are never unpublishable).
       const published = ctx.store.getListings().filter(l => l && typeof l.id === 'string' && !ctx.store.isSeed(l.id));
+      // "Website may be down" (high-tech-look 12.3, admin only): from the newest check of each listing's business.
+      const downNotes = websiteDownNotes(published, await ctx.store.collection('grades').read().catch(() => []));
 
       const categories = ctx.store.getCategories();
       const categoryLabel = slug => categories.find(c => c.slug === slug)?.label ?? String(slug ?? '');
@@ -319,7 +353,8 @@ ${preview}
           : `\n  <p class="hint">Verified stamp: ${t.verified ? 'showing' : 'not yet'} &middot; ${t.waived ? 'fee: waived' : `fee paid: ${yesNo(t.paid)}`} &middot; phone: ${yesNo(t.phoneOk)} &middot; photo ID: ${yesNo(t.idOk)}</p>`;
         const founderLine = founder ? `\n  <p class="hint">Founding Member No. ${founder.number}</p>` : '';
         // Admin only: the owner's own listings need no fee. Only the payment is skipped (Requirement 6).
-        const waivedLine = t?.waived ? '\n  <p class="hint">Fee waived by admin.</p>' : '';
+        const waivedLine = (t?.waived ? '\n  <p class="hint">Fee waived by admin.</p>' : '')
+          + (downNotes.has(l.id) ? `\n  <p class="admin-warning notice" role="note">${escapeHtml(downNotes.get(l.id))}</p>` : '');
         const waive = t && !t.verified && !t.paid && !t.removed
           ? `\n  <form method="POST" action="/admin/listings/${lid}/waive-fee"><button type="submit" class="admin-button admin-button-secondary">Waive the verification fee</button></form>`
           : '';

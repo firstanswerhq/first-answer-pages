@@ -18,6 +18,7 @@
 
 import { escapeHtml as h } from './html.js';
 import { signalRows } from './health-signals.js';
+import { addressParts } from './health-compare.js';
 
 // ---- the words -----------------------------------------------------------------------------------------------------
 
@@ -29,7 +30,11 @@ export const SYMBOLS = Object.freeze({ good: '\u2713', partly: '!', missing: '\u
 
 export const MAP_TITLE = 'Health of your setup';
 // Step 2 reader review H1: say what the colors are; the score is named the same way as at the top of the page.
-export const MAP_INTRO = "Every check we ran, at a glance. Green is good, amber is part way there, red needs work, gray means we couldn't check it. Your score is at the top of the page.";
+// J10 ("partway", "yellow") and J4/W7 (the "i" of the free listing is explained).
+export const MAP_INTRO = "Every check we ran, at a glance. Green is good, yellow is partway there, red needs work, gray means we couldn't check it. The i marks your free listing: information, not health. Your score is at the top of the page.";
+export const CLICK_HINT = 'Click a circle to see its checks.';
+/** Shown under the "Speaks AI's language" cluster heading, so the reader knows where it counts (J6). */
+export const SPEAKS_NOTE = "These checks don't count toward your score yet.";
 // Step 2 review V3: true at any later time (the spots were open when the check ran), and the listing is free.
 export const FOUNDING_NOTE = 'When we ran this check, Founding Member spots were still open. Listing is free; Founding Members pay once for the optional Verified stamp.';
 export const TAP_HINT = 'Tap a circle to see its checks.';
@@ -54,17 +59,20 @@ export const MAIN_NODES = Object.freeze([
  * review H6, H9); `words` turns a status label that repeats the name into a short answer (H7).
  */
 export const SUB_NODES = Object.freeze([
-  // 1. Website
+  // 1. Website. "Website is reachable" (Requirement 12) comes first: nothing else works if the site doesn't open.
+  { main: 'website', cluster: 'Website is reachable', name: 'Security certificate', path: 'website.certificate' },
+  { main: 'website', cluster: 'Website is reachable', name: 'Website address works', path: 'website.addressWorks', words: { Works: 'Yes' } },
   { main: 'website', cluster: 'Can AI read your website', name: 'Your website lets AI assistants read it (robots.txt)', check: 'ai-bots-allowed', words: { pass: 'Yes', fail: 'No, it blocks some' } },
   { main: 'website', cluster: 'Can AI read your website', name: 'Page list for search engines (sitemap)', path: 'website.sitemap' },
   { main: 'website', cluster: 'Can AI read your website', name: 'Text AI can read', path: 'website.wordsInPage', words: { 'Found in the page': 'Yes' } },
   { main: 'website', cluster: 'Can AI read your website', name: 'Name, phone and address tagged for AI (business label)', check: 'business-labeled', words: { pass: 'Found', fail: 'Not found' } },
+  // The info file counts in "Can AI read your website" in Score by area, so it sits there (J6; was "Speaks AI's language").
+  { main: 'website', cluster: 'Can AI read your website', name: 'A short info file for AI (llms.txt)', check: 'info-sheet', words: { pass: 'Found', fail: 'Not found' } },
   { main: 'website', cluster: "Speaks AI's language", name: 'Says what you do', path: 'website.saysWhatYouDo' },
   { main: 'website', cluster: "Speaks AI's language", name: 'Says where you work', path: 'website.saysWhereYouWork' },
   { main: 'website', cluster: "Speaks AI's language", name: 'Answers common questions', path: 'website.answersQuestions' },
   { main: 'website', cluster: "Speaks AI's language", name: 'A page for each service', path: 'website.pagePerService' },
-  { main: 'website', cluster: "Speaks AI's language", name: 'Recently updated', path: 'website.recentlyUpdated' },
-  { main: 'website', cluster: "Speaks AI's language", name: 'A short info file for AI (llms.txt)', check: 'info-sheet', words: { pass: 'Found', fail: 'Not found' } },
+  { main: 'website', cluster: "Speaks AI's language", name: 'Updated in the last 12 months', path: 'website.recentlyUpdated', words: { 'Updated in the last 12 months': 'Yes', 'Sitemap dates over a year old': 'Not by its sitemap dates' } },
   { main: 'website', cluster: 'Search basics', name: 'Page title names your city and service', check: 'title-city-service' },
   { main: 'website', cluster: 'Search basics', name: 'One main headline on the page', check: 'one-headline' },
   { main: 'website', cluster: 'Search basics', name: 'Search summary (the 2 lines under your link in Google)', check: 'summary' },
@@ -76,7 +84,7 @@ export const SUB_NODES = Object.freeze([
   { main: 'website', cluster: 'Customer basics', name: 'Call or book button on the home page', check: 'call-button' },
   // 3. Google profile
   { main: 'google', name: 'On Google', path: 'google.found', words: { 'Found on Google': 'Yes', 'Not found on Google': 'Not found' } },
-  { main: 'google', name: 'Open for business', path: 'google.open' },
+  { main: 'google', name: 'Open for business', path: 'google.open', words: { Open: 'Yes' } },
   { main: 'google', name: 'Category', path: 'google.category', words: { 'Category fits': 'Fits', 'Category may not fit what you do': 'May not fit what you do' } },
   { main: 'google', name: 'Hours on Google', path: 'google.hours', words: { 'Hours listed': 'Listed', 'No hours listed': 'Not listed' } },
   // 4. Reviews
@@ -89,22 +97,25 @@ export const SUB_NODES = Object.freeze([
   { main: 'details', name: 'Address matches Google', path: 'google.addressMatch' },
   { main: 'details', name: 'Name matches Google', path: 'google.nameMatch' },
   { main: 'details', name: 'Hours match Google', path: 'google.hoursMatch' },
-  { main: 'details', name: 'Your First Answer Pages listing matches your website', path: 'listing.matchesWebsite' },
   { main: 'details', name: 'On Bing Maps', path: 'bing.found', words: { 'Found on Bing': 'Yes', 'Not found in Bing map data': 'Not on Bing Maps yet' } },
   { main: 'details', name: 'Details match on Bing', path: 'bing.details' },
   // 6. Links
-  { main: 'links', name: 'Website links to your Google profile', path: 'links.google' },
-  { main: 'links', name: 'Website links to Yelp', path: 'links.yelp' },
+  { main: 'links', name: 'Website links to your Google profile', path: 'links.google', words: { 'Linked from your website': 'Linked' } },
+  { main: 'links', name: 'Website links to Yelp', path: 'links.yelp', words: { 'Linked from your website': 'Linked' } },
   { main: 'links', name: 'Google links to your site', path: 'google.linksToWebsite', words: { 'Links to your website': 'Yes', "Doesn't link to your website": 'No' } },
-  { main: 'links', name: 'Your First Answer Pages listing links to your website', path: 'listing.linksToWebsite' },
-  { main: 'links', cluster: 'Socials', name: 'Facebook', path: 'links.facebook' },
-  { main: 'links', cluster: 'Socials', name: 'Instagram', path: 'links.instagram' },
-  { main: 'links', cluster: 'Socials', name: 'TikTok', path: 'links.tiktok' },
-  // 7. Free listing (information, not health)
+  { main: 'links', cluster: 'Socials', name: 'Facebook', path: 'links.facebook', words: { 'Linked from your website': 'Linked' } },
+  { main: 'links', cluster: 'Socials', name: 'Instagram', path: 'links.instagram', words: { 'Linked from your website': 'Linked' } },
+  { main: 'links', cluster: 'Socials', name: 'TikTok', path: 'links.tiktok', words: { 'Linked from your website': 'Linked' } },
+  // 7. Free listing (information, not health). The two listing rows moved here from Details match and Links (J4, W4).
   { main: 'listing', name: 'Listed on First Answer Pages', path: 'listing.listed' },
   { main: 'listing', name: 'Verified stamp', path: 'listing.verified' },
+  { main: 'listing', name: 'Listing matches your website', path: 'listing.matchesWebsite' },
+  { main: 'listing', name: 'Listing links to your website', path: 'listing.linksToWebsite' },
   { main: 'listing', name: 'Founding Member', path: 'listing.founding' },
 ]);
+
+/** Plain notes under a cluster heading. */
+const CLUSTER_NOTES = Object.freeze({ "Speaks AI's language": SPEAKS_NOTE });
 
 const STATUSES = new Set(['good', 'partly', 'missing', 'not_checked', 'info']);
 const statusOf = s => (STATUSES.has(s) ? s : 'not_checked');
@@ -112,14 +123,30 @@ const statusOf = s => (STATUSES.has(s) ? s : 'not_checked');
 // ---- the model -----------------------------------------------------------------------------------------------------
 
 /** A HAVE row from an existing Check result: pass, fail or not checked, in the design's words. */
-function checkSub(def, result, input) {
-  const name = def.serviceAreaName && input?.noStorefront === true ? def.serviceAreaName : def.name;
+/** A sentence ends with a period (W9: "No website given" sits next to "No website given."). */
+const sentence = text => String(text).trim().replace(/([^.!?])$/, '$1.');
+
+export const ADDRESS_ONE_LINE = 'Write your full street address on one line, like "123 Main St, Nashville, TN 37201", so we can compare it with Google.';
+export const PHONE_AS_TEXT = "We saw a tap-to-call link but couldn't read the number. Write the number as plain text too.";
+
+function checkSub(def, result, input, found) {
+  const storefront = input?.noStorefront !== true;
+  const name = def.serviceAreaName && !storefront ? def.serviceAreaName : def.name;
   const base = { name, cluster: def.cluster ?? null };
   const r = result?.result;
-  if (r === 'pass') return { ...base, status: 'good', label: def.words?.pass ?? 'Good' };
+  if (r === 'pass') {
+    // The same facts the listing card uses (J1, J2): "Good" only when what the page shows could also be read.
+    if (def.check === 'address-shown' && storefront && found && !addressParts(found.address)) {
+      return { ...base, status: 'partly', label: 'Found, but not on one line', reason: ADDRESS_ONE_LINE };
+    }
+    if (def.check === 'tap-to-call' && found && !found.phone) {
+      return { ...base, status: 'partly', label: 'Found a link, but not the number', reason: PHONE_AS_TEXT };
+    }
+    return { ...base, status: 'good', label: def.words?.pass ?? 'Good' };
+  }
   if (r === 'fail') return { ...base, status: 'missing', label: def.words?.fail ?? 'Needs work' };
   // The check's own plain reason, the same one the full list of checks shows (Step 2 review V9).
-  const reason = typeof result?.detail === 'string' && result.detail.trim() !== '' ? result.detail : HAVE_NOT_CHECKED;
+  const reason = typeof result?.detail === 'string' && result.detail.trim() !== '' ? sentence(result.detail) : HAVE_NOT_CHECKED;
   return { ...base, status: 'not_checked', label: 'Not checked', reason };
 }
 
@@ -143,22 +170,33 @@ function signalSub(def, row, old) {
  * The free listing rows as information (Step 2 review V3, reader H8): no health color, no fix; plain words that say
  * what is so ("Not yet. It's free, claim it below.").
  */
-function listingSub(def, row, old) {
+function listingSub(def, row, old, notListed) {
   if (!row || row.status === 'info') return null;
+  // A report from before these checks: gray "Not checked", like every other row of it (W7).
+  if (old) return { name: def.name, cluster: null, status: 'not_checked', label: 'Not checked', reason: OLD_REPORT_SHORT };
   const base = { name: def.name, cluster: null, status: 'info' };
-  if (old) return { ...base, label: 'Not checked', reason: OLD_REPORT_SHORT };
-  if (def.path === 'listing.listed') {
-    if (row.status === 'good') return { ...base, label: 'Listed' };
-    if (row.needsClaim) return { ...base, label: "Not yet. It's free, claim it below." };
-    return { ...base, label: 'Not checked', ...(row.reason ? { reason: String(row.reason) } : {}) };
+  const unsure = (reason = row.reason) => ({ ...base, label: 'Not checked', ...(reason ? { reason: String(reason) } : {}) });
+  switch (def.path) {
+    case 'listing.listed':
+      if (row.status === 'good') return { ...base, label: 'Yes' }; // W5: never "Listed: Listed"
+      if (row.needsClaim) return { ...base, label: "Not yet. It's free, claim it below." };
+      return unsure();
+    case 'listing.verified':
+      if (row.status === 'good') return { ...base, label: 'Yes' };
+      if (row.status === 'partly') return { ...base, label: 'Not yet' };
+      if (notListed) return { ...base, label: 'Available after you claim your listing.' };
+      return unsure();
+    case 'listing.matchesWebsite':
+    case 'listing.linksToWebsite': {
+      // Nothing to check before there is a listing: never a gray "couldn't check" (J4, W4).
+      if (notListed) return { ...base, label: 'After you claim your listing.' };
+      if (row.status === 'not_checked') return unsure();
+      const words = { Matches: 'Yes', "Doesn't match": "Doesn't match", Linked: 'Yes', 'No website on the listing': 'No website on the listing' };
+      return { ...base, label: words[row.label] ?? String(row.label ?? '') };
+    }
+    default: // Founding Member (W5: never "Founding Member: Founding Member")
+      return { ...base, label: Number.isInteger(row.number) ? `Yes, member No. ${row.number}` : 'Yes' };
   }
-  if (def.path === 'listing.verified') {
-    if (row.status === 'good') return { ...base, label: 'Verified' };
-    if (row.status === 'partly') return { ...base, label: 'Not verified yet' };
-    if (row.reason === 'No listing yet.') return { ...base, label: 'Available after you claim your listing.' };
-    return { ...base, label: 'Not checked', ...(row.reason ? { reason: String(row.reason) } : {}) };
-  }
-  return { ...base, label: String(row.label ?? '') }; // Founding Member
 }
 
 const counted = subs => subs.filter(s => s.status !== 'not_checked' && s.status !== 'info');
@@ -167,7 +205,8 @@ const allGood = subs => subs.length > 0 && subs.every(s => s.status === 'good');
 /** The main node's status from its sub-nodes, by the design's main status rules. */
 export function mainStatus(id, subs, extra = {}) {
   if (id === 'ai') return statusOf(extra.aiStatus);
-  if (id === 'listing') return 'info'; // information, never a health color
+  // Information, never a health color; gray on a report from before these checks, like the rest of it (W7).
+  if (id === 'listing') return extra.old ? 'not_checked' : 'info';
   const seen = counted(subs);
   if (seen.length === 0) return 'not_checked';
   const byName = name => subs.find(s => s.name === name);
@@ -203,7 +242,7 @@ function listingLabel(subs, old) {
   if (old) return 'Not checked';
   const listed = subs.find(s => s.name === 'Listed on First Answer Pages')?.label;
   const verified = subs.find(s => s.name === 'Verified stamp')?.label;
-  if (listed === 'Listed') return verified === 'Verified' ? 'Verified' : 'Listed';
+  if (listed === 'Yes') return verified === 'Yes' ? 'Verified' : 'Listed';
   if (listed && listed.startsWith('Not yet')) return 'Not started';
   return 'Not sure';
 }
@@ -214,10 +253,11 @@ function listingLabel(subs, old) {
  * @param {{ score: number|null, aiRows: Array<{ name: string, status: string, label: string }>, aiStatus: string,
  *           aiReason?: string }} opts  `aiReason` is the one line shown when there is no answer (H5)
  */
-export function healthModel(grade, { score = null, aiRows = [], aiStatus = 'not_checked', aiReason } = {}) {
+export function healthModel(grade, { score = null, aiRows = [], aiStatus = 'not_checked', aiReason, found } = {}) {
   const results = new Map((Array.isArray(grade?.results) ? grade.results : []).filter(r => r && typeof r.id === 'string').map(r => [r.id, r]));
   const old = !grade?.signals || typeof grade.signals !== 'object';
   const rows = new Map(signalRows(old ? undefined : grade.signals).map(r => [r.path, r]));
+  const notListed = rows.get('listing.listed')?.needsClaim === true;
   const input = grade?.input ?? {};
   const mains = MAIN_NODES.map(node => {
     let subs;
@@ -226,15 +266,17 @@ export function healthModel(grade, { score = null, aiRows = [], aiStatus = 'not_
     } else {
       subs = SUB_NODES.filter(d => d.main === node.id)
         .map(d => {
-          if (d.check) return checkSub(d, results.get(d.check), input);
-          if (node.id === 'listing') return listingSub(d, rows.get(d.path), old);
+          if (d.check) return checkSub(d, results.get(d.check), input, found);
+          if (node.id === 'listing') return listingSub(d, rows.get(d.path), old, notListed);
           return signalSub(d, rows.get(d.path), old);
         })
         .filter(Boolean);
     }
-    const status = mainStatus(node.id, subs, { aiStatus });
+    const status = mainStatus(node.id, subs, { aiStatus, old });
     let label = MAIN_WORDS[status];
     if (node.id === 'ai' && status === 'good') label = 'Pass';
+    // J10: with several answers the AI circle says how many named the business ("2 of 3"), like "Socials: 1 of 3".
+    if (node.id === 'ai' && subs.length > 1) label = `${subs.filter(s => s.status === 'good').length} of ${subs.length}`;
     if (node.id === 'listing') label = listingLabel(subs, old);
     const out = { id: node.id, name: node.name, lines: node.lines, status, label, subs };
     if (node.id === 'ai' && subs.length === 0 && aiReason) out.reason = String(aiReason);
@@ -294,6 +336,7 @@ function groupHtml(main, full, runNew) {
         if (full && so.fix) parts.push(`<p class="health-fix"><strong>Fix:</strong> ${h(so.fix)}</p>`);
       } else if (cluster) {
         parts.push(`<h4 class="health-cluster">${h(cluster)}</h4>`);
+        if (CLUSTER_NOTES[cluster]) parts.push(`<p class="health-why">${h(CLUSTER_NOTES[cluster])}</p>`);
       }
     }
     list.push(rowHtml(sub, full, runNew));
@@ -315,8 +358,10 @@ function groupHtml(main, full, runNew) {
  * each drawing is shown at (Step 2 review V2, reader H4): font units x shown width / viewBox width.
  */
 export const MAP_SIZES = Object.freeze({
-  full: { view: 1000, minShownPx: 540, rMain: 280, rNode: 86, nameFont: 24, statusFont: 24, symbolFont: 26, orbFont: 24 },
-  phone: { view: 700, minShownPx: 353, rMain: 260, rNode: 86, nameFont: 26, statusFont: 24, symbolFont: 26, orbFont: 24 },
+  // W3: the real narrowest widths: 530 px for the wide drawing (two columns from 960 px), 323 px for the phone drawing
+  // on a 360 px screen (the common Android width).
+  full: { view: 1000, minShownPx: 530, rMain: 280, rNode: 86, nameFont: 24, statusFont: 24, symbolFont: 26, orbFont: 24 },
+  phone: { view: 700, minShownPx: 323, rMain: 255, rNode: 94, nameFont: 26, statusFont: 26, symbolFont: 28, orbFont: 26 },
 });
 const MID = 500;
 const R_ORB = 110;
@@ -371,6 +416,7 @@ function mainNodeSvg(main, [x, y], sz) {
   const top = y - (lines.length * lh) / 2 + sz.nameFont * 0.35;
   const nameSvg = lines.map((l, i) => `<tspan x="${x}" y="${round(top + i * lh)}">${h(l)}</tspan>`).join('');
   return `<a href="#health-g-${main.id}" tabindex="-1" class="health-node-link"><g class="health-node health-node-${st}" data-name="${h(main.name)}">`
+    + `<title>${h(main.name)}: ${h(main.label)}</title>`
     + `<circle cx="${x}" cy="${y}" r="${sz.rNode}" class="health-node-ring"/>`
     + `<text x="${x}" y="${round(y - sz.rNode + sz.symbolFont + 4)}" class="health-node-sym" font-size="${sz.symbolFont}">${SYMBOLS[st]}</text>`
     + `<text class="health-node-name" font-size="${sz.nameFont}">${nameSvg}</text>`
@@ -384,9 +430,10 @@ function orbSvg(model, sz, gradientId) {
   const nameY = MID - 20 - (lines.length - 1) * lh;
   const nameSvg = lines.map((l, i) => `<text x="${MID}" y="${round(nameY + i * lh)}" class="health-orb-name" font-size="${sz.orbFont}">${h(l)}</text>`).join('');
   // H1: the score in the report's own form, the same number as at the top of the page.
+  // W10: with no score, the same words as the top of the page ("Not enough to score yet"), on two lines.
   const scoreSvg = model.score === null
-    ? `<text x="${MID}" y="${MID + 34}" class="health-orb-score health-orb-score-none">Not scored yet</text>`
-    : `<text x="${MID}" y="${MID + 38}" class="health-orb-score">Score ${model.score}/100</text>`;
+    ? `<text class="health-orb-score health-orb-score-none"><tspan x="${MID}" y="${MID + 30}">Not enough</tspan><tspan x="${MID}" y="${MID + 58}">to score yet</tspan></text>`
+    : `<text x="${MID}" y="${MID + 38}" class="health-orb-score" data-score="${model.score}">Score ${model.score}/100</text>`;
   return `<circle cx="${MID}" cy="${MID}" r="${R_ORB + 40}" class="health-orb-halo"/>
   <circle cx="${MID}" cy="${MID}" r="${R_ORB}" class="health-orb" fill="url(#${gradientId})"/>
   ${nameSvg}${scoreSvg}`;
@@ -402,6 +449,8 @@ function fullSvg(model) {
   model.mains.forEach((main, i) => {
     const deg = -90 + (i * 360) / n;
     const pos = polar(MID, MID, sz.rMain, deg);
+    // One group per main node, so the one-time scan (2.10) can light it up as a whole.
+    parts.push(`<g class="health-branch" data-main="${main.id}">`);
     parts.push(linkSvg(polar(MID, MID, R_ORB + 6, deg), polar(MID, MID, sz.rMain - sz.rNode - 4, deg), main.status, 'main'));
     const subs = main.subs;
     const spread = subs.length > 1 ? Math.min(150, 9 * (subs.length - 1)) : 0;
@@ -409,12 +458,14 @@ function fullSvg(model) {
       const a = subs.length > 1 ? deg - spread / 2 + (k * spread) / (subs.length - 1) : deg;
       const p = polar(pos[0], pos[1], R_SUB_AT, a);
       const st = statusOf(sub.status);
-      parts.push(`<g class="health-sub health-sub-${st}">${linkSvg(polar(pos[0], pos[1], sz.rNode + 3, a), polar(pos[0], pos[1], R_SUB_AT - R_SUB - 2, a), st, 'sub')}`
+      // J5: the check's name and status on hover, the same words as its row in the list.
+      parts.push(`<g class="health-sub health-sub-${st}"><title>${h(sub.name)}: ${h(sub.label)}</title>${linkSvg(polar(pos[0], pos[1], sz.rNode + 3, a), polar(pos[0], pos[1], R_SUB_AT - R_SUB - 2, a), st, 'sub')}`
         + `<circle cx="${p[0]}" cy="${p[1]}" r="${R_SUB}" class="health-dot-node"/>`
         + `<text x="${p[0]}" y="${round(p[1] + 7)}" class="health-sub-sym">${SYMBOLS[st]}</text>`
         + '</g>');
     });
     parts.push(mainNodeSvg(main, pos, sz));
+    parts.push('</g>');
   });
   return `<svg class="health-svg health-svg-full" viewBox="0 0 ${sz.view} ${sz.view}" role="presentation" focusable="false" xmlns="http://www.w3.org/2000/svg">
   ${gradient('health-orb-glow-full')}
@@ -431,8 +482,10 @@ function phoneSvg(model) {
   model.mains.forEach((main, i) => {
     const deg = -90 + (i * 360) / n;
     const pos = polar(MID, MID, sz.rMain, deg);
+    parts.push(`<g class="health-branch" data-main="${main.id}">`);
     parts.push(linkSvg(polar(MID, MID, R_ORB + 6, deg), polar(MID, MID, sz.rMain - sz.rNode - 4, deg), main.status, 'main'));
     parts.push(mainNodeSvg(main, pos, sz));
+    parts.push('</g>');
   });
   const off = MID - sz.view / 2;
   return `<svg class="health-svg health-svg-phone" viewBox="${off} ${off} ${sz.view} ${sz.view}" role="presentation" focusable="false" xmlns="http://www.w3.org/2000/svg">
@@ -461,10 +514,14 @@ export function healthMapHtml(model, { full = false, runNew } = {}) {
 ${model.mains.map(m => groupHtml(m, full, runNew)).join('\n')}
     </div>
     <div class="health-map" id="health-map" aria-hidden="true">
-      <div class="health-orb-host" data-health-orb></div>
-      ${fullSvg(model)}
-      ${phoneSvg(model)}
+      <div class="health-art">
+        <div class="health-orb-host" data-health-orb></div>
+        ${fullSvg(model)}
+        ${phoneSvg(model)}
+      </div>
+      <p class="health-caption" aria-hidden="true" data-health-caption></p>
       <p class="health-tap">${h(TAP_HINT)}</p>
+      <p class="health-click">${h(CLICK_HINT)}</p>
     </div>
   </div>
 </section>`;

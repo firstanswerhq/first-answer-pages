@@ -145,7 +145,7 @@ function assertOldRestaurantNumbers(text) {
   assert.ok(text.includes('<strong>Hours on the home page</strong><br><span class="grade-points">3 of 3 points</span>'));
   assert.ok(text.includes('<strong>Call or book button on the home page</strong><br><span class="grade-points">2 of 2 points</span>'));
   // A Grade stored without the Check simply has no row for it.
-  assert.equal(text.includes('Can AI see your reviews?'), false);
+  assert.equal(text.includes('<strong>Reviews on your website</strong>'), false);
 }
 
 test('F3: the current points give an old restaurant Grade 40, not its stored 42', () => {
@@ -201,7 +201,7 @@ test('F3: a Recheck of an old Grade adds the Check and shows no "before" line', 
   const text = await report(env, id);
   assert.equal(text.includes('Your score was'), false);
   assert.ok(text.includes('<span class="num">39</span>'));
-  assert.ok(text.includes('Can AI see your reviews?'));
+  assert.ok(text.includes('<strong>Reviews on your website</strong>'));
 });
 
 test('F3: a Grade that already had the Check still shows its "before" line after a Recheck', async () => {

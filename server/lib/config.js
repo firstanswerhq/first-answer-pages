@@ -167,6 +167,23 @@ export function parseGradeNetworkPerDay(value, warn = console.warn) {
   return DEFAULT_GRADE_NETWORK_PER_DAY;
 }
 
+export const DEFAULT_GRADE_AI_REPEAT_DAYS = 7;
+
+/**
+ * GRADE_AI_REPEAT_DAYS (high-tech-look 11.6): one full check with AI per business in this many days. A whole number
+ * from 0 (the limit is off) to 365. Unset gives 7; anything else warns (without echoing the value) and gives 7.
+ * @param {string | undefined} value
+ * @param {(msg: string) => void} [warn]
+ * @returns {number}
+ */
+export function parseGradeAiRepeatDays(value, warn = console.warn) {
+  const v = nonEmpty(value);
+  if (v === undefined) return DEFAULT_GRADE_AI_REPEAT_DAYS;
+  if (/^(0|[1-9][0-9]{0,2})$/.test(v) && Number(v) <= 365) return Number(v);
+  warn(`GRADE_AI_REPEAT_DAYS must be a whole number from 0 to 365; using ${DEFAULT_GRADE_AI_REPEAT_DAYS}.`);
+  return DEFAULT_GRADE_AI_REPEAT_DAYS;
+}
+
 /** GRADER_ENABLED / GRADER_LEAD_GATE: 'off' (any case) is false; anything else is true. */
 export function parseOnOff(value) {
   return nonEmpty(value)?.toLowerCase() !== 'off';
@@ -348,6 +365,11 @@ export function configFromEnv(env = process.env, opts = {}) {
     // How many times the free question is asked of the main assistant (1 to 3, default 3). The score counts only these answers.
     gradeMainAsks: parseGradeMainAsks(env.GRADE_MAIN_ASKS, opts.warn ?? console.warn),
     gradeNetworkPerDay: parseGradeNetworkPerDay(env.GRADE_NETWORK_PER_DAY, opts.warn ?? console.warn),
+    // Off in test runs unless set (like the paid lookups), so older tests that check one business twice still run;
+    // the fair-use tests turn it on. Everywhere else the default is 7.
+    gradeAiRepeatDays: isTestRun(env) && nonEmpty(env.GRADE_AI_REPEAT_DAYS) === undefined
+      ? 0
+      : parseGradeAiRepeatDays(env.GRADE_AI_REPEAT_DAYS, opts.warn ?? console.warn),
     // The human check on the check form (Cloudflare Turnstile). Off unless both keys are set.
     turnstileSiteKey: nonEmpty(env.TURNSTILE_SITE_KEY) ?? '',
     turnstileSecretKey: nonEmpty(env.TURNSTILE_SECRET_KEY) ?? '',

@@ -780,7 +780,7 @@ test('R14 and R15: the "compare" reasons say what is needed and where', () => {
   // Step 2 reader review H2: the reason says which side is missing.
   assert.equal(build({ places: found({ address: 'Nashville, TN' }) }).google.addressMatch.reason, "Google doesn't show a street address for you.");
   assert.equal(build({ found: { ...FOUND, address: 'Main Street' }, places: found() }).google.addressMatch.reason,
-    'We couldn\'t read a full street address on your website to compare. Write it on one line, like "123 Main St, Nashville, TN 37201".');
+    'Write your full street address on one line, like "123 Main St, Nashville, TN 37201", so we can compare it with Google.');
   assert.equal(build({ places: found() }).google.hoursMatch.status, 'good');
   assert.equal(build({ places: found(), websiteHours: {} }).google.hoursMatch.reason, "Add your hours as plain text on your home page and we'll compare them with Google.");
   assert.equal(build({ bing: { status: 'not_found' } }).bing.details.reason, "Once you're on Bing Maps, we'll compare your details.");

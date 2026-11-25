@@ -460,9 +460,11 @@ function severalAnswers(answers, input, now, cut = null) {
   const shown = answers[shownIndex];
   // Which answer the list is from, numbered among the answers that came back (V102).
   // "the one that named you" when only one answer did, "the first one that named you" when several did (V245).
-  const from = shown.named
-    ? `This list is from answer ${shownIndex + 1}, the ${named === 1 ? '' : 'first '}one that named you.`
-    : `This list is from answer ${shownIndex + 1}.`;
+  // Only when a list is shown (high-tech-look J3: never point at a list that isn't there).
+  const listHtml = competitorList(shown, input);
+  const from = !listHtml ? '' : shown.named
+    ? ` This list is from answer ${shownIndex + 1}, the ${named === 1 ? '' : 'first '}one that named you.`
+    : ` This list is from answer ${shownIndex + 1}.`;
   const demo = firstAnswer.provider === 'mock' ? '<p class="hint">Demo answer (no AI connected)</p>\n  ' : '';
   const blocks = answers.map((a, i) => `<p>Answer ${i + 1}</p><blockquote class="grade-answer seance-answer">${h(readableAnswer(a.answer ?? ''))}</blockquote>`).join('');
   // Why we ask more than once (V101). When today's limit cut the asks short, the Grade stores the number
@@ -474,27 +476,28 @@ function severalAnswers(answers, input, now, cut = null) {
     : `AI answers change from one time to the next, so we ask the same question ${times}.`;
   // Named in some answers but not all (V206): say where the business stood in the answer that named it, and that the
   // others did not, before the list, so one good answer never reads as the whole result.
-  let result = h(outcome(shown, input));
+  // The outcome line, unless it only says again what the lead line already said (J3): "It named your business in
+  // its answer." or "It didn't name your business." add nothing to "Claude named your business in 2 of 3 answers".
+  const plainOutcome = outcome(shown, input);
+  const echoes = ['It named your business in its answer.', "It didn't name your business."].includes(plainOutcome);
+  let result = echoes ? '' : h(plainOutcome);
   if (named > 0 && named < total && shown.named) {
     const lists = mainList(shown, input);
     const position = lists ? lists.position : shown.position;
     const of = lists ? lists.rows.length : shown.total;
-    const where = Number.isInteger(position) && Number.isInteger(of) && of > 0
-      ? (named === 1
-        ? `In that answer you were ${ordinal(position)} of ${of}.`
-        : `In the first answer that named you, you were ${ordinal(position)} of ${of}.`)
-      : outcome(shown, input);
     const rest = total - named;
     // One answer named you: "In the other 2 answers ..."; several did: "In 1 answer ..." (V225-6).
     const others = named === 1 ? `In the other ${rest === 1 ? 'answer' : `${rest} answers`}` : `In ${rest === 1 ? '1 answer' : `${rest} answers`}`;
-    result = h(`${where} ${others}, ${subject} didn't name you.`);
+    result = Number.isInteger(position) && Number.isInteger(of) && of > 0
+      ? h(`${named === 1 ? `In that answer you were ${ordinal(position)} of ${of}.` : `In the first answer that named you, you were ${ordinal(position)} of ${of}.`} ${others}, ${subject} didn't name you.`)
+      : '';
   }
   return [
     `<p>${asked} ${h(subject)} ${count}.</p>`,
     // One paragraph under the lead line (V109).
-    `<p class="hint">${why} ${from}</p>`,
-    `<p>${result}</p>`,
-    competitorList(shown, input),
+    `<p class="hint">${why}${from}</p>`,
+    result ? `<p>${result}</p>` : '',
+    listHtml,
     `${demo}<details><summary>${h(`See ${subject}'s answers`)}</summary>${blocks}</details>`,
   ];
 }
@@ -574,9 +577,11 @@ function aiFree(grade, { googleLive, requester, now, secondPending = [] }) {
     ? `<form method="post" action="/grade/${h(grade.id)}/google-live"><button type="submit" class="button">Show Google's live answer</button></form>`
     : '<p class="hint">Google\'s live answer is private to the person who ran the check, so it is not shown here.</p>'}
 </section>` : '';
+  // The question itself, so the reader sees what was asked (high-tech-look J3).
+  const question = first ? `<p class="grade-question">The question we asked: ${h(first.prompt ?? prompt)}</p>\n  ` : '';
   return `<section class="grade-ai">
   <h2>What AI says</h2>
-  ${parts.filter(Boolean).join('\n  ')}
+  ${question}${parts.filter(Boolean).join('\n  ')}
 </section>${google ? `\n${google}` : ''}`;
 }
 
@@ -589,21 +594,34 @@ function hoursPlainTextOnly(grade) {
   return passed && readableHours(foundOf(grade).hours).length === 0;
 }
 
+/** True when a Check passed on the home page (the same facts the health rows use, high-tech-look J1, J2). */
+const checkPassed = (grade, id) => resultsOf(grade).some(r => r.id === id && r.result === 'pass');
+
 function previewCard(grade) {
   const i = grade.input;
   const found = foundOf(grade);
   const shown = readableHours(found.hours);
+  // Google shows hours for the business: said without copying them (Google's values are never kept, T3).
+  const googleHours = grade.signals?.google?.hours?.status === 'good';
   const hours = shown.length
     ? shown.map(x => h(x)).join('; ')
-    : blank(hoursPlainTextOnly(grade) ? "Add your hours (we saw them on your website but couldn't copy them)" : 'Add your hours');
+    : blank(hoursPlainTextOnly(grade) ? "Add your hours (we saw them on your website but couldn't copy them)"
+      : googleHours ? 'Add your hours (Google shows hours for you)' : 'Add your hours');
+  // Only "Add your ..." for what was really not found; when the page shows it but it couldn't be copied, say so (J1, J2).
+  const phone = found.phone
+    ? `<span class="phone">${h(found.phone)}</span>`
+    : blank(checkPassed(grade, 'tap-to-call') ? "Add your phone number (we saw a tap-to-call link but couldn't read the number)" : 'Add your phone number');
+  const address = found.address
+    ? h(found.address)
+    : blank(checkPassed(grade, 'address-shown') ? "Add your street address (we saw one on your website but couldn't copy it)" : 'Add your street address');
   return `<div class="grade-preview">
-    <h3>${h(i.name)} &middot; ${found.phone ? `<span class="phone">${h(found.phone)}</span>` : blank('Add your phone number')}</h3>
+    <h3>${h(i.name)} &middot; ${phone}</h3>
     <p>${h(capFirst(i.service))} in ${h(i.city)}, ${h(i.state)}</p>
     <p>Hours: ${hours}</p>
     ${i.noStorefront === true
     // A business that goes to its customers shows its area, never an address, even when the page has one.
     ? `<p>Serves the ${h(i.city)} area</p>`
-    : `<p>Address: ${found.address ? h(found.address) : blank('Add your street address')}</p>`}
+    : `<p>Address: ${address}</p>`}
     <p>Website: ${i.website ? h(i.website) : blank('Add your website')}</p>
   </div>`;
 }
@@ -1064,7 +1082,7 @@ export function reportPage(storedGrade, opts = {}) {
     ${reachLine}
     <h1>${h(i.name)}</h1>
     <p class="grade-where">${h(i.service)} in ${h(i.city)}, ${h(i.state)}</p>
-    ${failedLine}${failedLine ? `\n    <p class="hint grade-failed-note">${h(FAILED_NOTE)}</p>` : ''}
+    ${failedLine}${failedLine ? `\n    <p class="hint grade-failed-note">${h(failedNote(s.counted))}</p>` : ''}
     ${noWebsite}
     ${prev}
   </div>
@@ -1100,7 +1118,8 @@ export function reportPage(storedGrade, opts = {}) {
 
   // The health map (high-tech-look Requirement 2): the plain list and the map of the same signals, right under the
   // score. It shows the existing score and changes nothing; the fix sentences show only in the full report.
-  const healthMap = healthMapHtml(healthModel(grade, { score: scored ? s.score : null, ...aiHealth(grade) }), {
+  // `found` is what the listing card shows, so the rows and the card never disagree (J1, J2).
+  const healthMap = healthMapHtml(healthModel(grade, { score: scored ? s.score : null, found: foundOf(grade), ...aiHealth(grade) }), {
     full,
     // Every "Run a new check" in a reason is the report's own link (V244).
     runNew: text => runNewLink(grade, text),
@@ -1119,15 +1138,24 @@ ${foot}
   return page(`AI Visibility Check for ${i.name}`, body, {
     refresh: rechecking || secondPending.length > 0 || body.includes('The other questions are still being answered.'),
     // The orb's turning particles: a small script loaded after the page; the report reads the same without it.
-    scripts: [HEALTH_ORB_SCRIPT],
+    scripts: [HEALTH_ORB_SCRIPT, HEALTH_SCAN_SCRIPT],
   });
 }
+
+/** The one-time scan when the health map first comes into view (2.10; decoration only). */
+export const HEALTH_SCAN_SCRIPT = '/js/health-scan.js';
 
 /** The small script that turns the health map's orb (decoration only). */
 export const HEALTH_ORB_SCRIPT = '/js/health-orb.js';
 
-/** Under "N of M checks need work": the count is of the scored checks; the lights show every check (Step 2 review H10). */
-export const FAILED_NOTE = "That counts the scored checks. The lights below show every check, including ones that don't count toward the score.";
+/**
+ * Under "N of M checks need work": what the count is, said about the owner's report (Step 2 reader reviews H10, J9):
+ * "13 checks make up your score. The lights below also show extra checks that don't count toward it."
+ */
+export function failedNote(counted) {
+  const lead = counted === 1 ? '1 check makes up your score.' : `${counted} checks make up your score.`;
+  return `${lead} The lights below also show extra checks that don't count toward it.`;
+}
 
 /**
  * The AI answers node of the health map: one sub-node per answer to the free question, in the report's own words
@@ -1182,6 +1210,41 @@ export function googleLivePage({ grade, text, sources = [], suggestionsHtml = ''
 }
 
 // ---- other pages ---------------------------------------------------------------------------------
+
+/** A date as "November 24, 2026" (the owner's time zone). */
+export function fairUseDay(iso) {
+  const ms = Date.parse(iso);
+  return Number.isFinite(ms)
+    ? new Date(ms).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'America/Chicago' })
+    : '';
+}
+
+/** The sentences of the "checked recently" page (high-tech-look 11.2), each 160 characters or less. */
+export function repeatCheckLines({ checkedAt, againAt }) {
+  return [
+    `This business was checked on ${fairUseDay(checkedAt)}.`,
+    'Open that report and use Check again to see your website changes.',
+    `AI assistants usually take days to weeks to notice changes, so we ask them again after ${fairUseDay(againAt)}.`,
+  ];
+}
+
+/**
+ * Fair use (high-tech-look Requirement 11): a new check of a business checked in the last days. No new AI check runs.
+ * The button to the earlier report shows only to the browser that ran it (`showLink`); anyone else sees the same
+ * words, the date, and no link to the report.
+ */
+export function repeatCheckPage({ gradeId, checkedAt, againAt, showLink = false }) {
+  const lines = repeatCheckLines({ checkedAt, againAt });
+  const button = showLink && typeof gradeId === 'string'
+    ? `<p><a class="button" href="/grade/${h(gradeId)}">Open that report</a></p>`
+    : '<p><a href="/grade">Back to the check</a></p>';
+  const body = `<section class="message grade-repeat">
+  <h1>This business was checked recently</h1>
+  ${lines.map(l => `<p>${h(l)}</p>`).join('\n  ')}
+  ${button}
+</section>`;
+  return page('This business was checked recently', body);
+}
 
 /** A short page with a heading, one line and a link. */
 export function messagePage(title, message, link = { href: '/grade', text: 'Back to the check' }) {

@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 
 import { createApp } from '../server/app.js';
 import { createAiBudget } from '../server/lib/ai-budget.js';
-import { reportPage, HEALTH_ORB_SCRIPT } from '../server/lib/grade-html.js';
+import { reportPage, HEALTH_ORB_SCRIPT, HEALTH_SCAN_SCRIPT } from '../server/lib/grade-html.js';
 
 const NOW = Date.UTC(2026, 10, 24, 18, 0, 0);
 const REPO_DATA = fileURLToPath(new URL('../data/', import.meta.url));
@@ -359,7 +359,7 @@ test('Step 2: the report shows the health map under the score, with the report\'
   assert.ok(score, 'the report has a score');
   assert.equal(Number(score), g.score.score, 'the score is the stored one: the map changes nothing');
   // H1: the same number, in the score's own form.
-  assert.ok(html.includes(`class="health-orb-score">Score ${score}/100</text>`), 'the orb shows the same number');
+  assert.ok(html.includes(`class="health-orb-score" data-score="${score}">Score ${score}/100</text>`), 'the orb shows the same number');
   // Order: the heading, then the health map, then "What AI says".
   assert.ok(html.indexOf('<h1>Zephyr Plumbing</h1>') < html.indexOf('<section class="health"'));
   assert.ok(html.indexOf('<section class="health"') < html.indexOf('<h2>What AI says</h2>'));
@@ -367,7 +367,13 @@ test('Step 2: the report shows the health map under the score, with the report\'
   assert.match(html, /<span class="health-group-name">AI answers:<\/span> <span class="health-status">Needs work<\/span>/);
   assert.match(html, /<strong class="health-row-name">Answer 1 \(Claude\):<\/strong> <span class="health-status">Didn(?:'|&#39;|&#x27;)t name you<\/span>/);
   assert.match(html, /<strong class="health-row-name">On Google:<\/strong> <span class="health-status">Yes<\/span>/);
-  assert.match(html, /<strong class="health-row-name">Facebook:<\/strong> <span class="health-status">Linked from your website<\/span>/);
+  assert.match(html, /<strong class="health-row-name">Facebook:<\/strong> <span class="health-status">Linked<\/span>/);
+  // J1, J2: the listing card and the rows use the same facts. The page shows the phone, so the card has it.
+  assert.match(html, /<span class="phone">[^<]*555-0142<\/span>/);
+  assert.equal(html.includes('Add your phone number'), false);
+  assert.match(html, /<strong class="health-row-name">Tap-to-call phone number:<\/strong> <span class="health-status">Good<\/span>/);
+  // The question that was asked is shown (J3).
+  assert.match(html, /<p class="grade-question">The question we asked: Who are the best [^<]*Nashville, TN\?[^<]*<\/p>/);
   // Decoration only, after the content; the page keeps its noindex and title.
   assert.match(html, /<div class="health-map" id="health-map" aria-hidden="true">/);
   // A module script, so it runs only after the page is read (deferred).
@@ -377,6 +383,28 @@ test('Step 2: the report shows the health map under the score, with the report\'
   // The orb script file is there and is small.
   const js = await fs.readFile(fileURLToPath(new URL(`../public${HEALTH_ORB_SCRIPT}`, import.meta.url)), 'utf8');
   assert.ok(js.length > 0 && js.length < 6000);
+});
+
+test('J1, J2 (sparse page): the card says "Add your ..." only for what was really not found, and the rows agree', async () => {
+  const env = await startEnv({ site: fakeSite(defaultRoutes()) });
+  const g = await check(env);
+  // A page whose tap-to-call link and address passed the Checks, but whose number and address could not be read.
+  const sparse = structuredClone(g);
+  sparse.found = { ...sparse.found, phone: '', address: '', hours: [] };
+  sparse.results = sparse.results.map(r => (['tap-to-call', 'address-shown'].includes(r.id) ? { ...r, result: 'pass' } : r));
+  const html = reportPage(sparse, { leadGate: false });
+  assert.ok(html.includes("Add your phone number (we saw a tap-to-call link but couldn&#39;t read the number)")
+    || html.includes("Add your phone number (we saw a tap-to-call link but couldn't read the number)"));
+  assert.ok(/Add your street address \(we saw one on your website but couldn(?:'|&#39;|&#x27;)t copy it\)/.test(html));
+  assert.match(html, /<strong class="health-row-name">Tap-to-call phone number:<\/strong> <span class="health-status">Found a link, but not the number<\/span>/);
+  assert.match(html, /<strong class="health-row-name">Street address on the home page:<\/strong> <span class="health-status">Found, but not on one line<\/span>/);
+  // Nothing found and nothing passed: plain "Add your ..." and red rows, never a contradiction.
+  const none = structuredClone(sparse);
+  none.results = none.results.map(r => (['tap-to-call', 'address-shown'].includes(r.id) ? { ...r, result: 'fail' } : r));
+  const plain = reportPage(none, { leadGate: false });
+  assert.ok(plain.includes('Add your phone number<') || plain.includes('Add your phone number</'));
+  assert.equal(plain.includes('we saw a tap-to-call link'), false);
+  assert.match(plain, /<strong class="health-row-name">Tap-to-call phone number:<\/strong> <span class="health-status">Needs work<\/span>/);
 });
 
 test('Step 2: the locked report shows the map and the statuses without the fixes; the full report adds the fixes', async () => {
@@ -408,6 +436,26 @@ test('Step 2: a report saved before the signals still shows the map, every new r
   assert.equal(/run a new check/i.test(healthSection.replace(/<a [^>]*>[^<]*<\/a>/g, '')), false);
   // Every section of the report is still there (nothing moved behind JavaScript).
   for (const heading of ['What AI says', 'Score by area', 'Health of your setup']) assert.ok(b.includes(heading), heading);
+});
+
+test('Requirement 12: the certificate date from the home page request is read, and the score does not change', async () => {
+  const home = validTo => url => ({ status: 200, text: HOME, contentType: 'text/html', finalUrl: url, certValidTo: validTo });
+  const soon = await check(await startEnv({ site: fakeSite(defaultRoutes({ '/': home(new Date(NOW + 5 * 86400000).toISOString()) })) }));
+  const fine = await check(await startEnv({ site: fakeSite(defaultRoutes({ '/': home(new Date(NOW + 200 * 86400000).toISOString()) })) }));
+  assert.equal(soon.signals.website.certificate.label, 'Expires in 5 days');
+  assert.equal(soon.signals.website.certificate.status, 'partly');
+  assert.equal(fine.signals.website.certificate.status, 'good');
+  assert.equal(fine.signals.website.addressWorks.status, 'good');
+  assert.deepEqual(soon.results, fine.results, 'the Checks are the same');
+  assert.deepEqual(soon.score, fine.score, 'the score is the same');
+  // A site that does not answer: Not checked, never red.
+  const down = await check(await startEnv({ site: fakeSite(defaultRoutes({ '/': () => { throw Object.assign(new Error('x'), { code: 'timeout' }); } })) }));
+  assert.equal(down.signals.website.addressWorks.status, 'not_checked');
+  // The rows are in the report, under "Website is reachable".
+  const html = reportPage(soon, { leadGate: false });
+  assert.match(html, /<h4 class="health-cluster">Website is reachable<\/h4>/);
+  assert.match(html, /<strong class="health-row-name">Security certificate:<\/strong> <span class="health-status">Expires in 5 days<\/span>/);
+  assert.ok(html.includes(`<script type="module" src="${HEALTH_SCAN_SCRIPT}"></script>`), 'the scan script is loaded (2.10)');
 });
 
 test('U4: lookups older than 30 days are dropped from memory when new ones are kept, even without a recheck', async () => {

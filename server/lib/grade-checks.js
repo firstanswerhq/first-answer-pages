@@ -37,7 +37,8 @@ export const CHECKS = Object.freeze([
     label: 'Business label for AI',
     passText: 'Your home page labels your business name and phone for AI.',
     failText: 'We found no readable business label with your name and phone.',
-    fix: 'Add the business label block from your fix kit to your home page so AI can read your name and phone.',
+    // J7: say what the business label is and where to find it.
+    fix: 'Add the business label (a few lines of code in your full report) to your home page, so AI can read your name, phone and address.',
   },
   {
     id: 'info-sheet', group: 'ai_readable', points: 4,
@@ -118,7 +119,8 @@ export const CHECKS = Object.freeze([
   },
   {
     id: 'reviews-visible', group: 'customer_basics', points: 3,
-    label: 'Can AI see your reviews?',
+    // high-tech-look J7: a plain label like the others, not a question.
+    label: 'Reviews on your website',
     passText: 'Your home page shows customer reviews that AI can read.',
     failText: "We found no customer reviews on your home page. AI assistants often can't see reviews that are only inside Google.",
     fix: "Put 3 or more of your real customer reviews on your home page, with each customer's first name and the date, and add a link to your Google reviews.",

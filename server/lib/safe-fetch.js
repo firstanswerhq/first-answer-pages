@@ -93,10 +93,15 @@ export function createSafeFetcher({
     https: request?.https ?? ((...a) => https.request(...a)),
   };
 
-  const resolveAll = host => new Promise((resolve, reject) => {
+  const resolveOnce = host => new Promise((resolve, reject) => {
     try {
       lookup(host, { all: true }, (err, list) => {
-        if (err) return reject(new SafeFetchError('connect_failed', 'The host name could not be found.'));
+        if (err) {
+          const failed = new SafeFetchError('connect_failed', 'The host name could not be found.');
+          // Kept only as a fact for the health map (high-tech-look 12.1b): the name does not exist (NXDOMAIN).
+          if (err.code === 'ENOTFOUND') failed.dns = 'not_found';
+          return reject(failed);
+        }
         resolve(Array.isArray(list) ? list : []);
       });
     } catch {
@@ -104,6 +109,19 @@ export function createSafeFetcher({
       reject(new SafeFetchError('connect_failed', 'The host name could not be found.'));
     }
   });
+
+  /**
+   * Resolve a host name. A name that does not exist is asked once more before it counts as not found (12.1b: "on two
+   * tries"), so one bad answer from a resolver is never reported as a dead address. Nothing else is retried.
+   */
+  const resolveAll = async host => {
+    try {
+      return await resolveOnce(host);
+    } catch (err) {
+      if (err?.dns !== 'not_found') throw err;
+      return resolveOnce(host);
+    }
+  };
 
   /** Resolve and check every address for one URL. Returns the checked list. */
   async function checkedAddresses(url, host) {
@@ -167,12 +185,24 @@ export function createSafeFetcher({
             return reject(new SafeFetchError('connect_failed', 'Could not connect to the website.'));
           }
           current = { req, res: null };
-          req.on('error', err => reject(err instanceof SafeFetchError
-            ? err
-            : new SafeFetchError('connect_failed', 'Could not connect to the website.')));
+          req.on('error', err => {
+            if (err instanceof SafeFetchError) return reject(err);
+            const failed = new SafeFetchError('connect_failed', 'Could not connect to the website.');
+            // An expired certificate is still refused (nothing is loosened); it is only noted for the health map (12.1a).
+            if (err?.code === 'CERT_HAS_EXPIRED') failed.tls = 'expired';
+            return reject(failed);
+          });
           req.end();
         });
         current.res = res;
+        // The certificate's end date, read from this same connection (12.1a: no extra request). Only for https.
+        let certValidTo = null;
+        if (url.protocol === 'https:') {
+          try {
+            const ms = Date.parse(res.socket?.getPeerCertificate?.()?.valid_to ?? '');
+            if (Number.isFinite(ms)) certValidTo = new Date(ms).toISOString();
+          } catch { /* not readable: left out */ }
+        }
 
         const status = res.statusCode;
         const headers = res.headers || {};
@@ -235,6 +265,7 @@ export function createSafeFetcher({
           contentType,
           text: decodeBody(Buffer.concat(chunks), contentType),
           truncated,
+          ...(certValidTo ? { certValidTo } : {}),
         };
       }
     };

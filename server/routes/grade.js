@@ -17,7 +17,9 @@
  */
 
 import express, { Router } from 'express';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import { RULES } from '../lib/rate-limiter.js';
+import { tokenMatches, isGradeAdmin, readCookie } from '../lib/admin-auth.js';
 import { networkKey } from '../lib/network-key.js';
 import { canonicalUrl } from '../lib/base-url.js';
 import {
@@ -26,7 +28,7 @@ import {
 import { normalizeGradeInput, freeQuestion, recheckIsRunning } from '../lib/grader.js';
 import { normalizeEmail, normalizePhone } from '../lib/listing-fields.js';
 import {
-  gradeFormPage, scanPage, reportPage, failedPage, aboutPage, googleLivePage, messagePage, notFoundPage,
+  gradeFormPage, scanPage, reportPage, failedPage, aboutPage, googleLivePage, messagePage, notFoundPage, repeatCheckPage,
 } from '../lib/grade-html.js';
 
 const ID_PATTERN = /^[A-Za-z0-9_-]{22}$/;
@@ -60,6 +62,30 @@ export function createGradeRouter(ctx) {
     return html(res, 429, messagePage('Please slow down', 'A lot of checks have come from your internet provider today. Please try again tomorrow, or from another connection.'));
   };
   const hasCookie = (kind, id, req) => hasValidCookie(secret(), kind, id, req.headers.cookie);
+
+  // Fair use (high-tech-look 11.2): the checks this browser ran, in one signed cookie sent to every /grade path, so the
+  // "checked recently" page can link to the report only for the person who ran it. The per-report cookie goes only to
+  // /grade/<id>, so it can't be read on POST /grade.
+  const MINE_COOKIE = 'gr_mine';
+  const MINE_MAX = 20;
+  const sign = text => createHmac('sha256', String(secret())).update(`mine:${text}`).digest('base64url');
+  const mineIds = req => {
+    const value = readCookie(req.headers.cookie, MINE_COOKIE);
+    if (typeof value !== 'string') return [];
+    const [list, mac] = value.split('~');
+    if (!list || !mac) return [];
+    const want = Buffer.from(sign(list));
+    const got = Buffer.from(mac);
+    if (want.length !== got.length || !timingSafeEqual(want, got)) return [];
+    return list.split('.').filter(id => ID_PATTERN.test(id));
+  };
+  const mineCookie = ids => {
+    const list = ids.filter(id => ID_PATTERN.test(id)).slice(0, MINE_MAX).join('.');
+    return `${MINE_COOKIE}=${list}~${sign(list)}; Path=/grade; HttpOnly; SameSite=Lax; Max-Age=${90 * 24 * 60 * 60}${production() ? '; Secure' : ''}`;
+  };
+  // The owner is never limited (11.3): the admin token, or the short /grade cookie a signed-in admin's browser gets.
+  const isAdmin = req => Boolean(ctx.config.adminToken)
+    && (tokenMatches(req.headers.authorization, ctx.config.adminToken) || isGradeAdmin(req, ctx.config.adminToken, now()));
 
   // Google's live answer: at most 3 per Grade in total (counted on the stored Grade as `liveAnswers`).
   const liveAnswersUsed = g => (Number.isInteger(g?.liveAnswers) && g.liveAnswers > 0 ? g.liveAnswers : 0);
@@ -167,6 +193,16 @@ export function createGradeRouter(ctx) {
         }
       }
 
+      // Fair use (high-tech-look Requirement 11): one check with AI per business in GRADE_AI_REPEAT_DAYS days. Asked
+      // before any limit is counted, since no check is started. "Check again" (website only) is a different route.
+      if (!isAdmin(req)) {
+        const repeat = await ctx.grader.repeatCheck?.(checked.input);
+        if (repeat) {
+          const mine = mineIds(req).includes(repeat.gradeId);
+          return html(res, 200, repeatCheckPage({ ...repeat, showLink: mine }));
+        }
+      }
+
       // Per address (5 an hour, 6 a day) and per network (20 a day by default). One refused rule counts none of them.
       const addressRules = [
         { key: `grade:${req.ip}`, ...RULES.grade },
@@ -192,6 +228,7 @@ export function createGradeRouter(ctx) {
       ctx.gradeGuard?.started();
       // The browser that ran the check is the only one that may ask for Google's live answer.
       res.append('Set-Cookie', setCookieHeader(secret(), 'ran', id, { production: production() }));
+      res.append('Set-Cookie', mineCookie([id, ...mineIds(req).filter(x => x !== id)]));
       return res.redirect(303, `/grade/${id}`);
     } catch (err) {
       return next(err);

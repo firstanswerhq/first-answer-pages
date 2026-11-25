@@ -2535,8 +2535,9 @@ a.tel,
 }
 .health-layout { display: grid; gap: 1.25rem; }
 .health-map { order: -1; position: relative; max-width: 40rem; width: 100%; margin: 0 auto; background: var(--health-panel); border-radius: 12px; overflow: hidden; }
-@media (min-width: 900px) {
-  /* The map gets the wider column so its words are readable (Step 2 review V2). */
+@media (min-width: 960px) {
+  /* The map gets the wider column so its words are readable (Step 2 review V2); two columns only from 960 px, so the
+     map is never narrower than 530 px beside the list (W3). */
   .health-layout { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); align-items: start; }
   .health-map { position: sticky; top: 1rem; }
 }
@@ -2544,8 +2545,17 @@ a.tel,
 .health-svg-phone { display: none; }
 .health-orb-host { position: absolute; left: 39%; top: 39%; width: 22%; height: 22%; z-index: 0; }
 .health-orb-host canvas { width: 100%; height: 100%; display: block; }
-.health-tap { display: none; margin: 0; padding: 0 0.75rem 0.75rem; color: var(--health-ink); font-size: 0.9rem; text-align: center; }
+/* The drawings and the orb canvas share one box, so the canvas stays on the orb whatever sits below it (W2). */
+.health-art { position: relative; }
+.health-tap, .health-click { margin: 0; padding: 0 0.75rem 0.75rem; color: var(--health-ink); font-size: 0.9rem; text-align: center; }
+.health-tap { display: none; }
 .health-back { display: none; }
+/* The one-time scan (high-tech-look 2.10): while it plays, each main node and its checks light up in turn. Without the
+   script nothing here applies, so the map shows its final state. */
+.health-scanning .health-branch { opacity: 0.12; transition: opacity 0.35s ease-out; }
+.health-scanning .health-branch.health-on { opacity: 1; }
+.health-caption { margin: 0; padding: 0 0.75rem; min-height: 1.4em; color: var(--health-ink); font-size: 0.95rem; text-align: center; }
+.health-caption:empty { padding: 0; min-height: 0; }
 /* Off screen, the dots and the orb stop (Step 2 review V6). */
 .health-paused .health-flow { animation-play-state: paused; }
 
@@ -2624,6 +2634,7 @@ a.tel,
   .health-svg-phone { display: block; }
   .health-orb-host { left: 34.3%; top: 34.3%; width: 31.4%; height: 31.4%; }
   .health-tap { display: block; }
+  .health-click { display: none; }
   .health-back { display: inline-block; margin-top: 0.4rem; font-size: 0.9rem; }
 }
 
@@ -2631,4 +2642,5 @@ a.tel,
 @media (prefers-reduced-motion: reduce) {
   .health-flow { animation: none; display: none; }
   .health-orb-host { display: none; }
+  .health-scanning .health-branch { opacity: 1; transition: none; }
 }

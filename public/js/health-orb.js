@@ -5,6 +5,8 @@
 // report swaps its content in place while a recheck runs). Off screen, the loop and the CSS dots pause.
 
 const motion = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+// Every running orb: host -> its stop(). An orb swapped out while paused (no frame queued) is stopped by init (W1).
+const orbs = new Map();
 
 function start(host) {
   if (!host || host.dataset.orbStarted === '1') return;
@@ -92,6 +94,7 @@ function start(host) {
     pause();
     canvas.remove();
     host.dataset.orbStarted = '';
+    orbs.delete(host);
     document.removeEventListener('visibilitychange', onVisibility);
     if (motion && motion.removeEventListener) motion.removeEventListener('change', onMotion);
     if (watcher) watcher.disconnect();
@@ -99,10 +102,13 @@ function start(host) {
 
   document.addEventListener('visibilitychange', onVisibility);
   if (motion && motion.addEventListener) motion.addEventListener('change', onMotion);
+  orbs.set(host, stop);
   loop();
 }
 
 function init() {
+  // First stop every orb whose host left the page, so it drops its listeners and its old page at once (W1).
+  for (const [host, stop] of [...orbs]) if (!host.isConnected) stop();
   for (const host of document.querySelectorAll('[data-health-orb]')) start(host);
 }
 

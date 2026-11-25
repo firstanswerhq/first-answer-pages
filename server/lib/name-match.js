@@ -373,6 +373,26 @@ export const SHARED_DOMAINS = new Set([
 ]);
 
 /**
+ * The page an address points at, as one string: the host without "www." and "m.", the whole path in lower case without
+ * a trailing "/", and for Facebook's profile.php its `id` ("facebook.com/joeplumbing", "joe.wixsite.com/site").
+ * '' when it is not an address.
+ */
+export function pageKey(address) {
+  if (typeof address !== 'string' || address.trim() === '') return '';
+  let s = address.trim();
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(s)) s = `https://${s}`;
+  try {
+    const url = new URL(s);
+    const host = url.hostname.toLowerCase().replace(/\.$/, '').replace(/^(?:www\.|m\.)/, '');
+    const path = url.pathname.toLowerCase().replace(/\/+$/, '');
+    const id = /\/profile\.php$/.test(path) ? `?id=${url.searchParams.get('id') ?? ''}` : '';
+    return `${host}${path}${id}`;
+  } catch {
+    return '';
+  }
+}
+
+/**
  * True when two website addresses are the same site: the same registered domain, and that domain is not a shared host
  * (a Facebook page, a wixsite.com site, a business.site page...). A shared host is never proof of a match.
  */

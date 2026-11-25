@@ -103,6 +103,9 @@ export const FIXES = Object.freeze({
   verified: 'Verify your listing with a phone code and a photo ID so customers know it is really you.',
   listingMatches: 'Make the phone number and address on your listing the same as on your website.',
   listingWebsite: 'Add your website address to your listing so people can go from the directory to your site.',
+  // Requirement 12: what to do, never "the business may have closed".
+  certificate: "Renew your website's security certificate so browsers and AI can open your site.",
+  addressWorks: 'Check that your website address is spelled right and that your domain name is still paid for with the company you bought it from.',
 });
 
 const sig = (id, status, label, extra = {}) => ({ id, status, label, ...extra });
@@ -198,6 +201,38 @@ function wordsInPageSignal({ input, facts, found }) {
     : !nameIn ? "We couldn't find your business name in your page's text."
       : "We couldn't find your phone number in your page's text.";
   return partly('wordsInPage', 'Not in the page text', FIXES.wordsInPage, { reason });
+}
+
+/** Days before a certificate ends when it turns yellow (high-tech-look 12.1a). */
+export const CERT_WARN_DAYS = 30;
+
+const dayText = ms => new Date(ms).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+
+/**
+ * "Website is reachable" (high-tech-look Requirement 12), from the same request the check already makes. Never says
+ * the business may have closed. A timeout or any other error is "Not checked", never red.
+ * @param {{ reached?: boolean, https?: boolean, certValidTo?: string|null, certExpired?: boolean, dnsNotFound?: boolean }|null} alive
+ */
+export function aliveSignals({ hasSite, alive, now }) {
+  if (!hasSite) return { certificate: unknown('certificate', REASONS.noWebsite), addressWorks: unknown('addressWorks', REASONS.noWebsite) };
+  const a = alive && typeof alive === 'object' ? alive : null;
+  let certificate;
+  if (!a) certificate = unknown('certificate', "We couldn't read your certificate this time.");
+  else if (a.certExpired) certificate = missing('certificate', 'Expired', FIXES.certificate);
+  else if (a.reached && a.https === false) certificate = unknown('certificate', "Your website doesn't use a secure (https) address, so there is no certificate to read.");
+  else if (typeof a.certValidTo === 'string' && Number.isFinite(Date.parse(a.certValidTo))) {
+    const end = Date.parse(a.certValidTo);
+    const days = Math.ceil((end - now) / 86400000);
+    if (end <= now) certificate = missing('certificate', `Expired on ${dayText(end)}`, FIXES.certificate);
+    else if (days <= CERT_WARN_DAYS) certificate = partly('certificate', `Expires in ${days} ${days === 1 ? 'day' : 'days'}`, FIXES.certificate);
+    else certificate = good('certificate', 'Valid');
+  } else certificate = unknown('certificate', "We couldn't read your certificate date this time.");
+
+  let addressWorks;
+  if (a?.dnsNotFound) addressWorks = missing('addressWorks', "Your website address doesn't load", FIXES.addressWorks);
+  else if (a?.reached) addressWorks = good('addressWorks', 'Works');
+  else addressWorks = unknown('addressWorks', "We couldn't reach your website this time, so we didn't check this.");
+  return { certificate, addressWorks };
 }
 
 /** True when the page links to a questions page ("/faq", "FAQs", "Common questions"). */
@@ -440,7 +475,8 @@ function googleSignals({ input, facts, found, places, websiteHours, now }) {
   // Step 2 reader review H2: say which side is missing, so this row never contradicts "Street address on the home page".
   if (addr === 'unknown') {
     out.addressMatch = unknown('addressMatch', !addressParts(siteAddress)
-      ? "We couldn't read a full street address on your website to compare. Write it on one line, like \"123 Main St, Nashville, TN 37201\"."
+      // J9: what to do, said to the owner.
+      ? 'Write your full street address on one line, like "123 Main St, Nashville, TN 37201", so we can compare it with Google.'
       : "Google doesn't show a street address for you.");
   }
   else if (addr === 'match') out.addressMatch = good('addressMatch', 'Matches');
@@ -638,8 +674,9 @@ export function buildSignals(args = {}) {
   } catch {
     sitemapInfo = null;
   }
-  const websiteIds = ['sitemap', 'wordsInPage', 'saysWhatYouDo', 'saysWhereYouWork', 'answersQuestions', 'pagePerService', 'recentlyUpdated'];
+  const websiteIds = ['sitemap', 'wordsInPage', 'saysWhatYouDo', 'saysWhereYouWork', 'answersQuestions', 'pagePerService', 'recentlyUpdated', 'certificate', 'addressWorks'];
   part('website', () => ({
+    ...aliveSignals({ hasSite: Boolean(input.website), alive: args.alive ?? null, now }),
     sitemap: sitemapSignal({ hasSite: Boolean(input.website), sitemap: args.sitemap ?? null }),
     wordsInPage: wordsInPageSignal({ input, facts: args.facts ?? null, found: args.found }),
     saysWhatYouDo: textSignal('saysWhatYouDo', () => textHasService(args.facts.text, input.service), FIXES.saysWhatYouDo, { input, facts: args.facts ?? null }),
@@ -688,6 +725,8 @@ export function withoutGoogleValues(signals) {
  * checklist item it is. The order is the order of the design's list. `path` is where the signal is in `buildSignals`.
  */
 export const SIGNAL_ROWS = Object.freeze([
+  { main: 'website', cluster: 'Website is reachable', checklist: 'R12a', kind: 'ADD', path: 'website.certificate' },
+  { main: 'website', cluster: 'Website is reachable', checklist: 'R12b', kind: 'ADD', path: 'website.addressWorks' },
   { main: 'website', cluster: 'AI can read it', checklist: 'E2', kind: 'ADD', path: 'website.sitemap' },
   { main: 'website', cluster: 'AI can read it', checklist: 'E3', kind: 'ADD', path: 'website.wordsInPage' },
   { main: 'website', cluster: "Speaks AI's language", checklist: 'D1', kind: 'ADD', path: 'website.saysWhatYouDo' },
