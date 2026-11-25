@@ -194,15 +194,7 @@ export function createGradeRouter(ctx) {
         }
       }
 
-      // Fair use (high-tech-look Requirement 11): one check with AI per business in GRADE_AI_REPEAT_DAYS days. Asked
-      // before any limit is counted, since no check is started. "Check again" (website only) is a different route.
-      if (!isAdmin(req)) {
-        const repeat = await ctx.grader.repeatCheck?.(checked.input);
-        if (repeat) {
-          const mine = mineIds(req).includes(repeat.gradeId);
-          return html(res, 200, repeatCheckPage({ ...repeat, showLink: mine }));
-        }
-      }
+      const admin = isAdmin(req);
 
       // Per address (5 an hour, 6 a day) and per network (20 a day by default). One refused rule counts none of them.
       const addressRules = [
@@ -225,7 +217,19 @@ export function createGradeRouter(ctx) {
           : tooMany(res, limited.retryAfterSeconds);
       }
 
-      const id = await ctx.grader.start(checked.input);
+      // Fair use (high-tech-look Requirement 11): one check with AI per business in GRADE_AI_REPEAT_DAYS days. Asked
+      // after the human check and the per-address and per-network limits (batch 3 X15), so nobody can ask "was this
+      // business checked" without limits. "Check again" (website only) is a different route.
+      if (!admin) {
+        const repeat = await ctx.grader.repeatCheck?.(checked.input);
+        if (repeat) {
+          const mine = mineIds(req).includes(repeat.gradeId);
+          return html(res, 200, repeatCheckPage({ ...repeat, showLink: mine }));
+        }
+      }
+
+      // X6: a check the admin ran is marked, so it never limits the business's real owner.
+      const id = await ctx.grader.start(checked.input, { byAdmin: admin });
       ctx.gradeGuard?.started();
       // The browser that ran the check is the only one that may ask for Google's live answer.
       res.append('Set-Cookie', setCookieHeader(secret(), 'ran', id, { production: production() }));

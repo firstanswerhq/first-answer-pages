@@ -138,7 +138,8 @@ test('11.3: a signed-in admin\'s page view sets the /grade cookie', async () => 
     body: new URLSearchParams({ token: TOKEN }),
   });
   const adminCookie = (login.headers.getSetCookie?.() ?? []).map(c => c.split(';')[0]).join('; ');
-  if (!adminCookie.includes('fap_admin=')) return; // the login form's shape is covered by its own tests
+  // Batch 3 X14: a broken setup fails here instead of passing without checking anything.
+  assert.ok(adminCookie.includes('fap_admin='), 'the sign-in set the admin cookie');
   const page = await fetch(`${env.base}/admin/pending`, { headers: { cookie: adminCookie, accept: 'text/html' } });
   const set = (page.headers.getSetCookie?.() ?? []).find(c => c.startsWith(`${GRADE_ADMIN_COOKIE}=`)) ?? '';
   assert.match(set, /Path=\/grade/);
@@ -146,24 +147,73 @@ test('11.3: a signed-in admin\'s page view sets the /grade cookie', async () => 
   assert.equal(set.includes(TOKEN), false, 'never the token itself');
 });
 
+const RIDGE = {
+  id: 'ridge-roofing-nashville', name: 'Ridge Roofing', category: 'roofers', phone: '(615) 555-0101',
+  description: 'Roof repair.', city: 'Nashville', state: 'TN', services: ['Roof repair'], serviceArea: 'Nashville',
+  hours: { monday: '8am-5pm' },
+};
+const RIDGE_TRUST = {
+  [RIDGE.id]: {
+    waivedAt: new Date(START - DAY).toISOString(), waivedBy: 'admin',
+    phone: { number: '+16155550101', at: new Date(START - DAY).toISOString() },
+    identity: { ref: 'vs_1', at: new Date(START - DAY).toISOString(), name: 'Ridge Roofing' },
+  },
+};
+
+async function verifiedEnv() {
+  const env = await startEnv({ published: [RIDGE], trust: RIDGE_TRUST });
+  const verified = env.ctx.store.getTrustStatus?.(env.ctx.store.findById?.(RIDGE.id))?.verified;
+  // Batch 3 X14: a broken setup fails here instead of passing without checking anything.
+  assert.ok(verified === true, 'the listing is Verified');
+  return env;
+}
+
 test('11.4: a Verified listing is not limited for its own business', async () => {
-  const listing = {
-    id: 'ridge-roofing-nashville', name: 'Ridge Roofing', category: 'roofers', phone: '(615) 555-0101',
-    description: 'Roof repair.', city: 'Nashville', state: 'TN', services: ['Roof repair'], serviceArea: 'Nashville',
-    hours: { monday: '8am-5pm' },
-  };
-  const trust = {
-    [listing.id]: {
-      waivedAt: new Date(START - DAY).toISOString(), waivedBy: 'admin',
-      phone: { number: '+16155550101', at: new Date(START - DAY).toISOString() },
-      identity: { ref: 'vs_1', at: new Date(START - DAY).toISOString(), name: 'Ridge Roofing' },
-    },
-  };
-  const env = await startEnv({ published: [listing], trust });
-  const verified = env.ctx.store.getTrustStatus?.(env.ctx.store.findById?.(listing.id))?.verified;
-  if (verified !== true) return; // the trust record's shape is covered by the Verified tests
+  const env = await verifiedEnv();
   assert.equal((await check(env, { name: 'Ridge Roofing', city: 'Nashville' })).status, 303);
   assert.equal((await check(env, { name: 'Ridge Roofing', city: 'Nashville' })).status, 303, 'not limited');
+});
+
+test('11.4, batch 3 X3: a Verified name with another website, or a close name, is limited like anyone else', async () => {
+  const env = await verifiedEnv();
+  const other = { name: 'Ridge Roofing', city: 'Nashville', website: 'https://not-ridge.example/' };
+  assert.equal((await check(env, other)).status, 303);
+  assert.equal((await check(env, other)).status, 200, 'the listing has no website, so this site is not its business');
+  const close = { name: 'Ridge Roofing & Gutters', city: 'Nashville' };
+  assert.equal((await check(env, close)).status, 303);
+  assert.equal((await check(env, close)).status, 200, 'a close name is not the Verified name');
+});
+
+test('batch 3 X4: a check cut off by a restart (running, older than 4 minutes, no answers) does not limit', async () => {
+  const env = await startEnv();
+  const input = normalizeGradeInput({ ...ZEPHYR, state: 'TN', service: 'plumbers' }).input;
+  const old = new Date(START - 10 * 60 * 1000).toISOString();
+  await env.ctx.store.collection('grades').append({
+    id: 'fairstale0000000000001', status: 'running', input, createdAt: old, startedAt: old, finishedAt: null,
+    steps: [], results: [], ai: [],
+  });
+  assert.equal((await check(env, ZEPHYR)).status, 303, 'the stopped check asked nothing');
+  assert.equal((await check(env, ZEPHYR)).status, 200, 'the new check counts');
+});
+
+test('batch 3 X6: a check the admin ran never turns the real owner away', async () => {
+  const env = await startEnv();
+  const byAdmin = await check(env, ZEPHYR, { headers: { authorization: `Bearer ${TOKEN}` } });
+  assert.equal(byAdmin.status, 303);
+  const stored = (await env.ctx.store.collection('grades').read()).find(g => g.id === idOf(byAdmin));
+  assert.equal(stored.byAdmin, true, 'the admin\'s check is marked');
+  assert.equal((await check(env, ZEPHYR)).status, 303, 'the owner\'s own check runs');
+});
+
+test('batch 3 X16: signing out also ends the /grade admin cookie', async () => {
+  const env = await startEnv();
+  const res = await fetch(`${env.base}/admin/logout`, { method: 'POST', redirect: 'manual', headers: { origin: env.base } });
+  assert.equal(res.status, 303);
+  const set = (res.headers.getSetCookie?.() ?? []).find(c => c.startsWith(`${GRADE_ADMIN_COOKIE}=`)) ?? '';
+  assert.match(set, new RegExp(`^${GRADE_ADMIN_COOKIE}=;`));
+  assert.match(set, /Path=\/grade/);
+  assert.match(set, /Max-Age=0/);
+  assert.match(set, /HttpOnly/);
 });
 
 test('11.6: GRADE_AI_REPEAT_DAYS 0 turns the rule off; the default is 7', async () => {
@@ -212,6 +262,26 @@ test('11.1: on a shared host the typed page is kept beside the home page the che
   assert.equal(form('https://facebook.com/profile.php?id=7').websitePage, 'https://facebook.com/profile.php?id=7');
 });
 
+test('11.1, batch 3 X5: the same website AND (the same host, or the same city and state) is the same business', () => {
+  const form = (website, city = 'Nashville', state = 'TN') =>
+    normalizeGradeInput({ name: 'Mr Rooter', city, state, service: 'plumbers', website }).input;
+  const same = (a, b) => sameBusinessInput(a, b);
+  // Franchise locations on their own subdomains in other cities are different businesses.
+  assert.equal(same(form('https://nashville.mrrooter.example/'), form('https://memphis.mrrooter.example/', 'Memphis')), false);
+  assert.equal(same(form('https://nashville.mrrooter.example/', 'Nashville', 'TN'), form('https://nashville.mrrooter.example/', 'Nashville', 'KY')), true, 'the same host');
+  // The same domain in the same city and state is the same business, whatever page was typed.
+  assert.equal(same(form('https://mrrooter.example/'), form('https://www.mrrooter.example/nashville')), true);
+  assert.equal(same(form('https://nashville.mrrooter.example/'), form('https://mrrooter.example/')), true, 'same city and state');
+  assert.equal(same(form('https://mrrooter.example/'), form('https://mrrooter.example/', 'Memphis')), true, 'the same host, another city');
+  // Shared hosts: the page decides, ignoring case, a trailing slash, www. and m.
+  assert.equal(same(form('https://www.instagram.com/joeplumbing'), form('https://instagram.com/bobroofing')), false);
+  assert.equal(same(form('https://www.instagram.com/joeplumbing'), form('https://m.instagram.com/JoePlumbing/', 'Memphis')), true);
+  assert.equal(same(form('https://www.yelp.com/biz/joe-plumbing'), form('https://www.yelp.com/biz/bob-roofing')), false);
+  // With no website, a different state is a different business.
+  assert.equal(same(form(''), form('', 'Nashville', 'KY')), false);
+  assert.equal(same(form(''), form('')), true);
+});
+
 test('11.7: the business match follows the rules; the page sentences are short and plain', () => {
   const at = (a, b) => sameBusinessInput(a, b);
   assert.equal(at({ website: 'https://zephyr.example/' }, { website: 'http://www.zephyr.example/about' }), true);
@@ -221,6 +291,9 @@ test('11.7: the business match follows the rules; the page sentences are short a
   assert.equal(at({ website: 'https://facebook.com/profile.php?id=1' }, { website: 'https://facebook.com/profile.php?id=2' }), false);
   assert.equal(at({ name: 'Ace', city: 'Nashville' }, { name: 'ace', city: 'NASHVILLE' }), true);
   assert.equal(at({ name: 'Ace', city: 'Nashville' }, { name: 'Ace', city: 'Memphis' }), false);
+  // Batch 3 X7: with no website, the state counts too.
+  assert.equal(at({ name: 'Ace', city: 'Springfield', state: 'IL' }, { name: 'Ace', city: 'Springfield', state: 'TN' }), false);
+  assert.equal(at({ name: 'Ace', city: 'Springfield', state: 'TN' }, { name: 'ace', city: 'springfield', state: 'tn' }), true);
   for (const line of repeatCheckLines({ checkedAt: new Date(START).toISOString(), againAt: new Date(START + 7 * DAY).toISOString() })) {
     assert.ok(line.length <= 160, line);
     assert.equal(/guarantee|\$\d|colour|centre|will (?:name|recommend)/i.test(line), false, line);

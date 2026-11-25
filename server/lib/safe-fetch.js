@@ -87,6 +87,7 @@ export function createSafeFetcher({
   maxBytes = 2 * 1024 * 1024,
   maxRedirects = 5,
   userAgent = 'FirstAnswerGrader/1.0 (+https://firstanswerhq.com)',
+  dnsRetryDelayMs = 1000,
 } = {}) {
   const transport = {
     http: request?.http ?? ((...a) => http.request(...a)),
@@ -119,7 +120,20 @@ export function createSafeFetcher({
       return await resolveOnce(host);
     } catch (err) {
       if (err?.dns !== 'not_found') throw err;
-      return resolveOnce(host);
+      // Batch 3 X10: wait a moment, so the second try is not just the resolver's cached answer.
+      if (dnsRetryDelayMs > 0) await new Promise(r => setTimeout(r, dnsRetryDelayMs));
+      try {
+        return await resolveOnce(host);
+      } catch (again) {
+        if (again?.dns !== 'not_found' || /^www\./i.test(host) || net.isIP(host)) throw again;
+        // The name may exist with only "www." set up (Node says "not found" for a name with no address too). Then
+        // the address is not called dead: nothing is fetched from www, it is only looked up.
+        try {
+          await resolveOnce(`www.${host}`);
+          again.dns = 'www_only';
+        } catch { /* www does not resolve either: still not found */ }
+        throw again;
+      }
     }
   };
 

@@ -237,6 +237,8 @@ export function createAdminRouter(ctx) {
       return res.status(403).json({ error: 'Forbidden' });
     }
     clearAdminCookie(ctx, req, res);
+    // Batch 3 X16: signing out also ends the short /grade cookie (high-tech-look 11.3).
+    res.append('Set-Cookie', `${GRADE_ADMIN_COOKIE}=; Path=/grade; Max-Age=0; HttpOnly; SameSite=Lax${ctx.config.production ? '; Secure' : ''}`);
     res.redirect(303, '/admin/login');
   });
 

@@ -113,12 +113,13 @@ function readWebsiteInput(text) {
   }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return { error: MESSAGES.website };
   if (url.username || url.password || !url.hostname.includes('.')) return { error: MESSAGES.website };
-  // On a shared host (a Facebook page, a wixsite.com site) the page itself says which business it is, so it is kept
-  // beside the home page the check reads (high-tech-look 11.1). The check still reads the same home page as before.
-  const domain = registeredDomain(url.href);
+  // On a shared host (a Facebook page) the page typed on the form says which business it is, so it is kept beside the
+  // home page the check reads (high-tech-look 11.1, batch 3 X5). An own domain keeps only its home page, as before.
+  // The check still reads the same home page as before.
   const path = url.pathname.replace(/\/+$/, '');
   const id = /\/profile\.php$/i.test(path) && url.searchParams.get('id') ? `?id=${encodeURIComponent(url.searchParams.get('id'))}` : '';
-  const page = domain && SHARED_DOMAINS.has(domain) && path !== '' ? `${url.protocol}//${url.host}${path}${id}` : null;
+  const shared = SHARED_DOMAINS.has(registeredDomain(`${url.protocol}//${url.host}/`));
+  const page = shared && path !== '' ? `${url.protocol}//${url.host}${path}${id}` : null;
   return { value: `${url.protocol}//${url.host}/`, ...(page ? { page } : {}) };
 }
 
@@ -150,7 +151,10 @@ export function normalizeGradeInput(raw) {
   if (site.error) errors.website = site.error;
   if (Object.keys(errors).length > 0) return { ok: false, values, errors };
   const input = { name, city, state, service, website: site.value };
-  if (site.page) input.websitePage = site.page;
+  // An input that was already cleaned once (the route cleans the form, then start() cleans it again) only has the home
+  // page in `website`, so its kept page is read again here, and kept only when it is on the same host.
+  const kept = site.page ?? (typeof src.websitePage === 'string' ? readWebsiteInput(src.websitePage).page : undefined);
+  if (kept && site.value && new URL(kept).host === new URL(site.value).host) input.websitePage = kept;
   if (noStorefront) input.noStorefront = true;
   return { ok: true, values, errors, input };
 }
@@ -161,23 +165,38 @@ export function normalizeGradeInput(raw) {
  * With no website, the same name and city after normalizing.
  */
 export function sameBusinessInput(earlier, next) {
+  const sameState = String(earlier?.state ?? '').toUpperCase() === String(next?.state ?? '').toUpperCase();
+  const sameCity = normalizeForMatch(next?.city) !== '' && normalizeForMatch(earlier?.city) === normalizeForMatch(next?.city);
   const wanted = String(next?.website ?? '').trim();
   if (wanted) {
     const domain = registeredDomain(wanted);
     if (!domain || !earlier?.website) return false;
+    // The page typed on the form (`websitePage`), since `website` is only the home page the check reads.
+    const a = pageKey(next.websitePage || wanted);
+    const b = pageKey(earlier.websitePage || earlier.website);
     if (SHARED_DOMAINS.has(domain)) {
-      // The page typed on the form (`websitePage`), since `website` is only the shared host's home page.
-      const a = pageKey(next.websitePage || wanted);
-      const b = pageKey(earlier.websitePage || earlier.website);
-      // The shared host's own home page alone says nothing about which business it is.
+      // A shared host: the page is the business. The host's own home page alone says nothing.
       if (a === '' || a === pageKey(`https://${domain}/`)) return false;
       return a === b;
     }
-    return registeredDomain(earlier.website) === domain;
+    if (registeredDomain(earlier.website) !== domain) return false;
+    // Batch 3 X5 (owner decision): the same website AND (the same host, or the same city and state). Franchise
+    // locations on their own subdomains in other cities (nashville.x.com and memphis.x.com) are different businesses;
+    // another page of the same host (zephyr.example/about) is the same one. The host ignores www. and m.
+    return hostKey(wanted) === hostKey(earlier.website) || (sameCity && sameState);
   }
+  // X7: with no website, the same name, city and state.
   const name = normalizeForMatch(next?.name);
-  const city = normalizeForMatch(next?.city);
-  return name !== '' && city !== '' && normalizeForMatch(earlier?.name) === name && normalizeForMatch(earlier?.city) === city;
+  return name !== '' && sameCity && sameState && normalizeForMatch(earlier?.name) === name;
+}
+
+/** A website's host, lower case, without a trailing dot and without www. or m. in front ('' when unreadable). */
+function hostKey(website) {
+  try {
+    return new URL(String(website)).hostname.toLowerCase().replace(/\.$/, '').replace(/^(?:www|m)\./, '');
+  } catch {
+    return '';
+  }
 }
 
 /** The key two Grades share when they are about the same business. */
@@ -1371,6 +1390,7 @@ export function createGrader({
     } catch (err) {
       failure = failureFor(err);
       if (err?.dns === 'not_found') alive.dnsNotFound = true;
+      if (err?.dns === 'www_only') alive.wwwOnly = true;
       if (err?.tls === 'expired') alive.certExpired = true;
     }
     await step(0, home ? 'done' : 'failed', home ? 'Reached your website' : (failure ?? WEBSITE_UNREACHED), clock.now() - t);
@@ -1868,16 +1888,22 @@ export function createGrader({
     const checked = normalizeGradeInput(rawInput);
     if (!checked.ok) return null;
     const { input } = checked;
+    // 11.4, batch 3 X3: only the Verified listing's own business: the same name exactly, and the same website (a shared
+    // host never counts), or no website on either.
     const info = listingInfoFor(input);
-    if (info.state === 'listed' && info.verified === true) return null;
+    if (info.state === 'listed' && info.verified === true && compareNames(info.listing.name, input.name) === 'match') {
+      const own = info.listing.website ? sameSite(input.website, info.listing.website) : !input.website;
+      if (own) return null;
+    }
     const list = await grades().read();
     if (!Array.isArray(list)) return null;
     const windowMs = days * 24 * 60 * 60 * 1000;
     const cutoff = clock.now() - windowMs;
-    const askedAi = g => g.status === 'running'
+    // X4: a check cut off by a restart (stale) asked nothing. X6: the admin's own checks never limit anyone.
+    const askedAi = g => (g.status === 'running' && !isStale(g, clock.now()))
       || freeAnswersOf(Array.isArray(g.ai) ? g.ai : []).some(a => !a.reusedFrom);
     const earlier = list
-      .filter(g => g && typeof g === 'object' && ['running', 'done'].includes(g.status)
+      .filter(g => g && typeof g === 'object' && ['running', 'done'].includes(g.status) && g.byAdmin !== true
         && Date.parse(g.createdAt) >= cutoff && sameBusinessInput(g.input, input) && askedAi(g))
       .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0];
     if (!earlier) return null;
@@ -1885,7 +1911,7 @@ export function createGrader({
     return { gradeId: earlier.id, checkedAt: new Date(at).toISOString(), againAt: new Date(at + windowMs).toISOString() };
   }
 
-  async function start(rawInput) {
+  async function start(rawInput, { byAdmin = false } = {}) {
     const checked = normalizeGradeInput(rawInput);
     if (!checked.ok) throw new TypeError('Invalid grade input');
     const { input } = checked;
@@ -1913,6 +1939,8 @@ export function createGrader({
       recheckRunning: false,
       recheckFailedAt: null,
       extraAiStartedAt: null,
+      // X6: a check the admin ran is marked, so it never limits the real owner (fair use, Requirement 11).
+      ...(byAdmin === true ? { byAdmin: true } : {}),
     };
     await grades().append(created);
     if (typeof store.pruneExpired === 'function') {

@@ -105,7 +105,7 @@ export const FIXES = Object.freeze({
   listingWebsite: 'Add your website address to your listing so people can go from the directory to your site.',
   // Requirement 12: what to do, never "the business may have closed".
   certificate: "Renew your website's security certificate so browsers and AI can open your site.",
-  addressWorks: 'Check that your website address is spelled right and that your domain name is still paid for with the company you bought it from.',
+  addressWorks: 'Check that your website address is spelled right, works with and without www, and that your domain name is still paid for.',
 });
 
 const sig = (id, status, label, extra = {}) => ({ id, status, label, ...extra });
@@ -203,8 +203,12 @@ function wordsInPageSignal({ input, facts, found }) {
   return partly('wordsInPage', 'Not in the page text', FIXES.wordsInPage, { reason });
 }
 
-/** Days before a certificate ends when it turns yellow (high-tech-look 12.1a). */
-export const CERT_WARN_DAYS = 30;
+/**
+ * Days before a certificate ends when it turns yellow. Batch 3 X11 (owner decision, a deviation from 12.1a's 30):
+ * many healthy sites renew by themselves about 30 days before the end, and short certificates are always under 30
+ * days, so only 7 days or fewer is yellow.
+ */
+export const CERT_WARN_DAYS = 7;
 
 const dayText = ms => new Date(ms).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
 
@@ -230,7 +234,10 @@ export function aliveSignals({ hasSite, alive, now }) {
 
   let addressWorks;
   if (a?.dnsNotFound) addressWorks = missing('addressWorks', "Your website address doesn't load", FIXES.addressWorks);
-  else if (a?.reached) addressWorks = good('addressWorks', 'Works');
+  // X10: the name has no address of its own but "www." does: not called dead.
+  else if (a?.wwwOnly) addressWorks = unknown('addressWorks', 'Your website address seems to work only with "www." in front. Try both ways in your browser.');
+  // X9: an expired certificate was seen, so the address did resolve and answer.
+  else if (a?.reached || a?.certExpired) addressWorks = good('addressWorks', 'Works');
   else addressWorks = unknown('addressWorks', "We couldn't reach your website this time, so we didn't check this.");
   return { certificate, addressWorks };
 }

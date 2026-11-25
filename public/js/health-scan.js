@@ -54,45 +54,72 @@ function run(section) {
   const steps = scanPlan(nodes, Number.isInteger(score) ? score : null);
   if (svg.length === 0 || steps.length === 0) return;
 
-  const finish = () => {
+  // Batch 3 X12: every timer and the motion listener are kept, and cleared when the scan ends either way.
+  const timers = [];
+  const motion = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+  const onMotion = e => { if (e.matches) finish(); };
+  let done = false;
+  function finish() {
+    if (done) return;
+    done = true;
+    for (const t of timers) window.clearTimeout(t);
+    motion?.removeEventListener?.('change', onMotion);
     // The final state is the normal map: nothing the scan added is left behind.
     section.classList.remove('health-scanning');
     for (const b of branches) b.classList.remove('health-on');
     scoreTexts.forEach((t, i) => { t.textContent = original[i]; });
     if (caption) caption.textContent = '';
-  };
+  }
   section.classList.add('health-scanning');
   if (caption) caption.textContent = '';
   for (const step of steps) {
-    window.setTimeout(() => {
-      if (!section.isConnected) return;
+    timers.push(window.setTimeout(() => {
+      if (done || !section.isConnected) return;
       for (const b of branches) b.classList.toggle('health-on', step.lit.includes(b.dataset.main));
       if (caption) caption.textContent = step.caption;
       if (step.count !== null) scoreTexts.forEach(t => { t.textContent = `Score ${step.count}/100`; });
-    }, step.at);
+    }, step.at));
   }
-  window.setTimeout(finish, steps[steps.length - 1].at + 50);
+  timers.push(window.setTimeout(finish, steps[steps.length - 1].at + 50));
   // Stop at once if the visitor turns reduced motion on mid-scan.
-  const motion = window.matchMedia?.('(prefers-reduced-motion: reduce)');
-  motion?.addEventListener?.('change', e => { if (e.matches) finish(); }, { once: true });
+  motion?.addEventListener?.('change', onMotion);
 }
+
+/** The part watched: the map itself, not the tall section with its list (batch 3 X1). */
+export const SCAN_TARGET = '.health-map';
+export const SCAN_THRESHOLD = 0.5;
+
+let waiting = null;
 
 function watch() {
   const section = document.querySelector('.health');
-  if (!section) return;
+  if (!section) {
+    // Batch 3 X2: on the "Checking..." page the report is swapped in when the check finishes, so wait for the map.
+    if (!played && !waiting && window.MutationObserver) {
+      waiting = new MutationObserver(() => {
+        if (!document.querySelector('.health')) return;
+        waiting.disconnect();
+        waiting = null;
+        watch();
+      });
+      waiting.observe(document.body, { childList: true, subtree: true });
+    }
+    return;
+  }
   const reducedMotion = Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
   const hasObserver = typeof window.IntersectionObserver === 'function';
   if (!shouldScan({ reducedMotion, hidden: document.hidden, hasObserver, played })) return;
+  const target = section.querySelector(SCAN_TARGET) ?? section;
   const observer = new IntersectionObserver(entries => {
     if (!entries.some(e => e.isIntersecting)) return;
     observer.disconnect();
     // Checked again at the moment it comes into view: a hidden tab or reduced motion means no scan.
     const motionNow = Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
     if (!shouldScan({ reducedMotion: motionNow, hidden: document.hidden, hasObserver, played })) return;
-    played = true; // once per page load, even if the report is swapped in place later
+    played = true; // once per page load, so a later "Check again" swap doesn't replay it
     run(section);
-  }, { threshold: 0.35 });
-  observer.observe(section);
+  }, { threshold: SCAN_THRESHOLD });
+  observer.observe(target);
 }
 
 if (typeof window !== 'undefined' && typeof document !== 'undefined') watch();

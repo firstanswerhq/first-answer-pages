@@ -9,7 +9,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
-import { scanPlan, shouldScan, SCAN_MS } from '../public/js/health-scan.js';
+import { scanPlan, shouldScan, SCAN_MS, SCAN_TARGET, SCAN_THRESHOLD } from '../public/js/health-scan.js';
+import { scanPage, HEALTH_SCAN_SCRIPT, HEALTH_ORB_SCRIPT, markedAnswer } from '../server/lib/grade-html.js';
 import { healthModel, healthMapHtml, MAIN_NODES } from '../server/lib/health-map.js';
 
 const NODES = MAIN_NODES.map(n => ({ id: n.id, caption: `${n.name}: Good` }));
@@ -52,6 +53,54 @@ test('2.10.3, 2.10.4: reduced motion, a hidden tab or no observer skip the scan;
   assert.equal(shouldScan({ hidden: true }), false);
   assert.equal(shouldScan({ hasObserver: false }), false);
   assert.equal(shouldScan({ played: true }), false, 'once per page load');
+});
+
+test('batch 3 X1: the scan watches the map itself, at a share of it that always fits on screen', async () => {
+  assert.equal(SCAN_TARGET, '.health-map');
+  // The map is about 564 px tall on desktop and 387 px on phones, so 0.6 or less of it always fits on screen.
+  assert.ok(SCAN_THRESHOLD > 0 && SCAN_THRESHOLD <= 0.6, String(SCAN_THRESHOLD));
+  const js = await fs.readFile(fileURLToPath(new URL('../public/js/health-scan.js', import.meta.url)), 'utf8');
+  assert.match(js, /section\.querySelector\(SCAN_TARGET\)/);
+  assert.match(js, /observer\.observe\(target\)/);
+  assert.match(js, /\{ threshold: SCAN_THRESHOLD \}/);
+  assert.equal(/observer\.observe\(section\)/.test(js), false, 'never the tall section with its list');
+});
+
+test('batch 3 X2: the Checking page loads the scan, which waits for the report to be swapped in, and plays once', async () => {
+  const html = scanPage({ id: 'g1', input: { name: 'Zephyr Plumbing', city: 'Nashville', state: 'TN', service: 'plumbers', website: 'https://zephyr.example/' }, steps: [] });
+  assert.ok(html.includes(`<script type="module" src="${HEALTH_SCAN_SCRIPT}"></script>`));
+  assert.ok(html.includes(`<script type="module" src="${HEALTH_ORB_SCRIPT}"></script>`));
+  const js = await fs.readFile(fileURLToPath(new URL('../public/js/health-scan.js', import.meta.url)), 'utf8');
+  assert.match(js, /new MutationObserver\(/);
+  assert.match(js, /observe\(document\.body, \{ childList: true, subtree: true \}\)/);
+  assert.match(js, /waiting\.disconnect\(\)/);
+  assert.match(js, /if \(!played && !waiting/, 'a later swap never replays it');
+});
+
+test('batch 3 X12: the scan clears its timers and its motion listener; the caption keeps one height', async () => {
+  const js = await fs.readFile(fileURLToPath(new URL('../public/js/health-scan.js', import.meta.url)), 'utf8');
+  assert.match(js, /for \(const t of timers\) window\.clearTimeout\(t\)/);
+  assert.match(js, /removeEventListener\?\.\('change', onMotion\)/);
+  assert.match(js, /timers\.push\(window\.setTimeout\(/);
+  const css = await fs.readFile(fileURLToPath(new URL('../public/css/style.css', import.meta.url)), 'utf8');
+  assert.equal(css.includes('.health-caption:empty'), false, 'no rule that changes its height when it empties');
+  assert.match(css, /\.health-caption \{[^}]*min-height: 1\.4em;/);
+});
+
+test('batch 3 X13 (J3): the business name is marked in the answers that named it, after escaping', () => {
+  const input = { name: 'Zephyr Plumbing', city: 'Nashville', state: 'TN', service: 'plumbers' };
+  const named = { named: true, position: 1, total: 2, answer: '1. Zephyr Plumbing\n2. Other Co & Sons\nCall <b>fast</b>.' };
+  const out = markedAnswer(named, input);
+  assert.ok(out.includes('<mark>Zephyr Plumbing</mark>'));
+  assert.ok(out.includes('&lt;b&gt;fast&lt;/b&gt;'), 'the answer is still escaped');
+  assert.ok(out.includes('Other Co &amp; Sons'));
+  assert.equal((out.match(/<mark>/g) ?? []).length, 1);
+  // Not named: shown plain. A name that is only part of a word is not marked.
+  assert.equal(markedAnswer({ ...named, named: false }, input).includes('<mark>'), false);
+  assert.equal(markedAnswer({ named: true, position: 1, total: 1, answer: 'Amp & Co' }, { name: 'amp' }).includes('&<mark>'), false);
+  // A name with markup in it is escaped before it is matched.
+  const odd = markedAnswer({ named: true, position: 1, total: 1, answer: '1. Joe\'s <Pipes>' }, { name: 'Joe\'s <Pipes>' });
+  assert.ok(odd.includes('<mark>Joe&#39;s &lt;Pipes&gt;</mark>'));
 });
 
 test('2.10: the page has the pieces the scan needs; the caption is aria-hidden; without the script nothing is hidden', async () => {

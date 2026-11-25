@@ -558,3 +558,59 @@ No older test line changed for Requirement 13.
 | `test/places-lookup.test.js` (Bing: one search) | key not in the address; `subscription-key` header equals the key | `subscription-key` query parameter equals the key; no header | T4 |
 | `test/health-signals.test.js` (the S3 test) | all six link rows gray on a script-built page with no links | the three socials and Socials gray; Google and Yelp amber "Not linked" | T7 |
 | `test/grade-signals-flow.test.js` (the S5 old-Grade test) | restarted with no lookups | restarted with both lookups on, so the old-report and stale reasons are still shown | T6 |
+
+# Batch 3 fixes X1 to X16 (review-2026-11-25-batch3.md, batch3-fixes-2026-11-25.md)
+
+The score, the Checks and every public page (robots.txt, sitemap, JSON-LD, noindex) are unchanged. No report content is added only by JavaScript. Reduced motion still means no scan and no moving dots. Every new sentence is 160 characters or less, in American spelling, with no promise that AI will name a business.
+
+## Fixes for the two cloud failures (1840 of 1842)
+
+| Failure | Cause | Fix |
+|---|---|---|
+| `test/grade-fair-use.test.js:111` ("the same page") | The route cleans the form, then `repeatCheck` and `start` clean it again. The second pass only had the home page in `website`, so the kept Facebook page was lost and `m.facebook.com/JoePlumbing/` no longer matched. | `normalizeGradeInput` reads a kept `websitePage` back when it is on the same host. `pageKey` drops www. and m., lowercases the path and drops a trailing slash. Different pages (joeplumbing, bobroofing) stay different. |
+| `test/grade-report-list.test.js:71` (V38) | The test said the page has no "(you)", but the 13.1 share-of-voice table always has a "(you)" row. | The assertion now looks only at the competitor list. |
+
+## The items
+
+| Item | As built | Where |
+|---|---|---|
+| X1 | The scan watches the map (`SCAN_TARGET = '.health-map'`) at `SCAN_THRESHOLD = 0.5`, not the tall section with its list. Half of the map always fits on screen (564 px desktop, 387 px phone). | `public/js/health-scan.js` |
+| X2 | The Checking page loads the scan script too. When there is no `.health` yet, a MutationObserver on the body waits for the swapped-in report and then watches it. `played` stops a later "Check again" swap from playing it again. This replaces the Part B note that a swapped-in report does not play the scan. | `grade-html.js` (`scanPage`), `health-scan.js` |
+| X3 | A Verified listing is exempt only for its own business: the exact name (`compareNames` is `match`), and the same website as the listing (`sameSite`, so a shared host never counts), or no website on either. | `grader.js` (`repeatCheck`) |
+| X4 | A running check counts only while it is not stale (`isStale`, 4 minutes), so a check cut off by a restart limits nobody. | `grader.js` (`repeatCheck`) |
+| X5 | Two checks are the same business when the website is the same AND (the host is the same, or the city and state are the same). The host ignores www., m., case and a trailing dot. Franchise locations on their own subdomains in other cities are different businesses. On shared hosts the typed page decides, as before. | `grader.js` (`sameBusinessInput`, `hostKey`, `readWebsiteInput`) |
+| X6 | A check the admin runs is stored with `byAdmin: true`, and `repeatCheck` skips those. The route passes `start(input, { byAdmin })`. | `grader.js`, `routes/grade.js` |
+| X7 | With no website, the same business is the same name, city and state. | `grader.js` (`sameBusinessInput`) |
+| X8 | Kept as "Expired" with no date when the certificate was refused. The date can't be read from a refused connection without loosening TLS, and grader-safety forbids that. `rejectUnauthorized` is never turned off. | `health-signals.js` |
+| X9 | An expired certificate means the address resolved and answered, so "Website address works" is green "Works". | `health-signals.js` (`aliveSignals`) |
+| X10 | The second DNS try waits about 1 second (`dnsRetryDelayMs`, default 1000; tests pass 0). After two "not found" answers, `www.<host>` is looked up once (never fetched). If it resolves, the error is `dns: 'www_only'` and the row is "Not checked" with a reason, never red. The fix sentence is now "Check that your website address is spelled right, works with and without www, and that your domain name is still paid for." | `safe-fetch.js`, `grader.js`, `health-signals.js` |
+| X11 | `CERT_WARN_DAYS = 7`: amber "Expires in N days" at 7 days or fewer, green above. | `health-signals.js` |
+| X12 | Every scan timer and the motion listener are cleared in `finish()`. The `.health-caption:empty` rule is gone, so the caption keeps its 1.4em height and nothing below the map moves. | `health-scan.js`, `style.css` |
+| X13 | J3: the business name is wrapped in `<mark>` inside each answer that named it. The text is escaped first and the escaped name (as typed, and as the answer wrote it) is wrapped after. A name is never matched inside an escaped character. The listing card's hours line is now "Add your hours (Google has them, but we only copy hours from your website)". | `grade-html.js` (`markedAnswer`, `answerBlock`, `severalAnswers`, `previewCard`), `style.css` |
+| X14 | The two `return` guards in the fair-use tests are `assert.ok` on the setup, so a broken setup fails. | `test/grade-fair-use.test.js` |
+| X15 | The fair-use lookup now runs after the bot check and the per-address and per-network limits, just before the check starts. The store has no way to read only recent grades, so it still reads the grades collection, but only for posts that passed those limits. | `routes/grade.js` |
+| X16 | Signing out also sends `fap_grade_admin=; Path=/grade; Max-Age=0; HttpOnly; SameSite=Lax` (plus Secure in production). | `routes/admin.js` |
+
+## Deviations for the owner to approve
+
+| Requirement | Wording | As built | Why |
+|---|---|---|---|
+| 11.1 | "the same website" | the same website AND (the same host, or the same city and state) | X5: franchise locations in other cities share one domain. Owner decision in batch3-fixes-2026-11-25.md. |
+| 11.1 | "the same name and city" (no website) | the same name, city and state | X7: the same town name exists in many states. |
+| 12.1a | yellow at 30 days or fewer | yellow at 7 days or fewer | X11: many sites renew by themselves about 30 days before the end. Owner decision. |
+| 12.1a | red "Expired on <date>" | red "Expired" with no date when the certificate was refused | X8: the date can't be read without loosening TLS. |
+| 12.1b | red after two "not found" answers | gray when only www. resolves | X10: the address may work with www. in front. |
+| 12.2 | the fix sentence | "...spelled right, works with and without www, and that your domain name is still paid for." | X10 |
+
+## Older test lines changed in batch 3
+
+| Where | Old | New | Why |
+|---|---|---|---|
+| `test/grade-report-list.test.js:71` (V38) | no "(you)" anywhere in the page | no "(you)" in the competitor list | 13.1 table has a "(you)" row |
+| `test/grade-fair-use.test.js` (11.3 cookie test) | `if (!adminCookie.includes('fap_admin=')) return;` | `assert.ok(adminCookie.includes('fap_admin='))` | X14 |
+| `test/grade-fair-use.test.js` (11.4 test) | `if (verified !== true) return;`, listing set up inside the test | `assert.ok(verified === true)` in a shared `verifiedEnv()` helper | X14, reused by the X3 test |
+| `test/website-alive.test.js` (NXDOMAIN test) | `assert.equal(asked, 2, 'two tries')` | `asked` is 3 and the hosts are `gone.example` twice, then `www.gone.example` | X10 |
+| `test/website-alive.test.js` (NXDOMAIN test) | `createSafeFetcher({ request, lookup })` for the not-found fetchers | with `dnsRetryDelayMs: 0` | X10 (no 1-second wait in tests) |
+| `test/website-alive.test.js` (12.1a test) | `Expires in 10 days` is amber; `CERT_WARN_DAYS` case says "30 days or fewer" | `Expires in 5 days` is amber, 8 and 10 days are green; the case says "7 days or fewer" | X11 |
+
+New tests: `test/grade-fair-use.test.js` (X3 other website and close name, X4 stale check, X6 admin then owner, X16 sign-out, X5 franchise and shared-host cases, X7 state), `test/health-scan.test.js` (X1 target and threshold, X2 Checking page and waiting, X12 timers and caption CSS, X13 name marking), `test/website-alive.test.js` (X9, X10 www only and the wait, X11 the 7-day edge).

@@ -68,7 +68,10 @@ test('V38: a named business with no position gets a plain list under a short hea
   assert.ok(!listOf(html), 'no numbered list');
   assert.ok(html.includes('Other businesses it named'));
   assert.match(html, /<ul class="grade-competitors grade-competitors-plain">/);
-  assert.ok(!html.includes('(you)'));
+  // Only the competitor list is checked: the share-of-voice table (high-tech-look 13.1) always marks the business "(you)".
+  const plainList = /<ul class="grade-competitors grade-competitors-plain">[\s\S]*?<\/ul>/.exec(html)?.[0] ?? '';
+  assert.ok(plainList.length > 0);
+  assert.ok(!plainList.includes('(you)'));
 });
 
 test('V38: a business that was not named gets the plain list, not a numbered one', () => {

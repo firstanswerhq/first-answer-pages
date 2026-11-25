@@ -58,13 +58,17 @@ test('an expired certificate is still refused (nothing loosened) and is noted as
 test('a name that does not exist is asked twice; only two "not found" answers count; one bad answer then OK works', async () => {
   let asked = 0;
   const nx = (host, opts, cb) => { asked += 1; cb(Object.assign(new Error('nx'), { code: 'ENOTFOUND' })); };
-  await assert.rejects(createSafeFetcher({ request: fakeRequest(), lookup: nx }).fetchText('https://gone.example/'),
+  const hosts = [];
+  const nxSeen = (host, opts, cb) => { hosts.push(host); nx(host, opts, cb); };
+  await assert.rejects(createSafeFetcher({ request: fakeRequest(), lookup: nxSeen, dnsRetryDelayMs: 0 }).fetchText('https://gone.example/'),
     err => err.code === 'connect_failed' && err.dns === 'not_found');
-  assert.equal(asked, 2, 'two tries');
+  // Batch 3 X10: two tries of the name, then one lookup of its www. name (looked up only, never fetched).
+  assert.equal(asked, 3, 'two tries and the www. lookup');
+  assert.deepEqual(hosts, ['gone.example', 'gone.example', 'www.gone.example']);
 
   let tries = 0;
   const once = (host, opts, cb) => { tries += 1; return tries === 1 ? cb(Object.assign(new Error('nx'), { code: 'ENOTFOUND' })) : cb(null, PUBLIC); };
-  const res = await createSafeFetcher({ request: fakeRequest(), lookup: once }).fetchText('https://zephyr.example/');
+  const res = await createSafeFetcher({ request: fakeRequest(), lookup: once, dnsRetryDelayMs: 0 }).fetchText('https://zephyr.example/');
   assert.equal(res.status, 200);
   assert.equal(tries, 2);
 
@@ -78,13 +82,35 @@ test('a name that does not exist is asked twice; only two "not found" answers co
   await assert.rejects(createSafeFetcher({ request: fakeRequest(), lookup: privateLookup }).fetchText('https://zephyr.example/'), err => err.code === 'blocked_address');
 });
 
+test('batch 3 X10: a name with only www. set up is not called dead; the second try waits about a second', async () => {
+  const nxBare = (host, opts, cb) => (host.startsWith('www.') ? cb(null, PUBLIC) : cb(Object.assign(new Error('nx'), { code: 'ENOTFOUND' })));
+  const request = fakeRequest();
+  await assert.rejects(createSafeFetcher({ request, lookup: nxBare, dnsRetryDelayMs: 0 }).fetchText('https://zephyr.example/'),
+    err => err.code === 'connect_failed' && err.dns === 'www_only');
+  assert.equal(request.calls.length, 0, 'nothing is fetched from www.');
+  // The wait between the two tries.
+  const times = [];
+  const timed = (host, opts, cb) => { times.push(Date.now()); cb(Object.assign(new Error('nx'), { code: 'ENOTFOUND' })); };
+  await assert.rejects(createSafeFetcher({ request: fakeRequest(), lookup: timed, dnsRetryDelayMs: 200 }).fetchText('https://gone.example/'));
+  assert.ok(times[1] - times[0] >= 150, `waited ${times[1] - times[0]} ms`);
+  // The address row: Not checked with a reason, never red.
+  const row = aliveSignals({ hasSite: true, alive: { reached: false, wwwOnly: true }, now: NOW }).addressWorks;
+  assert.equal(row.status, 'not_checked');
+  assert.ok(row.reason.includes('www.'));
+  assert.equal(FIXES.addressWorks, 'Check that your website address is spelled right, works with and without www, and that your domain name is still paid for.');
+});
+
 test('12.1a: valid, expiring, expired (with its date or by its error), http-only and unreadable', () => {
   const at = alive => aliveSignals({ hasSite: true, alive, now: NOW }).certificate;
   const iso = ms => new Date(ms).toISOString();
   assert.deepEqual([at({ reached: true, https: true, certValidTo: iso(NOW + 90 * DAY) }).status, at({ reached: true, https: true, certValidTo: iso(NOW + 90 * DAY) }).label], ['good', 'Valid']);
-  const soon = at({ reached: true, https: true, certValidTo: iso(NOW + 10 * DAY) });
-  assert.deepEqual([soon.status, soon.label, soon.fix], ['partly', 'Expires in 10 days', FIXES.certificate]);
-  assert.equal(at({ reached: true, https: true, certValidTo: iso(NOW + CERT_WARN_DAYS * DAY) }).status, 'partly', '30 days or fewer');
+  // Batch 3 X11: amber only at 7 days or fewer (many sites renew by themselves about 30 days before the end).
+  assert.equal(CERT_WARN_DAYS, 7);
+  const soon = at({ reached: true, https: true, certValidTo: iso(NOW + 5 * DAY) });
+  assert.deepEqual([soon.status, soon.label, soon.fix], ['partly', 'Expires in 5 days', FIXES.certificate]);
+  assert.equal(at({ reached: true, https: true, certValidTo: iso(NOW + CERT_WARN_DAYS * DAY) }).status, 'partly', '7 days or fewer');
+  assert.equal(at({ reached: true, https: true, certValidTo: iso(NOW + 8 * DAY) }).status, 'good', 'green above 7 days');
+  assert.equal(at({ reached: true, https: true, certValidTo: iso(NOW + 10 * DAY) }).status, 'good');
   assert.equal(at({ reached: true, https: true, certValidTo: iso(NOW + 0.5 * DAY) }).label, 'Expires in 1 day');
   const gone = at({ reached: true, https: true, certValidTo: '2026-11-20T00:00:00.000Z' });
   assert.deepEqual([gone.status, gone.label], ['missing', 'Expired on November 20, 2026']);
@@ -104,6 +130,8 @@ test('12.1b: the address is red only when the name no longer resolves (twice); a
   const timeout = at({ reached: false });
   assert.equal(timeout.status, 'not_checked', 'a timeout or other error is never red');
   assert.ok(timeout.reason);
+  // Batch 3 X9: an expired certificate was seen, so the address resolved and answered.
+  assert.deepEqual([at({ reached: false, certExpired: true }).status, at({ reached: false, certExpired: true }).label], ['good', 'Works']);
 });
 
 test('12.2: never "may have closed"; fixes say what to do; every sentence is short and in American spelling', () => {

@@ -238,7 +238,7 @@ export function scanPage(grade) {
 </section>`;
   // The finished report is swapped into this page in place, so the orb script is loaded here too (Step 2 review V12).
   // It does nothing until a health map is on the page.
-  return page(`Checking ${grade.input.name}`, body, { refresh: true, scripts: [HEALTH_ORB_SCRIPT] });
+  return page(`Checking ${grade.input.name}`, body, { refresh: true, scripts: [HEALTH_ORB_SCRIPT, HEALTH_SCAN_SCRIPT] });
 }
 
 /** The page for a Grade that did not finish. `stamp` lets "Start again" post the same details. */
@@ -366,8 +366,33 @@ export function readableAnswer(text) {
   return t;
 }
 
-function answerBlock(a) {
-  return `${a.provider === 'mock' ? '<p class="hint">Demo answer (no AI connected)</p>\n  ' : ''}<details><summary>See the full answer</summary><blockquote class="grade-answer seance-answer">${h(readableAnswer(a.answer ?? ''))}</blockquote></details>`;
+const escapeRegExp = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * An answer's text, escaped, with the business's name in <mark> where the answer named it (high-tech-look J3, batch 3
+ * X13). The text is escaped first and the escaped name is wrapped after, so nothing from the answer becomes markup.
+ * A name is never matched inside an escaped character such as &amp;. Answers that didn't name the business are
+ * shown plain.
+ */
+export function markedAnswer(a, input) {
+  const text = h(readableAnswer(a?.answer ?? ''));
+  if (!a?.named || !input) return text;
+  let written = '';
+  try {
+    written = nameAsWritten(a, input);
+  } catch {
+    written = '';
+  }
+  const names = [...new Set([String(input.name ?? ''), String(written ?? '')].map(n => h(n.trim())))]
+    .filter(n => n.length >= 3)
+    .sort((x, y) => y.length - x.length);
+  if (names.length === 0) return text;
+  const pattern = new RegExp(`(?<![\\w&#])(?:${names.map(escapeRegExp).join('|')})(?![\\w;])`, 'gi');
+  return text.replace(pattern, m => `<mark>${m}</mark>`);
+}
+
+function answerBlock(a, input = null) {
+  return `${a.provider === 'mock' ? '<p class="hint">Demo answer (no AI connected)</p>\n  ' : ''}<details><summary>See the full answer</summary><blockquote class="grade-answer seance-answer">${markedAnswer(a, input)}</blockquote></details>`;
 }
 
 /** The business's name as the AI wrote it in the answer, or the name the owner typed. */
@@ -469,7 +494,7 @@ function severalAnswers(answers, input, now, cut = null) {
     ? ` This list is from answer ${shownIndex + 1}, the ${named === 1 ? '' : 'first '}one that named you.`
     : ` This list is from answer ${shownIndex + 1}.`;
   const demo = firstAnswer.provider === 'mock' ? '<p class="hint">Demo answer (no AI connected)</p>\n  ' : '';
-  const blocks = answers.map((a, i) => `<p>Answer ${i + 1}</p><blockquote class="grade-answer seance-answer">${h(readableAnswer(a.answer ?? ''))}</blockquote>`).join('');
+  const blocks = answers.map((a, i) => `<p>Answer ${i + 1}</p><blockquote class="grade-answer seance-answer">${markedAnswer(a, input)}</blockquote>`).join('');
   // Why we ask more than once (V101). When today's limit cut the asks short, the Grade stores the number
   // planned and the number asked, and the hint says both (V107); otherwise the number is the times asked.
   const limited = cut && Number.isInteger(cut.planned) && Number.isInteger(cut.asked)
@@ -522,7 +547,7 @@ function aiFree(grade, { googleLive, requester, now, secondPending = [] }) {
     parts.push(...severalAnswers(mainAnswers, grade.input, now, grade.aiMain?.asks ?? null));
   } else if (first) {
     const lead = askedLine(first, now, inline(first.provider));
-    parts.push(`<p>${lead} ${h(outcome(first, grade.input))}</p>`, competitorList(first, grade.input), answerBlock(first));
+    parts.push(`<p>${lead} ${h(outcome(first, grade.input))}</p>`, competitorList(first, grade.input), answerBlock(first, grade.input));
   } else if (seconds.length > 0) {
     parts.push(dailyLimitHit(grade)
       ? `<p>We couldn't ask ${h(mainLabel)} this time because today's limit for AI questions was reached, so this check has no AI score.</p>`
@@ -550,14 +575,14 @@ function aiFree(grade, { googleLive, requester, now, secondPending = [] }) {
       for (const s of seconds) {
         parts.push(`<p>${h(providerLabel(s.provider))}, asked the same question: ${h(outcome(s, grade.input))}</p>`);
         if (s.provider === 'gemini' && s.webSearch !== true) parts.push('<p class="hint">Gemini answered without a live web search.</p>');
-        parts.push(competitorList(s, grade.input), answerBlock(s));
+        parts.push(competitorList(s, grade.input), answerBlock(s, grade.input));
       }
     } else {
       parts.push('<p class="hint">These answers are for comparison only (not scored).</p>');
       for (const s of seconds) {
         parts.push(`<p>${askedLine(s, now, h(providerLabel(s.provider)))} ${h(outcome(s, grade.input))}</p>`);
         if (s.provider === 'gemini' && s.webSearch !== true) parts.push('<p class="hint">Gemini answered without a live web search.</p>');
-        parts.push(competitorList(s, grade.input), answerBlock(s));
+        parts.push(competitorList(s, grade.input), answerBlock(s, grade.input));
       }
     }
   }
@@ -604,12 +629,13 @@ function previewCard(grade) {
   const i = grade.input;
   const found = foundOf(grade);
   const shown = readableHours(found.hours);
-  // Google shows hours for the business: said without copying them (Google's values are never kept, T3).
+  // Google shows hours for the business: said without copying them (Google's values are never kept, T3). Batch 3 X13:
+  // the line says why the owner should still add them.
   const googleHours = grade.signals?.google?.hours?.status === 'good';
   const hours = shown.length
     ? shown.map(x => h(x)).join('; ')
     : blank(hoursPlainTextOnly(grade) ? "Add your hours (we saw them on your website but couldn't copy them)"
-      : googleHours ? 'Add your hours (Google shows hours for you)' : 'Add your hours');
+      : googleHours ? 'Add your hours (Google has them, but we only copy hours from your website)' : 'Add your hours');
   // Only "Add your ..." for what was really not found; when the page shows it but it couldn't be copied, say so (J1, J2).
   const phone = found.phone
     ? `<span class="phone">${h(found.phone)}</span>`

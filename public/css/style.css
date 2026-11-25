@@ -2522,6 +2522,8 @@ a.tel,
 .grade-sites-list { padding-left: 1.2rem; }
 .grade-sites-gap { margin: 0.3rem 0; }
 .grade-evidence { margin: 0.1rem 0 0.4rem; }
+/* The business's name inside an answer (J3, batch 3 X13): dark text on a pale highlight, well above AA contrast. */
+.grade-answer mark { padding: 0 0.1em; background: #FFE58A; color: var(--color-ink); font-weight: 700; }
 .grade-prepared { display: flex; flex-wrap: wrap; align-items: end; gap: 0.5rem; }
 .grade-prepared label { flex-basis: 100%; font-weight: 600; }
 .grade-prepared input { min-height: 2.5rem; max-width: 22rem; width: 100%; padding: 0 0.5rem; }
@@ -2581,8 +2583,8 @@ a.tel,
    script nothing here applies, so the map shows its final state. */
 .health-scanning .health-branch { opacity: 0.12; transition: opacity 0.35s ease-out; }
 .health-scanning .health-branch.health-on { opacity: 1; }
+/* A fixed height, empty or not, so nothing below the map moves when the scan starts or ends (batch 3 X12). */
 .health-caption { margin: 0; padding: 0 0.75rem; min-height: 1.4em; color: var(--health-ink); font-size: 0.95rem; text-align: center; }
-.health-caption:empty { padding: 0; min-height: 0; }
 /* Off screen, the dots and the orb stop (Step 2 review V6). */
 .health-paused .health-flow { animation-play-state: paused; }
 
