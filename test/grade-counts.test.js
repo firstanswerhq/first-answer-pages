@@ -202,6 +202,7 @@ test('G3: the guard names the counters and gives today\'s numbers', async () => 
   assert.deepEqual(guard.summary(), {
     usage: { used: 0, left: 60, limit: 60 },
     counts: { checks: 0, humanPass: 0, human: 0, limit: 0, network: 0 },
+    lookups: { placesOk: 0, placesError: 0, bingOk: 0, bingError: 0 },
     misconfigured: false,
   });
   guard.turnedAway('human');
@@ -219,6 +220,10 @@ test('G3: the guard names the counters and gives today\'s numbers', async () => 
   assert.deepEqual(s.counts, { checks: 3, humanPass: 1, human: 2, limit: 1, network: 1 });
   assert.equal(s.usage.used, 1);
   assert.equal(s.misconfigured, false);
+  // S6: the grader notes each lookup's outcome in the budget; the guard reads them back as today's lookup counts.
+  budget.note('placesOk');
+  budget.note('bingError');
+  assert.deepEqual(guard.summary().lookups, { placesOk: 1, placesError: 0, bingOk: 0, bingError: 1 });
   guard.misconfigured();
   assert.equal(guard.summary().misconfigured, true);
   assert.equal(guard.watch(), undefined, 'the heads-up emails come later; watching does nothing yet');
