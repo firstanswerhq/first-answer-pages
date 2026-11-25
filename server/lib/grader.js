@@ -30,6 +30,8 @@ import {
 } from './health-signals.js';
 import { compareNames } from './health-compare.js';
 import { sitemapAddress } from './sitemap-read.js';
+import { PLACES_ERROR_REASON } from './places.js';
+import { BING_ERROR_REASON } from './azure-maps.js';
 
 // ---- constants -------------------------------------------------------------------
 
@@ -1419,7 +1421,8 @@ export function createGrader({
       try {
         result = await client.lookup(query);
       } catch {
-        result = { status: 'error', reason: "We couldn't reach the lookup this time." };
+        // Reader review R13: say which one, with the lookups' own sentences.
+        result = { status: 'error', reason: counter === 'places' ? PLACES_ERROR_REASON : BING_ERROR_REASON };
       }
       // A daily ok / error count per lookup for the admin page (no key, no body, no typed input), so a day when
       // every lookup fails shows up instead of every check quietly reading "Not checked".

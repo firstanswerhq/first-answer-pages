@@ -315,7 +315,8 @@ ${preview}
         const yesNo = v => (v ? 'yes' : 'no');
         const trustLine = !started ? '' : t.removed
           ? '\n  <p class="hint">Verified stamp: turned off by admin.</p>'
-          : `\n  <p class="hint">Verified stamp: ${t.verified ? 'showing' : 'not yet'} &middot; fee paid: ${yesNo(t.paid)} &middot; phone: ${yesNo(t.phoneOk)} &middot; photo ID: ${yesNo(t.idOk)}</p>`;
+          // A waived fee is not a paid one (reader review R26).
+          : `\n  <p class="hint">Verified stamp: ${t.verified ? 'showing' : 'not yet'} &middot; ${t.waived ? 'fee: waived' : `fee paid: ${yesNo(t.paid)}`} &middot; phone: ${yesNo(t.phoneOk)} &middot; photo ID: ${yesNo(t.idOk)}</p>`;
         const founderLine = founder ? `\n  <p class="hint">Founding Member No. ${founder.number}</p>` : '';
         // Admin only: the owner's own listings need no fee. Only the payment is skipped (Requirement 6).
         const waivedLine = t?.waived ? '\n  <p class="hint">Fee waived by admin.</p>' : '';

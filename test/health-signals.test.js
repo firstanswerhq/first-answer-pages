@@ -132,7 +132,7 @@ test('"Says what you do" and "Says where you work" read the visible text; the ti
   const w = build({ facts: readPageFacts(html) }).website;
   assert.equal(w.saysWhatYouDo.status, 'missing');
   assert.equal(w.saysWhereYouWork.status, 'missing');
-  assert.equal(w.saysWhatYouDo.label, 'Not found');
+  assert.equal(w.saysWhatYouDo.label, 'Not on your home page');
   assert.ok(w.saysWhatYouDo.fix.length <= 160);
 });
 
@@ -169,8 +169,8 @@ test('words in the page itself: never red; a page built by scripts is amber with
   assert.equal(scripts.scriptBuilt, true);
   const amber = build({ facts: scripts }).website;
   assert.equal(amber.wordsInPage.status, 'partly');
-  assert.equal(amber.wordsInPage.label, 'Not found in the page code');
-  assert.equal(amber.wordsInPage.reason, "Your name and phone weren't in the page's own text. Some AI tools can't read text added by scripts.");
+  assert.equal(amber.wordsInPage.label, 'Not in the page text');
+  assert.equal(amber.wordsInPage.reason, "Your page adds its words with scripts, which some AI tools can't read.");
   // The text-based signals are gray on such a page, not red.
   for (const id of ['saysWhatYouDo', 'saysWhereYouWork', 'answersQuestions']) assert.equal(amber[id].status, 'not_checked', id);
   const noPhone = readPageFacts('<h1>Zephyr Plumbing</h1><p>' + 'We fix pipes in Nashville. '.repeat(15) + '</p>');
@@ -186,7 +186,7 @@ test('a page for each service: counted from the sitemap and the links; one page 
   assert.equal(build({ facts: one, sitemap: noSitemap }).website.pagePerService.status, 'partly');
   assert.equal(build({ facts: one, sitemap: noSitemap }).website.pagePerService.label, 'No separate service pages found', 'S16: 0 service pages');
   const single = readPageFacts('<h1>Zephyr</h1><p>' + 'We are plumbers. '.repeat(20) + '</p><a href="/plumbing-repair">Repairs</a>');
-  assert.equal(build({ facts: single, sitemap: noSitemap }).website.pagePerService.label, 'One page only', 'S16: 1 service page');
+  assert.equal(build({ facts: single, sitemap: noSitemap }).website.pagePerService.label, 'Only one service page', 'S16, R10: 1 service page');
   const bare = readPageFacts('<h1>Zephyr</h1><p>' + 'We are plumbers. '.repeat(20) + '</p>');
   assert.equal(build({ facts: bare, sitemap: noSitemap }).website.pagePerService.status, 'not_checked');
   // The sitemap alone can show the service pages.
@@ -203,7 +203,8 @@ test('recently updated: the newest sitemap date, within 12 months or not; no dat
   }).website.recentlyUpdated;
   assert.equal(at('2026-06-01').status, 'good');
   assert.equal(at('2024-01-01').status, 'partly');
-  assert.equal(at('2024-01-01').label, 'Not updated in a year');
+  assert.equal(at('2024-01-01').label, 'Sitemap dates over a year old');
+  assert.equal(at('2024-01-01').reason, "We go by the dates in your sitemap, which some builders don't update.");
   assert.equal(at('').status, 'not_checked');
   assert.equal(at('', false).status, 'not_checked');
   assert.equal(at('not a date').status, 'not_checked');
@@ -235,17 +236,18 @@ test('review count, star rating and the newest review use the named thresholds',
   assert.equal(at({ newestReviewAt: new Date(NOW - 89 * DAY).toISOString() }).newestReview.status, 'good');
   const old = at({ newestReviewAt: new Date(NOW - 200 * DAY).toISOString() }).newestReview;
   assert.equal(old.status, 'partly', 'an old newest review is amber, never red');
-  assert.equal(old.reason, 'Based on the reviews Google returned (up to 5).');
+  assert.equal(old.reason, 'Google shows us only a few of your reviews, so you may have a newer one.');
   assert.equal(at({ newestReviewAt: null }).newestReview.status, 'not_checked');
 });
 
 test('open, category and hours: closed is red, a different category is amber, no hours is red', () => {
   const at = extra => build({ places: found(extra) }).google;
   assert.equal(at({ businessStatus: 'CLOSED_PERMANENTLY' }).open.status, 'missing');
-  assert.equal(at({ businessStatus: 'CLOSED_TEMPORARILY' }).open.label, 'Marked closed');
+  assert.equal(at({ businessStatus: 'CLOSED_TEMPORARILY' }).open.label, 'Marked temporarily closed');
+  assert.equal(at({ businessStatus: 'CLOSED_PERMANENTLY' }).open.label, 'Marked closed');
   assert.equal(at({ businessStatus: '' }).open.status, 'not_checked');
   assert.equal(at({ primaryType: 'hair_salon' }).category.status, 'partly');
-  assert.equal(at({ primaryType: 'hair_salon' }).category.label, 'Category differs');
+  assert.equal(at({ primaryType: 'hair_salon' }).category.label, 'Category may not fit what you do');
   assert.equal(at({ primaryType: 'plumbing_contractor' }).category.status, 'good');
   assert.equal(at({ primaryType: '' }).category.status, 'not_checked');
   assert.equal(at({ hasHours: false, hoursByDay: {} }).hours.status, 'missing');
@@ -311,7 +313,7 @@ test('with no key, an error, a timeout, a limit or several close results, every 
       assert.ok(s.reason, id);
     }
   }
-  assert.equal(build({ places: { status: 'off' } }).google.found.reason, "Google lookups aren't turned on here.");
+  assert.equal(build({ places: { status: 'off' } }).google.found.reason, "We didn't check Google this time.");
 });
 
 // ---- Bing (KEY) ------------------------------------------------------------------------------------------------------
@@ -336,7 +338,7 @@ test('Bing: found, and the details match, differ closely, or differ clearly; no 
     assert.equal(b.found.status, 'not_checked');
     assert.equal(b.details.status, 'not_checked');
   }
-  assert.equal(build({ bing: null }).bing.found.reason, "Bing lookups aren't turned on here.");
+  assert.equal(build({ bing: null }).bing.found.reason, "We didn't check Bing this time.");
 });
 
 // ---- links between profiles ------------------------------------------------------------------------------------------
@@ -355,7 +357,7 @@ test('links: Google, Yelp and the three socials are Linked or Not linked; the so
   assert.equal(build({ facts: three }).links.socials.status, 'good');
   assert.equal(build({ facts: three }).links.socials.label, '3 of 3 linked');
   const zero = readPageFacts('<a href="/about">About</a>');
-  assert.equal(build({ facts: zero }).links.socials.status, 'missing');
+  assert.equal(build({ facts: zero }).links.socials.status, 'partly', 'R22: none linked is amber, never red');
   assert.equal(build({ facts: zero }).links.socials.label, '0 of 3 linked');
   // Only Facebook's fix may say it helps AI connect the business.
   assert.ok(FIXES.linkFacebook.includes('AI'));
@@ -395,7 +397,7 @@ test('listing: not listed yet is amber with the claim; listed, verified and Foun
   assert.equal(build({ listingInfo: info({ founder: { number: 12 } }) }).listing.founding.status, 'good');
   const open = build({ listingInfo: info({ foundersOpen: true }) }).listing.founding;
   assert.equal(open.label, 'Founding spots still open');
-  assert.equal(open.status, 'partly');
+  assert.equal(open.status, 'info', 'R17: information, not a health color');
   assert.equal('fix' in open, false);
   // Spots open, nothing listed yet: still true, so still shown.
   assert.equal(build({ listingInfo: { state: 'none', listing: null, foundersOpen: true } }).listing.founding.label, 'Founding spots still open');
@@ -404,7 +406,7 @@ test('listing: not listed yet is amber with the claim; listed, verified and Foun
 test('listing matches the website: a different phone or address is amber "Differs"; nothing to compare is gray; no website on it is amber', () => {
   const info = extra => ({ state: 'listed', listing: { id: 'z', phone: '(615) 555-0142', address: '12 Main St, Nashville, TN', website: 'https://zephyr.example/', ...extra }, verified: false, founder: null, foundersOpen: false });
   assert.equal(build({ listingInfo: info({ phone: '(615) 555-0100' }) }).listing.matchesWebsite.status, 'partly');
-  assert.equal(build({ listingInfo: info({ phone: '(615) 555-0100' }) }).listing.matchesWebsite.label, 'Differs');
+  assert.equal(build({ listingInfo: info({ phone: '(615) 555-0100' }) }).listing.matchesWebsite.label, "Doesn't match");
   assert.equal(build({ listingInfo: info({ address: '99 Oak Ave, Nashville, TN' }) }).listing.matchesWebsite.status, 'partly');
   assert.equal(build({ listingInfo: info({ phone: '', address: '' }) }).listing.matchesWebsite.status, 'not_checked');
   assert.equal(build({ listingInfo: info({ website: '' }) }).listing.linksToWebsite.label, 'No website on the listing');
@@ -578,14 +580,14 @@ test('S11: the name check reads "&", "and", "the" and "LLC" the same way on both
 
 test('S13: the threshold labels are built from health-constants.js and read the same at the default values', () => {
   assert.equal(LABELS.reviewsGreen, `${REVIEW_COUNT_GREEN} or more reviews`);
-  assert.equal(LABELS.ratingGreen, `${RATING_GREEN.toFixed(1)} or higher`);
-  assert.equal(LABELS.ratingRed, `Below ${RATING_AMBER.toFixed(1)}`);
+  assert.equal(LABELS.ratingGreen, `${RATING_GREEN.toFixed(1)} stars or higher`);
+  assert.equal(LABELS.ratingRed, `Below ${RATING_AMBER.toFixed(1)} stars`);
   assert.ok(LABELS.ratingAmber.startsWith(`${RATING_AMBER.toFixed(1)} to `));
   assert.ok(LABELS.newestGreen.includes(String(NEWEST_REVIEW_DAYS)));
   // The defaults keep the words already shown.
   assert.deepEqual(
     [LABELS.reviewsGreen, LABELS.reviewsAmber, LABELS.ratingGreen, LABELS.ratingAmber, LABELS.ratingRed, LABELS.newestGreen, LABELS.newestAmber],
-    ['10 or more reviews', '1 to 9 reviews', '4.3 or higher', '3.8 to 4.2', 'Below 3.8', 'Newest review within 90 days', 'Newest review is older than 90 days'],
+    ['10 or more reviews', '1 to 9 reviews', '4.3 stars or higher', '3.8 to 4.2 stars', 'Below 3.8 stars', 'A review in the last 90 days', 'No review seen from the last 90 days'],
   );
   const g = build({ places: found({ ratingCount: 3, rating: 4.0 }) }).google;
   assert.equal(g.reviewCount.label, LABELS.reviewsAmber);
@@ -597,10 +599,11 @@ test('S14: the reason says what really happened (an old report, the reserve, the
   assert.equal(old.google.found.reason, OLD_REPORT_REASON);
   assert.equal(old.bing.found.reason, OLD_REPORT_REASON);
   assert.equal(build({ places: { status: 'limit', reason: LOOKUP_RESERVE_REASON } }).google.found.reason, LOOKUP_RESERVE_REASON);
-  assert.equal(LOOKUP_RESERVE_REASON, "We kept today's last lookups for new checks, so we didn't look this up.");
+  assert.equal(LOOKUP_RESERVE_REASON, "We're almost at today's limit, so we saved the rest for the AI questions and skipped this one.");
   assert.equal(build({ places: { status: 'limit' } }).google.found.reason, LOOKUP_LIMIT_REASON);
-  assert.equal(build({ places: { status: 'off' } }).google.found.reason, "Google lookups aren't turned on here.");
-  assert.equal(build({ bing: { status: 'off' } }).bing.details.reason, "Bing lookups aren't turned on here.");
+  assert.equal(LOOKUP_LIMIT_REASON, "Today's limit for checks was reached, so we didn't look this up. Try again tomorrow.");
+  assert.equal(build({ places: { status: 'off' } }).google.found.reason, "We didn't check Google this time.");
+  assert.equal(build({ bing: { status: 'off' } }).bing.details.reason, "We didn't check Bing this time.");
   const stale = build({ places: { status: 'off', reason: STALE_GOOGLE_REASON }, bing: { status: 'off', reason: STALE_BING_REASON } });
   assert.equal(stale.google.phoneMatch.reason, 'Run a new check to look on Google again.');
   assert.equal(stale.bing.found.reason, 'Run a new check to look on Bing again.');
@@ -611,7 +614,7 @@ test('S16: a sitemap index is not counted as pages; with no service link it is N
   const index = `<?xml version="1.0"?><sitemapindex><sitemap><loc>https://zephyr.example/plumbing-sitemap.xml</loc></sitemap><sitemap><loc>https://zephyr.example/drain-plumbing-sitemap.xml</loc></sitemap></sitemapindex>`;
   const s = build({ facts: bare, sitemap: { status: 200, text: index } }).website.pagePerService;
   assert.equal(s.status, 'not_checked');
-  assert.equal(s.reason, "Your sitemap lists other sitemaps, so we couldn't count your pages.");
+  assert.equal(s.reason, "Your sitemap is split into parts we didn't open, so we couldn't count your pages.");
   const twoLinks = readPageFacts('<h1>Zephyr</h1><p>' + 'We are plumbers. '.repeat(20) + '</p><a href="/plumbing-repair">a</a><a href="/drain-plumbing">b</a>');
   assert.equal(build({ facts: twoLinks, sitemap: { status: 200, text: index } }).website.pagePerService.status, 'good');
 });
@@ -683,7 +686,7 @@ test('U2: the page shows the typed name, Google\'s differs, no business label: g
     facts: readPageFacts(`<h1>Joes Plumbing</h1><p>${pad}</p>`),
   }).google.nameMatch;
   assert.equal(s.status, 'not_checked');
-  assert.equal(s.reason, "The name on your website and the name on Google look different, so we didn't mark it.");
+  assert.equal(s.reason, 'Your website and Google may use different names. Check that both show the same name.');
   assert.ok(s.reason.length <= 160);
   // Neither name on the page keeps the other reason.
   const neither = build({ input: { ...INPUT, name: 'Joes Plumbing' }, places: found({ name: 'Josephs Plumbing Co' }), facts: readPageFacts(`<h1>Welcome</h1><p>${pad}</p>`) });
@@ -711,6 +714,94 @@ test('U5: on a shared host, "Links to your website" also needs the same first pa
   assert.equal(at('https://facebook.com/', 'https://facebook.com/anyone'), 'partly', 'the bare host says nothing');
   // A site of its own still compares by domain only.
   assert.equal(at('https://zephyr.example/', 'https://www.zephyr.example/contact'), 'good');
+});
+
+// ---- reader review R1 to R25 -------------------------------------------------------------------------------------------
+
+test('R1: the Socials fix names only the networks that are missing', () => {
+  const l = build().links; // GOOD_PAGE links to Facebook only
+  assert.equal(l.socials.label, '1 of 3 linked');
+  assert.equal(l.socials.fix, 'If you have them, add links to your Instagram and TikTok pages on your website so customers can find you.');
+  assert.equal(l.socials.fix.includes('Facebook'), false);
+  const two = readPageFacts('<a href="https://facebook.com/zephyr.co">f</a><a href="https://instagram.com/zephyr.co">i</a>');
+  assert.equal(build({ facts: two }).links.socials.fix, 'If you have a TikTok page, link to it from your website so customers can find you.');
+  const fbOnlyMissing = readPageFacts('<a href="https://instagram.com/zephyr.co">i</a><a href="https://tiktok.com/@zephyr.co">t</a>');
+  assert.equal(build({ facts: fbOnlyMissing }).links.socials.fix, 'If you have a Facebook page, link to it from your website so customers can find you.');
+  const igMissing = readPageFacts('<a href="https://facebook.com/zephyr.co">f</a><a href="https://tiktok.com/@zephyr.co">t</a>');
+  assert.equal(build({ facts: igMissing }).links.socials.fix, 'If you have an Instagram page, link to it from your website so customers can find you.');
+  const none = build({ facts: readPageFacts('<a href="/about">About</a>') }).links.socials;
+  assert.equal(none.fix, 'If you have them, add links to your Facebook, Instagram and TikTok pages on your website so customers can find you.');
+  for (const f of [l.socials.fix, none.fix]) assert.ok(f.length <= 160);
+  const three = readPageFacts('<a href="https://facebook.com/zephyr.co">f</a><a href="https://instagram.com/zephyr.co">i</a><a href="https://tiktok.com/@zephyr.co">t</a>');
+  assert.equal('fix' in build({ facts: three }).links.socials, false, 'nothing to fix at 3 of 3');
+});
+
+test('R4: on a shared host, different pages are never "Links to your website"', () => {
+  const at = (website, googleSite) => build({ input: { ...INPUT, website }, places: found({ website: googleSite }) }).google.linksToWebsite.status;
+  assert.equal(at('https://sites.google.com/view/joe', 'https://sites.google.com/view/bob'), 'partly');
+  assert.equal(at('https://www.facebook.com/pages/Joe/123', 'https://www.facebook.com/pages/Bob/456'), 'partly');
+  assert.equal(at('https://www.facebook.com/profile.php?id=1', 'https://www.facebook.com/profile.php?id=2'), 'partly');
+  // The same page still counts.
+  assert.equal(at('https://sites.google.com/view/joe', 'https://sites.google.com/view/joe/contact'), 'good');
+  assert.equal(at('https://www.facebook.com/pages/Joe/123', 'https://m.facebook.com/pages/joe/123/'), 'good');
+  assert.equal(at('https://www.facebook.com/profile.php?id=1', 'https://facebook.com/profile.php?id=1&ref=x'), 'good');
+  assert.equal(at('https://www.facebook.com/profile.php', 'https://facebook.com/profile.php'), 'partly', 'no id says nothing');
+});
+
+test('R5: the words-in-page reason says which case it is, and the label has no jargon', () => {
+  const pad = 'We fix pipes in Nashville. '.repeat(15);
+  const noName = build({ facts: readPageFacts(`<h1>Welcome</h1><p>Call (615) 555-0142. ${pad}</p>`) }).website.wordsInPage;
+  assert.equal(noName.label, 'Not in the page text');
+  assert.equal(noName.reason, "We couldn't find your business name in your page's text.");
+  const noPhone = build({ facts: readPageFacts(`<h1>Zephyr Plumbing</h1><p>${pad}</p>`) }).website.wordsInPage;
+  assert.equal(noPhone.reason, "We couldn't find your phone number in your page's text.");
+  const scripted = { ...readPageFacts(`<h1>Zephyr Plumbing</h1><p>Call (615) 555-0142. ${pad}</p>`), scriptBuilt: true };
+  assert.equal(build({ facts: scripted }).website.wordsInPage.reason, "Your page adds its words with scripts, which some AI tools can't read.");
+});
+
+test('R16 and R20: the review labels never claim "newest" and the rating labels say stars', () => {
+  const at = extra => build({ places: found(extra) }).google;
+  assert.equal(at({}).newestReview.label, 'A review in the last 90 days');
+  assert.equal(at({ newestReviewAt: new Date(NOW - 200 * DAY).toISOString() }).newestReview.label, 'No review seen from the last 90 days');
+  assert.equal(at({ rating: 4.6 }).rating.label, '4.3 stars or higher');
+  assert.equal(at({ rating: 4.0 }).rating.label, '3.8 to 4.2 stars');
+  assert.equal(at({ rating: 3.0 }).rating.label, 'Below 3.8 stars');
+});
+
+test('R14 and R15: the "compare" reasons say what is needed and where', () => {
+  assert.equal(build({ places: found({ address: 'Nashville, TN' }) }).google.addressMatch.reason, 'We need a street address on both your website and Google to compare.');
+});
+
+test('R17: "Founding spots still open" is information, with no health color and no fix', () => {
+  const open = build({ listingInfo: { state: 'none', listing: null, foundersOpen: true } }).listing.founding;
+  assert.equal(open.status, 'info');
+  assert.equal('fix' in open, false);
+  assert.equal('reason' in open, false);
+  const row = signalRows(build({ listingInfo: { state: 'none', listing: null, foundersOpen: true } })).find(r => r.path === 'listing.founding');
+  assert.equal(row.status, 'info');
+});
+
+test('R5 to R25: no signal sentence uses the old jargon or talks about our setup', () => {
+  const banned = /page code|opening hours|turned on here|the lookup\b|AI questions was reached|returned \(up to 5\)|on both sides|another place|didn't mark it|lists other sitemaps|One page only|Category differs|\bDiffers\b|one plain page|Not updated in a year|Newest review/i;
+  const scenarios = [
+    build(),
+    build({ places: null, bing: null, facts: null, sitemap: null }),
+    build({ places: { status: 'limit' }, bing: { status: 'limit' } }),
+    build({ places: { status: 'unsure', reason: "We found a business with your name in a different city, so we didn't use it." } }),
+    build({ places: found({ ratingCount: 0, rating: 3, businessStatus: 'CLOSED_TEMPORARILY', phone: '(615) 555-0100', primaryType: 'bakery', hasHours: false, hoursByDay: {}, address: 'Nashville', newestReviewAt: '2024-01-01T00:00:00Z' }) }),
+    build({ sitemap: { status: 200, text: SITEMAP_XML('2024-01-01') }, listingInfo: { state: 'listed', listing: { id: 'z', phone: '(615) 555-0100', address: '', website: '' }, foundersOpen: true } }),
+  ];
+  for (const s of scenarios) {
+    for (const [path, v] of allSignals(s)) {
+      for (const text of [v.label, v.reason, v.fix].filter(Boolean)) {
+        assert.equal(banned.test(text), false, `${path}: ${text}`);
+        assert.ok(Array.from(text).length <= 160, `${path}: ${text}`);
+      }
+    }
+  }
+  for (const [name, fix] of Object.entries(FIXES)) assert.equal(banned.test(fix), false, name);
+  // R22: the Yelp, Facebook, Instagram and TikTok fixes do not assume the business has those pages.
+  for (const name of ['linkYelp', 'linkFacebook', 'linkInstagram', 'linkTikTok']) assert.ok(FIXES[name].startsWith('If you have'), name);
 });
 
 test('T9: a .xml.gz address whose reply is already plain XML is read like any sitemap', () => {

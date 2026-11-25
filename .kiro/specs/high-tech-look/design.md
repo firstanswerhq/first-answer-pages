@@ -34,7 +34,7 @@ Format: `sub-node` (checklist item, status HAVE/ADD/KEY, existing check id if an
 **Cluster "AI can read it"**
 1. `robots.txt lets AI assistants in` (E1, HAVE, `ai-bots-allowed`): green "Open to AI assistants" / red "Blocks some AI assistants" (names them) / gray "Not checked"
 2. `Sitemap` (E2, ADD, Requirement 3.9): green "Found" (also a compressed `.xml.gz` sitemap the site serves, S4) / red "Not found" / gray "Not checked"
-3. `Words are in the page itself` (E3, ADD): green "Found in the page" / amber "Not found in the page code", never red, because a page built by scripts cannot be told apart from a page that is missing the words; the reason line is "Your name and phone weren't in the page's own text. Some AI tools can't read text added by scripts." / gray "Not checked" only when the page could not be read
+3. `Words are in the page itself` (E3, ADD): green "Found in the page" / amber "Not in the page text" (R5), never red, because a page built by scripts cannot be told apart from a page that is missing the words; the reason line says which case it is (the name is missing, the phone is missing, or the page adds its words with scripts) / gray "Not checked" only when the page could not be read
 4. `Business label` (E4, HAVE, `business-labeled`): green "Found" / red "Not found" / gray "Not checked"
 
 **Cluster "Speaks AI's language"** (Requirement 3.11 and checklist D)
@@ -105,7 +105,7 @@ Comparisons are tolerant (A1 digits only without a leading 1; A2 street number, 
 ### 7. Free listing
 43. `Listed on First Answer Pages` (G1, HAVE, Requirement 3.6): green "Listed" / amber "Not listed yet" (with the claim link)
 44. `Verified stamp` (G1, HAVE): green "Verified" / amber "Not verified yet" / gray "Not checked" (no listing)
-45. `Founding Member` (G1, HAVE): shown only when it says something true. Green "Founding Member" when the listing is a Founding Member; amber "Founding spots still open" when it is not and Founding spots are still open; otherwise the sub-node is left out (no row, no node).
+45. `Founding Member` (G1, HAVE): shown only when it says something true. Green "Founding Member" when the listing is a Founding Member; "Founding spots still open" as plain information (status `info`, no health color, no fix, reader review R17) when it is not and Founding spots are still open; otherwise the sub-node is left out (no row, no node).
 
 ## Totals
 
@@ -250,6 +250,61 @@ None of these changes the score or any public page (`SKIP_DOMAINS` is unchanged)
 | U5 | On a shared host, "Links to your website" also needs the same host and first part of the path, lower case, without `www.` and `m.` (`facebook.com/joeplumbing`). A bare shared host such as `facebook.com/` never counts. A site of its own on a shared host with no path typed (`joe.business.site`) compares the host. Other websites still compare by registered domain. | `health-signals.js` (`linksToSameSite`) | `health-signals` |
 
 No older test line changed for U1 to U5.
+
+## Reader review R1 to R27 (review-2026-11-25-step1-reader.md)
+
+None of these changes the score or any public page. The signals are not shown on any page yet (Step 2 will show them). Every sentence is 160 characters or less, in American spelling, and none promises that AI will name a business. The same idea uses the same words: "Matches" and "Doesn't match" for one value (phone, address, name, listing), "Match" and "Don't match" for several (hours, Bing details).
+
+| Item | Old | New | Where |
+|---|---|---|---|
+| R1 | Socials fix always "Add a link to your Facebook page ..." | Names only the networks that are missing, for example "If you have them, add links to your Instagram and TikTok pages on your website so customers can find you." (`socialsFix`) | `health-signals.js` |
+| R2 | "We kept today's last lookups for new checks, so we didn't look this up." | "We're almost at today's limit, so we saved the rest for the AI questions and skipped this one." | `health-signals.js` (`LOOKUP_RESERVE_REASON`) |
+| R3 | "The name on your website and the name on Google look different, so we didn't mark it." | "Your website and Google may use different names. Check that both show the same name." (`NAMES_MAY_DIFFER`) | `health-signals.js` |
+| R4 | On a shared host only the first part of the path was compared | The Google link must go to the same page as the typed one, or a page under it: the whole path, lower case, no trailing "/", and the `id` for `profile.php`. `sites.google.com/view/joe` vs `/view/bob`, `facebook.com/pages/Joe/123` vs `/pages/Bob/456` and `profile.php?id=1` vs `?id=2` are amber. | `health-signals.js` (`pageOf`, `linksToSameSite`) |
+| R5 | "Not found in the page code" with one reason for every case | "Not in the page text", and a reason by case: "We couldn't find your business name in your page's text.", "We couldn't find your phone number in your page's text." or "Your page adds its words with scripts, which some AI tools can't read." | `health-signals.js` |
+| R6 | wordsInPage fix with "scripts" | "Put your business name and phone number in the plain text of your page, so every tool can read them. Your web designer can help." | `FIXES.wordsInPage` |
+| R7 | sitemap fix | "Add a sitemap (a list of your pages for search engines) so search and AI tools can find them all. Most website builders make one for you." | `FIXES.sitemap` |
+| R8 | "Not updated in a year" | "Sitemap dates over a year old", with the reason "We go by the dates in your sitemap, which some builders don't update." | `health-signals.js` |
+| R9 | "Your sitemap lists other sitemaps, ..." | "Your sitemap is split into parts we didn't open, so we couldn't count your pages." | `health-signals.js` |
+| R10 | "One page only" | "Only one service page" | `health-signals.js` |
+| R11 | "Google lookups aren't turned on here." / "Bing ..." | "We didn't check Google this time." / "We didn't check Bing this time." | `health-signals.js` |
+| R12 | "Today's limit for AI questions was reached, ..." | "Today's limit for checks was reached, so we didn't look this up. Try again tomorrow." | `health-signals.js` (`LOOKUP_LIMIT_REASON`) |
+| R13 | "We couldn't reach the lookup this time." | "We couldn't reach Google this time." or "We couldn't reach Bing this time." | `grader.js` |
+| R14 | "... on both sides." | "We need a business name on both your website and Google to compare." and "We need a street address on both your website and Google to compare." | `health-signals.js` |
+| R15 | "... showed up in another place, so we didn't count it." | "We found a business with your website in a different city, so we didn't use it." and "... with your name ..." | `health-compare.js` |
+| R16 | "Newest review within 90 days" / "Newest review is older than 90 days" / "Based on the reviews Google returned (up to 5)." | "A review in the last 90 days" / "No review seen from the last 90 days" / "Google shows us only a few of your reviews, so you may have a newer one." | `health-signals.js` (`LABELS`) |
+| R17 | "Founding spots still open" as amber | status `info`: no health color, no fix. Step 2 must show `info` without a color. | `health-signals.js` |
+| R18 | listing "Differs" | "Doesn't match" | `health-signals.js` |
+| R19 | "opening hours" | "business hours" in the Google hours fix, "hours" in the hours match fix | `FIXES` |
+| R20 | "4.3 or higher", "3.8 to 4.2", "Below 3.8" | "4.3 stars or higher", "3.8 to 4.2 stars", "Below 3.8 stars" | `LABELS` |
+| R21 | "Category differs" | "Category may not fit what you do" | `health-signals.js` |
+| R22 | "Add a link to your Yelp / Facebook / Instagram / TikTok page ..."; "0 of 3 linked" red | "If you have a ... page, link to it from your website ..."; "0 of 3 linked" amber | `FIXES`, `health-signals.js` |
+| R23 | "Not found" on the text rows | "Not on your home page" (all three text rows, so the same word is used) | `health-signals.js` |
+| R24 | "Marked closed" for temporarily closed | "Marked temporarily closed" (permanently closed stays "Marked closed") | `health-signals.js` |
+| R25 | "... so there is one plain page with your details." | "Claim your free listing on First Answer Pages so customers have one simple page with your details." | `FIXES.listed` |
+| R26 | admin trust line "fee paid: yes" for a waived fee | "fee: waived" | `routes/admin.js` |
+| R27 | verify page "Pay the fee" / "Done No fee for this listing." / the price hint | heading "The fee", "Done. There is no fee for this listing.", and no price hint when the fee is waived | `routes/verify.js` |
+
+Tests: `health-signals` (R1 every combination, R4 the three cases and the same-page cases, R5 each reason, R16 and R20 labels, R14, R17, and one sweep that no label, reason or fix uses the old words or is over 160 characters), `grade-signals-flow` (R2, R11, R13), `health-compare` (R15), `admin-waive-fee` (R26, R27).
+
+### Older test lines changed by R1 to R27
+
+| Where | Old | New | Why |
+|---|---|---|---|
+| `test/health-signals.test.js` (title alone) | `saysWhatYouDo.label` `'Not found'` | `'Not on your home page'` | R23 |
+| `test/health-signals.test.js` (words in the page itself) | label `'Not found in the page code'` and the one reason | `'Not in the page text'` and the scripts reason | R5 |
+| `test/health-signals.test.js` (S16, 1 service page) | `'One page only'` | `'Only one service page'` | R10 |
+| `test/health-signals.test.js` (recently updated) | `'Not updated in a year'` | `'Sitemap dates over a year old'` plus the reason | R8 |
+| `test/health-signals.test.js` (newest review) | reason `'Based on the reviews Google returned (up to 5).'` | `'Google shows us only a few of your reviews, so you may have a newer one.'` | R16 |
+| `test/health-signals.test.js` (open, category) | `CLOSED_TEMPORARILY` label `'Marked closed'`; `'Category differs'` | `'Marked temporarily closed'`; `'Category may not fit what you do'` | R24, R21 |
+| `test/health-signals.test.js` (no key; Bing null; S14) | `"Google lookups aren't turned on here."`, `"Bing lookups aren't turned on here."`, the old reserve sentence | `"We didn't check Google this time."`, `"We didn't check Bing this time."`, the new reserve sentence, and the limit sentence pinned | R11, R2, R12 |
+| `test/health-signals.test.js` (links) | `'0 of 3 linked'` status `'missing'` | `'partly'` | R22 |
+| `test/health-signals.test.js` (listing) | Founding spots status `'partly'`; label `'Differs'` | `'info'`; `"Doesn't match"` | R17, R18 |
+| `test/health-signals.test.js` (S13) | the old rating and review label strings | the new ones with "stars", "A review in the last 90 days" and "No review seen from the last 90 days" | R20, R16 |
+| `test/health-signals.test.js` (S16 index; U2) | the old index reason; the old U2 sentence | the R9 and R3 sentences | R9, R3 |
+| `test/grade-signals-flow.test.js` (no keys; failing lookup; reserve; T6) | `"Google lookups aren't turned on here."`; `"We couldn't reach the lookup this time."`; the old reserve sentence; `"Bing lookups aren't turned on here."` | the R11, R13 and R2 sentences | R11, R13, R2 |
+| `test/health-compare.test.js` (T5) | `"A business with your website showed up in another place, ..."` | the R15 sentence | R15 |
+| `test/admin-waive-fee.test.js` (S15) | `'No fee for this listing.'` | `'There is no fee for this listing.'`, plus the heading, no price hint and "fee: waived" | R27, R26 |
 
 ### Older test lines changed by T1 to T9
 

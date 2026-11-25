@@ -218,7 +218,7 @@ test('without keys (no lookups) every Google and Bing signal is Not checked, and
   assert.equal('profiles' in g, false);
   for (const [id, s] of Object.entries(g.signals.google)) assert.equal(s.status, 'not_checked', id);
   for (const [id, s] of Object.entries(g.signals.bing)) assert.equal(s.status, 'not_checked', id);
-  assert.equal(g.signals.google.found.reason, "Google lookups aren't turned on here.");
+  assert.equal(g.signals.google.found.reason, "We didn't check Google this time.");
 });
 
 test('a lookup that fails or throws never stops the report, and nothing about it is red', async () => {
@@ -227,7 +227,7 @@ test('a lookup that fails or throws never stops the report, and nothing about it
   const g = await check(await startEnv({ site: fakeSite(defaultRoutes()), places, bing }));
   assert.equal(g.status, 'done');
   assert.equal('profiles' in g, false);
-  assert.equal(g.signals.google.found.reason, "We couldn't reach the lookup this time.");
+  assert.equal(g.signals.google.found.reason, "We couldn't reach Google this time.", 'R13: says which lookup');
   assert.equal(JSON.stringify(g).includes('secret details'), false, 'no raw error text is saved');
   for (const [id, s] of Object.entries(g.signals.google)) assert.equal(s.status, 'not_checked', id);
   assert.equal(g.signals.bing.found.reason, "We couldn't reach Bing this time.");
@@ -243,8 +243,9 @@ test('the lookups never use the day\'s last calls: with 12 left they are skipped
   assert.equal(bing.calls.length, 0);
   assert.equal(g.signals.google.found.status, 'not_checked');
   // S14: only the reserve held them back, so the reason says that, not that the limit was reached.
-  assert.equal(g.signals.google.found.reason, "We kept today's last lookups for new checks, so we didn't look this up.");
-  assert.equal(g.signals.bing.found.reason, "We kept today's last lookups for new checks, so we didn't look this up.");
+  // R2: the reserve is kept for the AI questions, which is true during a new check.
+  assert.equal(g.signals.google.found.reason, "We're almost at today's limit, so we saved the rest for the AI questions and skipped this one.");
+  assert.equal(g.signals.bing.found.reason, "We're almost at today's limit, so we saved the rest for the AI questions and skipped this one.");
   assert.equal(env.claude.calls, 1, 'the AI question was asked');
   assert.equal(g.ai.length, 1);
 });
@@ -419,8 +420,8 @@ test('T6: after a restart, a lookup with no key says it is off, not "run a new c
   const restarted = await startEnv({ site: fakeSite(defaultRoutes()), dir: first.dir, places: fakeLookup('places', GOOGLE_FOUND) });
   const after = await recheckDone(restarted, g.id);
   assert.equal(after.signals.google.found.reason, 'Run a new check to look on Google again.');
-  assert.equal(after.signals.bing.found.reason, "Bing lookups aren't turned on here.");
-  assert.equal(after.signals.bing.details.reason, "Bing lookups aren't turned on here.");
+  assert.equal(after.signals.bing.found.reason, "We didn't check Bing this time.");
+  assert.equal(after.signals.bing.details.reason, "We didn't check Bing this time.");
 });
 
 test('S6: each lookup\'s outcome is counted for the day (ok or error), with no key or body', async () => {

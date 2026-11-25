@@ -5,6 +5,7 @@
  *
  * Rules that every signal follows:
  *  - A status is 'good' (green), 'partly' (amber), 'missing' (red) or 'not_checked' (gray). The `label` always says it.
+ *    One row only, "Founding spots still open", is 'info': plain information with no health color (reader review R17).
  *  - Never a false red: when a signal cannot be sure, it is 'not_checked' with a one-line `reason`, never 'missing'.
  *    'missing' is only for when the check looked and it is truly not there.
  *  - A fix sentence (`fix`) is added to every 'partly' and 'missing' signal, at most 160 characters, with no promise
@@ -34,13 +35,16 @@ const REASONS = Object.freeze({
   script: "Your page loads its words in a way this check can't read yet.",
   failed: "We couldn't work this one out this time.",
   oldReport: 'This report was made before this check existed. Run a new check to see it.',
-  noGoogleKey: "Google lookups aren't turned on here.",
-  noBingKey: "Bing lookups aren't turned on here.",
+  // Reader review R11: about the owner's report, not about our setup.
+  noGoogleKey: "We didn't check Google this time.",
+  noBingKey: "We didn't check Bing this time.",
   noListing: 'No listing yet.',
   staleGoogle: 'Run a new check to look on Google again.',
   staleBing: 'Run a new check to look on Bing again.',
-  reserve: "We kept today's last lookups for new checks, so we didn't look this up.",
-  limit: "Today's limit for AI questions was reached, so we didn't look this up.",
+  // R2: the lookups run during a new check, so the reserve is kept for the AI questions, not "for new checks".
+  reserve: "We're almost at today's limit, so we saved the rest for the AI questions and skipped this one.",
+  // R12: a Google or Bing lookup is a check, not an AI question.
+  limit: "Today's limit for checks was reached, so we didn't look this up. Try again tomorrow.",
 });
 
 /** Reasons the grader passes in (as `{ status: 'off', reason }` or `{ status: 'limit', reason }`). */
@@ -54,17 +58,19 @@ export const LOOKUP_LIMIT_REASON = REASONS.limit;
 export const LABELS = Object.freeze({
   reviewsGreen: `${REVIEW_COUNT_GREEN} or more reviews`,
   reviewsAmber: REVIEW_COUNT_GREEN - 1 > 1 ? `1 to ${REVIEW_COUNT_GREEN - 1} reviews` : '1 review',
-  ratingGreen: `${RATING_GREEN.toFixed(1)} or higher`,
-  ratingAmber: `${RATING_AMBER.toFixed(1)} to ${(Math.round((RATING_GREEN - 0.1) * 10) / 10).toFixed(1)}`,
-  ratingRed: `Below ${RATING_AMBER.toFixed(1)}`,
-  newestGreen: `Newest review within ${NEWEST_REVIEW_DAYS} days`,
-  newestAmber: `Newest review is older than ${NEWEST_REVIEW_DAYS} days`,
+  // R20: the rating labels say what they measure.
+  ratingGreen: `${RATING_GREEN.toFixed(1)} stars or higher`,
+  ratingAmber: `${RATING_AMBER.toFixed(1)} to ${(Math.round((RATING_GREEN - 0.1) * 10) / 10).toFixed(1)} stars`,
+  ratingRed: `Below ${RATING_AMBER.toFixed(1)} stars`,
+  // R16: Google shows only a few of the most relevant reviews, so "newest" is never claimed.
+  newestGreen: `A review in the last ${NEWEST_REVIEW_DAYS} days`,
+  newestAmber: `No review seen from the last ${NEWEST_REVIEW_DAYS} days`,
 });
 
 /** The fix sentences, each at most 160 characters. No promise that anything makes an AI assistant name a business. */
 export const FIXES = Object.freeze({
-  sitemap: 'Add a sitemap so search engines and AI tools can find all your pages. Most website builders can make one for you.',
-  wordsInPage: 'Type your business name and phone number into the page itself, not only through scripts, so every tool can read them.',
+  sitemap: 'Add a sitemap (a list of your pages for search engines) so search and AI tools can find them all. Most website builders make one for you.',
+  wordsInPage: 'Put your business name and phone number in the plain text of your page, so every tool can read them. Your web designer can help.',
   saysWhatYouDo: 'Say plainly on your home page what you do, in the words customers use, like "emergency plumber" or "roof repair".',
   saysWhereYouWork: 'Say which city and nearby areas you serve in the text of your home page.',
   answersQuestions: 'Add a short questions-and-answers section that answers what customers ask, like your prices, hours and the areas you serve.',
@@ -73,23 +79,24 @@ export const FIXES = Object.freeze({
   googleFound: 'Add or claim your free Google Business Profile so your name, phone number and hours show on Google.',
   googleOpen: 'Your Google profile says you are closed. If that is wrong, fix the status in your Google Business Profile.',
   googleCategory: 'Check the main category on your Google profile and pick the one that best matches what you do.',
-  googleHours: 'Add your opening hours to your Google Business Profile so customers can see them.',
+  googleHours: 'Add your business hours to your Google Business Profile so customers can see them.',
   reviewCount: 'Ask happy customers to leave a Google review. Real reviews help people trust you.',
   rating: 'Read your lower-rated Google reviews and reply politely. Fix what you can.',
   newestReview: 'Ask recent customers for a Google review, so people see that you are busy now.',
   phoneMatch: 'Use the same phone number on your website and on your Google profile.',
   addressMatch: 'Write the same street address, the same way, on your website and on your Google profile.',
   nameMatch: 'Use your business name the same way on your website and on your Google profile.',
-  hoursMatch: 'Make your opening hours the same on your website and on your Google profile.',
+  hoursMatch: 'Make your hours the same on your website and on your Google profile.',
   googleLinksToWebsite: 'Add your website address to your Google Business Profile so people can go from Google to your site.',
   bingFound: 'Check that your business is on Bing Places, so it shows on Bing Maps. Add it there if it is not.',
   bingDetails: 'Use the same name, phone number and address on Bing as on your website.',
   linkGoogle: 'Add a link to your Google profile on your website so people and AI can connect the two.',
-  linkYelp: 'Add a link to your Yelp page on your website so people and AI can connect the two.',
-  linkFacebook: 'Add a link to your Facebook page on your website so people and AI can connect the two.',
-  linkInstagram: 'Add a link to your Instagram page on your website so customers can find and trust you.',
-  linkTikTok: 'Add a link to your TikTok page on your website so customers can find and trust you.',
-  listed: 'Claim your free listing on First Answer Pages so there is one plain page with your details.',
+  // R22: a business may not have these pages, so the fix does not assume it does.
+  linkYelp: 'If you have a Yelp page, link to it from your website so people and AI can connect the two.',
+  linkFacebook: 'If you have a Facebook page, link to it from your website so people and AI can connect the two.',
+  linkInstagram: 'If you have an Instagram page, link to it from your website so customers can find you.',
+  linkTikTok: 'If you have a TikTok page, link to it from your website so customers can find you.',
+  listed: 'Claim your free listing on First Answer Pages so customers have one simple page with your details.',
   verified: 'Verify your listing with a phone code and a photo ID so customers know it is really you.',
   listingMatches: 'Make the phone number and address on your listing the same as on your website.',
   listingWebsite: 'Add your website address to your listing so people can go from the directory to your site.',
@@ -179,10 +186,12 @@ function wordsInPageSignal({ input, facts, found }) {
   const phone = phoneDigits(found?.phone);
   const phoneIn = phone ? phonesInText(text, facts.telLinks).has(phone) : phonesInText(text, facts.telLinks).size > 0;
   if (nameIn && phoneIn && !facts.scriptBuilt) return good('wordsInPage', 'Found in the page');
-  // Never red: a page built by scripts cannot be told apart from a page that is missing the words.
-  return partly('wordsInPage', 'Not found in the page code', FIXES.wordsInPage, {
-    reason: "Your name and phone weren't in the page's own text. Some AI tools can't read text added by scripts.",
-  });
+  // Never red: a page built by scripts cannot be told apart from a page that is missing the words. The reason says
+  // which case it is (reader review R5).
+  const reason = facts.scriptBuilt ? "Your page adds its words with scripts, which some AI tools can't read."
+    : !nameIn ? "We couldn't find your business name in your page's text."
+      : "We couldn't find your phone number in your page's text.";
+  return partly('wordsInPage', 'Not in the page text', FIXES.wordsInPage, { reason });
 }
 
 /** True when the page links to a questions page ("/faq", "FAQs", "Common questions"). */
@@ -198,7 +207,8 @@ function textSignal(id, ok, fix, { input, facts }) {
   if (!input.website) return unknown(id, REASONS.noWebsite);
   if (!facts) return unknown(id, REASONS.unreadable);
   if (facts.scriptBuilt) return unknown(id, REASONS.script);
-  return ok() ? good(id, 'Found') : missing(id, 'Not found', fix);
+  // R23: we read the home page only, so the label says where we looked.
+  return ok() ? good(id, 'Found') : missing(id, 'Not on your home page', fix);
 }
 
 /** The internal pages a site shows, from its sitemap and its links: { path, text }. */
@@ -229,7 +239,7 @@ function pagePerServiceSignal({ input, facts, sitemapInfo }) {
   if (!input.website) return unknown('pagePerService', REASONS.noWebsite);
   if (!facts) return unknown('pagePerService', REASONS.unreadable);
   const pages = internalPages({ input, facts, sitemapInfo });
-  const indexReason = "Your sitemap lists other sitemaps, so we couldn't count your pages.";
+  const indexReason = "Your sitemap is split into parts we didn't open, so we couldn't count your pages.";
   if (pages.length === 0) {
     return unknown('pagePerService', sitemapInfo?.isIndex ? indexReason : "We couldn't see enough of your website to tell.");
   }
@@ -242,7 +252,7 @@ function pagePerServiceSignal({ input, facts, sitemapInfo }) {
   // The pages behind a sitemap index were not seen, so "none found" from the links alone is not sure.
   if (sitemapInfo?.isIndex && servicePaths.size === 0) return unknown('pagePerService', indexReason);
   return servicePaths.size === 1
-    ? partly('pagePerService', 'One page only', FIXES.pagePerService, { count: 1 })
+    ? partly('pagePerService', 'Only one service page', FIXES.pagePerService, { count: 1 })
     : partly('pagePerService', 'No separate service pages found', FIXES.pagePerService, { count: 0 });
 }
 
@@ -255,7 +265,10 @@ function recentlyUpdatedSignal({ input, sitemapInfo, now }) {
   const days = (now - newest) / 86400000;
   return days <= UPDATED_WITHIN_DAYS
     ? good('recentlyUpdated', 'Updated in the last 12 months', { newest: new Date(newest).toISOString() })
-    : partly('recentlyUpdated', 'Not updated in a year', FIXES.recentlyUpdated, { newest: new Date(newest).toISOString() });
+    // R8: this is only what the sitemap dates say, not a fact about the website.
+    : partly('recentlyUpdated', 'Sitemap dates over a year old', FIXES.recentlyUpdated, {
+      newest: new Date(newest).toISOString(), reason: "We go by the dates in your sitemap, which some builders don't update.",
+    });
 }
 
 // ---- Google --------------------------------------------------------------------------------------------------------
@@ -289,33 +302,41 @@ function websiteHoursByDay(websiteHours) {
   return out;
 }
 
-/** Host plus the first part of the path, lower case, without "www." and "m.": "facebook.com/joeplumbing". */
-function hostAndFirstSegment(address) {
+/**
+ * The page an address points at: the host without "www." and "m.", the whole path in lower case without a trailing
+ * "/", and, for Facebook's profile.php, the `id` value. "facebook.com/pages/joe/123", "sites.google.com/view/joe".
+ */
+function pageOf(address) {
   try {
     const url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(address) ? address : `https://${address}`);
     const host = url.hostname.toLowerCase().replace(/\.$/, '').replace(/^(?:www\.|m\.)/, '');
-    const first = url.pathname.split('/').filter(Boolean)[0] ?? '';
-    return `${host}/${first.toLowerCase()}`;
+    const path = url.pathname.toLowerCase().replace(/\/+$/, '');
+    const id = /\/profile\.php$/.test(path) ? url.searchParams.get('id') ?? '' : null;
+    return { host, path, id };
   } catch {
     return null;
   }
 }
 
 /**
- * The Google profile links to the typed website. On a shared host (a Facebook page, a wixsite.com site) the domain
- * alone says nothing, so the host and the first part of the path must be the same too (review U5).
+ * The Google profile links to the typed website. On a shared host (a Facebook page, a Google Sites or wixsite.com
+ * site) the domain alone says nothing, so the Google link must be on the same host and go to the same page as the
+ * typed one, or a page under it ("facebook.com/joeplumbing/about"). Different pages are never green (U5, R4).
  */
 function linksToSameSite(website, linked) {
   const domain = registeredDomain(website);
   if (!domain || registeredDomain(linked) !== domain) return false;
   if (!SHARED_DOMAINS.has(domain)) return true;
-  const a = hostAndFirstSegment(website);
-  const b = hostAndFirstSegment(linked);
-  if (a === null || b === null || a === `${domain}/`) return false; // "facebook.com" alone says nothing
-  // A site of its own on the shared host ("joe.business.site") with no path typed: the same host is enough.
-  if (a.endsWith('/')) return a.split('/')[0] === b.split('/')[0];
-  return a === b;
+  const a = pageOf(website);
+  const b = pageOf(linked);
+  if (!a || !b || a.host !== b.host) return false;
+  // "facebook.com" alone says nothing; a site of its own on the shared host ("joe.business.site") with no path does.
+  if (a.path === '') return a.host !== domain;
+  if (a.id !== null) return a.id !== '' && b.path === a.path && b.id === a.id;
+  return b.path === a.path || b.path.startsWith(`${a.path}/`);
 }
+
+export const NAMES_MAY_DIFFER = 'Your website and Google may use different names. Check that both show the same name.';
 
 /** True when the words of `name` (without "and", "the", "LLC" and the like) are written together in the page text. */
 function nameInText(name, text) {
@@ -340,11 +361,11 @@ function nameMatchSignal({ input, facts, p }) {
     siteName = input.name;
   }
   const nm = compareNames(siteName, p.name);
-  if (nm === 'unknown') return unknown('nameMatch', "We couldn't read a business name on both sides.");
+  if (nm === 'unknown') return unknown('nameMatch', 'We need a business name on both your website and Google to compare.');
   if (nm === 'match') return good('nameMatch', 'Matches');
   if (nm === 'close') return partly('nameMatch', 'Close, not the same', FIXES.nameMatch, { website: siteName, google: p.name });
-  // The page shows the typed name but there is no business label to be sure of (review U2).
-  if (!label) return unknown('nameMatch', "The name on your website and the name on Google look different, so we didn't mark it.");
+  // The page shows the typed name but there is no business label to be sure of (review U2, reader R3).
+  if (!label) return unknown('nameMatch', NAMES_MAY_DIFFER);
   return missing('nameMatch', "Doesn't match", FIXES.nameMatch, { website: siteName, google: p.name });
 }
 
@@ -366,13 +387,15 @@ function googleSignals({ input, facts, found, places, websiteHours, now }) {
   const p = base(places.place);
   out.found = good('found', 'Found on Google');
 
-  if (GOOGLE_CLOSED.has(p.businessStatus)) out.open = missing('open', 'Marked closed', FIXES.googleOpen);
+  // R24: temporarily closed is said as such.
+  if (p.businessStatus === 'CLOSED_TEMPORARILY') out.open = missing('open', 'Marked temporarily closed', FIXES.googleOpen);
+  else if (GOOGLE_CLOSED.has(p.businessStatus)) out.open = missing('open', 'Marked closed', FIXES.googleOpen);
   else if (p.businessStatus === GOOGLE_OPEN) out.open = good('open', 'Open');
   else out.open = unknown('open', "Google didn't say whether you are open.");
 
   const fits = categoryFits(p.primaryType, input.service);
   out.category = fits === null ? unknown('category', "Google didn't give a category to compare.")
-    : fits ? good('category', 'Category fits') : partly('category', 'Category differs', FIXES.googleCategory);
+    : fits ? good('category', 'Category fits') : partly('category', 'Category may not fit what you do', FIXES.googleCategory);
 
   out.hours = p.hasHours ? good('hours', 'Hours listed') : missing('hours', 'No hours listed', FIXES.googleHours);
 
@@ -391,7 +414,7 @@ function googleSignals({ input, facts, found, places, websiteHours, now }) {
   else if ((now - newest) / 86400000 <= NEWEST_REVIEW_DAYS) out.newestReview = good('newestReview', LABELS.newestGreen, { newest: p.newestReviewAt });
   else {
     out.newestReview = partly('newestReview', LABELS.newestAmber, FIXES.newestReview, {
-      newest: p.newestReviewAt, reason: 'Based on the reviews Google returned (up to 5).',
+      newest: p.newestReviewAt, reason: 'Google shows us only a few of your reviews, so you may have a newer one.',
     });
   }
 
@@ -408,7 +431,7 @@ function googleSignals({ input, facts, found, places, websiteHours, now }) {
   const siteAddress = found?.address ?? '';
   let addr = compareAddresses(siteAddress, p.address);
   if (addr === 'differ' && addressInText(p.address, facts?.text)) addr = 'match';
-  if (addr === 'unknown') out.addressMatch = unknown('addressMatch', "We couldn't read a street address on both sides.");
+  if (addr === 'unknown') out.addressMatch = unknown('addressMatch', 'We need a street address on both your website and Google to compare.');
   else if (addr === 'match') out.addressMatch = good('addressMatch', 'Matches');
   else if (addr === 'close') out.addressMatch = partly('addressMatch', 'Close, not the same', FIXES.addressMatch, { website: siteAddress, google: p.address });
   else out.addressMatch = missing('addressMatch', "Doesn't match", FIXES.addressMatch, { website: siteAddress, google: p.address });
@@ -500,12 +523,26 @@ function linkSignals({ input, facts }) {
       ? good(id, 'Linked from your website', { url: links[id] })
       : partly(id, 'Not linked', fixes[id]);
   }
-  const linked = ['facebook', 'instagram', 'tiktok'].filter(id => links[id]).length;
+  const linked = socialIds.filter(id => links[id]).length;
   const label = `${linked} of 3 linked`;
+  // R1 and R22: the fix names only the networks that are missing, and none linked is amber, never red (a business
+  // may simply not be on social media).
   out.socials = linked === 3 ? good('socials', label, { linked, of: 3 })
-    : linked > 0 ? partly('socials', label, FIXES.linkFacebook, { linked, of: 3 })
-      : missing('socials', label, FIXES.linkFacebook, { linked, of: 3 });
+    : partly('socials', label, socialsFix(socialIds.filter(id => !links[id])), { linked, of: 3 });
   return out;
+}
+
+const SOCIAL_NAMES = { facebook: 'Facebook', instagram: 'Instagram', tiktok: 'TikTok' };
+
+/** The Socials fix for the networks that are not linked: "If you have them, add links to your Instagram and TikTok pages ...". */
+export function socialsFix(missingIds) {
+  const names = missingIds.map(id => SOCIAL_NAMES[id]).filter(Boolean);
+  if (names.length === 0) return undefined;
+  if (names.length === 1) {
+    return `If you have ${names[0] === 'Instagram' ? 'an' : 'a'} ${names[0]} page, link to it from your website so customers can find you.`;
+  }
+  const list = names.length === 2 ? `${names[0]} and ${names[1]}` : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+  return `If you have them, add links to your ${list} pages on your website so customers can find you.`;
 }
 
 // ---- the free listing ----------------------------------------------------------------------------------------------
@@ -535,15 +572,16 @@ function listingSignals({ found, listingInfo, input }) {
     if (address !== 'unknown') results.push(address);
     if (results.length === 0) out.matchesWebsite = unknown('matchesWebsite', 'There is nothing to compare yet.');
     else if (results.every(r => r === 'match')) out.matchesWebsite = good('matchesWebsite', 'Matches');
-    else out.matchesWebsite = partly('matchesWebsite', 'Differs', FIXES.listingMatches);
+    // R18: the same words as the other "matches" rows.
+    else out.matchesWebsite = partly('matchesWebsite', "Doesn't match", FIXES.listingMatches);
     out.linksToWebsite = listing.website ? good('linksToWebsite', 'Linked')
       : partly('linksToWebsite', 'No website on the listing', FIXES.listingWebsite);
   }
   // Founding Member: only when it says something true. Otherwise there is no sub-node at all.
   if (info.founder) out.founding = good('founding', 'Founding Member', { number: info.founder.number ?? null });
-  else if (info.foundersOpen === true) out.founding = partly('founding', 'Founding spots still open', undefined);
+  // R17: open spots are information, not a health problem, so the status is 'info' (no health color, no fix).
+  else if (info.foundersOpen === true) out.founding = sig('founding', 'info', 'Founding spots still open');
   else out.founding = null;
-  if (out.founding && !out.founding.fix) delete out.founding.fix;
   void input;
   return out;
 }

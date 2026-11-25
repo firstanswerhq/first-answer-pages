@@ -148,10 +148,18 @@ test('the payment step is skipped: no checkout is made, but the phone code and t
 test('S15: the owner\'s verify page says "No fee for this listing." after a waiver, never "Fee paid"', async () => {
   const s = await site();
   const before = (await s.get(s.V)).text;
-  assert.equal(before.includes('No fee for this listing.'), false);
+  assert.equal(before.includes('There is no fee for this listing.'), false);
   await s.post(`/admin/listings/${s.id}/waive-fee`, undefined, ADMIN);
   const page = (await s.get(s.V)).text;
-  assert.ok(page.includes('No fee for this listing.'));
+  assert.ok(page.includes('There is no fee for this listing.'));
+  // R27: the page does not sell a fee that is not there.
+  assert.ok(page.includes('<h3>The fee</h3>'));
+  assert.equal(page.includes('<h3>Pay the fee</h3>'), false);
+  assert.equal(page.includes('once for Founding Members'), false, 'no price hint');
+  // R26: the admin line says "fee: waived", not "fee paid: yes".
+  const admin = (await adminPage(s)).text;
+  assert.ok(admin.includes('fee: waived'));
+  assert.equal(/fee paid: yes/.test(admin), false);
   assert.equal(/Fee paid/.test(page), false);
 });
 
