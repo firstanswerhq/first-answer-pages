@@ -249,13 +249,14 @@ test('F4: the preview says "Serves the <city> area" and never "Add your address"
   const ns = reportPage(grade({ ...noStore, website: null }));
   assert.ok(ns.includes('<p>Serves the Nashville area</p>'));
   assert.equal(ns.includes('Add your address'), false);
+  assert.equal(ns.includes('Add your street address'), false);
   assert.equal(ns.includes('Address: 12 Main Street'), false, 'not even the address the scan found');
 
   const plain = reportPage(grade({ ...FORM, website: null }));
   assert.ok(plain.includes('Address: 12 Main Street'));
   assert.equal(plain.includes('Serves the'), false);
   const empty = reportPage({ ...grade({ ...FORM, website: null }), found: { phone: '', hours: [], address: '', website: '' } });
-  assert.ok(empty.includes('Add your address'));
+  assert.ok(empty.includes('Add your street address'), 'Step 2 review H2: says what is missing');
 
   const odd = reportPage(grade({ ...noStore, city: '<b>Nash</b>', website: null }));
   assert.ok(odd.includes('<p>Serves the &lt;b&gt;Nash&lt;/b&gt; area</p>'));

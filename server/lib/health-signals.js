@@ -20,6 +20,7 @@ import { detectProfileLinks } from './profile-links.js';
 import { parseSitemap, isGzipSitemap } from './sitemap-read.js';
 import {
   comparePhone, phoneDigits, phonesInText, compareNames, compareAddresses, addressInText, compareHours, nameTokens,
+  addressParts,
 } from './health-compare.js';
 import {
   REVIEW_COUNT_GREEN, RATING_GREEN, RATING_AMBER, NEWEST_REVIEW_DAYS, UPDATED_WITHIN_DAYS, SERVICE_PAGES_GREEN,
@@ -436,7 +437,12 @@ function googleSignals({ input, facts, found, places, websiteHours, now }) {
   const siteAddress = found?.address ?? '';
   let addr = compareAddresses(siteAddress, p.address);
   if (addr === 'differ' && addressInText(p.address, facts?.text)) addr = 'match';
-  if (addr === 'unknown') out.addressMatch = unknown('addressMatch', 'We need a street address on both your website and Google to compare.');
+  // Step 2 reader review H2: say which side is missing, so this row never contradicts "Street address on the home page".
+  if (addr === 'unknown') {
+    out.addressMatch = unknown('addressMatch', !addressParts(siteAddress)
+      ? "We couldn't read a full street address on your website to compare. Write it on one line, like \"123 Main St, Nashville, TN 37201\"."
+      : "Google doesn't show a street address for you.");
+  }
   else if (addr === 'match') out.addressMatch = good('addressMatch', 'Matches');
   else if (addr === 'close') out.addressMatch = partly('addressMatch', 'Close, not the same', FIXES.addressMatch, { website: siteAddress, google: p.address });
   else out.addressMatch = missing('addressMatch', "Doesn't match", FIXES.addressMatch, { website: siteAddress, google: p.address });
@@ -444,7 +450,8 @@ function googleSignals({ input, facts, found, places, websiteHours, now }) {
   out.nameMatch = nameMatchSignal({ input, facts, p });
 
   const siteHours = websiteHoursByDay(websiteHours);
-  if (Object.keys(siteHours).length === 0) out.hoursMatch = unknown('hoursMatch', 'We found no hours we can read on your website.');
+  // H11: tell the owner what to do, not how we work.
+  if (Object.keys(siteHours).length === 0) out.hoursMatch = unknown('hoursMatch', "Add your hours as plain text on your home page and we'll compare them with Google.");
   else if (!p.hasHours) out.hoursMatch = unknown('hoursMatch', 'Google lists no hours.');
   else {
     const h = compareHours(siteHours, p.hoursByDay ?? {});
@@ -476,7 +483,7 @@ function bingSignals({ input, found, bing }) {
   if (bing.status === 'not_found') {
     return {
       found: partly('found', 'Not found in Bing map data', FIXES.bingFound),
-      details: unknown('details', 'No Bing listing was found to compare.'),
+      details: unknown('details', "Once you're on Bing Maps, we'll compare your details."),
     };
   }
   if (bing.status !== 'found' || !bing.place) {

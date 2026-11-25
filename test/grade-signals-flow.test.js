@@ -358,17 +358,18 @@ test('Step 2: the report shows the health map under the score, with the report\'
   const score = /<span class="num">(\d+)<\/span>/.exec(html)?.[1];
   assert.ok(score, 'the report has a score');
   assert.equal(Number(score), g.score.score, 'the score is the stored one: the map changes nothing');
-  assert.ok(html.includes(`class="health-orb-score">Health ${score}</text>`), 'the orb shows the same number');
+  // H1: the same number, in the score's own form.
+  assert.ok(html.includes(`class="health-orb-score">Score ${score}/100</text>`), 'the orb shows the same number');
   // Order: the heading, then the health map, then "What AI says".
   assert.ok(html.indexOf('<h1>Zephyr Plumbing</h1>') < html.indexOf('<section class="health"'));
   assert.ok(html.indexOf('<section class="health"') < html.indexOf('<h2>What AI says</h2>'));
   // The AI answers node reads the report's own answers: the stub named other businesses only.
   assert.match(html, /<span class="health-group-name">AI answers:<\/span> <span class="health-status">Needs work<\/span>/);
   assert.match(html, /<strong class="health-row-name">Answer 1 \(Claude\):<\/strong> <span class="health-status">Didn(?:'|&#39;|&#x27;)t name you<\/span>/);
-  assert.match(html, /<strong class="health-row-name">Found on Google:<\/strong> <span class="health-status">Found on Google<\/span>/);
+  assert.match(html, /<strong class="health-row-name">On Google:<\/strong> <span class="health-status">Yes<\/span>/);
   assert.match(html, /<strong class="health-row-name">Facebook:<\/strong> <span class="health-status">Linked from your website<\/span>/);
   // Decoration only, after the content; the page keeps its noindex and title.
-  assert.match(html, /<div class="health-map" aria-hidden="true">/);
+  assert.match(html, /<div class="health-map" id="health-map" aria-hidden="true">/);
   // A module script, so it runs only after the page is read (deferred).
   assert.ok(html.includes(`<script type="module" src="${HEALTH_ORB_SCRIPT}"></script>`));
   assert.match(html, /<meta name="robots" content="noindex, nofollow">/);
@@ -384,7 +385,7 @@ test('Step 2: the locked report shows the map and the statuses without the fixes
   const locked = reportPage(g, { leadGate: true, unlocked: false });
   const full = reportPage(g, { leadGate: true, unlocked: true });
   const section = html => /<section class="health"[\s\S]*?<\/section>/.exec(html)?.[0] ?? '';
-  assert.ok(section(locked).includes('Not found in Bing map data'));
+  assert.ok(section(locked).includes('Not on Bing Maps yet'));
   assert.equal(section(locked).includes('<strong>Fix:</strong>'), false);
   assert.ok(section(full).includes('<strong>Fix:</strong>'));
   // The same score either way.
@@ -400,8 +401,9 @@ test('Step 2: a report saved before the signals still shows the map, every new r
   const a = reportPage(g, { leadGate: false });
   const b = reportPage(old, { leadGate: false });
   assert.equal(/<span class="num">(\d+)<\/span>/.exec(a)?.[1], /<span class="num">(\d+)<\/span>/.exec(b)?.[1]);
-  // The reason's "Run a new check" is the report's own link (V244: every mention of it is a link).
-  assert.match(b, /<strong class="health-row-name">Sitemap:<\/strong> <span class="health-status">Not checked<\/span> <span class="health-why">This report was made before this check existed\. <a [^>]*>Run a new check<\/a> to see it\.<\/span>/);
+  // V10: the rows say it short; one note says it with the report's own link (V244: every mention of it is a link).
+  assert.match(b, /<strong class="health-row-name">Page list for search engines \(sitemap\):<\/strong> <span class="health-status">Not checked<\/span> <span class="health-why">Made before this check existed\.<\/span>/);
+  assert.match(b, /<p class="health-note health-old">This report was made before these checks existed\. <a [^>]*>Run a new check<\/a> to see them\.<\/p>/);
   const healthSection = /<section class="health"[\s\S]*?<\/section>/.exec(b)?.[0] ?? '';
   assert.equal(/run a new check/i.test(healthSection.replace(/<a [^>]*>[^<]*<\/a>/g, '')), false);
   // Every section of the report is still there (nothing moved behind JavaScript).

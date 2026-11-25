@@ -95,7 +95,7 @@ test('F3: reviews-visible is not checked with no website, an unreadable page or 
   const built = runWebsiteChecks({ facts: script, robots: { status: 404 }, llms: { status: 404 }, input });
   const r = built.find(x => x.id === 'reviews-visible');
   assert.equal(r.result, 'not_checked');
-  assert.equal(r.detail, "Your page loads its words in a way this check can't read yet.");
+  assert.equal(r.detail, "Your page loads its words in a way some AI tools can't read.");
 });
 
 test('F3: no review wording suggests writing, editing or copying reviews, or promises AI will name the business', () => {

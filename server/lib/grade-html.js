@@ -233,7 +233,9 @@ export function scanPage(grade) {
     ${itemsHtml}
   </ol>
 </section>`;
-  return page(`Checking ${grade.input.name}`, body, { refresh: true });
+  // The finished report is swapped into this page in place, so the orb script is loaded here too (Step 2 review V12).
+  // It does nothing until a health map is on the page.
+  return page(`Checking ${grade.input.name}`, body, { refresh: true, scripts: [HEALTH_ORB_SCRIPT] });
 }
 
 /** The page for a Grade that did not finish. `stamp` lets "Start again" post the same details. */
@@ -601,7 +603,7 @@ function previewCard(grade) {
     ${i.noStorefront === true
     // A business that goes to its customers shows its area, never an address, even when the page has one.
     ? `<p>Serves the ${h(i.city)} area</p>`
-    : `<p>Address: ${found.address ? h(found.address) : blank('Add your address')}</p>`}
+    : `<p>Address: ${found.address ? h(found.address) : blank('Add your street address')}</p>`}
     <p>Website: ${i.website ? h(i.website) : blank('Add your website')}</p>
   </div>`;
 }
@@ -1062,7 +1064,7 @@ export function reportPage(storedGrade, opts = {}) {
     ${reachLine}
     <h1>${h(i.name)}</h1>
     <p class="grade-where">${h(i.service)} in ${h(i.city)}, ${h(i.state)}</p>
-    ${failedLine}
+    ${failedLine}${failedLine ? `\n    <p class="hint grade-failed-note">${h(FAILED_NOTE)}</p>` : ''}
     ${noWebsite}
     ${prev}
   </div>
@@ -1124,6 +1126,9 @@ ${foot}
 /** The small script that turns the health map's orb (decoration only). */
 export const HEALTH_ORB_SCRIPT = '/js/health-orb.js';
 
+/** Under "N of M checks need work": the count is of the scored checks; the lights show every check (Step 2 review H10). */
+export const FAILED_NOTE = "That counts the scored checks. The lights below show every check, including ones that don't count toward the score.";
+
 /**
  * The AI answers node of the health map: one sub-node per answer to the free question, in the report's own words
  * ("Named you" or "Didn't name you"), and the node's status from the `ai-named` row (Pass, Partly, Needs work).
@@ -1140,16 +1145,16 @@ function aiHealth(grade) {
     status: a.named ? 'good' : 'missing',
     label: a.named ? 'Named you' : "Didn't name you",
   }));
+  // No answer: no "Answer 1" row, one plain line instead (Step 2 reader review H5).
+  let aiReason;
   if (aiRows.length === 0) {
     const state = grade.aiMain?.state;
-    const who = grade.aiMain?.label || 'The AI assistant';
-    const reason = dailyLimitHit(grade) || state === 'limit'
-      ? "Today's limit for AI questions was reached, so there is no answer yet."
+    aiReason = dailyLimitHit(grade) || state === 'limit'
+      ? "Today's limit for AI questions was reached. Run a new check tomorrow to see what AI assistants say about you."
       : state === 'not_connected' || state === 'off' ? "The AI check isn't connected yet."
-        : state === 'failed' ? `${who} didn't answer this time.` : 'There was no answer to read.';
-    aiRows.push({ name: 'Answer 1', status: 'not_checked', label: 'Not checked', reason });
+        : "The AI assistant didn't reply this time. Run a new check later to see what it says about you.";
   }
-  return { aiRows, aiStatus };
+  return { aiRows, aiStatus, aiReason };
 }
 
 // ---- Google's live answer ----------------------------------------------------------------------

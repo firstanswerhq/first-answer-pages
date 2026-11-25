@@ -318,7 +318,7 @@ Tests: `health-signals` (R1 every combination, R4 the three cases and the same-p
 | Q5 | "No review seen from the last 90 days" | "No review seen in the last 90 days" | `LABELS.newestAmber` |
 | Q6 | "... in a different city, so we didn't use it." | "We found a business with your website in a different city than you typed. Check the city and try again." and the same with "your name" | `health-compare.js` |
 | Q7 | Facebook fix ended "... so people and AI can connect the two." | "If you have a Facebook page, link to it from your website so customers can find you." (the same ending as Instagram, TikTok and Socials) | `FIXES.linkFacebook` |
-| Q8 | "Founding spots still open" had no words around it | handled in Step 2: never a light; a plain line under Free listing: "Founding Member spots are still open. Founding Members pay once for the Verified stamp." | `health-map.js` |
+| Q8 | "Founding spots still open" had no words around it | handled in Step 2: never a light; a plain line under Free listing: "When we ran this check, Founding Member spots were still open. Listing is free; Founding Members pay once for the optional Verified stamp." (reworded by Step 2 review V3) | `health-map.js` |
 
 ### Older test lines changed by Q1 to Q8
 
@@ -403,7 +403,46 @@ Tests: `health-signals` (R1 every combination, R4 the three cases and the same-p
   - The locked report has no fixes and the full report has them.
   - An old report still shows the map, with "Not checked" rows, links for "Run a new check", and the same score.
 
-No older test line changed for Step 2.
+No older test line changed for Step 2 as first built.
+
+## Step 2 review fixes (step2-fix-list-2026-11-25.md: V1 to V12, H1 to H13)
+
+Nothing here changes the score or any public page. Every new sentence is 160 characters or less, in American spelling, with no promise that AI will name a business. The one-time "scan" animation the reader review suggested is not built (the owner decides).
+
+| Item | What changed | Where |
+|---|---|---|
+| V1 | The orb's drawing loop stops for good when its orb leaves the page (`host.isConnected`). A frame already asked for is cancelled before a new one is asked for, so there is never more than one loop. The visibility, motion and on-screen listeners are named and removed in `stop()`. The MutationObserver watches the body, and the new orb starts after an in-place swap. | `public/js/health-orb.js` |
+| V2, H4 | The main node words are readable. The wide drawing (viewBox 1000) has bigger nodes (radius 86), names on one or two lines ("Google / profile") and font 24 for the name and status. The map column is wider (`3fr` to `2fr`). Phones get their own main-nodes-only drawing (viewBox 150 150 700 700, radius 86, name 26, status 24) that fills the box. At the narrowest width each drawing is shown at (540 px, and 353 px on a 390 px phone) the words are 12 px or more. A test pins this from `MAP_SIZES`. Font sizes are set on the words, not in the CSS. | `health-map.js`, `style.css` |
+| V3, H8 | The Founding note is true at any later time: "When we ran this check, Founding Member spots were still open. Listing is free; Founding Members pay once for the optional Verified stamp." The Free listing node and its rows are information (status `info`): no health color, no fix, a neutral ring and line, and plain words. The node reads "Not started", "Listed" or "Verified". The rows read "Listed on First Answer Pages: Not yet. It's free, claim it below." and "Verified stamp: Available after you claim your listing." | `health-map.js`, `style.css` |
+| V4, H3 | Sub-nodes on the map show the symbol and the list's own color only, with no words. The generic words ("Partly" for "Not linked") are gone. `R_SUB` is 14 and the symbol is 20. "Not found" is red everywhere; the amber Bing row now says "Not on Bing Maps yet". **Deviation from 2.2, for the owner to accept:** on the map, sub-nodes are decoration (symbol and color). Their names and status words are in the list beside it, and every main node still says its status in words. | `health-map.js` |
+| V5 | The sub-node dots use the main period (dasharray 0.5 26), so the keyframe moves two whole periods and the dots no longer jump. | `style.css` |
+| V6 | Off screen (an IntersectionObserver on the section), the orb loop pauses and the CSS dots pause (`.health-paused`). | `health-orb.js`, `style.css` |
+| V7 | A red sub-node link breaks from 30% to 70% of its length, so the break shows. | `health-map.js` |
+| V8 | The intro test compares with the escaped sentence. | `test/health-map.test.js` |
+| V9 | A Website row that was not checked uses the check's own reason. The fallback is "Couldn't check this time. Run a new check later." (H11). The Checks' script-built reason is now the Q3 wording, "Your page loads its words in a way some AI tools can't read." | `health-map.js`, `grade-checks.js` |
+| V10 | A report from before these signals shows one note with one link ("This report was made before these checks existed. Run a new check to see them."). The rows say "Made before this check existed." | `health-map.js` |
+| V11 | The Socials fix sits under its heading, not inside it. On an old report the gray Socials line has its reason. | `health-map.js` |
+| V12 | The scan page loads the orb script too, so the orb turns after a scan finishes in place. | `grade-html.js` (`scanPage`) |
+| H1 | The orb shows "Score 69/100" (the report's own score, in its own form), or "Not scored yet". The intro says what the colors mean: "Every check we ran, at a glance. Green is good, amber is part way there, red needs work, gray means we couldn't check it. Your score is at the top of the page." | `health-map.js` |
+| H2 | The address rows agree. "Address matches Google" says which side is missing: "We couldn't read a full street address on your website to compare. Write it on one line, like "123 Main St, Nashville, TN 37201"." or "Google doesn't show a street address for you." The listing preview says "Add your street address". | `health-signals.js`, `grade-html.js` |
+| H5 | With no AI answer there is no "Answer 1" row. One plain line says why, with the report's own link: "The AI assistant didn't reply this time. Run a new check later to see what it says about you." (or the daily limit, or "The AI check isn't connected yet."). For the contest sample and video, use a run where the AI answered. That is not a code change. | `grade-html.js` (`aiHealth`), `health-map.js` |
+| H6 | Plain words first: "Your website lets AI assistants read it (robots.txt)", "Page list for search engines (sitemap)", "A short info file for AI (llms.txt)", "Name, phone and address tagged for AI (business label)", "Search summary (the 2 lines under your link in Google)", "Picture shown when someone shares your link", "One main headline on the page", "On Bing Maps: Not on Bing Maps yet". | `health-map.js` |
+| H7 | No row repeats itself: "On Google: Yes", "Category: Fits", "Hours on Google: Listed", "Text AI can read: Yes", "Google links to your site: Yes", "Your website lets AI assistants read it (robots.txt): Yes". The saved signals keep their words; only the list and the map show the short answer. | `health-map.js` |
+| H9 | "Your First Answer Pages listing matches your website" and "... links to your website". The list uses the Checks' own names for the customer basics ("Tap-to-call phone number", "Hours on the home page", "Street address on the home page", "Call or book button on the home page"). The Website cluster "Can AI read your website" matches "Score by area". The AI line says "The AI assistant". **Not changed, for the owner:** the Check label "Can AI see your reviews?". An earlier approved review set it, and six existing tests pin it (`review-final-pages`, `grade-reviews-check`, `grade-old-grades`). | `health-map.js` |
+| H10 | The "N of M checks need work" line is kept as it is (four tests pin it). A note under it says what it counts: "That counts the scored checks. The lights below show every check, including ones that don't count toward the score." | `grade-html.js`, `style.css` |
+| H11 | The reasons speak to the owner: "Add your hours as plain text on your home page and we'll compare them with Google." and "Once you're on Bing Maps, we'll compare your details." The not-checked fallback is H11's own sentence. | `health-signals.js`, `health-map.js` |
+| H12 | On phones the map says "Tap a circle to see its checks." Each group in the list has a "Back to the map" link (phones only, out of the tab order). The phone drawing fills its box. | `health-map.js`, `style.css` |
+| H13 | The "Fix these first" hours fix says "business hours". | `grade-checks.js` |
+
+### Older test lines changed by the Step 2 review fixes
+
+| Where | Old | New | Why |
+|---|---|---|---|
+| `test/health-map.test.js` | the first Step 2 tests: intro compared raw, "Health 61", sub-node words, the Free listing as amber, "Answer 1" with no answer, the old reason on every row | rewritten for the fixes above: the escaped intro, "Score 61/100", symbols with no sub-node words, the listing as information, one AI line, one old-report note, readable sizes pinned, no leak in the orb script | V1-V11, H1-H12 |
+| `test/grade-signals-flow.test.js` (Step 2 tests) | "Health N"; "Found on Google: Found on Google"; the map div without its id; "Not found in Bing map data"; the old Sitemap row with the long reason and link | "Score N/100"; "On Google: Yes"; `id="health-map"`; "Not on Bing Maps yet"; "Page list for search engines (sitemap): Not checked Made before this check existed." plus one note with the link | H1, H7, H12, H6, V10 |
+| `test/health-signals.test.js` (R14 and R15) | "We need a street address on both your website and Google to compare." | "Google doesn't show a street address for you.", plus new lines for the website side, the hours reason and the Bing details reason | H2, H11 |
+| `test/grade-reviews-check.test.js` line 98 | "Your page loads its words in a way this check can't read yet." | "Your page loads its words in a way some AI tools can't read." | V9 (Q3) |
+| `test/grade-no-storefront.test.js` (F4) | `empty.includes('Add your address')` | `empty.includes('Add your street address')`, and the no-storefront page also never says it | H2 |
 
 ### Older test lines changed by T1 to T9
 

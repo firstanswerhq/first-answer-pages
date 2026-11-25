@@ -93,7 +93,7 @@ export const CHECKS = Object.freeze([
     label: 'Hours on the home page',
     passText: 'Your home page shows your hours.',
     failText: 'We found no hours on your home page.',
-    fix: 'Write your opening hours in plain text on your home page, for example "Mon-Fri 8am-5pm".',
+    fix: 'Write your business hours in plain text on your home page, for example "Mon-Fri 8am-5pm".',
   },
   {
     id: 'address-shown', group: 'customer_basics', points: 3,
@@ -177,7 +177,8 @@ const AGENT_NAMES = Object.freeze({
 });
 
 const TEXT_CHECKS = new Set(['one-headline', 'hours-shown', 'address-shown', 'call-button', 'reviews-visible']);
-const SCRIPT_BUILT_REASON = "Your page loads its words in a way this check can't read yet.";
+// The one wording for a page built by scripts, the same as the health map's (high-tech-look Q3, Step 2 review V9).
+const SCRIPT_BUILT_REASON = "Your page loads its words in a way some AI tools can't read.";
 const NO_WEBSITE = 'No website given';
 const UNREACHED = "We couldn't reach your website.";
 

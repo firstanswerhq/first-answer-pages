@@ -1,6 +1,8 @@
 // health-orb.js: turns small particles behind the still orb of the report's health map (high-tech-look 2.4).
 // Decoration only: the map is aria-hidden and every fact is in the plain list in the page's HTML, so nothing is lost
 // without this script. It does nothing when the visitor asks for reduced motion or the browser has no canvas.
+// There is never more than one drawing loop per orb, and a loop stops for good when its orb leaves the page (the
+// report swaps its content in place while a recheck runs). Off screen, the loop and the CSS dots pause.
 
 const motion = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
 
@@ -13,6 +15,7 @@ function start(host) {
   host.dataset.orbStarted = '1';
   canvas.setAttribute('aria-hidden', 'true');
   host.appendChild(canvas);
+  const section = host.closest('.health');
 
   const COUNT = 140;
   const points = [];
@@ -26,7 +29,12 @@ function start(host) {
 
   let angle = 0;
   let frame = 0;
+  let onScreen = true;
+  let stopped = false;
+
   const draw = () => {
+    if (!host.isConnected) { stop(); return; }
+    frame = 0;
     const size = Math.max(1, Math.round(host.clientWidth * (window.devicePixelRatio || 1)));
     if (canvas.width !== size) { canvas.width = size; canvas.height = size; }
     const half = size / 2;
@@ -44,20 +52,54 @@ function start(host) {
       ctx.fill();
     }
     angle += 0.004; // slow
-    frame = window.requestAnimationFrame(draw);
+    loop();
   };
-  frame = window.requestAnimationFrame(draw);
 
-  const stop = () => {
-    window.cancelAnimationFrame(frame);
+  // One loop only: any frame already asked for is cancelled before a new one is asked for.
+  function loop() {
+    if (stopped || !onScreen || document.hidden) return;
+    if (frame) window.cancelAnimationFrame(frame);
+    frame = window.requestAnimationFrame(draw);
+  }
+  function pause() {
+    if (frame) window.cancelAnimationFrame(frame);
+    frame = 0;
+  }
+
+  function onVisibility() {
+    if (!host.isConnected) { stop(); return; }
+    if (document.hidden) pause();
+    else loop();
+  }
+  function onMotion(e) {
+    if (e.matches) stop();
+  }
+
+  let watcher = null;
+  if (section && window.IntersectionObserver) {
+    watcher = new IntersectionObserver(entries => {
+      if (!host.isConnected) { stop(); return; }
+      onScreen = entries.some(e => e.isIntersecting);
+      section.classList.toggle('health-paused', !onScreen);
+      if (onScreen) loop();
+      else pause();
+    });
+    watcher.observe(section);
+  }
+
+  function stop() {
+    stopped = true;
+    pause();
     canvas.remove();
     host.dataset.orbStarted = '';
-  };
-  if (motion && motion.addEventListener) motion.addEventListener('change', e => { if (e.matches) stop(); });
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) window.cancelAnimationFrame(frame);
-    else if (host.dataset.orbStarted === '1') frame = window.requestAnimationFrame(draw);
-  });
+    document.removeEventListener('visibilitychange', onVisibility);
+    if (motion && motion.removeEventListener) motion.removeEventListener('change', onMotion);
+    if (watcher) watcher.disconnect();
+  }
+
+  document.addEventListener('visibilitychange', onVisibility);
+  if (motion && motion.addEventListener) motion.addEventListener('change', onMotion);
+  loop();
 }
 
 function init() {
@@ -65,8 +107,8 @@ function init() {
 }
 
 init();
-// The report page may swap its content in place (a recheck finishing); start the orb again when it does.
+// The report page may swap its content in place (a recheck or a scan finishing); start the new orb when it does.
+// The old orb's loop stops by itself on its next frame, because its host is no longer in the page.
 if (window.MutationObserver) {
-  const main = document.querySelector('main') ?? document.body;
-  new MutationObserver(init).observe(main.parentNode ?? document.body, { childList: true, subtree: true });
+  new MutationObserver(init).observe(document.body, { childList: true, subtree: true });
 }

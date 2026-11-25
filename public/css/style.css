@@ -2515,6 +2515,9 @@ a.tel,
   line-height: 1.35;
 }
 
+/* The note under "N of M checks need work" sits right under it (Step 2 reader review H10). */
+.grade-score .grade-failed-note { order: 4; margin-top: 0; }
+
 /* ---- The health map on the report (high-tech-look Requirement 2) ------------------------------------------------
    The plain list comes first in the page and holds every fact; the map beside it (above it on phones) is decoration
    (aria-hidden). Status is always said in words and with a symbol, never by color alone. Colors meet WCAG AA:
@@ -2533,12 +2536,18 @@ a.tel,
 .health-layout { display: grid; gap: 1.25rem; }
 .health-map { order: -1; position: relative; max-width: 40rem; width: 100%; margin: 0 auto; background: var(--health-panel); border-radius: 12px; overflow: hidden; }
 @media (min-width: 900px) {
-  .health-layout { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+  /* The map gets the wider column so its words are readable (Step 2 review V2). */
+  .health-layout { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); align-items: start; }
   .health-map { position: sticky; top: 1rem; }
 }
 .health-svg { display: block; width: 100%; height: auto; position: relative; z-index: 1; }
+.health-svg-phone { display: none; }
 .health-orb-host { position: absolute; left: 39%; top: 39%; width: 22%; height: 22%; z-index: 0; }
 .health-orb-host canvas { width: 100%; height: 100%; display: block; }
+.health-tap { display: none; margin: 0; padding: 0 0.75rem 0.75rem; color: var(--health-ink); font-size: 0.9rem; text-align: center; }
+.health-back { display: none; }
+/* Off screen, the dots and the orb stop (Step 2 review V6). */
+.health-paused .health-flow { animation-play-state: paused; }
 
 /* The list */
 .health-group { margin: 0 0 1rem; padding: 0.6rem 0.8rem; border-left: 4px solid var(--color-text-muted); background: var(--color-surface); }
@@ -2555,26 +2564,30 @@ a.tel,
 .health-partly > h3 .health-status, .health-row.health-partly .health-status, .health-row.health-partly .health-sym, .health-cluster.health-partly .health-status { color: var(--color-partly-text); }
 .health-missing > h3 .health-status, .health-row.health-missing .health-status, .health-row.health-missing .health-sym, .health-cluster.health-missing .health-status { color: var(--color-fail); }
 .health-not_checked > h3 .health-status, .health-row.health-not_checked .health-status, .health-row.health-not_checked .health-sym { color: var(--color-text-muted); }
+/* The free listing is information, not health: plain text color, a solid neutral border (Step 2 review V3, H8). */
+.health-info > h3 .health-status, .health-row.health-info .health-status, .health-row.health-info .health-sym { color: var(--color-text); }
+.health-group.health-info { border-left-color: var(--color-divider); }
 .health-group.health-good { border-left-color: var(--color-success); }
 .health-group.health-partly { border-left-color: var(--color-partly); }
 .health-group.health-missing { border-left-color: var(--color-fail); }
 .health-group.health-not_checked { border-left-style: dashed; }
 
 /* The map: the orb */
-.health-orb { fill: url(#health-orb-glow); stroke: var(--health-glow); stroke-width: 2; }
+.health-orb { stroke: var(--health-glow); stroke-width: 2; }
 .health-orb-halo { fill: none; stroke: var(--health-glow); stroke-opacity: 0.25; stroke-width: 1; }
-.health-orb-name { fill: var(--health-ink); font-size: 24px; font-weight: 700; text-anchor: middle; paint-order: stroke; stroke: var(--health-panel); stroke-width: 4px; }
+.health-orb-name { fill: var(--health-ink); font-weight: 700; text-anchor: middle; paint-order: stroke; stroke: var(--health-panel); stroke-width: 4px; }
 .health-orb-score { fill: var(--health-glow); font-size: 30px; font-weight: 700; text-anchor: middle; paint-order: stroke; stroke: var(--health-panel); stroke-width: 4px; }
-.health-orb-score-none { font-size: 17px; }
+.health-orb-score-none { font-size: 24px; }
 
-/* The map: nodes */
+/* The map: nodes. Font sizes are set on each word in the drawing (they are pinned by a test, Step 2 review V2). */
 .health-node-ring { fill: var(--health-node-fill); stroke-width: 3; }
-.health-node-name { fill: var(--health-ink); font-size: 14px; font-weight: 700; text-anchor: middle; }
-.health-node-status, .health-node-sym { font-size: 14px; font-weight: 700; text-anchor: middle; }
-.health-node-sym { font-size: 16px; }
+.health-node-name { fill: var(--health-ink); font-weight: 700; text-anchor: middle; }
+.health-node-status, .health-node-sym { font-weight: 700; text-anchor: middle; }
 .health-dot-node { fill: var(--health-node-fill); stroke-width: 2; }
-.health-sub-sym { font-size: 12px; font-weight: 700; text-anchor: middle; }
-.health-sub-word { font-size: 11px; fill: var(--health-ink); }
+.health-sub-sym { font-size: 20px; font-weight: 700; text-anchor: middle; }
+.health-node-info .health-node-ring, .health-sub-info .health-dot-node { stroke: var(--health-ink); stroke-opacity: 0.6; }
+.health-node-info text.health-node-status, .health-node-info .health-node-sym, .health-sub-info .health-sub-sym { fill: var(--health-ink); }
+.health-line-info { stroke: var(--health-ink); stroke-opacity: 0.35; }
 .health-node-good .health-node-ring, .health-sub-good .health-dot-node { stroke: var(--health-good); }
 .health-node-partly .health-node-ring, .health-sub-partly .health-dot-node { stroke: var(--health-partly); }
 .health-node-missing .health-node-ring, .health-sub-missing .health-dot-node { stroke: var(--health-missing); }
@@ -2595,7 +2608,8 @@ a.tel,
 .health-line-gray { stroke: var(--health-gray); stroke-opacity: 0.6; stroke-dasharray: 6 7; }
 .health-flow { fill: none; stroke: var(--health-glow); stroke-linecap: round; stroke-dasharray: 0.5 26; }
 .health-flow-main { stroke-width: 5; }
-.health-flow-sub { stroke-width: 3; stroke-dasharray: 0.5 18; }
+/* The same period as the main links (26.5), so one loop of the keyframe is two whole periods: no jump (V5). */
+.health-flow-sub { stroke-width: 3; }
 .health-flow-out { animation: health-flow 2.6s linear infinite; }
 .health-flow-in { animation: health-flow 2.6s linear infinite; animation-delay: -1.3s; }
 .health-flow-slow { stroke: var(--health-partly); animation: health-flow 7s linear infinite, health-fade 7s ease-in-out infinite; }
@@ -2605,7 +2619,12 @@ a.tel,
 /* Phones: the map shows the main nodes only; tapping one goes to its sub-nodes in the list below the map. */
 @media (max-width: 600px) {
   .health-sub { display: none; }
-  .health-node-name, .health-node-status { font-size: 16px; }
+  /* Phones get the main-nodes-only drawing with bigger words that fills the box (V2, H4, H12). */
+  .health-svg-full { display: none; }
+  .health-svg-phone { display: block; }
+  .health-orb-host { left: 34.3%; top: 34.3%; width: 31.4%; height: 31.4%; }
+  .health-tap { display: block; }
+  .health-back { display: inline-block; margin-top: 0.4rem; font-size: 0.9rem; }
 }
 
 /* Reduced motion: no dots move and the orb stays still; the line colors and the words show the status. */
