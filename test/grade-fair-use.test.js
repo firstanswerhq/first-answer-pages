@@ -291,6 +291,11 @@ test('11.7: the business match follows the rules; the page sentences are short a
   assert.equal(at({ website: 'https://facebook.com/profile.php?id=1' }, { website: 'https://facebook.com/profile.php?id=2' }), false);
   assert.equal(at({ name: 'Ace', city: 'Nashville' }, { name: 'ace', city: 'NASHVILLE' }), true);
   assert.equal(at({ name: 'Ace', city: 'Nashville' }, { name: 'Ace', city: 'Memphis' }), false);
+  // The business's own domain: www., http and another path are the same business; a missing state on both is equal.
+  const zephyr = { name: 'Zephyr Plumbing', city: 'Nashville', state: '', website: 'https://zephyr.example/' };
+  assert.equal(at(zephyr, { name: 'Zephyr Plumbing LLC', city: 'Nashville', state: '', website: 'http://www.zephyr.example/contact' }), true);
+  assert.equal(at(zephyr, { name: 'Zephyr Plumbing LLC', city: 'Nashville', website: 'http://www.zephyr.example/' }), true);
+  assert.equal(at({ ...zephyr, state: undefined }, { ...zephyr, website: 'https://ZEPHYR.example/about/' }), true);
   // Batch 3 X7: with no website, the state counts too.
   assert.equal(at({ name: 'Ace', city: 'Springfield', state: 'IL' }, { name: 'Ace', city: 'Springfield', state: 'TN' }), false);
   assert.equal(at({ name: 'Ace', city: 'Springfield', state: 'TN' }, { name: 'ace', city: 'springfield', state: 'tn' }), true);

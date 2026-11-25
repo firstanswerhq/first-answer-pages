@@ -165,7 +165,8 @@ export function normalizeGradeInput(raw) {
  * With no website, the same name and city after normalizing.
  */
 export function sameBusinessInput(earlier, next) {
-  const sameState = String(earlier?.state ?? '').toUpperCase() === String(next?.state ?? '').toUpperCase();
+  // A missing state on both sides is equal (null, undefined and '' are all "no state").
+  const sameState = String(earlier?.state ?? '').trim().toUpperCase() === String(next?.state ?? '').trim().toUpperCase();
   const sameCity = normalizeForMatch(next?.city) !== '' && normalizeForMatch(earlier?.city) === normalizeForMatch(next?.city);
   const wanted = String(next?.website ?? '').trim();
   if (wanted) {
@@ -1033,6 +1034,9 @@ export function createGrader({
     ? config.gradeMaxRunning
     : DEFAULT_MAX_RUNNING;
   const waiting = []; // Grade_Ids in line
+  // Grade_Ids started by this process whose run has not ended yet (from start() to the end of the run). Such a check is
+  // really running, however long the clock says it took, so fair use always counts it (batch 3 X4 follow-up).
+  const ours = new Set();
 
   // GRADE_MAIN_ASKS: 1 to 3; a missing or odd value counts as 3 (config.js has already checked a set value).
   const mainAsks = () => (Number.isInteger(config.gradeMainAsks) && config.gradeMainAsks >= 1 && config.gradeMainAsks <= 3
@@ -1791,6 +1795,7 @@ export function createGrader({
       })
       .finally(() => {
         active.delete(id);
+        ours.delete(id);
         startWaiting(); // a place is free: the next check in line starts
       });
     active.set(id, p);
@@ -1899,8 +1904,9 @@ export function createGrader({
     if (!Array.isArray(list)) return null;
     const windowMs = days * 24 * 60 * 60 * 1000;
     const cutoff = clock.now() - windowMs;
-    // X4: a check cut off by a restart (stale) asked nothing. X6: the admin's own checks never limit anyone.
-    const askedAi = g => (g.status === 'running' && !isStale(g, clock.now()))
+    // X4: a check cut off by a restart (stale) asked nothing. One this process is still running always counts, so a
+    // slow check is never mistaken for a stopped one. X6: the admin's own checks never limit anyone.
+    const askedAi = g => (g.status === 'running' && (ours.has(g.id) || active.has(g.id) || !isStale(g, clock.now())))
       || freeAnswersOf(Array.isArray(g.ai) ? g.ai : []).some(a => !a.reusedFrom);
     const earlier = list
       .filter(g => g && typeof g === 'object' && ['running', 'done'].includes(g.status) && g.byAdmin !== true
@@ -1942,6 +1948,7 @@ export function createGrader({
       // X6: a check the admin ran is marked, so it never limits the real owner (fair use, Requirement 11).
       ...(byAdmin === true ? { byAdmin: true } : {}),
     };
+    ours.add(id);
     await grades().append(created);
     if (typeof store.pruneExpired === 'function') {
       await store.pruneExpired({ quotes: false, drafts: false, grades: true, leads: true })

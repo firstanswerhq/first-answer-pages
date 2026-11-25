@@ -614,3 +614,30 @@ The score, the Checks and every public page (robots.txt, sitemap, JSON-LD, noind
 | `test/website-alive.test.js` (12.1a test) | `Expires in 10 days` is amber; `CERT_WARN_DAYS` case says "30 days or fewer" | `Expires in 5 days` is amber, 8 and 10 days are green; the case says "7 days or fewer" | X11 |
 
 New tests: `test/grade-fair-use.test.js` (X3 other website and close name, X4 stale check, X6 admin then owner, X16 sign-out, X5 franchise and shared-host cases, X7 state), `test/health-scan.test.js` (X1 target and threshold, X2 Checking page and waiting, X12 timers and caption CSS, X13 name marking), `test/website-alive.test.js` (X9, X10 www only and the wait, X11 the 7-day edge).
+
+The deviations table above was approved by the owner as written (Nov 26, 2026).
+
+## Fixes after the batch 3 cloud run (1850 of 1852)
+
+| Failure | Cause | Fix |
+|---|---|---|
+| `test/grade-fair-use.test.js:91` (a real bug) | The business match was right. The X4 change was the problem: the test moves the clock 3 days while the first check is still running, so that check looked stale (older than 4 minutes) and stopped counting. | `repeatCheck` always counts a check that this process started and is still running (`ours`, from `start()` to the end of the run, and `active`). Only a check left over from before a restart can be stale. A missing state on both sides counts as equal (null, undefined and '' are all "no state"). Shared hosts still compare the page; an own domain compares the host. A unit test pins the exact pair: `https://zephyr.example/` against `http://www.zephyr.example/contact`, same city, no state. |
+| `test/admin-login.test.js:426` | Sign-out now clears two cookies (X16), and the test expected one. | The test expects two: the admin cookie as before, then `fap_grade_admin=` with `Path=/grade`, `Max-Age=0` and `HttpOnly`. |
+
+| Where | Old | New | Why |
+|---|---|---|---|
+| `test/admin-login.test.js` (logout test) | `res.setCookie.length` is 1 | 2, and the second is the cleared /grade admin cookie | X16 |
+
+# Requirement 9: receipts in the AI lookup
+
+Built in `server/lib/mcp.js`. The data comes from what the store already holds (`verified.json` for "Details confirmed by the business", `trust.json` for the Verified stamp). No new stored field, no new page and no change to any public page, JSON-LD or the score.
+
+| Line | As built |
+|---|---|
+| 9.1 | Each listing in `search_listings`, and the one in `get_listing`, has `receipts` with `phone`, `hours`, `services`, `area` (the service area) and `website`. Each is `{ lastConfirmed, confirmedBy }`. When the business confirmed its details, every field it has gets the stored confirmation time (`verifiedAt`, else the stored `verifiedDate`) and `confirmedBy: "business"`. The Verified check confirms the phone only, since its code went to that number: the phone gets the stamp's stored time and `confirmedBy: "First Answer phone and ID check"`. A field the listing doesn't have, or one nobody confirmed, is `{ lastConfirmed: null, confirmedBy: null }`. A date is never made up: an unreadable stored value is null. |
+| 9.2 | Both lookup answers have `fetchedAt`, the app clock's time when the answer was built (ISO). |
+| 9.3 | `get_listing` has `verifiedCheck`: `{ checkedBy: "First Answer phone and ID check", checkedAt }` only when the listing is Verified and the time is stored, else null. A practice run (test key) is never a stamp. The older `verification` object keeps its names and its false shape; when it is true it also says `confirmedBy: "business"` and `label: "Details confirmed by the business"`, beside its date. |
+| Free | Both lookup tool descriptions start with "Free: there is no charge for this lookup." and name the receipts and `fetchedAt`. |
+| 9.4 | `test/mcp-receipts.test.js`: dates match the stored data (both record shapes), null when missing or unconfirmed, the Verified phone receipt and stamp, a practice run gets none, `fetchedAt` on every answer (also an empty search), no "verified" anywhere without who and when, and the free note. |
+
+No older test line changed for Requirement 9: `test/mcp.test.js` still passes as written (the unconfirmed `verification` shape is unchanged).

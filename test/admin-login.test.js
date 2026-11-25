@@ -423,11 +423,17 @@ test('logout clears the cookie and redirects to the login page', async () => {
   });
   assert.equal(res.status, 303);
   assert.equal(res.headers.location, '/admin/login');
-  assert.equal(res.setCookie.length, 1);
-  const [cookie] = res.setCookie;
+  // Two cookies: the admin cookie, and the short /grade admin cookie (high-tech-look batch 3 X16).
+  assert.equal(res.setCookie.length, 2);
+  const [cookie, gradeCookie] = res.setCookie;
   assert.ok(cookie.startsWith('fap_admin=; '));
   const attrs = cookie.split('; ').slice(1);
   assert.deepEqual(attrs, ['HttpOnly', 'SameSite=Strict', 'Path=/admin', 'Max-Age=0']);
+  assert.ok(gradeCookie.startsWith('fap_grade_admin=; '));
+  const gradeAttrs = gradeCookie.split('; ').slice(1);
+  assert.ok(gradeAttrs.includes('Path=/grade'));
+  assert.ok(gradeAttrs.includes('Max-Age=0'));
+  assert.ok(gradeAttrs.includes('HttpOnly'));
 });
 
 test('logout without a cookie still lands on the login page; a cookie with a foreign Origin is 403', async () => {
