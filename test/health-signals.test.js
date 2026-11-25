@@ -676,6 +676,43 @@ test('T8: link text like "Questions? Call us" pointing at a contact page is not 
   }
 });
 
+test('U2: the page shows the typed name, Google\'s differs, no business label: gray with a reason that says so', () => {
+  const pad = 'Call (615) 555-0142. ' + 'We fix pipes in Nashville. '.repeat(15);
+  const s = build({
+    input: { ...INPUT, name: 'Joes Plumbing' }, places: found({ name: 'Josephs Plumbing Co' }),
+    facts: readPageFacts(`<h1>Joes Plumbing</h1><p>${pad}</p>`),
+  }).google.nameMatch;
+  assert.equal(s.status, 'not_checked');
+  assert.equal(s.reason, "The name on your website and the name on Google look different, so we didn't mark it.");
+  assert.ok(s.reason.length <= 160);
+  // Neither name on the page keeps the other reason.
+  const neither = build({ input: { ...INPUT, name: 'Joes Plumbing' }, places: found({ name: 'Josephs Plumbing Co' }), facts: readPageFacts(`<h1>Welcome</h1><p>${pad}</p>`) });
+  assert.equal(neither.google.nameMatch.reason, "We couldn't find your business name written on your website.");
+});
+
+test('U3: real FAQ links are found; "Questions? Call us" still is not', () => {
+  const pad = '<p>' + 'We fix pipes in Nashville. '.repeat(20) + '</p>';
+  for (const link of [
+    '<a href="/frequently-asked-questions">Help</a>', '<a href="/common-questions">Help</a>',
+    '<a href="/help">Questions & Answers</a>', '<a href="/help">Questions and answers</a>', '<a href="/help">Q&A</a>',
+  ]) {
+    assert.equal(build({ facts: readPageFacts(pad + link) }).website.answersQuestions.status, 'good', link);
+  }
+  assert.equal(build({ facts: readPageFacts(`${pad}<a href="/contact">Questions? Call us</a>`) }).website.answersQuestions.status, 'missing');
+});
+
+test('U5: on a shared host, "Links to your website" also needs the same first part of the path', () => {
+  const at = (website, googleSite) => build({ input: { ...INPUT, website }, places: found({ website: googleSite }) }).google.linksToWebsite.status;
+  assert.equal(at('https://www.facebook.com/joeplumbing', 'https://facebook.com/someoneelse'), 'partly');
+  assert.equal(at('https://www.facebook.com/joeplumbing', 'https://m.facebook.com/JoePlumbing/about'), 'good');
+  assert.equal(at('https://joe.wixsite.com/site', 'https://bob.wixsite.com/site'), 'partly');
+  assert.equal(at('https://joe.wixsite.com/site', 'https://joe.wixsite.com/site/contact'), 'good');
+  assert.equal(at('https://joe-plumbing.business.site/', 'https://joe-plumbing.business.site/'), 'good');
+  assert.equal(at('https://facebook.com/', 'https://facebook.com/anyone'), 'partly', 'the bare host says nothing');
+  // A site of its own still compares by domain only.
+  assert.equal(at('https://zephyr.example/', 'https://www.zephyr.example/contact'), 'good');
+});
+
 test('T9: a .xml.gz address whose reply is already plain XML is read like any sitemap', () => {
   const sitemap = { status: 200, text: SITEMAP_XML('2026-10-01'), contentType: 'application/xml', url: 'https://zephyr.example/sitemap.xml.gz' };
   const s = sitemapSignal({ hasSite: true, sitemap });

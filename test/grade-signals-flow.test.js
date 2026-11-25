@@ -349,6 +349,20 @@ test('S5 and S14: a Grade from before the lookups existed, or one saved with raw
   assert.equal(rawRecheck.signals.google.found.reason, 'Run a new check to look on Google again.');
 });
 
+test('U4: lookups older than 30 days are dropped from memory when new ones are kept, even without a recheck', async () => {
+  const places = fakeLookup('places', GOOGLE_FOUND);
+  const env = await startEnv({ site: fakeSite(defaultRoutes()), places });
+  const a = await check(env);
+  // 31 days later another check keeps its own lookups; the first Grade's are past 30 days and are dropped then.
+  env.clock.t = NOW + 31 * 86400000;
+  await check(env, { ...INPUT, name: 'Another Plumbing Co' });
+  // Move the clock back inside the 30 days: had the old entry stayed in memory, this recheck would reuse it.
+  env.clock.t = NOW + 86400000;
+  const after = await recheckDone(env, a.id);
+  assert.equal(after.signals.google.found.reason, 'Run a new check to look on Google again.', 'the old lookups were gone');
+  assert.equal(places.calls.length, 2, 'no lookup on the recheck');
+});
+
 test('T3: no value read from Google or Bing reaches grades.json, also on mismatches and after a recheck', async () => {
   const google = {
     status: 'found',

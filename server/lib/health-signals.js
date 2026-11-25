@@ -13,7 +13,7 @@
  *  - Nothing here throws: a signal that fails to work out is 'not_checked'.
  */
 
-import { registeredDomain } from './name-match.js';
+import { registeredDomain, SHARED_DOMAINS } from './name-match.js';
 import { parseHoursRange } from './schema.js';
 import { detectProfileLinks } from './profile-links.js';
 import { parseSitemap, isGzipSitemap } from './sitemap-read.js';
@@ -188,8 +188,10 @@ function wordsInPageSignal({ input, facts, found }) {
 /** True when the page links to a questions page ("/faq", "FAQs", "Common questions"). */
 function linksToQuestions(links) {
   if (!Array.isArray(links)) return false;
-  // "Questions? Call us" pointing at /contact is not a questions page (review T8).
-  return links.some(l => l && /\bfaqs?\b|(?:common|frequently asked)\s+questions|\/questions\b/i.test(`${l.href ?? ''} ${l.text ?? ''}`));
+  // "Questions? Call us" pointing at /contact is not a questions page (review T8); /frequently-asked-questions,
+  // /common-questions, "Questions & Answers" and "Q&A" are (review U3).
+  const pattern = /\bfaqs?\b|(?:common|frequently[\s-]+asked)[\s-]+questions|\/questions\b|questions\s*(?:&|and)\s*answers|\bq\s*&\s*a\b/i;
+  return links.some(l => l && pattern.test(`${l.href ?? ''} ${l.text ?? ''}`));
 }
 
 function textSignal(id, ok, fix, { input, facts }) {
@@ -287,6 +289,34 @@ function websiteHoursByDay(websiteHours) {
   return out;
 }
 
+/** Host plus the first part of the path, lower case, without "www." and "m.": "facebook.com/joeplumbing". */
+function hostAndFirstSegment(address) {
+  try {
+    const url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(address) ? address : `https://${address}`);
+    const host = url.hostname.toLowerCase().replace(/\.$/, '').replace(/^(?:www\.|m\.)/, '');
+    const first = url.pathname.split('/').filter(Boolean)[0] ?? '';
+    return `${host}/${first.toLowerCase()}`;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The Google profile links to the typed website. On a shared host (a Facebook page, a wixsite.com site) the domain
+ * alone says nothing, so the host and the first part of the path must be the same too (review U5).
+ */
+function linksToSameSite(website, linked) {
+  const domain = registeredDomain(website);
+  if (!domain || registeredDomain(linked) !== domain) return false;
+  if (!SHARED_DOMAINS.has(domain)) return true;
+  const a = hostAndFirstSegment(website);
+  const b = hostAndFirstSegment(linked);
+  if (a === null || b === null || a === `${domain}/`) return false; // "facebook.com" alone says nothing
+  // A site of its own on the shared host ("joe.business.site") with no path typed: the same host is enough.
+  if (a.endsWith('/')) return a.split('/')[0] === b.split('/')[0];
+  return a === b;
+}
+
 /** True when the words of `name` (without "and", "the", "LLC" and the like) are written together in the page text. */
 function nameInText(name, text) {
   const wanted = nameTokens(name).join(' ');
@@ -313,7 +343,8 @@ function nameMatchSignal({ input, facts, p }) {
   if (nm === 'unknown') return unknown('nameMatch', "We couldn't read a business name on both sides.");
   if (nm === 'match') return good('nameMatch', 'Matches');
   if (nm === 'close') return partly('nameMatch', 'Close, not the same', FIXES.nameMatch, { website: siteName, google: p.name });
-  if (!label) return unknown('nameMatch', notFound);
+  // The page shows the typed name but there is no business label to be sure of (review U2).
+  if (!label) return unknown('nameMatch', "The name on your website and the name on Google look different, so we didn't mark it.");
   return missing('nameMatch', "Doesn't match", FIXES.nameMatch, { website: siteName, google: p.name });
 }
 
@@ -398,7 +429,7 @@ function googleSignals({ input, facts, found, places, websiteHours, now }) {
   // -- the Google profile links to the website (F2 and B5, one signal)
   if (!input.website) out.linksToWebsite = unknown('linksToWebsite', REASONS.noWebsite);
   else {
-    const same = p.website !== '' && registeredDomain(p.website) !== null && registeredDomain(p.website) === registeredDomain(input.website);
+    const same = p.website !== '' && linksToSameSite(input.website, p.website);
     out.linksToWebsite = same ? good('linksToWebsite', 'Links to your website')
       : partly('linksToWebsite', "Doesn't link to your website", FIXES.googleLinksToWebsite);
   }

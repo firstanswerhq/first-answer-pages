@@ -1445,6 +1445,12 @@ export function createGrader({
 
   function keepLookups(id, looked) {
     recentLookups.delete(id);
+    // Drop the ones older than 30 days (review U4). The map is in time order (each entry is deleted and set again),
+    // so the scan stops at the first one that is still fresh.
+    for (const [key, v] of recentLookups) {
+      if (clock.now() - v.at > LOOKUP_KEEP_MS) recentLookups.delete(key);
+      else break;
+    }
     recentLookups.set(id, { looked, at: clock.now() });
     while (recentLookups.size > LOOKUP_KEEP_MAX) recentLookups.delete(recentLookups.keys().next().value);
   }

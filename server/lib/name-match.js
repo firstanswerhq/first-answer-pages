@@ -367,6 +367,9 @@ export const SHARED_DOMAINS = new Set([
   ...SKIP_DOMAINS,
   'business.site', 'square.site', 'linktr.ee', 'carrd.co', 'canva.site', 'my.canva.site', 'sites.google.com',
   'fb.com', 'fb.me', 'wix.com', 'editorx.io', 'webflow.io', 'squareup.com', 'godaddy.com', 'site123.me',
+  // Review U1.
+  'myshopify.com', 'blogspot.com', 'netlify.app', 'vercel.app', 'github.io', 'mystrikingly.com', 'wixstudio.io',
+  'g.page', 'jimdosite.com', 'yolasite.com', 'webnode.com',
 ]);
 
 /**

@@ -157,6 +157,20 @@ test('T1: a shared host (a Facebook page, a wixsite.com site and the like) is ne
   assert.equal(sameSite('', 'https://zephyr.example/'), false);
 });
 
+test('U1: more shared hosts are never proof of a match', () => {
+  for (const host of [
+    'myshopify.com', 'blogspot.com', 'netlify.app', 'vercel.app', 'github.io', 'mystrikingly.com', 'wixstudio.io',
+    'g.page', 'jimdosite.com', 'yolasite.com', 'webnode.com',
+  ]) {
+    assert.ok(SHARED_DOMAINS.has(host), host);
+    assert.equal(sameSite(`https://joe.${host}/`, `https://bob.${host}/`), false, host);
+    const picked = pickCandidate([cand('Bob Smith Roofing', '4 Elm St, Nashville, TN', { website: `https://bob.${host}/` })],
+      { name: 'Joe Plumbing', city: 'Nashville', website: `https://joe.${host}/` });
+    assert.equal(picked.status, 'unsure', host);
+  }
+  assert.equal(sameSite('https://g.page/joe-plumbing', 'https://g.page/bob-roofing'), false);
+});
+
 test('T5: the website\'s domain in another city does not hide a clear name match in the typed city', () => {
   const wanted = { name: 'Joes Plumbing', city: 'Franklin', website: 'https://joes.example/' };
   const list = [

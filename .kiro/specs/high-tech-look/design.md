@@ -237,6 +237,20 @@ None of these changes the score or any public page. Every new sentence is 160 ch
 | T8 | A questions link must say FAQ, "common questions" or "frequently asked questions", or point at `/questions`. "Questions? Call us" on `/contact` does not count. | `health-signals.js` | `health-signals` |
 | T9 | The sitemap reply is read as XML first. `isGzipSitemap` is used only when it is not XML, so a `.xml.gz` the fetcher already unpacked is read in full, dates included. | `health-signals.js` | `health-signals` |
 
+## Third review fixes U1 to U5 (review-2026-11-25-step1-pass3.md, verdict GO)
+
+None of these changes the score or any public page (`SKIP_DOMAINS` is unchanged). Every new sentence is 160 characters or less.
+
+| Item | What changed | Where | Tests |
+|---|---|---|---|
+| U1 | `SHARED_DOMAINS` also holds `myshopify.com`, `blogspot.com`, `netlify.app`, `vercel.app`, `github.io`, `mystrikingly.com`, `wixstudio.io`, `g.page`, `jimdosite.com`, `yolasite.com` and `webnode.com`. (`my.canva.site` and `sites.google.com` never match, because `registeredDomain` shortens them, but they do no harm.) | `name-match.js` | `health-compare` (one row per host: never proof, and another business on it is not picked) |
+| U2 | When the page shows the typed name, there is no business label, and Google's name differs clearly, the gray reason is "The name on your website and the name on Google look different, so we didn't mark it." "We couldn't find your business name written on your website." is kept for when neither name is on the page. | `health-signals.js` (`nameMatchSignal`) | `health-signals` |
+| U3 | The questions-link pattern also finds `/frequently-asked-questions`, `/common-questions`, "Questions & Answers", "Questions and answers" and "Q&A". It still ignores "Questions? Call us" on `/contact`. | `health-signals.js` (`linksToQuestions`) | `health-signals` |
+| U4 | `keepLookups` drops entries older than 30 days each time it keeps a new one. The map is in time order, so the scan stops at the first fresh entry. No lookup stays in memory past 30 days only because nobody rechecked it. | `grader.js` | `grade-signals-flow` (a check 31 days later drops the first Grade's lookups; a recheck with the clock moved back says to run a new check) |
+| U5 | On a shared host, "Links to your website" also needs the same host and first part of the path, lower case, without `www.` and `m.` (`facebook.com/joeplumbing`). A bare shared host such as `facebook.com/` never counts. A site of its own on a shared host with no path typed (`joe.business.site`) compares the host. Other websites still compare by registered domain. | `health-signals.js` (`linksToSameSite`) | `health-signals` |
+
+No older test line changed for U1 to U5.
+
 ### Older test lines changed by T1 to T9
 
 | Where | Old | New | Why |
