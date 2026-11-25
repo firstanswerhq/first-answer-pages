@@ -132,6 +132,16 @@ Why: a new check asks several AI assistants and makes paid Google and Bing looku
 11.7 Tests: same domain within 7 days is sent to the message; different page on a shared host is not; day 8 runs; admin and Verified are not limited; "Check again" is unaffected; the message is 160 characters or less per sentence, American spelling.
 11.8 A paid "ask AI again sooner" option is NOT built now; it waits until real cost per check is known from the provider dashboards.
 
+## Requirement 12: Website still alive (owner, Nov 25; idea from Moltbook Q9 answers)
+Why: an expired security certificate or a website address that no longer works means browsers show a warning or nothing, and AI assistants can't read the site. Both are public facts we can check for free on every check, with no paid lookup.
+12.1 Add a "Website is reachable" cluster under the Website node with two sub-nodes, read from the same connection the check already makes (no extra paid call):
+  a. Security certificate: green when valid for more than 30 days; amber "Expires in N days" when 30 or fewer; red "Expired on <date>" when expired. "Not checked" when the site is http-only or the date can't be read.
+  b. Website address works: green when the address resolves and answers; red "Your website address doesn't load" only when the name no longer resolves (DNS NXDOMAIN) on two tries; a timeout or any other error is "Not checked", never red.
+12.2 Never tell the owner the business "may have closed". The fix sentences tell them what to do ("Renew your website's security certificate so browsers and AI can open your site.").
+12.3 Listings side (admin only): when a listing's website shows an expired certificate or an address that no longer resolves, show a "Website may be down" note on the admin page so the owner can look before trusting the listing. Never shown publicly.
+12.4 No WHOIS or RDAP lookups in this version.
+12.5 Tests with a fake connection: valid, expiring, expired, http-only, NXDOMAIN twice, NXDOMAIN once then OK, timeout; score unchanged; sentences 160 characters or less, American spelling.
+
 ## Requirement 4: Tests
 4.1 Unit tests for profile-link detection, including share buttons, tracking parameters, mixed case, www and m. subdomains, and pages with no links.
 4.2 Tests for the Google lookup with the key missing, a match, no match, an error and a timeout (fake the network; no real calls in tests).
@@ -142,6 +152,6 @@ Why: a new check asks several AI assistants and makes paid Google and Bing looku
 ## Order of work
 1. Requirement 3 (signals and saving them), with tests.
 2. Requirement 2 (health map), with tests.
-3. Requirement 2.10 (scan) and Requirement 11 (fair use), with tests.
+3. Requirement 2.10 (scan), Requirement 11 (fair use) and Requirement 12 (website still alive), with tests.
 4. Requirement 1 (site look), with tests.
 Stop after each step and tell me what changed, so I can run the tests and review before the next step.
