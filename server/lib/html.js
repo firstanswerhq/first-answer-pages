@@ -285,11 +285,35 @@ export function foundersInvite(status, opts) {
  */
 export function listingCard(listing, categories, opts) {
   const badge = [verifiedBadge(opts?.trust), founderBadge(opts?.founder)].filter(Boolean).join('\n  ');
-  return `<article class="listing-card">
+  const fields = readableFields(listing);
+  // high-tech-look Step 1C (Requirement 1.4): a Verified listing's card glows more (class only; the label is the
+  // existing Verified stamp), and every card says which of its details AI can read, from its real fields only.
+  const verified = opts?.trust?.verified === true;
+  return `<article class="listing-card${verified ? ' is-verified' : ''}">
   <h3><strong><a href="/listings/${encodeURIComponent(listing.id)}">${escapeHtml(listing.name)}</a></strong> <span class="phone">${telLink(listing.phone)}</span></h3>
-  <p>${escapeHtml(listing.city)}, ${escapeHtml(listing.state)} &middot; ${escapeHtml(categoryLabel(listing.category, categories))}</p>${badge ? `\n  ${badge}` : ''}
+  <p>${escapeHtml(listing.city)}, ${escapeHtml(listing.state)} &middot; ${escapeHtml(categoryLabel(listing.category, categories))}</p>${badge ? `\n  ${badge}` : ''}${fields.length > 0 ? `\n  <p class="listing-ai">Details AI can read: ${fields.join(', ')}</p>` : ''}
   <p><a href="/listings/${encodeURIComponent(listing.id)}">View details →</a></p>
 </article>`;
+}
+
+/**
+ * high-tech-look Step 1C (Requirement 1.4): the details a listing really has, in plain words, in a fixed order: phone,
+ * hours, services, area, address, website. Only fields with a real value count (hours: at least one filled-in day).
+ * Never a field the listing doesn't have.
+ * @param {object} listing
+ * @returns {string[]}
+ */
+export function readableFields(listing) {
+  const l = listing && typeof listing === 'object' ? listing : {};
+  const text = v => typeof v === 'string' && v.trim() !== '';
+  const out = [];
+  if (text(l.phone)) out.push('phone');
+  if (l.hours && typeof l.hours === 'object' && filledHours(l.hours).length > 0) out.push('hours');
+  if (Array.isArray(l.services) && l.services.some(text)) out.push('services');
+  if (text(l.serviceArea)) out.push('area');
+  if (text(l.address)) out.push('address');
+  if (text(l.website)) out.push('website');
+  return out;
 }
 
 /**

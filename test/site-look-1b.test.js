@@ -56,12 +56,15 @@ const get = await start();
 const categories = JSON.parse(await fs.readFile(path.join(REPO_DATA, 'categories.json'), 'utf8'));
 const labelOf = slug => categories.find(c => c.slug === slug)?.label;
 
-/** One CSS rule's body by its exact selector (the last one in the file wins, as in the browser). */
-function lastRule(selector) {
+/** Every rule body with this exact selector, in file order. */
+function rulesFor(selector) {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const all = [...CSS.matchAll(new RegExp(`(?:^|\\n|\\})\\s*${escaped}\\s*\\{([^}]*)\\}`, 'g'))];
-  return all.at(-1)?.[1] ?? '';
+  return [...CSS.matchAll(new RegExp(`(?:^|\\n|\\})\\s*${escaped}\\s*\\{([^}]*)\\}`, 'g'))].map(m => m[1]);
 }
+/** The last rule with this selector (the last one in the file wins, as in the browser). */
+const lastRule = selector => rulesFor(selector).at(-1) ?? '';
+/** The base rule (outside any media query): the first one in the file. */
+const baseRule = selector => rulesFor(selector)[0] ?? '';
 
 test('1.2: the home page main area is a book, with A-Z tabs that are real links to the categories that have listings', async () => {
   const html = await get('/');
@@ -105,11 +108,15 @@ test('1.3: the headline is "The phone book is back." and "And AI can read it.", 
 });
 
 test('1.2, 1.7: the spine is drawn by CSS; the tabs show only on wide screens, and nothing pushes the page sideways', () => {
-  assert.match(lastRule('.book::before'), /content: "";/);
-  assert.match(lastRule('.book::before'), /border-right: 1px solid var\(--color-primary\);/);
-  // Hidden by default (phones), shown from 900 px.
+  // 1B follow-up: the spine is the base `.book::before` rule (the one with content: ""); the wide-screen rule only
+  // widens it.
+  const spine = baseRule('.book::before');
+  assert.match(spine, /content: "";/);
+  assert.match(spine, /border-right: 1px solid var\(--color-primary\);/);
+  assert.match(lastRule('.book::before'), /width: 2\.75rem;/, 'wider on wide screens');
+  // Hidden by default (phones), shown from 960 px, the site's one wide breakpoint.
   assert.match(CSS, /\.book-tabs \{ display: none; \}/);
-  const wide = /@media \(min-width: 900px\) \{\n  \/\* Room on the right[\s\S]*?\n\}/.exec(CSS)?.[0] ?? '';
+  const wide = /@media \(min-width: 960px\) \{\n  \/\* Room on the right[\s\S]*?\n\}/.exec(CSS)?.[0] ?? '';
   assert.match(wide, /\.book-tabs \{\s*display: flex;/);
   assert.match(wide, /\.book \{ max-width: min\(66rem, calc\(100% - 3rem\)\);/, 'room for the tabs that stand out 1rem');
   // The tab names are there for screen readers, hidden on screen.

@@ -88,6 +88,7 @@
   --color-gold:       #FFB547;   /* amber: thin rules, ornaments and highlights */
   --color-glow:       rgba(56, 225, 255, 0.35);
   --color-gold-glow:  rgba(255, 181, 71, 0.6);   /* Step 1B: the lit index tab */
+  --color-glow-soft:  rgba(56, 225, 255, 0.12);  /* Step 1C: the soft glow on every listing card */
   --color-spine:      #132A55;   /* Step 1B: the middle of the book's spine (decoration) */
   --color-ink:        #E8EEFC;   /* headings and the score number */
   --color-tan:        #131F3A;   /* empty-state card */
@@ -130,7 +131,7 @@
     --color-warn: #B45309; --color-warn-bg: #FFFBEB; --color-partly: #B7791F; --color-partly-bg: #FBF1DC;
     --color-partly-text: #8A5300; --color-partly-pill: rgba(183, 121, 31, 0.14); --color-mark-bg: #FFE58A; --color-mark-text: #0F1B33; --color-serp-title: #1A0DAB;
     --color-serp-url: #006621; --color-button-text: #FFFEF9; --color-focus: #0C2C73;
-    --color-gold-glow: rgba(184, 137, 59, 0.3); --color-spine: #F3E7CC;
+    --color-gold-glow: rgba(184, 137, 59, 0.3); --color-spine: #F3E7CC; --color-glow-soft: rgba(0, 0, 0, 0);
   }
 }
 
@@ -2611,7 +2612,9 @@ p.grade-prepared-by { font-weight: 700; font-size: 1.1rem; }
      which Chrome doesn't split across pages well), so the score box, the heading and the map share page 1; the list
      flows after it. The heading and intro stay with the map. */
   .health-layout { display: block !important; }
-  .health-map { order: -1; position: static !important; max-width: 12rem; margin: 0 auto 0.4rem; break-inside: avoid; break-before: avoid; }
+  /* Fix D: two classes (.grade-report .health-map), so this wins over the later one-class screen rule that sets the
+     map's width to 40rem. That rule came after this one in the file and made the printed map about 6.7 inches square. */
+  .grade-report .health-map { order: -1; position: static !important; max-width: 12rem; margin: 0 auto 0.4rem; break-inside: avoid; break-before: avoid; }
   .health > h2, .health-intro, .health > .grade-print-only { break-after: avoid; }
   /* Fix C: "Your fix kit" stays with its intro and its first box. */
   .grade-kit > h2, .grade-kit > h2 + p { break-after: avoid; }
@@ -2853,6 +2856,42 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 }
 
 /* =====================================================================
+   high-tech-look Step 1C: listing cards (Requirement 1.4, and the cards part of 1.11). Tokens only.
+   A soft glow on every card, a stronger one on Verified cards (with the existing Verified stamp), the "Details AI can
+   read" line, and a small lift on hover and keyboard focus. With reduced motion the cards don't move (see the last
+   reduced-motion block).
+   ===================================================================== */
+.listing-card {
+  margin-bottom: 1rem;
+  padding: 0.85rem 1rem 0.6rem;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+  box-shadow: 0 0 12px var(--color-glow-soft);
+  transition: transform 0.15s ease-out, box-shadow 0.15s ease-out, border-color 0.15s ease-out;
+}
+.listing-card.is-verified {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 20px var(--color-glow);
+}
+.listing-card:hover, .listing-card:focus-within {
+  transform: translateY(-2px);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 24px var(--color-glow);
+}
+.listing-card .listing-ai {
+  margin: 0.35rem 0 0.1rem;
+  font: 600 0.75rem ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+  color: var(--color-success);
+}
+.listing-card .listing-ai::before { content: "\25CF\00a0"; }
+/* Two cards side by side keep a gap between them, not a padding on one side only. */
+@media (min-width: 640px) {
+  .category > .listing-card:nth-of-type(odd),
+  .category-grid > .listing-card:nth-of-type(odd) { padding-right: 1rem; }
+}
+
+/* =====================================================================
    high-tech-look Step 1B: the open-book home page (Requirement 1.2, 1.3). Tokens only, like the 1A block.
    ===================================================================== */
 
@@ -2892,7 +2931,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   clip-path: inset(50%);
   white-space: nowrap;
 }
-@media (min-width: 900px) {
+/* From 960 px, the site's one wide breakpoint (the report's two columns start there too, W3). */
+@media (min-width: 960px) {
   /* Room on the right for the tabs, which stand 1rem out from the book, so nothing scrolls sideways. */
   .book { max-width: min(66rem, calc(100% - 3rem)); padding: 2.5rem 4rem 2.5rem 4.5rem; }
   .book::before { width: 2.75rem; }
@@ -2950,6 +2990,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
    Step 1A (Requirement 1.6): nothing else on the site moves either. */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  /* Step 1C: the cards still glow on hover and focus, but don't lift. */
+  .listing-card:hover, .listing-card:focus-within { transform: none !important; }
   .health-flow { animation: none; display: none; }
   .health-orb-host { display: none; }
   .health-scanning .health-branch { opacity: 1; transition: none; }

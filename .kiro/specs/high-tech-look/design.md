@@ -815,8 +815,8 @@ look-1.html and look-1.png were followed for the shape (book, spine, tabs, two-l
 
 | Line | As built | Where |
 |---|---|---|
-| 1.2 book | The home page's main area (head, search, check button, founders invite and listings) sits in `<div class="book">`, a dark panel with a glowing spine drawn by `.book::before`: cyan edge, soft inner glow, wider from 900 px. | `server/routes/home.js`, `style.css` |
-| 1.2 tabs | `<nav class="book-tabs" aria-label="Categories A to Z">`. One tab per first letter of the categories that have at least one listing, in A-Z order. Each tab is a real link to that letter's category page (`/?category=...`, the same page the search opens), with the category's name in the link for screen readers. The tab for the category being shown is lit (amber, dark text) and has `aria-current="page"`. The tabs stand down the right edge from 900 px and are hidden on phones. The book leaves room for them, so nothing scrolls sideways. | `home.js` (`bookTabs`), `style.css` |
+| 1.2 book | The home page's main area (head, search, check button, founders invite and listings) sits in `<div class="book">`, a dark panel with a glowing spine drawn by `.book::before`: cyan edge, soft inner glow, wider from 960 px. | `server/routes/home.js`, `style.css` |
+| 1.2 tabs | `<nav class="book-tabs" aria-label="Categories A to Z">`. One tab per first letter of the categories that have at least one listing, in A-Z order. Each tab is a real link to that letter's category page (`/?category=...`, the same page the search opens), with the category's name in the link for screen readers. The tab for the category being shown is lit (amber, dark text) and has `aria-current="page"`. The tabs stand down the right edge from 960 px (900 px before the 1B follow-up below) and are hidden on phones. The book leaves room for them, so nothing scrolls sideways. | `home.js` (`bookTabs`), `style.css` |
 | 1.3 headline | "The phone book is back." with "And AI can read it." on the next line in the glow color (cyan, still glow). The owner's sentence stays under it, word for word: "People now ask AI who to call. List your business free so AI can find it." | `home.js`, `style.css` |
 | 1.5, 1.6, 1.7 | Tokens only, no animation or transition in the 1B block, and the 12 px floor holds (the tabs are 12 px). Phones get a thin spine and no tabs. | `style.css` |
 | 1A nit 1 | The tag, pin, name, email and phone icons in the fields are drawn in the muted text color. They are pictures, which can't read a token, so the value (`#A9B6D3`, the same as `--color-text-muted`) is written into them, the same way the Partly icon has its amber. A test ties them to the token. | `style.css` |
@@ -831,6 +831,39 @@ look-1.html and look-1.png were followed for the shape (book, spine, tabs, two-l
 | Requirement 5.1 ("the same server-rendered HTML text") | | The home page gains the A-Z tabs (links to category pages that already exist and are in the sitemap) and the tagline's new wording. | 1.2 and 1.3 ask for both. Titles, descriptions, canonical links, robots rules, JSON-LD and the sitemap are unchanged (baseline test). |
 
 No older test line changed for Step 1B.
+
+### Step 1B follow-up: the two failures (1906 of 1908)
+
+| Failure | Decision | Change |
+|---|---|---|
+| `test/health-map.test.js:381` (W2, W3: "two columns only from 960 px") | Code. The test reads the stylesheet from the health map's comment to the end of the file. It checks that no `@media (min-width: 900px)` is there, so that the report's two columns start at 960 px, not 900 px. The 1B book block comes after the health map's CSS and used 900 px, a breakpoint the report had decided against (W3). | The book's wide layout (wider spine, A-Z tabs, room for the tabs) now starts at 960 px, the site's one wide breakpoint. The test is unchanged. |
+| `test/site-look-1b.test.js:107` | Test. My helper read the last `.book::before` rule. That is the one inside the wide-screen media query, which only sets the width (`width: 2.75rem`). The spine is drawn by the base rule, the one with `content: ""`. | The test reads the base rule for the spine (`content: ""` and the cyan edge) and the last rule for the wide width. It also reads the media query at 960 px. |
+
+| Where | Old | New | Why |
+|---|---|---|---|
+| `test/site-look-1b.test.js` (1.2, 1.7) | `lastRule('.book::before')` for the spine; the wide media query at 900 px | `baseRule('.book::before')` for the spine, `lastRule` for the wide width; 960 px | the two failures above |
+
+## Batch 6, fix D (batch6-fix-D-2026-11-26.md)
+
+| Item | Decision | As built |
+|---|---|---|
+| Print map width | Code, as the reader found. I confirmed it in the stylesheet: the print rule `.health-map { max-width: 12rem }` sits inside the report's `@media print` block. The screen rule `.health-map { ... max-width: 40rem ... }` comes later in the file, at the same specificity, so it won. The printed map was about 640 px (6.7 inches) square and could not fit under the score box. | The print rule's selector is now `.grade-report .health-map` (two classes), so it beats the one-class screen rule wherever that sits. The map is inside `<section class="grade-report grade-print">`, so it applies. Everything else in the rule is as in fix C. A test checks the two selectors, their order in the file and that no other one-class print rule sets the map's width. |
+| Page counts | Not measured here (no browser, no shell commands). Please re-measure the real `/print` page: 1 answer and 5 answers (Claude x3, ChatGPT, Perplexity), each with and without "Prepared by". Then put the four counts here. The only print change is the selector above. | |
+
+# Requirement 1, Step 1C: listing cards (site-look-steps-2026-11-26.md)
+
+| Line | As built | Where |
+|---|---|---|
+| 1.4 glow | Every listing card is a dark card with a thin border and a soft cyan glow (`--color-glow-soft`). A Verified listing's card (`is-verified`) has a cyan border and a stronger glow. The label is the existing Verified stamp, unchanged. | `server/lib/html.js` (`listingCard`), `style.css` |
+| 1.4 "Details AI can read" | Each card has a line, "Details AI can read: phone, hours, services, area, address, website", built by `readableFields` only from fields the listing really has, in that order. A field counts only with a real value: a non-blank phone, at least one filled-in day of hours, at least one non-blank service, and a non-blank service area, address or website. With none, the card has no line. The cards come from the public listing (`publicListing`), so a website that fails the check is never counted. | `html.js` |
+| 1.11 (cards) | On hover and keyboard focus (`:focus-within`, so tabbing to the card's links counts) a card lifts 2 px and its glow grows. With reduced motion the card still glows but doesn't lift, and the transition is off (the global 1A rule). | `style.css` |
+| 1.5, 1.7 | Tokens only. The details line is 12 px in the success green (AA on the card). Cards wrap long words as before. | `style.css` |
+
+Where the cards show: the home page and the category and city pages (the same `listingCard`). The listing page itself is not a card and is unchanged.
+
+No titles, meta tags, JSON-LD, sitemap, robots or noindex changed (the stored baseline test covers it). The cards add visible text, the details line, as 1.4 asks.
+
+No older test line changed for Step 1C. If an older test compares a whole card's HTML word for word, it will now see the details line and, for a Verified listing, the `is-verified` class. Both are on purpose (1.4).
 
 ## Batch 6, fix C (batch6-fix-C-2026-11-26.md)
 

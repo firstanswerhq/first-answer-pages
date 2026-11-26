@@ -719,6 +719,23 @@ test('fix C: the "1." before each question in "Every answer" uses lining figures
   assert.ok(rule.index > oldNumbers, 'and it comes after the Old Numbers rule, so it wins');
 });
 
+test('fix D: in print the 12rem map width wins over the later 40rem screen rule (higher specificity)', async () => {
+  const css = await fs.readFile(fileURLToPath(new URL('../public/css/style.css', import.meta.url)), 'utf8');
+  const prints = [...css.matchAll(/@media print \{([\s\S]*?)\n\}/g)].map(m => m[1]).join('\n');
+  // The print rule uses two classes, so it beats any one-class .health-map rule wherever that sits in the file.
+  assert.match(prints, /\.grade-report \.health-map \{ order: -1; position: static !important; max-width: 12rem;/);
+  // The screen rule that won before (one class, later in the file) is still there and still one class.
+  const screen = /\n\.health-map \{ order: -1; position: relative; max-width: 40rem;/.exec(css);
+  assert.ok(screen, 'the screen rule');
+  const printRule = css.indexOf('.grade-report .health-map { order: -1; position: static !important; max-width: 12rem;');
+  assert.ok(screen.index > printRule, 'the screen rule comes later, so only specificity can let print win');
+  // No other print rule sets a width on the map with one class only.
+  assert.equal(/(^|[\s,}])\.health-map \{[^}]*max-width/m.test(prints.replace(/\.grade-report \.health-map/g, 'X')), false);
+  // The map is inside the report section, so the two-class selector applies to it.
+  const html = printPage(realGrade(FIVE()));
+  assert.ok(/<section class="grade-report grade-print">[\s\S]*<div class="health-map"/.test(html));
+});
+
 test('fix B item 10: "How we checked" uses words for one to nine', () => {
   const nine = grade(Array.from({ length: 9 }, () => answer()));
   assert.match(howWeChecked(nine), /from Claude nine times\./);
