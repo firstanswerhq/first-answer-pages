@@ -82,7 +82,7 @@ test('V157, V203: "Check again" stays for a Grade with a website; when the AI pa
     const html = open(grade({ state, results: [...WEBSITE_ONLY, notChecked(state === 'limit' ? AI_LIMIT_REACHED : AI_FAILED)] }));
     assert.ok(html.includes('>Recheck my website only</button>'), state);
     assert.equal(html.includes('>Check again (website only, fast)</button>'), false, state);
-    assert.ok(html.includes(`To ask AI again after your changes, <a href="/grade?from=${ID}">run a full new check (asks AI again)</a>.`), state);
+    assert.ok(html.includes(`To ask AI again after your changes, <a href="/grade?from=${ID}">run a full new check</a>.`), state);
   }
 });
 

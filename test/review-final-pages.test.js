@@ -174,7 +174,11 @@ test('V136: a stored Grade shows the new labels (labels are read when the page i
   const g = grade({ results: [pass('ai-bots-allowed'), fail('business-labeled'), fail('title-city-service'), fail('reviews-visible')] });
   for (const result of g.results) assert.equal(Object.hasOwn(result, 'label'), false);
   const html = open(g);
-  for (const label of ['Can AI assistants get in?', 'Business label for AI', 'Page title', 'Reviews on your website']) {
+  // Batch 5 K10: the report's one name per check (the health map's name), read when the page is drawn.
+  for (const label of [
+    'Your website lets AI assistants read it (robots.txt)', 'Name, phone and address tagged for AI (business label)',
+    'Page title names your city and service', 'Reviews shown on your website',
+  ]) {
     assert.ok(html.includes(`<strong>${label}</strong>`), label);
   }
 });

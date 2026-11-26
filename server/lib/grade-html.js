@@ -1042,7 +1042,8 @@ function fixKit(grade, contactEmail, { offer = true } = {}) {
     ['kit-summary', name('summary', 'Page summary'), 'Use this as the summary Google shows under your title.', suggestedSummary(kit), passed('summary')],
     ['kit-label', name('business-labeled', 'Business label for AI'),
       // K13: the technical term once, the address too, and a plain warning when a placeholder is in the block (V137).
-      `Paste this business label (schema.org LocalBusiness markup) into your home page so AI can read your name, phone and address.${hasPlaceholder(label) ? ` ${REPLACE_CAPITALS}` : ''}`,
+      // V137 stays: with no phone found, the line says to put it in.
+      `Paste this business label (schema.org LocalBusiness markup) into your home page so AI can read your name, phone and address.${kit.phone ? '' : ' Put your phone number in before you paste.'}${hasPlaceholder(label) ? ` ${REPLACE_CAPITALS}` : ''}`,
       label, passed('business-labeled')],
     ['kit-llms', name('info-sheet', 'Info sheet for AI (llms.txt)'), 'Save this as a plain text file named llms.txt on your website.', llmsDraft(kit), passed('info-sheet')],
   ];
@@ -1100,7 +1101,8 @@ function leadForm(grade, { values = {}, errors = {} } = {}) {
 function recheckBlock(grade, rechecking) {
   // One sentence, used under the recheck button and on a report with no website (V251, V257, S17).
   // Batch 5 K14: each action is named by what it does.
-  const askAgain = `To ask AI again after your changes, ${runNewLink(grade, 'run a full new check (asks AI again)')}.`;
+  // Fix B: "run a full new check", the same words as the footer ("asks AI again" would repeat the sentence's start).
+  const askAgain = `To ask AI again after your changes, ${runNewLink(grade, FULL_NEW_CHECK)}.`;
   if (!grade.input.website) {
     return `<p class="hint">You didn't give a website, so there is nothing to check again. Your fix kit still has a draft you can use. ${askAgain}</p>`;
   }
@@ -1225,7 +1227,7 @@ export function reportPage(storedGrade, opts = {}) {
 
   const when = grade.finishedAt || grade.createdAt;
   // Batch 5 K23: who can see the report, next to the way to remove it. K4: an agency's printout ends with one line.
-  const foot = `<p class="grade-meta">Automated check, ${h(whenText(when))}. AI assistants pick up changes over days to weeks, so ${runNewLink(grade, 'run a new check')} after you make fixes.</p>
+  const foot = `<p class="grade-meta">Automated check, ${h(whenText(when))}. AI assistants pick up changes over days to weeks, so ${runNewLink(grade, FULL_NEW_CHECK)} after you make fixes.</p>
 <p class="hint grade-remove">Only people with this link can see this report. Ask us to remove this report: ${contactLink(contactEmail, contactEmail || 'contact page')}.</p>${agency ? `\n<p class="hint grade-powered">${POWERED_BY}</p>` : ''}`;
 
   const justOpened = opened && full && leadGate && unlocked
@@ -1275,6 +1277,9 @@ ${foot}
 
 /** The one-time scan when the health map first comes into view (2.10; decoration only). */
 export const HEALTH_SCAN_SCRIPT = '/js/health-scan.js';
+
+/** Batch 5 K14, fix B: the link that asks AI again, in the recheck line and the footer alike. */
+export const FULL_NEW_CHECK = 'run a full new check';
 
 /** Batch 5 K4: the one line about us on an agency's printable report. */
 export const POWERED_BY = 'Powered by First Answer Pages';

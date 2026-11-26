@@ -60,7 +60,8 @@ test('V203: one instruction, "Come back ... and press Run a new check", and a bo
   assert.ok(limit.includes('>Recheck my website only</button>'));
   for (const html of [failed, limit]) {
     assert.equal(/run the check again (tomorrow|later)/i.test(html), false, 'no second, different instruction');
-    assert.equal(html.includes('>Check again</button>'), false);
+    // Batch 5 K14: the plain button's new name, so this still checks that it is not shown.
+  assert.equal(html.includes('>Check again (website only, fast)</button>'), false);
   }
 });
 

@@ -707,6 +707,8 @@ The score, the Checks and every public page (robots.txt, sitemap, JSON-LD, noind
 | 12.1 | the cluster is named "Website is reachable" | "Website basics" | K9: the reader saw "Website is reachable" next to "Not checked" and a dozen passed checks. |
 | 13.4 | CSV: one row per health row and per answer, "Prepared by" on the first line | one header row first; report columns on every row; check, named and site rows added; "Prepared by" is a column | K17: a line above the header breaks spreadsheet imports, and agencies need score, points, names and sites. |
 | 13.2 | sites from every answer's stored sources | only from answers that used a live web search | K3: an answer from memory didn't visit the sites it lists. |
+| Report card names (V136, F3) | the score cards say "Can AI assistants get in?", "Business label for AI", "Page title", "Reviews on your website" and so on | the cards, "Fix these first", the fix kit and the CSV use the health map's name for each check ("Your website lets AI assistants read it (robots.txt)", "Name, phone and address tagged for AI (business label)", "Page title names your city and service", "Reviews shown on your website") | K10: one name per check on the whole report. The Checks' own labels outside the report are unchanged. |
+| Recheck button and links (V157, V203, V225-4, V251) | the button says "Check again"; the recheck line and the footer say "run a new check" | the button says "Check again (website only, fast)"; the recheck line and the footer both say "run a full new check" | K14: each action is named by what it does. Fix B chose "run a full new check" over "run a full new check (asks AI again)", because the sentence already starts "To ask AI again". "Check again" stays first, so the 11.2 sentence still matches. |
 
 Not in this batch: Requirements 9.5 to 9.8 (the Verified badge's checked-by, date and expiry, and the expired state). They are not in batch5-fixes-2026-11-25.md, so they are left for their own step.
 
@@ -725,5 +727,28 @@ Not in this batch: Requirements 9.5 to 9.8 (the Verified badge's checked-by, dat
 | `test/grade-o1-notes.test.js` (V157, V203 test) | `>Check again</button>` and "run a new check" in the recheck hint | `>Check again (website only, fast)</button>` and "run a full new check (asks AI again)" | K14 |
 
 New tests: `test/agency-report.test.js` (Z1, Z2, K1, K2, K3, K4, K5-K7, K8, K10-K13, K15, K16, K18, K19, K23), `test/mcp-receipts.test.js` (Z3, Z4, Z5), `test/health-scan.test.js` (K20), `test/website-alive.test.js` (K9).
+
+Fix B (batch5-fix-B-2026-11-25.md, 7 failures after fix A):
+
+| Failure | Decision | Change |
+|---|---|---|
+| `test/agency-report.test.js:124` (Y4) | Test out of date: K17 put the business columns first, so no row starts with `answer,`. | The test reads the CSV with a small parser and picks rows by the section column. It still checks that empty answers are skipped and the count matches share of voice. |
+| `test/agency-report.test.js:189` (K17) | Test too loose: `includes(',answer,')` can also match text in another column. | Rows are read by the section column. Exactly 2 answer rows are still required, and every row must have all 23 columns, so a real extra answer row would still fail. |
+| `test/grade-old-grades.test.js:204` (F3) | On purpose (K10). | The test expects `<strong>Reviews shown on your website</strong>`. |
+| `test/review-final-pages.test.js:178` (V136) | On purpose (K10). The point (names are read when drawn, never stored) is kept. | The test expects the four new names. |
+| `test/grade-reader-notes2.test.js:192` (V251) | Wording chosen: "run a full new check" in the recheck line and the footer (`FULL_NEW_CHECK`). | Code: the recheck line and the footer use the same words. Tests: V251 and grade-o1-notes V157. |
+| `test/grade-reader-notes2.test.js:225` (V225-4) | On purpose (K14): the failing line was the "not connected" case, which looked for the old `>Check again</button>`. "Recheck my website only" is unchanged. | The test looks for `>Check again (website only, fast)</button>`. The "not shown" lines in V225-4 and grade-reader-notes V203 also use the new name, so they still guard something. |
+| `test/review-final-pages.test.js:193` (V137) | Code wrong: K13 dropped "Put your phone number in before you paste." by mistake. The `offer:` flag did not hide anything. | The sentence is back, before the bold "Replace the CAPITAL WORDS before pasting." |
+
+| Where | Old | New | Why |
+|---|---|---|---|
+| `test/agency-report.test.js` (batch 4 Y4) | `split('\r\n').filter(line => line.startsWith('answer,'))` | `csvSection(text, 'answer')` and the engines in order | K17 |
+| `test/agency-report.test.js` (13.4, K17) | `includes(',answer,')`, `includes(',health,')` and regexes on whole lines | section-column reads and field checks, and every row has 23 columns | K17 |
+| `test/grade-old-grades.test.js` (F3) | `<strong>Reviews on your website</strong>` | `<strong>Reviews shown on your website</strong>` | K10 |
+| `test/review-final-pages.test.js` (V136) | the four old card labels | the four health map names | K10 |
+| `test/grade-reader-notes2.test.js` (V251) | `run a new check` link in the recheck line and the footer | `run a full new check` | K14 |
+| `test/grade-reader-notes2.test.js` (V225-4) | `>Check again</button>` | `>Check again (website only, fast)</button>` | K14 |
+| `test/grade-reader-notes.test.js` (V203) | `>Check again</button>` is not shown | `>Check again (website only, fast)</button>` is not shown | K14 |
+| `test/grade-o1-notes.test.js` (V157) | `run a full new check (asks AI again)` | `run a full new check` | fix B wording |
 
 Fix A (batch5-fix-A-2026-11-25.md): in `reportPage`, the Requirement 13 sections value was renamed `agencySections`, so it no longer clashes with the K4 yes/no `agency` option (a SyntaxError that stopped grade-html.js from loading). `healthModel` gets the yes/no `agency`, as intended. Every other K4 edit (allChecks, checkRow, fixKit, printPage, reportCsvFor, health-map.js listingSub and healthModel, mcp.js) was read again for names declared twice. No other clash was found.

@@ -32,6 +32,31 @@ const grade = (ai, extra = {}) => ({
   aiMain: { provider: 'anthropic', label: 'Claude', state: 'ok' }, ...extra,
 });
 
+/** The rows of a CSV, each an array of cells (quoted cells may hold commas, quotes and line breaks). */
+function parseCsv(text) {
+  const rows = [];
+  let row = [];
+  let cell = '';
+  let quoted = false;
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+    if (quoted) {
+      if (ch === '"' && text[i + 1] === '"') { cell += '"'; i += 1; } else if (ch === '"') quoted = false; else cell += ch;
+    } else if (ch === '"') quoted = true;
+    else if (ch === ',') { row.push(cell); cell = ''; } else if (ch === '\r' && text[i + 1] === '\n') {
+      row.push(cell); rows.push(row); row = []; cell = ''; i += 1;
+    } else cell += ch;
+  }
+  if (cell !== '' || row.length > 0) { row.push(cell); rows.push(row); }
+  return rows;
+}
+/** The rows of one section ("check", "health", "answer", "named", "site"), read by the section column, as objects. */
+function csvSection(text, section) {
+  const [head, ...rows] = parseCsv(text);
+  const at = head.indexOf('section');
+  return rows.filter(r => r[at] === section).map(r => Object.fromEntries(head.map((name, k) => [name, r[k]])));
+}
+
 test('13.1: who AI named across the answers that came back; the checked business is always a row', () => {
   const g = grade([
     answer({ named: true, competitors: ['Ridge Plumbing', 'Ace Drains'] }),
@@ -128,9 +153,11 @@ test('batch 4 Y4: the CSV has the same answers as "across N answers" (an answer 
     answer({ provider: 'gemini', answer: '   ' }),
     answer({ provider: 'grok', answer: '' }),
   ]);
-  const rows = reportCsvFor(g).split('\r\n').filter(line => line.startsWith('answer,'));
+  // Batch 5 fix B: rows are read by their section column (K17 put the business columns first on every row).
+  const rows = csvSection(reportCsvFor(g), 'answer');
   assert.equal(rows.length, shareOfVoice(g).total);
   assert.equal(rows.length, 2);
+  assert.deepEqual(rows.map(r => r.engine), ['Claude', 'ChatGPT'], 'the two answers with text, in order');
   assert.equal(answersOf(g).length, 2);
 });
 
@@ -183,16 +210,24 @@ test('13.4, batch 5 K17: one header row first; the report\'s own columns on ever
 
   // The real report: one row per scored check, per health map row, per answer that came back.
   const g = grade([answer({ named: true, competitors: ['Ridge Plumbing'] }), answer({ provider: 'chatgpt', webSearch: false, sources: [{ url: 'https://yelp.com/x' }] })]);
-  const real = reportCsvFor(g).trim().split('\r\n');
+  const text = reportCsvFor(g);
+  const real = text.trim().split('\r\n');
   assert.equal(real[0], CSV_COLUMNS.join(','));
   assert.ok(real[1].startsWith('Zephyr Plumbing,https://zephyr.example/,Nashville,TN,'));
-  assert.equal(real.filter(l => l.includes(',answer,')).length, 2);
-  assert.ok(real.filter(l => l.includes(',health,')).length >= 40);
-  assert.ok(real.some(l => /,answer,,,,,,,Claude,claude-test,yes,.*,yes,/.test(l)));
+  // Batch 5 fix B: rows are read by their section column, never by text that may also sit in another column.
+  const answerRows = csvSection(text, 'answer');
+  assert.equal(answerRows.length, 2, 'one row per answer that came back, no more');
+  assert.ok(csvSection(text, 'health').length >= 40);
+  const claude = answerRows.find(r => r.engine === 'Claude');
+  assert.deepEqual([claude.model, claude.web_search, claude.named], ['claude-test', 'yes', 'yes']);
   // K3: an answer from memory lists no cited sites.
-  assert.ok(real.some(l => /,answer,,,,,,,ChatGPT,claude-test,no,.*,no,1\. Some answer,,,/.test(l)));
-  assert.ok(real.some(l => l.includes(',named,,Ridge Plumbing,,,,1 of 2,')));
-  assert.ok(real.some(l => l.includes(',health,Website: Search basics,')), 'the cluster is named with its group');
+  const chatgpt = answerRows.find(r => r.engine === 'ChatGPT');
+  assert.deepEqual([chatgpt.model, chatgpt.web_search, chatgpt.named, chatgpt.answer, chatgpt.sites_cited], ['claude-test', 'no', 'no', '1. Some answer', '']);
+  const ridge = csvSection(text, 'named').find(r => r.item === 'Ridge Plumbing');
+  assert.equal(ridge.detail, '1 of 2');
+  assert.ok(csvSection(text, 'health').some(r => r.group === 'Website: Search basics'), 'the cluster is named with its group');
+  // Every row has every column.
+  for (const row of parseCsv(text)) assert.equal(row.length, CSV_COLUMNS.length);
 });
 
 test('13.4: the print page opens every answer and the print stylesheet hides the menu, buttons, forms and animation', async () => {

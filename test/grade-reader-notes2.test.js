@@ -184,7 +184,8 @@ test('V225-2: the extra-question run writes extraAiDoneAt when it ends, also whe
 // ---- V251, V244: a way to ask AI again on every report --------------------------------------------------------------
 
 test('V251: every report says how to ask AI again, as a link, and the footer says to run a new check', () => {
-  const link = `<a href="/grade?from=${ID}">run a new check</a>`;
+  // Batch 5 K14, fix B: "run a full new check" in the recheck line and the footer alike.
+  const link = `<a href="/grade?from=${ID}">run a full new check</a>`;
   const ok = grade({ ai: [entry(FREE, true)], state: 'ok', results: okResults() });
   const failed = grade({ state: 'failed' });
   for (const g of [ok, failed]) {
@@ -219,10 +220,11 @@ test('V225-4: an old report saved by the rescue line (state "ok" but partial) sh
   const g = grade({ ai: [entry(EXTRA_1, true), entry(EXTRA_2, true)], results: [...WEBSITE_ONLY, stored], state: 'ok' });
   const html = open(g);
   assert.ok(html.includes('>Recheck my website only</button>'));
-  assert.equal(html.includes('>Check again</button>'), false);
+  // Batch 5 K14: the plain button is now named by what it does.
+  assert.equal(html.includes('>Check again (website only, fast)</button>'), false);
   // Not connected: nothing to ask again, so the plain button stays.
   const off = open(grade({ state: 'not_connected', results: [...WEBSITE_ONLY, notChecked("AI check isn't connected")] }));
-  assert.ok(off.includes('>Check again</button>'));
+  assert.ok(off.includes('>Check again (website only, fast)</button>'));
 });
 
 // ---- V241 -------------------------------------------------------------------------------------------------------

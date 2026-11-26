@@ -201,7 +201,8 @@ test('F3: a Recheck of an old Grade adds the Check and shows no "before" line', 
   const text = await report(env, id);
   assert.equal(text.includes('Your score was'), false);
   assert.ok(text.includes('<span class="num">39</span>'));
-  assert.ok(text.includes('<strong>Reviews on your website</strong>'));
+  // Batch 5 K10: the card uses the health map's name for this check.
+  assert.ok(text.includes('<strong>Reviews shown on your website</strong>'));
 });
 
 test('F3: a Grade that already had the Check still shows its "before" line after a Recheck', async () => {
