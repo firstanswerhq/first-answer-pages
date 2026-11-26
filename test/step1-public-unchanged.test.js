@@ -98,6 +98,62 @@ test('robots.txt and sitemap.xml still list what they listed, and the public JSO
   }
 });
 
+/** The tags in a page's <head>, as plain strings, in order. */
+function headTags(html) {
+  const head = /<head>([\s\S]*?)<\/head>/.exec(html)?.[1] ?? '';
+  return [...head.matchAll(/<(meta|title|link|script|style|base)\b[^>]*>/g)].map(m => m[0]);
+}
+
+test('Step 1A (Requirement 5): the dark theme is the stylesheet only; every public page has the same kinds of head tags', async () => {
+  const s = await start();
+  const pages = ['/', `/listings/${LISTING.id}`, '/about', '/privacy', '/rise', '/grade', '/grade/about'];
+  for (const p of pages) {
+    const res = await s.get(p);
+    assert.equal(res.status, 200, p);
+    const tags = headTags(res.text);
+    // Only the tags the site has always used: charset, viewport, title, description, robots, canonical, icon, the one
+    // stylesheet, JSON-LD and module scripts from this site (and Cloudflare's own human-check script).
+    for (const tag of tags) {
+      const ok = /^<meta charset="utf-8">$/.test(tag)
+        || /^<meta name="viewport" content="width=device-width, initial-scale=1">$/.test(tag)
+        || /^<title>/.test(tag)
+        || /^<meta name="description" content="[^"]*">$/.test(tag)
+        || /^<meta name="robots" content="[^"]*">$/.test(tag)
+        || /^<meta http-equiv="refresh" content="\d+">$/.test(tag)
+        || /^<link rel="canonical" href="https:\/\/pages\.example\.test\/[^"]*">$/.test(tag)
+        || tag === '<link rel="icon" href="/favicon.svg" type="image/svg+xml">'
+        || tag === '<link rel="stylesheet" href="/css/style.css">'
+        || tag === '<script type="application/ld+json">'
+        || /^<script type="module" src="\/js\/[\w-]+\.js">$/.test(tag)
+        || /^<script src="https:\/\/challenges\.cloudflare\.com\/turnstile\/v0\/api\.js" async defer>$/.test(tag)
+        // Sharing and feed tags some pages may already carry (never added by the theme).
+        || /^<meta (?:property="og:[\w:]+"|name="twitter:[\w:]+") content="[^"]*">$/.test(tag)
+        || /^<link rel="alternate" [^>]*>$/.test(tag);
+      assert.ok(ok, `${p}: unexpected head tag ${tag}`);
+    }
+    // Exactly one stylesheet, the site's own, and no inline style anywhere in the head.
+    assert.equal(tags.filter(t => t.startsWith('<link rel="stylesheet"')).length, 1, p);
+    assert.equal(tags.some(t => t.startsWith('<style')), false, p);
+    assert.equal(tags.filter(t => t.startsWith('<title>')).length, 1, p);
+    // The page still opens with the same document shape: the theme adds no wrapper, class or attribute to <html> or <body>.
+    assert.match(res.text, /^<!DOCTYPE html>\n<html lang="en">\n<head>/, p);
+    assert.match(res.text, /<\/head>\n<body>\n  <nav class="site-nav">/, p);
+  }
+  // The pages open to search keep their canonical link and description (the earlier tests check the listing's JSON-LD).
+  for (const p of ['/', `/listings/${LISTING.id}`]) {
+    const text = (await s.get(p)).text;
+    assert.match(text, /<link rel="canonical" href="https:\/\/pages\.example\.test\//, p);
+    assert.match(text, /<meta name="description" content="[^"]+">/, p);
+  }
+  // The stylesheet is served as CSS from this site, and the fonts it uses are this site's own files.
+  const css = await s.get('/css/style.css');
+  assert.equal(css.status, 200);
+  assert.match(css.headers.get('content-type') ?? '', /text\/css/);
+  for (const m of css.text.matchAll(/url\("([^"]+)"\)/g)) {
+    assert.ok(m[1].startsWith('/fonts/') || m[1].startsWith('data:'), `no outside file: ${m[1].slice(0, 60)}`);
+  }
+});
+
 test('the admin pages and the reports stay out of search', async () => {
   const s = await start();
   const admin = await s.get('/admin/pending', { Authorization: 'Bearer t' });

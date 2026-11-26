@@ -778,6 +778,29 @@ The score, the Checks and every public page are unchanged. No report content is 
 
 New tests (`test/agency-report.test.js`): item 1 (print width limit and order, answers once, cards that need work, the print-only line), item 2 (kicker, no Free listing group in the agency report, model and CSV), item 3 (no broken printed sentence), item 5 (order and the summary line), item 8 (How we checked), item 9, item 10, nits 11 to 13 and 15, and `csvDate`.
 
+# Requirement 1, Step 1A: the dark theme on every page (site-look-steps-2026-11-26.md)
+
+Only `public/css/style.css` changed in the product. No server file, template, title, meta tag, JSON-LD, sitemap, robots, canonical or noindex changed, so the HTML of every page is the same as before. The mockup look-1.html and the dark dashboard picture were used for mood only: no text, logo or layout was copied.
+
+| Line | As built |
+|---|---|
+| 1.1 tokens | Every color is a token in the one `:root` block at the top of the stylesheet: near-black page `#070B16` (with a soft glow at the top), panels `#0C1324`, near-white text, cyan `#38E1FF` (buttons and links), pink `#FF4FA3` (accent, not yet used), amber `#FFB547` (rules, highlights, focus). The second `:root` that held the mockup colors now keeps only `--radius`. Print has the paper values of the same tokens in a block right after, so a printed page is dark ink on white. |
+| 1.1 every page | A theme block near the end of the stylesheet (before the reduced-motion block, so it overrides the older rules) recolors what had literal colors: the page, links, buttons (cyan with dark text and a still glow), every form field, panels, quotes, code, the free listing card, the search preview, check cards, pills, the Verified badge and the highlight in answers. It names no color, only tokens. Every page uses the one stylesheet, so the home, category, listing, claim, check, report and admin pages all turn dark. The health map keeps its own colors (`.health`). |
+| 1.5 contrast | Worked out from the tokens in `test/site-look-1a.test.js`: every text pair is 4.5:1 or more (for example text on the page 17:1, muted text on panels 9:1, cyan links on panels 11:1, dark text on the cyan button 12:1, the status colors on their own backgrounds 6:1 or more). Field borders and the amber focus outline are 3:1 or more. The "Partly" amber stays `#B7791F` (5.1:1 on the panels) because its icon is a picture with that color written in. |
+| 1.5 12 px | `.grade-result` (the pass/fail pills) went from 0.72rem to 0.75rem. No other text was under 12 px. The test reads every `font-size` in the stylesheet. |
+| 1.5 focus | Every link, button, field and summary gets a 3px amber outline on keyboard focus. |
+| 1.6 reduced motion | The last reduced-motion block now also stops every animation and transition on the site (`*, *::before, *::after`). The health map's own reduced-motion rules stay. |
+| 1.7 390 px | `pre`, tables, images, SVG and video never grow past the page, code blocks scroll inside themselves, and `main` wraps long words. The test checks that no rule sets a width or minimum width over 390 px. |
+| Requirement 5 | `test/step1-public-unchanged.test.js` now renders the home, listing, about, privacy, claim, check and check-about pages. It checks that each head has only the tags the site has always used, with exactly one stylesheet (`/css/style.css`) and no inline style, and that `<html>`, `<head>` and `<body>` open the same way. It checks that the canonical link and description are kept, and that the stylesheet loads only this site's fonts and data pictures. The earlier tests in that file still check the listing's JSON-LD, robots.txt, the sitemap and noindex. |
+
+Not measured: the colors were checked from the token values, not by looking at rendered pages (no shell commands, so no browser here). Please look at the pages at 390 px and 1280 px, with and without reduced motion.
+
+Known for later steps (not changed in 1A):
+- The small icons inside the search fields and the lead form are pictures drawn in dark ink, so they barely show on the dark fields. They are decoration (the labels say what each field is). Step 1B can redraw them.
+- The pink accent token is defined but not used yet. Step 1B uses it in the headline.
+
+No older test line changed for Step 1A.
+
 ## Batch 6, fix B (batch6-fix-B-2026-11-26.md, from review-2026-11-25-batch6.md and review-2026-11-25-batch6-reader.md)
 
 The score, the Checks and every public page are unchanged. `layout` gains an option to leave out the header button, and every public page keeps the default, so their HTML is byte for byte the same.

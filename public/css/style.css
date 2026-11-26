@@ -63,35 +63,71 @@
   src: url("/fonts/fira-sans-condensed-latin-700-italic.woff2") format("woff2");
 }
 
+/* high-tech-look Step 1A (Requirement 1.1, 1.5): the dark theme. Every color of the site is a token here, in this one
+   block: near-black, one main glow color (cyan), one accent (pink) and one highlight (amber). Each text and button pair
+   meets WCAG AA (test/site-look-1a.test.js works the ratios out from these values). The health map keeps its own
+   colors in `.health` (Requirement 2). Print gets the paper colors in the block right after this one. */
 :root {
-  /* Paper & ink */
-  --color-page-bg:    #F8F1E3;   /* warm cream paper */
-  --color-surface:    #FFFEF9;   /* soft off-white cards */
-  --color-text:       #1C1917;   /* near-black */
-  --color-text-muted: #57534E;   /* secondary text */
-  --color-divider:    #44403C;   /* charcoal rules */
+  /* Night paper */
+  --color-page-bg:    #070B16;   /* near-black page */
+  --color-glow-bg:    #14244A;   /* the soft glow at the top of the page */
+  --color-surface:    #0C1324;   /* panels and cards */
+  --color-surface-2:  #0A142B;   /* cards inside panels, quotes, code */
+  --color-input-bg:   #081022;   /* form fields */
+  --color-code-bg:    #081022;
+  --color-text:       #E8EEFC;   /* near-white */
+  --color-text-muted: #A9B6D3;   /* secondary text */
+  --color-divider:    #5B6E96;   /* rules and field borders (3:1 or more on every surface) */
+  --color-line:       #1C2A48;   /* hairlines between cards (decoration only) */
 
-  /* Accent & status */
-  --color-primary:    #1E3A5F;   /* deep ink blue */
-  --color-primary-hover: #152A45;
-  --color-link:       #1E3A5F;
-  --color-success:    #2D6A4F;   /* forest green */
-  --color-success-bg: #E8F5E9;
-  --color-fail:       #9B2C2C;   /* deep brick */
-  --color-fail-bg:    #FEF2F2;
-  --color-warn:       #B45309;   /* amber */
-  --color-warn-bg:    #FFFBEB;
-  --color-partly:      #B7791F;  /* the AI check's "Partly": an amber of its own, between pass and fail */
-  --color-partly-bg:   #FBF1DC;
-  --color-partly-text: #8A5300;
-  --color-partly-pill: rgba(183, 121, 31, 0.14);
+  /* Glow, accent, highlight */
+  --color-primary:    #38E1FF;   /* cyan: buttons and links */
+  --color-primary-hover: #7EEBFF;
+  --color-link:       #38E1FF;
+  --color-accent:     #FF4FA3;   /* pink */
+  --color-gold:       #FFB547;   /* amber: thin rules, ornaments and highlights */
+  --color-glow:       rgba(56, 225, 255, 0.35);
+  --color-ink:        #E8EEFC;   /* headings and the score number */
+  --color-tan:        #131F3A;   /* empty-state card */
 
-  /* Surfaces */
-  --color-button-text: #FFFEF9;
-  --color-focus:      #1E3A5F;
+  /* Status */
+  --color-success:    #4ADE80;
+  --color-success-bg: #0F2A1C;
+  --color-fail:       #F87171;
+  --color-fail-bg:    #2A1215;
+  --color-warn:       #FFB547;
+  --color-warn-bg:    #2A1F0B;
+  --color-partly:      #B7791F;  /* the AI check's "Partly": the same amber as its icon (5.1:1 on the panels) */
+  --color-partly-bg:   #2A2108;
+  --color-partly-text: #FFD27A;
+  --color-partly-pill: rgba(251, 191, 36, 0.16);
+
+  /* Highlight in answers, and the search preview */
+  --color-mark-bg:    #FFB547;
+  --color-mark-text:  #04101F;
+  --color-serp-title: #8AB4F8;
+  --color-serp-url:   #7DD3A0;
+
+  /* Buttons, focus, shadows */
+  --color-button-text: #04101F;  /* dark text on the cyan button */
+  --color-focus:      #FFB547;   /* amber focus outline: visible on every dark surface */
   --radius:           4px;
-  --shadow-sm:        0 1px 2px rgba(28, 25, 23, 0.06);
-  --shadow-md:        0 4px 12px rgba(28, 25, 23, 0.08);
+  --shadow-sm:        0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-md:        0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+/* Paper: printed pages use dark ink on white (the same tokens, paper values). */
+@media print {
+  :root {
+    --color-page-bg: #FFFFFF; --color-glow-bg: #FFFFFF; --color-surface: #FFFFFF; --color-surface-2: #FFFFFF;
+    --color-input-bg: #FFFFFF; --color-code-bg: #FFFFFF; --color-text: #1C1917; --color-text-muted: #57534E;
+    --color-divider: #44403C; --color-line: #D9CDB4; --color-primary: #0C2C73; --color-primary-hover: #081F52;
+    --color-link: #0C2C73; --color-gold: #B8893B; --color-ink: #0F1B33; --color-tan: #F3E7CC;
+    --color-success: #2D6A4F; --color-success-bg: #E8F5E9; --color-fail: #9B2C2C; --color-fail-bg: #FEF2F2;
+    --color-warn: #B45309; --color-warn-bg: #FFFBEB; --color-partly: #B7791F; --color-partly-bg: #FBF1DC;
+    --color-partly-text: #8A5300; --color-mark-bg: #FFE58A; --color-mark-text: #0F1B33; --color-serp-title: #1A0DAB;
+    --color-serp-url: #006621; --color-button-text: #FFFEF9; --color-focus: #0C2C73;
+  }
 }
 
 /* ---------- Reset & base ---------- */
@@ -1567,14 +1603,8 @@ summary {
    Centered serif headings, gold rules, icon fields, big score, check rows
    ===================================================================== */
 
+/* high-tech-look Step 1A: every color is in the one :root block at the top of this file (Requirement 1.1). */
 :root {
-  --color-primary: #0C2C73;        /* phone-book blue for buttons and links */
-  --color-primary-hover: #081F52;
-  --color-link: #0C2C73;
-  --color-focus: #0C2C73;
-  --color-ink: #0F1B33;            /* score number and dark buttons */
-  --color-gold: #B8893B;           /* thin rules and ornaments */
-  --color-tan: #F3E7CC;            /* empty-state card */
   --radius: 6px;
 }
 
@@ -2024,7 +2054,7 @@ summary {
   border: 1.5px solid currentColor;
   border-radius: 999px;
   background: transparent;
-  font-size: 0.72rem;
+  font-size: 0.75rem; /* Step 1A: 12 px is the smallest text on the site (was 0.72rem) */
   letter-spacing: 0.06em;
 }
 
@@ -2719,8 +2749,94 @@ p.grade-prepared-by { font-weight: 700; font-size: 1.1rem; }
   .health-back { display: inline-block; margin-top: 0.4rem; font-size: 0.9rem; }
 }
 
-/* Reduced motion: no dots move and the orb stays still; the line colors and the words show the status. */
+/* =====================================================================
+   high-tech-look Step 1A: the dark theme on every page (Requirement 1.1, 1.5, 1.6, 1.7)
+   Colors come only from the tokens in the :root block at the top of the file; nothing below names a color.
+   The health map keeps its own colors (.health). The layout of each page is unchanged (1B to 1E come later).
+   ===================================================================== */
+
+body {
+  background: radial-gradient(1200px 600px at 50% -10%, var(--color-glow-bg) 0%, var(--color-page-bg) 60%) var(--color-page-bg);
+  background-attachment: fixed;
+  color: var(--color-text);
+}
+
+a { color: var(--color-link); }
+a:hover:not(.google-search-suggestions *) { color: var(--color-primary-hover); }
+
+/* Headings and the top bar */
+.site-nav, .site-footer { background: transparent; border-color: var(--color-line); }
+.site-nav a.brand { color: var(--color-text); }
+
+/* Buttons: the cyan glow color with dark text, and a soft glow (no movement). */
+.button, button.button, .site-nav a.nav-cta, .grade-lead .button {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-button-text);
+  box-shadow: 0 0 18px var(--color-glow);
+}
+.button:hover, .button:focus-visible, .site-nav a.nav-cta:hover,
+.grade-lead .button:hover, .grade-lead .button:focus-visible {
+  background: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
+  color: var(--color-button-text);
+}
+
+/* Form fields */
+.rise-form input[type="text"], .rise-form input[type="tel"], .rise-form input[type="email"], .rise-form input[type="url"],
+.rise-form select, .rise-form textarea, .quote-form input[type="text"], .quote-form textarea, .field input[type="tel"],
+.field input[type="email"], .field input[type="text"], .filters select, .filters input, .verify-code input,
+.grade-prepared input, input, select, textarea {
+  background-color: var(--color-input-bg);
+  color: var(--color-text);
+  border-color: var(--color-divider);
+}
+.filters label { background-color: var(--color-input-bg); border-color: var(--color-divider); color: var(--color-text); }
+.filters select, .filters input { background-color: transparent; color: var(--color-text); }
+.grade-lead .field input { background-color: var(--color-input-bg); border-color: var(--color-gold); }
+::placeholder { color: var(--color-text-muted); opacity: 1; }
+select option { background: var(--color-input-bg); color: var(--color-text); }
+
+/* Panels, cards and quotes */
+.stamp { background: var(--color-surface); }
+.demo-banner { background: var(--color-warn-bg); color: var(--color-text); }
+.admin-warning { color: var(--color-warn); }
+.seance-not-named { color: var(--color-partly-text); }
+.seance-demo { color: var(--color-text-muted); }
+.seance-result.seance-demo { background: var(--color-surface-2); border-left-color: var(--color-divider); }
+.rise pre, .kit-item pre, pre { background: var(--color-code-bg); color: var(--color-text); border-color: var(--color-divider); }
+.grade-preview { background: var(--color-surface); border-color: var(--color-gold); }
+.serp { background: var(--color-surface-2); border-color: var(--color-divider); }
+.serp-title { color: var(--color-serp-title); }
+.serp-url { color: var(--color-serp-url); }
+.grade-check, .grade-check.pass, .grade-check.partly, .grade-check.fail, .grade-check.needs_work, .grade-top-fails li {
+  border-top-color: var(--color-line);
+  border-right-color: var(--color-line);
+  border-bottom-color: var(--color-line);
+}
+.grade-check.not_checked { border-left-color: var(--color-divider); }
+.grade-check.pass .grade-result { background: var(--color-success-bg); }
+.grade-check.fail .grade-result, .grade-check.needs_work .grade-result { background: var(--color-fail-bg); }
+.grade-competitors .grade-you { background: var(--color-surface-2); }
+.verified-badge { color: var(--color-button-text); }
+.grade-answer mark { background: var(--color-mark-bg); color: var(--color-mark-text); }
+.grade-prepared .button-secondary:hover { color: var(--color-button-text); }
+
+/* Requirement 1.7: 390 px wide with no sideways scrolling. */
+pre, table, img, svg, video { max-width: 100%; }
+pre { overflow-x: auto; }
+main { min-width: 0; overflow-wrap: anywhere; }
+
+/* Requirement 1.5: focus outlines stay visible on the dark background. */
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* Reduced motion: no dots move and the orb stays still; the line colors and the words show the status.
+   Step 1A (Requirement 1.6): nothing else on the site moves either. */
 @media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
   .health-flow { animation: none; display: none; }
   .health-orb-host { display: none; }
   .health-scanning .health-branch { opacity: 1; transition: none; }
