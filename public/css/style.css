@@ -108,6 +108,7 @@
   --color-serp-title: #8AB4F8;
   --color-serp-url:   #7DD3A0;
 
+  /* Surfaces */
   /* Buttons, focus, shadows */
   --color-button-text: #04101F;  /* dark text on the cyan button */
   --color-focus:      #FFB547;   /* amber focus outline: visible on every dark surface */
@@ -125,7 +126,7 @@
     --color-link: #0C2C73; --color-gold: #B8893B; --color-ink: #0F1B33; --color-tan: #F3E7CC;
     --color-success: #2D6A4F; --color-success-bg: #E8F5E9; --color-fail: #9B2C2C; --color-fail-bg: #FEF2F2;
     --color-warn: #B45309; --color-warn-bg: #FFFBEB; --color-partly: #B7791F; --color-partly-bg: #FBF1DC;
-    --color-partly-text: #8A5300; --color-mark-bg: #FFE58A; --color-mark-text: #0F1B33; --color-serp-title: #1A0DAB;
+    --color-partly-text: #8A5300; --color-partly-pill: rgba(183, 121, 31, 0.14); --color-mark-bg: #FFE58A; --color-mark-text: #0F1B33; --color-serp-title: #1A0DAB;
     --color-serp-url: #006621; --color-button-text: #FFFEF9; --color-focus: #0C2C73;
   }
 }
@@ -2574,6 +2575,13 @@ p.grade-prepared-by { font-weight: 700; font-size: 1.1rem; }
   font-feature-settings: "lnum" 1;
 }
 .grade-report, .health, .health-row-name { font-variant-numeric: lining-nums; }
+/* Batch 6 fix C: the "1." before each question in "Every answer" was drawn by "Old Numbers" too (the ::marker rule),
+   and its 1 looked like a small capital I. Plain lining figures here. */
+.grade-all-answers ol > li::marker {
+  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  font-variant-numeric: lining-nums;
+  font-feature-settings: "lnum" 1;
+}
 /* Batch 5 K18: the Save button looks like the other buttons on the page. */
 .grade-prepared .button-secondary {
   min-height: 2.5rem; padding: 0.45rem 1.1rem; border: 2px solid var(--color-primary); border-radius: var(--radius);
@@ -2595,9 +2603,16 @@ p.grade-prepared-by { font-weight: 700; font-size: 1.1rem; }
   details > summary, .copy-btn, .grade-remove { display: none !important; }
   .grade-print-only { display: block !important; }
   .health-svg-full { display: block !important; }
-  /* Batch 6 item 1: the map is small and first, so the score box and the map share page 1; the list flows after it. */
-  .health-layout { display: flex !important; flex-direction: column; }
-  .health-map { order: -1; position: static !important; max-width: 12rem; margin: 0 auto 0.4rem; break-inside: avoid; }
+  /* Batch 6 item 1, fix C: the map is small and comes first in the print page's HTML, in a plain block layout (no flex,
+     which Chrome doesn't split across pages well), so the score box, the heading and the map share page 1; the list
+     flows after it. The heading and intro stay with the map. */
+  .health-layout { display: block !important; }
+  .health-map { order: -1; position: static !important; max-width: 12rem; margin: 0 auto 0.4rem; break-inside: avoid; break-before: avoid; }
+  .health > h2, .health-intro, .health > .grade-print-only { break-after: avoid; }
+  /* Fix C: "Your fix kit" stays with its intro and its first box. */
+  .grade-kit > h2, .grade-kit > h2 + p { break-after: avoid; }
+  .grade-kit > p + .kit-item { break-before: avoid; }
+  .kit-item > h3, .kit-item > .hint { break-after: avoid; }
   /* Fix B item 1: the health list prints only the rows that are not green (a line above it says so). */
   .health-row.health-good { display: none !important; }
   .health-intro { margin: 0 0 0.25rem; }

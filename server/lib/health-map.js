@@ -542,17 +542,28 @@ function phoneSvg(model) {
  * @param {{ full?: boolean, runNew?: (text: string) => string }} [opts] `runNew` gives the report's own
  *   "Run a new check" link (trusted HTML), so every mention of it in a reason is a link.
  */
-export function healthMapHtml(model, { full = false, runNew } = {}) {
+export function healthMapHtml(model, { full = false, runNew, mapFirst = false } = {}) {
   // A report from before these checks: one line with the link, not the same link on every row (Step 2 review V10).
   const oldNote = model.old ? `\n  <p class="health-note health-old">${reasonHtml(OLD_REPORT_NOTE, runNew)}</p>` : '';
+  const list = `    <div class="health-list">
+${model.mains.map(m => groupHtml(m, full, runNew)).join('\n')}
+    </div>`;
+  const map = mapHtml(model);
+  // On screen the list comes first in the page (read first by screen readers and search tools; CSS shows the map
+  // beside or above it). The print page asks for the map first (`mapFirst`), so on paper it sits right under the score
+  // box with no page break before it (batch 6 fix C): Chrome doesn't move a map kept whole inside a flex layout well.
   return `<section class="health" aria-labelledby="health-title">
   <h2 id="health-title">${MAP_TITLE}</h2>
   <p class="hint health-intro">${h(model.mains.some(m => m.id === 'listing') ? MAP_INTRO : MAP_INTRO_NO_LISTING)}</p>${oldNote}
   <div class="health-layout">
-    <div class="health-list">
-${model.mains.map(m => groupHtml(m, full, runNew)).join('\n')}
-    </div>
-    <div class="health-map" id="health-map" aria-hidden="true">
+${mapFirst ? `${map}\n${list}` : `${list}\n${map}`}
+  </div>
+</section>`;
+}
+
+/** The map part of the section (decoration, aria-hidden). */
+function mapHtml(model) {
+  return `    <div class="health-map" id="health-map" aria-hidden="true">
       <div class="health-art">
         <div class="health-orb-host" data-health-orb></div>
         ${fullSvg(model)}
@@ -561,7 +572,5 @@ ${model.mains.map(m => groupHtml(m, full, runNew)).join('\n')}
       <p class="health-caption" aria-hidden="true" data-health-caption></p>
       <p class="health-tap">${h(TAP_HINT)}</p>
       <p class="health-click">${h(CLICK_HINT)}</p>
-    </div>
-  </div>
-</section>`;
+    </div>`;
 }

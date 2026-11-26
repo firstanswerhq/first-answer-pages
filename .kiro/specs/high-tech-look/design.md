@@ -799,7 +799,31 @@ Known for later steps (not changed in 1A):
 - The small icons inside the search fields and the lead form are pictures drawn in dark ink, so they barely show on the dark fields. They are decoration (the labels say what each field is). Step 1B can redraw them.
 - The pink accent token is defined but not used yet. Step 1B uses it in the headline.
 
-No older test line changed for Step 1A.
+### Step 1A follow-up: the one failure (1897 of 1898)
+
+| Failure | Decision | Change |
+|---|---|---|
+| `test/grade-o2-notes.test.js` V170 ("the amber of Partly is in color tokens beside the others, and the rules use them") | The test is out of date in two details, and its point still holds. It pinned the light theme's values for three Partly tokens (`#FBF1DC`, `#8A5300`, `rgba(183, 121, 31, 0.14)`), and it looked for the `/* Surfaces */` comment, which Step 1A had renamed. The point is that the Partly tokens sit beside the other status tokens in the first `:root`, and the rules use the tokens, not the hex values. That is still true. | The test reads the first `:root` block and checks the dark values there (the amber `#B7791F` is unchanged). It also checks that the old light values are now the paper values of the same tokens in the print block, and that `/* Surfaces */` sits after the Partly tokens inside the first `:root`. The rules check is unchanged. In the stylesheet, the `/* Surfaces */` heading is back in the token block, and the pill token has its paper value in print (it was the one token missing one). |
+
+| Where | Old | New | Why |
+|---|---|---|---|
+| `test/grade-o2-notes.test.js` (V170) | `--color-partly-bg: #FBF1DC`, `--color-partly-text: #8A5300`, `--color-partly-pill: rgba(183, 121, 31, 0.14)` anywhere in the file | dark values in the first `:root`, and the same light values as the paper values in print | Step 1A dark theme |
+
+## Batch 6, fix C (batch6-fix-C-2026-11-26.md)
+
+| Item | Decision | As built | Where |
+|---|---|---|---|
+| Map on page 1 | Code. Measured in the cloud at a6a0cf8: page 1 held the score box, the "Health of your setup" heading and intro, then about 55% blank, and the map began page 2. The likely cause: the map was the second item of a flex layout (`order: -1`), kept whole, and Chrome doesn't split flex layouts across pages well. | The print page asks the health section for the map first in its HTML (`healthMapHtml({ mapFirst: true })`), and in print the layout is a plain block (no flex). The map (12rem) keeps `break-inside: avoid` and `break-before: avoid`. The heading, intro and print note keep `break-after: avoid`, so they stay with the map. On screen the list stays first in the page, as before, so screen readers and search tools read it first. | `health-map.js`, `grade-html.js`, `style.css` |
+| Fix kit heading | Code. | "Your fix kit" and its intro have `break-after: avoid`, and the first box after the intro has `break-before: avoid`. Each box's heading and hint stay with its code. | `style.css` |
+| "1." marker in "Every answer" | Code, the same cause as fix B item 3: the `::marker` rule puts "Old Numbers" first. | A later rule gives the marker Fira Sans Condensed with lining figures. | `style.css` |
+| Footer with Prepared by | Code. | "Only people with this link can see this report. To have this report removed, contact First Answer Pages." The link is on "contact First Answer Pages". | `grade-html.js` |
+| Page counts | Not measured here: there is no browser on this laptop and no shell commands may be run. Please measure the real `/print` page with a stored grade of 1 answer and of 5 answers (Claude x3, ChatGPT, Perplexity), with and without "Prepared by", and add the four counts here. The print CSS that changed is in the `@media print` block: `.health-layout { display: block }`; `.health-map` gains `break-before: avoid`; `.health > h2`, `.health-intro` and the print note get `break-after: avoid`; and the `.grade-kit > h2`, `.grade-kit > h2 + p`, `.grade-kit > p + .kit-item`, `.kit-item > h3` and `.kit-item > .hint` rules. | | |
+
+| Where | Old | New | Why |
+|---|---|---|---|
+| `test/agency-report.test.js` (fix B item 4) | "To have it removed, contact First Answer Pages:" | "To have this report removed, <a ...>contact First Answer Pages</a>." | fix C wording |
+
+New tests (`test/agency-report.test.js`): the map comes before the list on paper and after it on screen, with the same rows; the print layout is a block, not flex; the keep-together rules; the marker rule comes after the Old Numbers rule.
 
 ## Batch 6, fix B (batch6-fix-B-2026-11-26.md, from review-2026-11-25-batch6.md and review-2026-11-25-batch6-reader.md)
 

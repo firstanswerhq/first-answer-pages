@@ -128,13 +128,22 @@ test('V171: "Partly", "10 of 30 points" and the detail without "Yes. " come from
 
 test('V170: the amber of "Partly" is in color tokens beside the others, and the rules use them', async () => {
   const css = await fs.readFile(fileURLToPath(new URL('../public/css/style.css', import.meta.url)), 'utf8');
-  assert.ok(/--color-partly:\s*#B7791F/i.test(css));
-  assert.ok(/--color-partly-bg:\s*#FBF1DC/i.test(css));
-  assert.ok(/--color-partly-text:\s*#8A5300/i.test(css));
-  assert.ok(/--color-partly-pill:\s*rgba\(183, 121, 31, 0\.14\)/.test(css));
+  // high-tech-look Step 1A: the screen tokens are the dark theme's; the light values of V170 are the paper (print)
+  // values of the same tokens. The amber itself (#B7791F, also written into the icon) is the same on screen and paper.
+  const first = css.slice(css.indexOf(':root {'), css.indexOf('\n}', css.indexOf(':root {')));
+  assert.ok(/--color-partly:\s*#B7791F/i.test(first));
+  assert.ok(/--color-partly-bg:\s*#2A2108/i.test(first));
+  assert.ok(/--color-partly-text:\s*#FFD27A/i.test(first));
+  assert.ok(/--color-partly-pill:\s*rgba\(251, 191, 36, 0\.16\)/.test(first));
+  const paper = /@media print \{\n  :root \{([\s\S]*?)\n  \}/.exec(css)?.[1] ?? '';
+  assert.ok(/--color-partly:\s*#B7791F/i.test(paper));
+  assert.ok(/--color-partly-bg:\s*#FBF1DC/i.test(paper));
+  assert.ok(/--color-partly-text:\s*#8A5300/i.test(paper));
+  assert.ok(/--color-partly-pill:\s*rgba\(183, 121, 31, 0\.14\)/.test(paper));
   // Beside the other status tokens, in the first :root block.
   assert.ok(css.indexOf('--color-partly:') > css.indexOf('--color-warn-bg:'));
   assert.ok(css.indexOf('--color-partly:') < css.indexOf('/* Surfaces */'));
+  assert.ok(css.indexOf('/* Surfaces */') < css.indexOf('\n}', css.indexOf(':root {')), 'all in the first :root block');
   // The rules use the tokens; the icon's picture is the one place the amber is written out.
   const rules = [...css.matchAll(/\.grade-check\.partly(?: \.grade-result)?\s*\{[^}]*\}/g)].map(m => m[0]);
   assert.ok(rules.length >= 3, `the three rules (found ${rules.length})`);

@@ -668,7 +668,8 @@ test('fix B item 4: with "Prepared by" set, the web page follows the printout: k
     assert.equal(html.includes(text), false, text);
   }
   assert.ok(html.includes(`<p class="hint grade-powered">${POWERED_BY}</p>`));
-  assert.ok(html.includes('Only people with this link can see this report. To have it removed, contact First Answer Pages:'));
+  // Batch 6 fix C: one plain sentence, with the link on its last words.
+  assert.match(html, /Only people with this link can see this report\. To have this report removed, <a [^>]*>contact First Answer Pages<\/a>\.<\/p>/);
   // Without a name, the web page is as before.
   const ours = reportPage(realGrade([answer()]), { leadGate: false });
   for (const text of ['Report &middot; First Answer Pages', 'List your business free', 'Claim my free listing', 'Ask us to remove this report']) {
@@ -687,6 +688,35 @@ test('fix B item 6: with one answer there is no table, only a plain sentence', (
   assert.equal(oneAnswerLine([{ name: 'Zephyr', count: 1, own: true }]), 'The one answer named you.');
   assert.equal(oneAnswerLine([{ name: 'Zephyr', count: 1, own: true }, { name: 'Ridge', count: 1, own: false }]), 'The one answer named you, and also named Ridge.');
   assert.ok(voiceSection(grade([answer(), answer()])).includes('<table'), 'two answers keep the table');
+});
+
+test('fix C: on paper the map comes before the list, in a block layout, and the fix kit heading stays with its first box', async () => {
+  const g = realGrade(FIVE());
+  const print = printPage(g);
+  const section = /<section class="health"[\s\S]*?<\/section>/.exec(print)?.[0] ?? '';
+  assert.ok(section.indexOf('<div class="health-map"') !== -1);
+  assert.ok(section.indexOf('<div class="health-map"') < section.indexOf('<div class="health-list">'), 'print: the map first');
+  // On screen the list stays first in the page (screen readers and search tools read it first).
+  const screen = /<section class="health"[\s\S]*?<\/section>/.exec(reportPage(g, { leadGate: false }))?.[0] ?? '';
+  assert.ok(screen.indexOf('<div class="health-list">') < screen.indexOf('<div class="health-map"'), 'screen: the list first');
+  // The same rows and the same map either way.
+  const rows = html => (html.match(/<li class="health-row /g) ?? []).length;
+  assert.equal(rows(section), rows(screen));
+  const css = await fs.readFile(fileURLToPath(new URL('../public/css/style.css', import.meta.url)), 'utf8');
+  const prints = [...css.matchAll(/@media print \{([\s\S]*?)\n\}/g)].map(m => m[1]).join('\n');
+  assert.match(prints, /\.health-layout \{ display: block !important; \}/);
+  assert.equal(/\.health-layout \{ display: flex/.test(prints), false, 'no flex layout around the map on paper');
+  assert.match(prints, /\.health > h2, \.health-intro, \.health > \.grade-print-only \{ break-after: avoid; \}/);
+  assert.match(prints, /\.grade-kit > h2, \.grade-kit > h2 \+ p \{ break-after: avoid; \}/);
+  assert.match(prints, /\.grade-kit > p \+ \.kit-item \{ break-before: avoid; \}/);
+});
+
+test('fix C: the "1." before each question in "Every answer" uses lining figures, after the "Old Numbers" rule', async () => {
+  const css = await fs.readFile(fileURLToPath(new URL('../public/css/style.css', import.meta.url)), 'utf8');
+  const oldNumbers = css.lastIndexOf('font-family: "Old Numbers", "Fira Sans Condensed"');
+  const rule = /\.grade-all-answers ol > li::marker \{\s*font-family: "Fira Sans Condensed"[^}]*font-variant-numeric: lining-nums;[^}]*"lnum" 1;/.exec(css);
+  assert.ok(rule, 'the marker rule is there');
+  assert.ok(rule.index > oldNumbers, 'and it comes after the Old Numbers rule, so it wins');
 });
 
 test('fix B item 10: "How we checked" uses words for one to nine', () => {

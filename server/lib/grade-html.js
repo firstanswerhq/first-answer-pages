@@ -1255,7 +1255,8 @@ export function reportPage(storedGrade, opts = {}) {
   const foot = `${method ? `<p class="hint grade-method"><strong>How we checked:</strong> ${h(method)}</p>\n` : ''}<p class="grade-meta">Automated check, ${h(whenText(when))}. AI assistants pick up changes over days to weeks, so ${runNewLink(grade, FULL_NEW_CHECK)} after you make fixes.</p>
 <p class="hint grade-remove">Only people with this link can see this report. ${agency
     // An agency's report: the way to remove it stays (privacy), said to whoever reads it, not to the business owner.
-    ? `To have it removed, contact First Answer Pages: ${contactLink(contactEmail, contactEmail || 'contact page')}.`
+    // Batch 6 fix C: one plain sentence, with the link on its last words.
+    ? `To have this report removed, ${contactLink(contactEmail, 'contact First Answer Pages')}.`
     : `Ask us to remove this report: ${contactLink(contactEmail, contactEmail || 'contact page')}.`}</p>${agency ? `\n<p class="hint grade-powered">${POWERED_BY}</p>` : ''}`;
 
   const justOpened = opened && full && leadGate && unlocked
@@ -1281,6 +1282,8 @@ export function reportPage(storedGrade, opts = {}) {
     full,
     // Every "Run a new check" in a reason is the report's own link (V244).
     runNew: text => runNewLink(grade, text),
+    // Batch 6 fix C: on paper the map comes first, so it sits on page 1 right under the score box.
+    mapFirst: print,
   });
 
   // Requirement 13 (full report): who AI named across every answer, and the sites the answers used.
