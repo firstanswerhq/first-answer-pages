@@ -22,6 +22,12 @@ The demo video opens on a black-and-white 1950s family. The old phone book comes
 1.5 Text and buttons meet WCAG AA contrast on the dark background. Focus outlines stay visible.
 1.6 Respect prefers-reduced-motion: no glow pulses or movement when it is set.
 1.7 The page must work at 390 px wide with no sideways scrolling.
+1.8 (owner, Nov 25: "live animation, things moving, interacting with each other"; look reference: mockups/reference-dark-dashboard-2026-11-25.jpg, mood only) The home page has a live "network" under the headline, drawn on a canvas: glowing nodes drift slowly, thin lines join nodes that are near each other and fade as they drift apart, and nodes ease gently away from each other so they never pile up.
+1.9 The nodes are real. Each node is a real category (and, close to it, the real listings in that category). Its label is the real name. Click or tap a node to open that real category or listing page. No made-up businesses, no fake counts, no fake activity.
+1.10 It reacts to the visitor: moving the pointer near a node lights it and the lines around it, nearby nodes lean toward the pointer, and a tap on a phone does the same. A node that is focused with the keyboard lights up the same way.
+1.11 The other pages move too, in smaller ways that fit the page: listing cards lift and glow on hover and focus; the check form's "Checking" page lights its steps as the real work finishes (never faster than the real work); the report's health map (Requirement 2) lines pulse once when a node is hovered or focused.
+1.12 Limits so it stays fast and safe: no libraries and no outside files; at most 60 nodes on wide screens and 24 on phones; it stops drawing when the tab is hidden or the network is off screen; it caps itself at 30 frames a second; if a frame takes too long it drops to fewer nodes. With prefers-reduced-motion, or if canvas is not available, show one still picture of the same network, and every node is still a working link.
+1.13 The same links are in the page as plain HTML links (a normal list of categories and listings under the network). The canvas is aria-hidden. With JavaScript off the page still reads and works. Nothing about titles, headings, schema, sitemap, robots or noindex changes because of the animation.
 
 ## Requirement 2: Health orb on the report (look 3)
 2.1 At the top of every finished report, show a "health map": the business name in a glowing orb in the center, with one node per signal around it, each joined to the center by a thin line.
