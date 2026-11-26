@@ -87,6 +87,8 @@
   --color-accent:     #FF4FA3;   /* pink */
   --color-gold:       #FFB547;   /* amber: thin rules, ornaments and highlights */
   --color-glow:       rgba(56, 225, 255, 0.35);
+  --color-gold-glow:  rgba(255, 181, 71, 0.6);   /* Step 1B: the lit index tab */
+  --color-spine:      #132A55;   /* Step 1B: the middle of the book's spine (decoration) */
   --color-ink:        #E8EEFC;   /* headings and the score number */
   --color-tan:        #131F3A;   /* empty-state card */
 
@@ -128,6 +130,7 @@
     --color-warn: #B45309; --color-warn-bg: #FFFBEB; --color-partly: #B7791F; --color-partly-bg: #FBF1DC;
     --color-partly-text: #8A5300; --color-partly-pill: rgba(183, 121, 31, 0.14); --color-mark-bg: #FFE58A; --color-mark-text: #0F1B33; --color-serp-title: #1A0DAB;
     --color-serp-url: #006621; --color-button-text: #FFFEF9; --color-focus: #0C2C73;
+    --color-gold-glow: rgba(184, 137, 59, 0.3); --color-spine: #F3E7CC;
   }
 }
 
@@ -1725,11 +1728,12 @@ summary {
 }
 
 .filters label:nth-of-type(1) {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230F1B33' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 12V4h8l10 10-8 8z'/%3E%3Ccircle cx='7.5' cy='8.5' r='1.3'/%3E%3C/svg%3E");
+  /* Step 1B: the icon is a picture, so its color is written out here: the muted text color, #A9B6D3. */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23A9B6D3' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 12V4h8l10 10-8 8z'/%3E%3Ccircle cx='7.5' cy='8.5' r='1.3'/%3E%3C/svg%3E");
 }
 
 .filters label:nth-of-type(2) {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230F1B33' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 21s-7-6.2-7-11.5a7 7 0 0114 0C19 14.8 12 21 12 21z'/%3E%3Ccircle cx='12' cy='9.5' r='2.3'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23A9B6D3' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 21s-7-6.2-7-11.5a7 7 0 0114 0C19 14.8 12 21 12 21z'/%3E%3Ccircle cx='12' cy='9.5' r='2.3'/%3E%3C/svg%3E");
 }
 
 .filters label:focus-within {
@@ -2106,15 +2110,15 @@ summary {
 }
 
 #l-name {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230F1B33' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='8' r='4'/%3E%3Cpath d='M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23A9B6D3' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='8' r='4'/%3E%3Cpath d='M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7'/%3E%3C/svg%3E");
 }
 
 #l-email {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230F1B33' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='5' width='18' height='14' rx='1.5'/%3E%3Cpath d='M3.5 6.5l8.5 6.5 8.5-6.5'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23A9B6D3' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='5' width='18' height='14' rx='1.5'/%3E%3Cpath d='M3.5 6.5l8.5 6.5 8.5-6.5'/%3E%3C/svg%3E");
 }
 
 #l-phone {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230F1B33' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6.5 3h3l1.5 4.5-2 1.5a12 12 0 006 6l1.5-2 4.5 1.5v3a2 2 0 01-2 2A16 16 0 014.500 5a2 2 0 012-2z'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23A9B6D3' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6.5 3h3l1.5 4.5-2 1.5a12 12 0 006 6l1.5-2 4.5 1.5v3a2 2 0 01-2 2A16 16 0 014.500 5a2 2 0 012-2z'/%3E%3C/svg%3E");
 }
 
 .grade-lead .button {
@@ -2848,6 +2852,100 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   outline-offset: 2px;
 }
 
+/* =====================================================================
+   high-tech-look Step 1B: the open-book home page (Requirement 1.2, 1.3). Tokens only, like the 1A block.
+   ===================================================================== */
+
+/* The book: the home page's main area, with a glowing spine down the left edge. */
+.book {
+  position: relative;
+  max-width: 66rem;
+  margin: 1rem auto 2rem;
+  padding: 1.25rem 1rem 1.5rem 1.75rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: 18px;
+  box-shadow: var(--shadow-md);
+}
+.book::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0.75rem;
+  border-radius: 18px 0 0 18px;
+  background: linear-gradient(90deg, var(--color-surface-2), var(--color-spine), var(--color-surface-2));
+  border-right: 1px solid var(--color-primary);
+  box-shadow: inset -6px 0 14px var(--color-glow), 0 0 12px var(--color-glow);
+  pointer-events: none;
+}
+
+/* The A-Z index tabs: down the right edge on wide screens, hidden on phones. The lit tab is the category shown. */
+.book-tabs { display: none; }
+.book-tab-name {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+@media (min-width: 900px) {
+  /* Room on the right for the tabs, which stand 1rem out from the book, so nothing scrolls sideways. */
+  .book { max-width: min(66rem, calc(100% - 3rem)); padding: 2.5rem 4rem 2.5rem 4.5rem; }
+  .book::before { width: 2.75rem; }
+  .book-tabs {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    position: absolute;
+    right: -1rem;
+    top: 2.5rem;
+  }
+  .book-tab {
+    display: block;
+    width: 2rem;
+    padding: 0.35rem 0;
+    text-align: center;
+    font: 700 0.75rem ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+    background: var(--color-surface-2);
+    border: 1px solid var(--color-line);
+    border-radius: 0 8px 8px 0;
+    color: var(--color-text-muted);
+    text-decoration: none;
+  }
+  .book-tab:hover { color: var(--color-text); border-color: var(--color-primary); }
+  .book-tab.is-on {
+    color: var(--color-button-text);
+    background: var(--color-gold);
+    border-color: var(--color-gold);
+    box-shadow: 0 0 14px var(--color-gold-glow);
+  }
+}
+
+/* The headline (1.3): the h1 keeps its words as a small label; the big lines are "The phone book is back." and
+   "And AI can read it." in the glow color, with the owner's sentence under them. */
+.home-head h1 {
+  margin: 0 0 0.5rem;
+  font: 700 0.875rem ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--color-primary);
+}
+.home-head .tagline {
+  margin: 0;
+  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  font-size: clamp(2.25rem, 9vw, 3.5rem);
+  font-weight: 700;
+  line-height: 1.05;
+  color: var(--color-text);
+}
+.tagline-back, .tagline-ai { display: block; }
+.tagline-ai { color: var(--color-primary); text-shadow: 0 0 14px var(--color-glow); }
+.book .home-why { color: var(--color-text-muted); }
+
 /* Reduced motion: no dots move and the orb stays still; the line colors and the words show the status.
    Step 1A (Requirement 1.6): nothing else on the site moves either. */
 @media (prefers-reduced-motion: reduce) {
@@ -2855,4 +2953,19 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   .health-flow { animation: none; display: none; }
   .health-orb-host { display: none; }
   .health-scanning .health-branch { opacity: 1; transition: none; }
+}
+
+/* Step 1B (reviewer nit on 1A): the paper values of the health map's own tokens, so a printed report is light: white
+   panel and node fills, dark words and lines. Last in the file, after the `.health` tokens, so print uses these. */
+@media print {
+  .health {
+    --health-panel: #FFFFFF;
+    --health-node-fill: #FFFFFF;
+    --health-ink: #0F1B33;
+    --health-good: #2D6A4F;
+    --health-partly: #8A5300;
+    --health-missing: #9B2C2C;
+    --health-gray: #57534E;
+    --health-glow: #0C2C73;
+  }
 }

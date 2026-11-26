@@ -809,6 +809,29 @@ Known for later steps (not changed in 1A):
 |---|---|---|---|
 | `test/grade-o2-notes.test.js` (V170) | `--color-partly-bg: #FBF1DC`, `--color-partly-text: #8A5300`, `--color-partly-pill: rgba(183, 121, 31, 0.14)` anywhere in the file | dark values in the first `:root`, and the same light values as the paper values in print | Step 1A dark theme |
 
+# Requirement 1, Step 1B: the open-book home page (site-look-steps-2026-11-26.md)
+
+look-1.html and look-1.png were followed for the shape (book, spine, tabs, two-line headline). The dashboard picture was mood only. No text or logo was copied.
+
+| Line | As built | Where |
+|---|---|---|
+| 1.2 book | The home page's main area (head, search, check button, founders invite and listings) sits in `<div class="book">`, a dark panel with a glowing spine drawn by `.book::before`: cyan edge, soft inner glow, wider from 900 px. | `server/routes/home.js`, `style.css` |
+| 1.2 tabs | `<nav class="book-tabs" aria-label="Categories A to Z">`. One tab per first letter of the categories that have at least one listing, in A-Z order. Each tab is a real link to that letter's category page (`/?category=...`, the same page the search opens), with the category's name in the link for screen readers. The tab for the category being shown is lit (amber, dark text) and has `aria-current="page"`. The tabs stand down the right edge from 900 px and are hidden on phones. The book leaves room for them, so nothing scrolls sideways. | `home.js` (`bookTabs`), `style.css` |
+| 1.3 headline | "The phone book is back." with "And AI can read it." on the next line in the glow color (cyan, still glow). The owner's sentence stays under it, word for word: "People now ask AI who to call. List your business free so AI can find it." | `home.js`, `style.css` |
+| 1.5, 1.6, 1.7 | Tokens only, no animation or transition in the 1B block, and the 12 px floor holds (the tabs are 12 px). Phones get a thin spine and no tabs. | `style.css` |
+| 1A nit 1 | The tag, pin, name, email and phone icons in the fields are drawn in the muted text color. They are pictures, which can't read a token, so the value (`#A9B6D3`, the same as `--color-text-muted`) is written into them, the same way the Partly icon has its amber. A test ties them to the token. | `style.css` |
+| 1A nit 2 | In print, the health map's own tokens get paper values (white panel and node fills, dark words and lines), so a printed report from the normal report page is light. They sit last in the stylesheet, after the screen `.health` tokens, so print uses them. | `style.css` |
+| Requirement 5 | A stored baseline, `test/fixtures/seo-baseline.json`. It holds, for the home, category, listing, about, privacy, claim, check and check-about pages, the exact title, meta description, canonical link, robots meta, X-Robots-Tag and h1 text. It also holds the listing's full JSON-LD, the exact robots.txt and the sitemap's address list. `test/step1-public-unchanged.test.js` renders each page and compares with it (deepEqual). The baseline values were worked out from the code; the cloud run is the first time it is compared with a real render. If a value there differs, it shows what the app really serves, and that should be checked against the code before any step changes it. | `test/fixtures/seo-baseline.json`, `test/step1-public-unchanged.test.js` |
+
+### Deviations for the owner to approve (Step 1B)
+
+| Requirement | Wording | As built | Why |
+|---|---|---|---|
+| 1.3 and Requirement 5 / the steps rule "headings stay exactly as they are" | the headline is "The phone book is back." / "And AI can read it." | The `<h1>` keeps its words ("Local Business Directory"), shown as a small cyan label above the headline. The big two-line headline is the tagline paragraph, whose words changed from "The phone book is back, and AI can read it." to "The phone book is back." and "And AI can read it." | 1.3 asks for the new headline, and the steps file says headings and titles stay the same. Keeping the h1's words keeps what search engines read as the page heading. The visible headline follows 1.3. |
+| Requirement 5.1 ("the same server-rendered HTML text") | | The home page gains the A-Z tabs (links to category pages that already exist and are in the sitemap) and the tagline's new wording. | 1.2 and 1.3 ask for both. Titles, descriptions, canonical links, robots rules, JSON-LD and the sitemap are unchanged (baseline test). |
+
+No older test line changed for Step 1B.
+
 ## Batch 6, fix C (batch6-fix-C-2026-11-26.md)
 
 | Item | Decision | As built | Where |

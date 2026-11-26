@@ -1,0 +1,107 @@
+{
+  "_note": "high-tech-look Requirement 5: what Google, Bing and AI read on the public pages, stored before Step 1B (the open-book home page). The look must never change any of it. The app runs as in test/step1-public-unchanged.test.js (one published listing, demo mode off, base URL https://pages.example.test, no SITE_NAME). If a value here has to change on purpose, change it in its own step and record why in design.md.",
+  "pages": {
+    "/": {
+      "title": "First Answer Pages: Local Business Directory",
+      "description": "Free local business directory that AI assistants can read. Find a local business, call them, or ask for a quote.",
+      "canonical": "https://pages.example.test/",
+      "robotsMeta": null,
+      "xRobotsTag": null,
+      "h1": ["Local Business Directory"]
+    },
+    "/?category=plumbers": {
+      "title": "Plumbers in Nashville | First Answer Pages",
+      "description": "Plumbers: phone numbers, services and hours. Call them or ask for a quote, free.",
+      "canonical": "https://pages.example.test/?category=plumbers",
+      "robotsMeta": null,
+      "xRobotsTag": null,
+      "h1": ["Local Business Directory"]
+    },
+    "/listings/zephyr-plumbing-nashville": {
+      "title": "Zephyr Plumbing | First Answer Pages",
+      "description": "Zephyr Plumbing is a plumber in Nashville, TN offering drain cleaning and water heaters. Call (615) 555-0142.",
+      "canonical": "https://pages.example.test/listings/zephyr-plumbing-nashville",
+      "robotsMeta": null,
+      "xRobotsTag": null,
+      "h1": ["Zephyr Plumbing"]
+    },
+    "/about": {
+      "title": "About | First Answer Pages",
+      "description": "First Answer Pages is a free local business directory that AI assistants can read.",
+      "canonical": "https://pages.example.test/about",
+      "robotsMeta": null,
+      "xRobotsTag": null,
+      "h1": ["About First Answer Pages"]
+    },
+    "/privacy": {
+      "title": "Privacy | First Answer Pages",
+      "description": "What First Answer Pages collects, why, how long we keep it, and how to ask for removal.",
+      "canonical": "https://pages.example.test/privacy",
+      "robotsMeta": null,
+      "xRobotsTag": null,
+      "h1": ["Privacy"]
+    },
+    "/rise": {
+      "title": "List your business free | First Answer Pages",
+      "description": "List your local business free on First Answer Pages. Send a photo of your card or sign, or type it in. We review every listing.",
+      "canonical": "https://pages.example.test/rise",
+      "robotsMeta": null,
+      "xRobotsTag": null,
+      "h1": ["List your business free"]
+    },
+    "/grade": {
+      "title": "Can AI find your local business? Free AI Visibility Check | First Answer Pages",
+      "description": "See whether AI assistants name your local business when someone asks for one like it, and get a score with plain fixes. Free. No account needed.",
+      "canonical": "https://pages.example.test/grade",
+      "robotsMeta": null,
+      "xRobotsTag": null,
+      "h1": ["Can AI find your business?"]
+    },
+    "/grade/about": {
+      "title": "About the AI Visibility Check | First Answer Pages",
+      "description": "What the free AI Visibility Check reads on a business's website and asks AI assistants, and why.",
+      "canonical": "https://pages.example.test/grade/about",
+      "robotsMeta": null,
+      "xRobotsTag": null,
+      "h1": ["About the AI Visibility Check"]
+    }
+  },
+  "listingJsonLd": {
+    "@context": "https://schema.org",
+    "@type": "Plumber",
+    "name": "Zephyr Plumbing",
+    "telephone": "+16155550142",
+    "description": "We fix pipes and drains in Nashville.",
+    "address": {
+      "@type": "PostalAddress",
+      "addressLocality": "Nashville",
+      "addressRegion": "TN",
+      "streetAddress": "12 Main Street"
+    },
+    "hasOfferCatalog": {
+      "@type": "OfferCatalog",
+      "itemListElement": [
+        { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Drain cleaning" } },
+        { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Water heaters" } }
+      ]
+    },
+    "url": "https://pages.example.test/listings/zephyr-plumbing-nashville",
+    "areaServed": "Nashville and nearby areas",
+    "openingHoursSpecification": [
+      { "@type": "OpeningHoursSpecification", "dayOfWeek": "Monday", "opens": "08:00", "closes": "17:00" },
+      { "@type": "OpeningHoursSpecification", "dayOfWeek": "Tuesday", "opens": "08:00", "closes": "17:00" }
+    ],
+    "sameAs": ["https://zephyr.example/"]
+  },
+  "robotsTxt": "User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /rise/drafts/\n\nSitemap: https://pages.example.test/sitemap.xml\n",
+  "sitemapLocs": [
+    "https://pages.example.test/",
+    "https://pages.example.test/about",
+    "https://pages.example.test/privacy",
+    "https://pages.example.test/rise",
+    "https://pages.example.test/grade",
+    "https://pages.example.test/grade/about",
+    "https://pages.example.test/?category=plumbers",
+    "https://pages.example.test/listings/zephyr-plumbing-nashville"
+  ]
+}

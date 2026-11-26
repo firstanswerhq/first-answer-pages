@@ -47,6 +47,34 @@ export function emptyTradeInCityText(label, city) {
   return `No ${what} in ${shown} yet. Own one?`;
 }
 
+/**
+ * high-tech-look Step 1B (Requirement 1.2): the A-Z index tabs down the book's right edge, one per first letter of the
+ * categories that have listings. Each tab is a real link to that letter's first category page (the same page the
+ * search form opens); its name is in the link for screen readers. The tab for the category being shown is lit.
+ * Hidden on phones by CSS. '' when no category has a listing.
+ * @returns {string}
+ */
+export function bookTabs(store, categories, shown) {
+  const used = new Set(store.searchListings({}).map(l => l.category));
+  const byLetter = new Map();
+  for (const c of categories) {
+    if (!c || !used.has(c.slug) || typeof c.label !== 'string' || c.label.trim() === '') continue;
+    const letter = c.label.trim()[0].toUpperCase();
+    if (!/^[A-Z]$/.test(letter)) continue;
+    if (!byLetter.has(letter)) byLetter.set(letter, []);
+    byLetter.get(letter).push(c);
+  }
+  if (byLetter.size === 0) return '';
+  const tabs = [...byLetter.keys()].sort().map(letter => {
+    const group = byLetter.get(letter);
+    const target = group.find(c => c.slug === shown) ?? group[0];
+    const lit = group.some(c => c.slug === shown);
+    const current = target.slug === shown ? ' aria-current="page"' : '';
+    return `<a class="book-tab${lit ? ' is-on' : ''}" href="/?category=${encodeURIComponent(target.slug)}"${current}><span aria-hidden="true">${letter}</span><span class="book-tab-name">${escapeHtml(target.label)}</span></a>`;
+  });
+  return `<nav class="book-tabs" aria-label="Categories A to Z">${tabs.join('')}</nav>\n`;
+}
+
 export function createHomeRouter(ctx) {
   const router = Router();
   const { store } = ctx;
@@ -135,13 +163,19 @@ ${group.map(l => listingCard(l, categories, { founder: founderOf(l.id), trust: t
       ? foundersInvite(store.getFoundersStatus(), { link: true, fees: ctx.trust ? ctx.config?.trust : undefined })
       : '';
     const invite = inviteHtml ? `\n${inviteHtml}` : '';
-    const body = `<header class="home-head">
+    // high-tech-look Step 1B (Requirement 1.2, 1.3): the main area is an open book, with a glowing spine down the left
+    // edge (CSS) and A-Z index tabs down the right edge on wide screens. The h1 keeps its text, so headings stay the
+    // same (Requirement 5). The big headline is the tagline: "The phone book is back." with "And AI can read it." on
+    // the next line in the glow color, and the owner's sentence under it as written.
+    const body = `<div class="book">
+${bookTabs(store, categories, category)}<header class="home-head">
 <h1>Local Business Directory</h1>
-<p class="tagline">The phone book is back, and AI can read it.</p>
+<p class="tagline"><span class="tagline-back">The phone book is back.</span> <span class="tagline-ai">And AI can read it.</span></p>
 <p class="home-why">People now ask AI who to call. List your business free so AI can find it.</p>
 </header>
 ${filterForm}${graderButton}${invite}
-${results}`;
+${results}
+</div>`;
 
     // Category pages: "Plumbers in Nashville | First Answer Pages". The default site
     // name is swapped for SITE_NAME by the app-level HTML wrapper.

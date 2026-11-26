@@ -154,6 +154,48 @@ test('Step 1A (Requirement 5): the dark theme is the stylesheet only; every publ
   }
 });
 
+const BASELINE = JSON.parse(await fs.readFile(fileURLToPath(new URL('./fixtures/seo-baseline.json', import.meta.url)), 'utf8'));
+
+/** HTML text or attribute value back to plain text (the entities escapeHtml writes). */
+const unescape = s => String(s)
+  .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&#x27;/g, "'").replace(/&amp;/g, '&');
+
+/** The parts of a page that Google, Bing and AI read, as plain values. */
+function seoParts(res) {
+  const head = /<head>([\s\S]*?)<\/head>/.exec(res.text)?.[1] ?? '';
+  return {
+    title: unescape(/<title>([^<]*)<\/title>/.exec(head)?.[1] ?? ''),
+    description: (() => { const m = /<meta name="description" content="([^"]*)">/.exec(head); return m ? unescape(m[1]) : null; })(),
+    canonical: (() => { const m = /<link rel="canonical" href="([^"]*)">/.exec(head); return m ? unescape(m[1]) : null; })(),
+    robotsMeta: (() => { const m = /<meta name="robots" content="([^"]*)">/.exec(head); return m ? m[1] : null; })(),
+    xRobotsTag: res.headers.get('x-robots-tag'),
+    h1: [...res.text.matchAll(/<h1\b[^>]*>([\s\S]*?)<\/h1>/g)].map(m => unescape(m[1].replace(/<[^>]*>/g, '')).trim()),
+  };
+}
+
+test('Requirement 5 (Steps 1A to 1E): titles, descriptions, canonical links, robots rules and h1 headings equal the stored baseline', async () => {
+  const s = await start();
+  for (const [p, expected] of Object.entries(BASELINE.pages)) {
+    const res = await s.get(p);
+    assert.equal(res.status, 200, p);
+    assert.deepEqual(seoParts(res), expected, p);
+  }
+});
+
+test('Requirement 5 (Steps 1A to 1E): the listing JSON-LD, robots.txt and the sitemap equal the stored baseline', async () => {
+  const s = await start();
+  const page = (await s.get(`/listings/${LISTING.id}`)).text;
+  const blocks = [...page.matchAll(/<script type="application\/ld\+json">([^]*?)<\/script>/g)].map(m => JSON.parse(m[1]));
+  assert.equal(blocks.length, 1, 'one JSON-LD block');
+  assert.deepEqual(blocks[0], BASELINE.listingJsonLd);
+  // The home page has no JSON-LD (as before).
+  assert.equal(/application\/ld\+json/.test((await s.get('/')).text), false);
+  assert.equal((await s.get('/robots.txt')).text, BASELINE.robotsTxt);
+  const sitemap = (await s.get('/sitemap.xml')).text;
+  assert.deepEqual([...sitemap.matchAll(/<loc>([^<]*)<\/loc>/g)].map(m => unescape(m[1])), BASELINE.sitemapLocs);
+  assert.ok(sitemap.startsWith('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'));
+});
+
 test('the admin pages and the reports stay out of search', async () => {
   const s = await start();
   const admin = await s.get('/admin/pending', { Authorization: 'Bearer t' });
