@@ -850,6 +850,34 @@ No older test line changed for Step 1B.
 | Print map width | Code, as the reader found. I confirmed it in the stylesheet: the print rule `.health-map { max-width: 12rem }` sits inside the report's `@media print` block. The screen rule `.health-map { ... max-width: 40rem ... }` comes later in the file, at the same specificity, so it won. The printed map was about 640 px (6.7 inches) square and could not fit under the score box. | The print rule's selector is now `.grade-report .health-map` (two classes), so it beats the one-class screen rule wherever that sits. The map is inside `<section class="grade-report grade-print">`, so it applies. Everything else in the rule is as in fix C. A test checks the two selectors, their order in the file and that no other one-class print rule sets the map's width. |
 | Page counts | Not measured here (no browser, no shell commands). Please re-measure the real `/print` page: 1 answer and 5 answers (Claude x3, ChatGPT, Perplexity), each with and without "Prepared by". Then put the four counts here. The only print change is the selector above. | |
 
+# Code review fix after 1C: the lit A-Z tab's contrast
+
+| Finding | Decision | Change |
+|---|---|---|
+| The lit tab (`.book-tab.is-on`) showed light text on gold, 1.74:1 (AA needs 4.5:1). The suggested fix was `--color-ink` (#0F1B33). | Code, but not with `--color-ink`. On screen that token is the dark theme's near-white (#E8EEFC); #0F1B33 is only its paper value. The rule already used `--color-button-text` (#04101F on screen, 11:1), so there were two causes. First, the site's link hover rule (`a:hover:not(...)`) is more specific than `.book-tab.is-on`, so hovering the lit tab turned it pale cyan on gold. Second, the paper value of `--color-button-text` is near-white (#FFFEF9), 1.7:1 on gold. | A new token, `--color-on-gold: #0F1B33`, the same on screen and paper (9.8:1 on the screen gold, 5.5:1 on the paper gold). The lit tab uses it in every state, through `.book-tabs a.book-tab.is-on` and its `:hover`, `:visited` and `:focus-visible` forms, which outrank the link hover rule. The 1A contrast test checks the pair on screen and on paper. |
+
+| Where | Old | New | Why |
+|---|---|---|---|
+| `test/site-look-1b.test.js` (1.2, 1.7) | the lit tab rule `.book-tab.is-on` with `var(--color-button-text)` | the `.book-tabs a.book-tab.is-on` rule (and its states) with `var(--color-on-gold)`, and no lit tab rule with the button text color | the contrast fix above |
+
+# Requirement 1, Step 1D: the live network on the home page (site-look-steps-2026-11-26.md)
+
+| Line | As built | Where |
+|---|---|---|
+| 1.13 the list | On the unfiltered home page, right under the headline and above the search, `<nav class="home-network" aria-label="Categories and listings">` holds a plain list of real links. Each category that has listings links to its page, and under it up to six of its listings link to their pages, in the directory's order (Verified first). With JavaScript off this list is the whole network, and every link works. Filtered pages have no network. | `server/routes/home.js` (`networkList`) |
+| 1.9 real nodes | The script reads only that list (`a[data-node]`). It makes no names, counts or activity. Categories come first, then listings one per category in turn, up to the cap (`pickNodes`). A click or tap on a node opens that node's real page. | `public/js/home-network.js` |
+| 1.8 the drift | A canvas the script adds above the list (aria-hidden). Nodes start on a sunflower spiral, each listing near its category, and the start is the same on every visit. They drift slowly with a little friction. Near nodes are joined by thin lines whose opacity fades to 0 at 140 px (`linkOpacity`). A listing is always joined to its own category within 1.5 times that. Nodes nearer than 56 px ease apart, so they never pile up. They bounce off the edges and never leave the box. | `home-network.js` (`initialPositions`, `links`, `step`) |
+| 1.10 the visitor | Moving the pointer lights the nearest node and its lines (pink accent), and nodes within 120 px lean toward the pointer. A tap does the same. Focusing a link in the list with the keyboard lights its node. | `home-network.js` |
+| 1.12 limits | No libraries, no imports, no outside files. At most 60 nodes on wide screens and 24 at 600 px or less (`nodeCap`). Ten slow frames in a row (over 50 ms) halve the nodes, never under 8. At most 30 frames a second (`shouldDraw`). Nothing is drawn while the tab is hidden (`visibilitychange`) or the network is off screen (`IntersectionObserver`). With reduced motion it draws one still picture, and pointer and focus still light nodes but nothing drifts. With no canvas, nothing is added and the list stays. | `home-network.js` |
+| 1.5, 1.7, tokens | The canvas reads its colors from the page's tokens (`--color-primary`, `--color-gold`, `--color-accent`, `--color-text`). Labels are drawn at 12 px. The CSS block uses tokens only, has no animation and fits 390 px (the canvas is 100% wide). | `style.css` |
+| Requirement 5 | The home page's title, description, canonical link, robots rules and h1 are unchanged (the stored baseline test), and the home page still has no JSON-LD. The head gains one module script from this site, `/js/home-network.js`, which the head-tag test allows. The page gains the list of links (real pages that are already in the sitemap), as 1.13 asks. | |
+
+Tests: `test/site-look-1d.test.js`. The pure functions: the node cap and its halving, which nodes are picked, the starting places, link opacity, easing apart, the box, pointer lean, nearest node, still mode, the 30 fps cap, slow-frame dropping and when to run. The page: the list is present and holds only real links, at most six listings per category, there is no canvas in the HTML, the script is loaded, and there is no network on filtered pages. The script: no imports, outside files or HTML writing, the canvas is aria-hidden, and the colors are tokens. The CSS block: tokens only.
+
+Not checked here: how it looks and moves in a browser (no browser on this laptop). Please look at the home page at 390 px and 1280 px, with and without reduced motion, and with the tab hidden.
+
+No older test line changed for Step 1D. If an older test counts how many times a listing's link appears on the home page, it will now see one more (in the network list). That is on purpose (1.13).
+
 # Requirement 1, Step 1C: listing cards (site-look-steps-2026-11-26.md)
 
 | Line | As built | Where |

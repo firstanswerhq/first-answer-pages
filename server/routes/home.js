@@ -47,6 +47,35 @@ export function emptyTradeInCityText(label, city) {
   return `No ${what} in ${shown} yet. Own one?`;
 }
 
+/** high-tech-look Step 1D: the script that draws the live network from the list (loaded after the page). */
+export const HOME_NETWORK_SCRIPT = '/js/home-network.js';
+/** How many listings of each category the list holds (the directory below the search has every one). */
+export const NETWORK_LISTINGS_PER_CATEGORY = 6;
+
+/**
+ * high-tech-look Step 1D (Requirement 1.9, 1.13): the network's nodes as a plain list of real links: each category that
+ * has listings (its page), and under it up to six of its listings (their pages), in the directory's own order.
+ * Nothing is made up: no other names, counts or activity. '' when there is nothing to list.
+ * @param {Map<string, object[]>} grouped  the directory's listings by category slug
+ * @returns {string}
+ */
+export function networkList(grouped, categories) {
+  const items = [];
+  for (const [slug, group] of grouped) {
+    const label = categories.find(c => c.slug === slug)?.label;
+    if (!label || !Array.isArray(group) || group.length === 0) continue;
+    const listings = group.slice(0, NETWORK_LISTINGS_PER_CATEGORY)
+      .map(l => `<li><a href="/listings/${encodeURIComponent(l.id)}" data-node="listing">${escapeHtml(l.name)}</a></li>`)
+      .join('');
+    items.push(`<li class="network-category"><a href="/?category=${encodeURIComponent(slug)}" data-node="category">${escapeHtml(label)}</a><ul>${listings}</ul></li>`);
+  }
+  if (items.length === 0) return '';
+  return `<nav class="home-network" aria-label="Categories and listings">
+<ul class="network-list">${items.join('')}</ul>
+</nav>
+`;
+}
+
 /**
  * high-tech-look Step 1B (Requirement 1.2): the A-Z index tabs down the book's right edge, one per first letter of the
  * categories that have listings. Each tab is a real link to that letter's first category page (the same page the
@@ -167,13 +196,17 @@ ${group.map(l => listingCard(l, categories, { founder: founderOf(l.id), trust: t
     // edge (CSS) and A-Z index tabs down the right edge on wide screens. The h1 keeps its text, so headings stay the
     // same (Requirement 5). The big headline is the tagline: "The phone book is back." with "And AI can read it." on
     // the next line in the glow color, and the owner's sentence under it as written.
+    // high-tech-look Step 1D (Requirement 1.8 to 1.13): the live network, on the unfiltered home page only. The page
+    // holds a plain list of real links (the categories with listings, and their listings); the script draws the
+    // network from that list on a canvas it adds (aria-hidden). With JavaScript off the list is the whole thing.
+    const network = !category && !city ? networkList(grouped, categories) : '';
     const body = `<div class="book">
 ${bookTabs(store, categories, category)}<header class="home-head">
 <h1>Local Business Directory</h1>
 <p class="tagline"><span class="tagline-back">The phone book is back.</span> <span class="tagline-ai">And AI can read it.</span></p>
 <p class="home-why">People now ask AI who to call. List your business free so AI can find it.</p>
 </header>
-${filterForm}${graderButton}${invite}
+${network}${filterForm}${graderButton}${invite}
 ${results}
 </div>`;
 
@@ -200,7 +233,9 @@ ${results}
       ? `${categoryLabel}${where}: phone numbers, services and hours. Call them or ask for a quote, free.`
       : `Free local business directory that AI assistants can read. Find a local business${where}, call them, or ask for a quote.`;
 
-    res.status(200).type('html').send(layout({ title, body, canonical, description }));
+    res.status(200).type('html').send(layout({
+      title, body, canonical, description, ...(network ? { scripts: [HOME_NETWORK_SCRIPT] } : {}),
+    }));
   });
 
   return router;

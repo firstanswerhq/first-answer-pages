@@ -71,6 +71,8 @@ test('1.5: text and buttons meet WCAG AA on the dark background, and outlines an
     ['--color-mark-text', '--color-mark-bg'], ['--color-serp-title', '--color-surface-2'], ['--color-serp-url', '--color-surface-2'],
     ['--color-ink', '--color-surface'], ['--color-text', '--color-success-bg'],
     ['--color-partly', '--color-surface'], ['--color-partly', '--color-surface-2'],
+    // Code review of 1B: the lit A-Z tab is dark text on gold.
+    ['--color-on-gold', '--color-gold'],
   ];
   for (const [fg, bg] of text) {
     const ratio = contrast(t[fg], t[bg]);
@@ -129,6 +131,7 @@ test('the health map keeps its own colors, and print uses paper colors', () => {
   assert.ok(contrast(t['--color-text'], t['--color-page-bg']) >= 4.5);
   assert.ok(contrast(t['--color-text-muted'], t['--color-page-bg']) >= 4.5);
   assert.ok(contrast(t['--color-link'], t['--color-page-bg']) >= 4.5);
+  assert.ok(contrast(t['--color-on-gold'], t['--color-gold']) >= 4.5, 'the lit tab on paper');
   // Every screen color token has a paper value, so nothing prints light on white.
   const screen = rootTokens();
   for (const name of Object.keys(screen).filter(n => n.startsWith('--color-') && !['--color-accent', '--color-glow', '--color-partly-pill'].includes(n))) {

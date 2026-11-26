@@ -121,8 +121,10 @@ test('1.2, 1.7: the spine is drawn by CSS; the tabs show only on wide screens, a
   assert.match(wide, /\.book \{ max-width: min\(66rem, calc\(100% - 3rem\)\);/, 'room for the tabs that stand out 1rem');
   // The tab names are there for screen readers, hidden on screen.
   assert.match(lastRule('.book-tab-name'), /clip-path: inset\(50%\);/);
-  // The lit tab: dark text on amber (AA), from tokens only.
-  assert.match(wide, /\.book-tab\.is-on \{\s*color: var\(--color-button-text\);\s*background: var\(--color-gold\);/);
+  // The lit tab: dark text on amber (AA), from tokens only, in every state (code review fix: the link hover rule
+  // turned it pale cyan on gold, and the paper value of the button text is near-white).
+  assert.match(wide, /\.book-tabs a\.book-tab\.is-on, \.book-tabs a\.book-tab\.is-on:hover, \.book-tabs a\.book-tab\.is-on:visited,\s*\.book-tabs a\.book-tab\.is-on:focus-visible \{\s*color: var\(--color-on-gold\);\s*background: var\(--color-gold\);/);
+  assert.equal(/\.book-tab\.is-on[^{]*\{[^}]*color: var\(--color-button-text\)/.test(wide), false);
   // Tokens only in the 1B block.
   const block = CSS.slice(CSS.indexOf('high-tech-look Step 1B: the open-book home page'), CSS.lastIndexOf('@media (prefers-reduced-motion: reduce)'));
   assert.ok(block.length > 500);

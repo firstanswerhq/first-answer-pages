@@ -88,6 +88,7 @@
   --color-gold:       #FFB547;   /* amber: thin rules, ornaments and highlights */
   --color-glow:       rgba(56, 225, 255, 0.35);
   --color-gold-glow:  rgba(255, 181, 71, 0.6);   /* Step 1B: the lit index tab */
+  --color-on-gold:    #0F1B33;   /* dark text on the gold highlight (the lit tab): 9.8:1 on screen, 5.5:1 on paper */
   --color-glow-soft:  rgba(56, 225, 255, 0.12);  /* Step 1C: the soft glow on every listing card */
   --color-spine:      #132A55;   /* Step 1B: the middle of the book's spine (decoration) */
   --color-ink:        #E8EEFC;   /* headings and the score number */
@@ -132,6 +133,7 @@
     --color-partly-text: #8A5300; --color-partly-pill: rgba(183, 121, 31, 0.14); --color-mark-bg: #FFE58A; --color-mark-text: #0F1B33; --color-serp-title: #1A0DAB;
     --color-serp-url: #006621; --color-button-text: #FFFEF9; --color-focus: #0C2C73;
     --color-gold-glow: rgba(184, 137, 59, 0.3); --color-spine: #F3E7CC; --color-glow-soft: rgba(0, 0, 0, 0);
+    --color-on-gold: #0F1B33;
   }
 }
 
@@ -2892,6 +2894,56 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 }
 
 /* =====================================================================
+   high-tech-look Step 1D: the live network on the home page (Requirement 1.8 to 1.13). Tokens only.
+   The list of real links is the content; the canvas the script adds above it is decoration (aria-hidden). The
+   script itself caps its speed; with reduced motion it draws one still picture.
+   ===================================================================== */
+.home-network {
+  margin: 1rem 0 1.25rem;
+}
+.network-canvas {
+  display: block;
+  width: 100%;
+  height: 14rem;
+  margin: 0 0 0.75rem;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+  touch-action: manipulation;
+}
+@media (min-width: 960px) {
+  .network-canvas { height: 20rem; }
+}
+.network-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  columns: 2 12rem;
+  column-gap: 1.5rem;
+  font-size: 0.875rem;
+}
+.network-category {
+  break-inside: avoid;
+  margin: 0 0 0.6rem;
+}
+.network-category > a {
+  font-weight: 700;
+  color: var(--color-primary);
+}
+.network-category ul {
+  margin: 0.15rem 0 0;
+  padding: 0 0 0 0.9rem;
+  list-style: none;
+  border-left: 1px solid var(--color-line);
+}
+.network-category ul a {
+  display: inline-block;
+  padding: 0.15rem 0;
+  color: var(--color-text-muted);
+}
+.network-category ul a:hover { color: var(--color-text); }
+
+/* =====================================================================
    high-tech-look Step 1B: the open-book home page (Requirement 1.2, 1.3). Tokens only, like the 1A block.
    ===================================================================== */
 
@@ -2957,8 +3009,11 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     text-decoration: none;
   }
   .book-tab:hover { color: var(--color-text); border-color: var(--color-primary); }
-  .book-tab.is-on {
-    color: var(--color-button-text);
+  /* Code review fix: dark text on the gold tab, in every state. `.book-tabs a.book-tab.is-on` (three classes and an
+     element) outranks the site's link hover rule, which would otherwise turn the text pale cyan on gold. */
+  .book-tabs a.book-tab.is-on, .book-tabs a.book-tab.is-on:hover, .book-tabs a.book-tab.is-on:visited,
+  .book-tabs a.book-tab.is-on:focus-visible {
+    color: var(--color-on-gold);
     background: var(--color-gold);
     border-color: var(--color-gold);
     box-shadow: 0 0 14px var(--color-gold-glow);
