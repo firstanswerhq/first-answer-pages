@@ -347,13 +347,35 @@ function reasonHtml(reason, runNew) {
   return typeof runNew === 'function' ? safe.replace(/Run a new check/g, () => runNew('Run a new check')) : safe;
 }
 
-function rowHtml(sub, full, runNew) {
-  const reason = sub.reason ? ` <span class="health-why">${reasonHtml(sub.reason, runNew)}</span>` : '';
-  const fix = full && sub.fix && sub.status !== 'info' ? ` <span class="health-fix"><strong>Fix:</strong> ${h(sub.fix)}</span>` : '';
-  return `<li class="health-row health-${sub.status}">${sym(sub.status)}<strong class="health-row-name">${h(sub.name)}:</strong> <span class="health-status">${h(sub.label)}</span>${reason}${fix}</li>`;
+function drillPanel(sub, full, gradeId, contactEmail) {
+  if (!full) return '';
+  const statusLine = `<p class="drill-status drill-status-${sub.status}">${sym(sub.status)}<strong>${h(sub.name)}:</strong> ${h(sub.label)}</p>`;
+  let fixLine;
+  if (sub.status === 'good') {
+    fixLine = '<p class="drill-fix drill-fix-good">This one’s good — no changes needed.</p>';
+  } else if (sub.fix) {
+    fixLine = `<p class="drill-fix"><strong>How to fix it:</strong> ${h(sub.fix)}</p>`;
+  } else {
+    fixLine = '';
+  }
+  const recheckLine = gradeId
+    ? `<form class="drill-recheck" method="post" action="/grade/${h(gradeId)}/recheck"><button type="submit" class="btn btn-sm">Check again</button></form>`
+    : '<p class="drill-recheck hint">Run a new check to see if this improved.</p>';
+  let helpLine = '';
+  if (contactEmail) {
+    helpLine = `<p class="drill-help">Want someone to handle this? <a href="mailto:${h(contactEmail)}">Contact us</a></p>`;
+  }
+  return `<div class="health-drill-panel" hidden>${statusLine}${fixLine}${recheckLine}${helpLine}<button type="button" class="drill-back" aria-label="Back">← Back</button></div>`;
 }
 
-function groupHtml(main, full, runNew) {
+function rowHtml(sub, full, runNew, gradeId, contactEmail) {
+  const reason = sub.reason ? ` <span class="health-why">${reasonHtml(sub.reason, runNew)}</span>` : '';
+  const fix = full && sub.fix && sub.status !== 'info' ? ` <span class="health-fix"><strong>Fix:</strong> ${h(sub.fix)}</span>` : '';
+  const panel = drillPanel(sub, full, gradeId, contactEmail);
+  return `<li class="health-row health-${sub.status}" data-drill-sub="${h(sub.name)}">${sym(sub.status)}<strong class="health-row-name">${h(sub.name)}:</strong> <span class="health-status">${h(sub.label)}</span>${reason}${fix}${panel}</li>`;
+}
+
+function groupHtml(main, full, runNew, gradeId, contactEmail) {
   const parts = [];
   let cluster;
   let list = [];
@@ -377,12 +399,12 @@ function groupHtml(main, full, runNew) {
         if (CLUSTER_NOTES[cluster]) parts.push(`<p class="health-why">${h(CLUSTER_NOTES[cluster])}</p>`);
       }
     }
-    list.push(rowHtml(sub, full, runNew));
+    list.push(rowHtml(sub, full, runNew, gradeId, contactEmail));
   }
   flush();
   if (main.reason) parts.push(`<p class="health-why">${reasonHtml(main.reason, runNew)}</p>`);
   if (main.note) parts.push(`<p class="health-note">${h(main.note)}</p>`);
-  return `<div class="health-group health-${main.status}" id="health-g-${main.id}">
+  return `<div class="health-group health-${main.status}" id="health-g-${main.id}" data-main-id="${main.id}">
   <h3>${sym(main.status)}<span class="health-group-name">${h(main.name)}:</span> <span class="health-status">${h(main.label)}</span></h3>
   ${parts.join('\n  ')}
   <a href="#health-map" class="health-back" tabindex="-1" aria-hidden="true">Back to the map</a>
@@ -542,11 +564,11 @@ function phoneSvg(model) {
  * @param {{ full?: boolean, runNew?: (text: string) => string }} [opts] `runNew` gives the report's own
  *   "Run a new check" link (trusted HTML), so every mention of it in a reason is a link.
  */
-export function healthMapHtml(model, { full = false, runNew, mapFirst = false } = {}) {
+export function healthMapHtml(model, { full = false, runNew, mapFirst = false, gradeId, contactEmail } = {}) {
   // A report from before these checks: one line with the link, not the same link on every row (Step 2 review V10).
   const oldNote = model.old ? `\n  <p class="health-note health-old">${reasonHtml(OLD_REPORT_NOTE, runNew)}</p>` : '';
   const list = `    <div class="health-list">
-${model.mains.map(m => groupHtml(m, full, runNew)).join('\n')}
+${model.mains.map(m => groupHtml(m, full, runNew, gradeId, contactEmail)).join('\n')}
     </div>`;
   const map = mapHtml(model);
   // On screen the list comes first in the page (read first by screen readers and search tools; CSS shows the map

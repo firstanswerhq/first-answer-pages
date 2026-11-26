@@ -2773,6 +2773,72 @@ p.grade-prepared-by { font-weight: 700; font-size: 1.1rem; }
   .health-back { display: inline-block; margin-top: 0.4rem; font-size: 0.9rem; }
 }
 
+/* ---- Step 1F: drill-down interaction ---- */
+
+/* Level 1: fade non-expanded groups, show close button */
+.drill-faded { opacity: 0.2; pointer-events: none; transition: opacity 400ms ease-out; }
+.drill-expanded { transition: opacity 400ms ease-out; }
+.health-drilled .health-group:not(.drill-expanded) { margin-block: 0.3rem; }
+
+.drill-close {
+  position: absolute; top: 0.5rem; right: 0.6rem; z-index: 2;
+  background: var(--health-panel, #0B1020); border: 1px solid var(--color-line, #1a2340);
+  color: var(--color-text, #e0e6f0); font-size: 1.4rem; line-height: 1;
+  width: 2rem; height: 2rem; border-radius: 50%; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.drill-close:hover { background: var(--color-surface, #111b30); }
+
+/* Level 2: sub-check rows become interactive */
+.health-row[data-drill-sub] { transition: background 200ms; border-radius: 4px; padding: 0.25rem 0.4rem; }
+.health-row[data-drill-sub]:hover { background: rgba(255,255,255,0.04); }
+.health-row[data-drill-sub]:focus-visible { outline: 2px solid var(--color-primary, #00e5ff); outline-offset: 2px; }
+.drill-row-active { background: rgba(0,229,255,0.06) !important; }
+
+/* The drill panel (hidden by default via HTML attribute) */
+.health-drill-panel {
+  margin: 0.5rem 0 0.8rem 1.4rem; padding: 0.8rem 1rem;
+  background: var(--color-surface, #111b30); border-left: 3px solid var(--color-primary, #00e5ff);
+  border-radius: 0 6px 6px 0; font-size: 0.92rem; line-height: 1.5;
+}
+.health-drill-panel:focus { outline: none; }
+
+.drill-status { margin: 0 0 0.4rem; }
+.drill-status strong { margin-left: 0.3em; }
+.drill-status-good { color: var(--health-good, #00e676); }
+.drill-status-partly { color: var(--health-partly, #ffab00); }
+.drill-status-missing { color: var(--health-missing, #ff5252); }
+.drill-status-not_checked { color: var(--health-gray, #607090); }
+.drill-status-info { color: var(--color-text-muted, #8090b0); }
+
+.drill-fix { margin: 0 0 0.4rem; }
+.drill-fix-good { color: var(--health-good, #00e676); font-style: italic; }
+
+.drill-recheck { margin: 0.5rem 0 0.3rem; }
+.drill-recheck .btn { font-size: 0.85rem; padding: 0.25rem 0.7rem; }
+.drill-recheck.hint { font-size: 0.85rem; color: var(--color-text-muted, #8090b0); }
+
+.drill-help { margin: 0.3rem 0 0; font-size: 0.88rem; }
+.drill-help a { color: var(--color-primary, #00e5ff); }
+
+.drill-back {
+  display: inline-block; margin-top: 0.5rem; padding: 0.15rem 0.5rem;
+  font-size: 0.85rem; background: none; border: 1px solid var(--color-line, #1a2340);
+  color: var(--color-text-muted, #8090b0); border-radius: 4px; cursor: pointer;
+}
+.drill-back:hover { color: var(--color-text, #e0e6f0); border-color: var(--color-text-muted, #8090b0); }
+
+/* Print: hide all drill-down UI */
+@media print {
+  .drill-close, .health-drill-panel, .drill-back { display: none !important; }
+  .drill-faded { opacity: 1 !important; pointer-events: auto !important; }
+}
+
+/* Reduced motion: skip transitions */
+@media (prefers-reduced-motion: reduce) {
+  .drill-faded, .drill-expanded, .health-row[data-drill-sub] { transition: none; }
+}
+
 /* =====================================================================
    high-tech-look Step 1A: the dark theme on every page (Requirement 1.1, 1.5, 1.6, 1.7)
    Colors come only from the tokens in the :root block at the top of the file; nothing below names a color.
