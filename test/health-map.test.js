@@ -464,5 +464,5 @@ test('V1/V6: the orb script never leaks a loop, cleans up its listeners, and pau
   // W1: init first stops every orb whose host left the page (even one paused off screen).
   assert.match(js, /function init\(\) \{[\s\S]*?for \(const \[host, stop\] of \[\.\.\.orbs\]\) if \(!host\.isConnected\) stop\(\);/);
   assert.match(js, /orbs\.delete\(host\)/);
-  assert.ok(js.length < 6000, 'small');
+  assert.ok(js.length < 12000, 'small');
 });

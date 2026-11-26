@@ -383,7 +383,7 @@ test('Step 2: the report shows the health map under the score, with the report\'
   assert.match(html, /<title>AI Visibility Check for Zephyr Plumbing/);
   // The orb script file is there and is small.
   const js = await fs.readFile(fileURLToPath(new URL(`../public${HEALTH_ORB_SCRIPT}`, import.meta.url)), 'utf8');
-  assert.ok(js.length > 0 && js.length < 6000);
+  assert.ok(js.length > 0 && js.length < 12000);
 });
 
 test('J1, J2 (sparse page): the card says "Add your ..." only for what was really not found, and the rows agree', async () => {

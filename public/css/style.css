@@ -2668,7 +2668,7 @@ p.grade-prepared-by { font-weight: 700; font-size: 1.1rem; }
   margin: 1.5rem 0;
 }
 .health-layout { display: grid; gap: 1.25rem; }
-.health-map { order: -1; position: relative; max-width: 40rem; width: 100%; margin: 0 auto; background: var(--health-panel); border-radius: 12px; overflow: hidden; }
+.health-map { order: -1; position: relative; max-width: 40rem; width: 100%; margin: 0 auto; background: var(--health-panel); border-radius: 12px; overflow: hidden; box-shadow: 0 0 30px rgba(103, 232, 249, 0.08), 0 0 60px rgba(103, 232, 249, 0.04), inset 0 0 30px rgba(103, 232, 249, 0.03); border: 1px solid rgba(103, 232, 249, 0.12); }
 @media (min-width: 960px) {
   /* The map gets the wider column so its words are readable (Step 2 review V2); two columns only from 960 px, so the
      map is never narrower than 530 px beside the list (W3). */
@@ -2677,7 +2677,7 @@ p.grade-prepared-by { font-weight: 700; font-size: 1.1rem; }
 }
 .health-svg { display: block; width: 100%; height: auto; position: relative; z-index: 1; }
 .health-svg-phone { display: none; }
-.health-orb-host { position: absolute; left: 39%; top: 39%; width: 22%; height: 22%; z-index: 0; }
+.health-orb-host { position: absolute; left: 30%; top: 30%; width: 40%; height: 40%; z-index: 0; }
 .health-orb-host canvas { width: 100%; height: 100%; display: block; }
 /* The drawings and the orb canvas share one box, so the canvas stays on the orb whatever sits below it (W2). */
 .health-art { position: relative; }
@@ -2718,10 +2718,10 @@ p.grade-prepared-by { font-weight: 700; font-size: 1.1rem; }
 .health-group.health-not_checked { border-left-style: dashed; }
 
 /* The map: the orb */
-.health-orb { stroke: var(--health-glow); stroke-width: 2; }
-.health-orb-halo { fill: none; stroke: var(--health-glow); stroke-opacity: 0.25; stroke-width: 1; }
+.health-orb { stroke: var(--health-glow); stroke-width: 2; filter: drop-shadow(0 0 6px rgba(103, 232, 249, 0.5)); }
+.health-orb-halo { fill: none; stroke: var(--health-glow); stroke-opacity: 0.3; stroke-width: 1.5; filter: drop-shadow(0 0 10px rgba(103, 232, 249, 0.3)); }
 .health-orb-name { fill: var(--health-ink); font-weight: 700; text-anchor: middle; paint-order: stroke; stroke: var(--health-panel); stroke-width: 4px; }
-.health-orb-score { fill: var(--health-glow); font-size: 30px; font-weight: 700; text-anchor: middle; paint-order: stroke; stroke: var(--health-panel); stroke-width: 4px; }
+.health-orb-score { fill: var(--health-glow); font-size: 30px; font-weight: 700; text-anchor: middle; paint-order: stroke; stroke: var(--health-panel); stroke-width: 4px; filter: drop-shadow(0 0 8px rgba(103, 232, 249, 0.6)); }
 .health-orb-score-none { font-size: 24px; }
 
 /* The map: nodes. Font sizes are set on each word in the drawing (they are pinned by a test, Step 2 review V2). */
@@ -2733,9 +2733,9 @@ p.grade-prepared-by { font-weight: 700; font-size: 1.1rem; }
 .health-node-info .health-node-ring, .health-sub-info .health-dot-node { stroke: var(--health-ink); stroke-opacity: 0.6; }
 .health-node-info text.health-node-status, .health-node-info .health-node-sym, .health-sub-info .health-sub-sym { fill: var(--health-ink); }
 .health-line-info { stroke: var(--health-ink); stroke-opacity: 0.35; }
-.health-node-good .health-node-ring, .health-sub-good .health-dot-node { stroke: var(--health-good); }
-.health-node-partly .health-node-ring, .health-sub-partly .health-dot-node { stroke: var(--health-partly); }
-.health-node-missing .health-node-ring, .health-sub-missing .health-dot-node { stroke: var(--health-missing); }
+.health-node-good .health-node-ring, .health-sub-good .health-dot-node { stroke: var(--health-good); filter: drop-shadow(0 0 5px rgba(74, 222, 128, 0.4)); }
+.health-node-partly .health-node-ring, .health-sub-partly .health-dot-node { stroke: var(--health-partly); filter: drop-shadow(0 0 5px rgba(251, 191, 36, 0.4)); }
+.health-node-missing .health-node-ring, .health-sub-missing .health-dot-node { stroke: var(--health-missing); filter: drop-shadow(0 0 5px rgba(248, 113, 113, 0.4)); }
 .health-node-not_checked .health-node-ring, .health-sub-not_checked .health-dot-node { stroke: var(--health-gray); stroke-dasharray: 5 4; }
 .health-node-good text.health-node-status, .health-node-good .health-node-sym, .health-sub-good .health-sub-sym { fill: var(--health-good); }
 .health-node-partly text.health-node-status, .health-node-partly .health-node-sym, .health-sub-partly .health-sub-sym { fill: var(--health-partly); }
