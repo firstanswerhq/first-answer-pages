@@ -469,7 +469,9 @@ test('Requirement 13: the full report has share of voice, evidence and downloads
 
   const report = await (await fetch(`${base}/grade/${g.id}`)).text();
   assert.match(report, /<h2>Who AI named, across 1 answer<\/h2>/);
-  assert.match(report, /<tr class="grade-voice-you"><td><strong>Zephyr Plumbing<\/strong> \(you\)<\/td><td>0 of 1<\/td><\/tr>/);
+  // Batch 6 fix B item 6: with one answer a plain sentence, not a "0 of 1" table.
+  assert.match(report, /<p class="grade-voice-summary">The one answer didn(?:'|&#39;)t name you[^<]*\.<\/p>/);
+  assert.equal(/<section class="grade-voice">[\s\S]*?<table/.test(report.split('<section class="grade-sites">')[0]), false);
   // Batch 6 item 6: the reviewers' wording, with the report's one time zone label.
   assert.match(report, /<p class="hint grade-evidence">Evidence: Claude stub, [^<]+ C[SD]T, live web search on\.<\/p>/);
   assert.ok(report.includes(`href="/grade/${g.id}/print">Print or save as PDF</a>`), 'K18');

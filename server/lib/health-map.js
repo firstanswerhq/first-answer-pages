@@ -156,6 +156,9 @@ export function checkTip(id, input, found) {
  */
 /** Batch 6 item 7a: the names of the health rows that show a Check (the CSV has a "check" row for each of those). */
 export const CHECK_ROW_NAMES = Object.freeze(new Set(SUB_NODES.filter(d => d.check).flatMap(d => [d.name, d.serviceAreaName].filter(Boolean))));
+/** Batch 6 fix B: the Check id each of those rows shows (both names of the address row lead to the same id). */
+export const CHECK_ROW_IDS = Object.freeze(new Map(SUB_NODES.filter(d => d.check)
+  .flatMap(d => [d.name, d.serviceAreaName].filter(Boolean).map(n => [n, d.check]))));
 
 export function checkName(id, input) {
   const def = SUB_NODES.find(d => d.check === id);

@@ -2534,8 +2534,16 @@ p.grade-prepared-by { font-weight: 700; font-size: 1.1rem; }
 .grade-print-only { display: none; }
 .grade-voice-summary { margin: 0.3rem 0 0.5rem; font-weight: 600; }
 .grade-method { margin-top: 1rem; }
-/* Batch 6 nit 12: numbers in headings and names are lining figures, so "5" never reads as a letter. */
-.grade-report, .health, .grade-report h2, .grade-report h3, .health-row-name { font-variant-numeric: lining-nums; }
+/* Batch 6 nit 12, fix B item 3: the report's section headings use plain lining figures, so "5 answers" and "the 2
+   lines" never read as letters. Their digits came from "Old Numbers" (Rozha One, digits only), which the rule for every
+   h1, h2 and h3 puts first; font-variant-numeric can't change that font's figures. Here the report's headings go back
+   to Fira Sans Condensed, with lining figures asked for twice. The big score number keeps its old-style figures. */
+.grade-report h2, .grade-report h3, .grade-report h4, .health h2, .health h3, .health h4, .kit-item h3 {
+  font-family: "Fira Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  font-variant-numeric: lining-nums;
+  font-feature-settings: "lnum" 1;
+}
+.grade-report, .health, .health-row-name { font-variant-numeric: lining-nums; }
 /* Batch 5 K18: the Save button looks like the other buttons on the page. */
 .grade-prepared .button-secondary {
   min-height: 2.5rem; padding: 0.45rem 1.1rem; border: 2px solid var(--color-primary); border-radius: var(--radius);
@@ -2559,7 +2567,11 @@ p.grade-prepared-by { font-weight: 700; font-size: 1.1rem; }
   .health-svg-full { display: block !important; }
   /* Batch 6 item 1: the map is small and first, so the score box and the map share page 1; the list flows after it. */
   .health-layout { display: flex !important; flex-direction: column; }
-  .health-map { order: -1; position: static !important; max-width: 15rem; margin: 0 auto 0.5rem; break-inside: avoid; }
+  .health-map { order: -1; position: static !important; max-width: 12rem; margin: 0 auto 0.4rem; break-inside: avoid; }
+  /* Fix B item 1: the health list prints only the rows that are not green (a line above it says so). */
+  .health-row.health-good { display: none !important; }
+  .health-intro { margin: 0 0 0.25rem; }
+  .grade-report h2 { margin: 0.6rem 0 0.3rem; }
   *, *::before, *::after { animation: none !important; transition: none !important; }
   .health-scanning .health-branch { opacity: 1 !important; }
   /* K7: the name and score in the center print once, as plain dark text (no outline copy). */
@@ -2567,9 +2579,10 @@ p.grade-prepared-by { font-weight: 700; font-size: 1.1rem; }
   .health-orb { fill: #FFFFFF !important; }
   .health-orb-halo { display: none; }
   /* Batch 6 item 1: no forced page breaks at all; only a single row, card or kit box is kept whole. Groups flow. */
-  .grade-check, .grade-top-fails li, .health-row, .kit-item, .grade-voice-table tr, .grade-sites-list li,
+  /* Fix B item 1: a kit box may break (its long code blocks left half pages empty); its heading stays with it. */
+  .grade-check, .grade-top-fails li, .health-row, .grade-voice-table tr, .grade-sites-list li,
   .grade-all-answers li > p { break-inside: avoid; }
-  .grade-report h2, .grade-report h3, .health-group h3 { break-after: avoid; }
+  .grade-report h2, .grade-report h3, .health-group h3, .kit-item h3 { break-after: avoid; }
   .grade-score, .grade-top { margin-bottom: 0.25rem; padding-top: 0; }
   .grade-score-number .num { font-size: 4rem; }
   .grade-print-head { margin: 0 0 0.25rem; }

@@ -778,6 +778,46 @@ The score, the Checks and every public page are unchanged. No report content is 
 
 New tests (`test/agency-report.test.js`): item 1 (print width limit and order, answers once, cards that need work, the print-only line), item 2 (kicker, no Free listing group in the agency report, model and CSV), item 3 (no broken printed sentence), item 5 (order and the summary line), item 8 (How we checked), item 9, item 10, nits 11 to 13 and 15, and `csvDate`.
 
+## Batch 6, fix B (batch6-fix-B-2026-11-26.md, from review-2026-11-25-batch6.md and review-2026-11-25-batch6-reader.md)
+
+The score, the Checks and every public page are unchanged. `layout` gains an option to leave out the header button, and every public page keeps the default, so their HTML is byte for byte the same.
+
+| Item | Decision | As built | Where |
+|---|---|---|---|
+| 1 (must) print length | Code. Measured by the reader: 1 answer 8 pages, 5 answers 9 to 10. | The print page puts the health map right after the score box, before "Who AI named" (`reportPage({ print: true })`); the screen keeps batch 6 item 5's order. The map prints at 12rem. The health list prints only the rows that are not green, under "Only the rows that are not green are listed here. Everything else passed." Health groups already flow. A fix-kit box may break across pages (its heading stays with it), so long code blocks no longer leave half-empty pages. | `grade-html.js` (`printPage`, `PRINT_HEALTH_NOTE`), `style.css` |
+| 1 (page count) | Not measured here: shell commands may not be run, so no PDF can be made. Please measure the real `/print` page with a real stored grade of 1 answer and of 5 answers (Claude x3, ChatGPT, Perplexity), with and without "Prepared by", and add the counts to this row. | | |
+| 2 (must) CSV double count | Code, partly. The batch 6 code already skipped those rows by name, and the names agree in a real grade (the card name and the health row name both come from `SUB_NODES`). Most likely the reader's 31 health rows were the signal rows (Says what you do, Website links to Yelp...), which aren't scored Checks. Still, the matching was by label text and dropped a row even when no check row existed. | Health rows are matched to Checks by id (`CHECK_ROW_IDS`, both names of the address row), and dropped only when that Check's "check" row exists. An old report with no stored result keeps its health row. A new test uses the real shape (every scored Check stored, 5 answers, with and without "Prepared by", and a no-storefront business) and fails if any item is in both sections. | `health-map.js`, `grade-html.js` (`reportCsvFor`) |
+| 3 (must) lining numerals | Code. `font-variant-numeric` had no effect because those digits are drawn by "Old Numbers" (Rozha One, digits only), which the late rule for every h1, h2 and h3 puts first. Rozha One's figures are old-style and no CSS feature changes them. | The report's section headings (`.grade-report h2/h3/h4`, `.health h2/h3/h4`, `.kit-item h3`) use Fira Sans Condensed with `lining-nums` and `"lnum" 1`, in a rule after the Old Numbers rule. The big score number and the listing phone numbers keep their old-style figures. | `style.css` |
+| 4 web page with Prepared by | Code. | With "Prepared by" set, the web page follows the printout: the Prepared by kicker, no Free listing group, no claim panel, no "Want help?", no "List your business free" header button (`layout({ navCta: false })`), and the small "Powered by First Answer Pages" line. The remove line stays (privacy), worded for whoever reads it: "Only people with this link can see this report. To have it removed, contact First Answer Pages: ...". | `grade-html.js` (`reportPage`, `page`), `html.js` (`layout`) |
+| 5 Partly with full points | Code. | A tip-only "Partly" card says "Full points, one fix below" in place of "4 of 4 points". The CSV keeps the numbers. | `grade-html.js` (`checkRow`, `FULL_POINTS_TIP`) |
+| 6 one answer | Code. | With one answer, "Who AI named, across 1 answer" has a plain sentence and no table: "The one answer didn't name you, and named Ace Drains and Ridge Plumbing." (at most five names). From two answers the table shows. | `grade-html.js` (`voiceSection`, `oneAnswerLine`) |
+| 7 Tip / Fix | Code. | "Fix:" is the one word for advice: the tip on a Partly card now says "Fix:". | `grade-html.js` |
+| 8 "Run a new check" in health rows and notices | Stays as is, on purpose. | These are sentence starts ("Run a new check to look on Google again.") inside reasons that are saved with each Grade's signals, so old and new reports would read differently. They also link to the same page as `FULL_NEW_CHECK`. Many pinned lines (health-signals, V157, V203, V244, H5) say exactly these words. "run a full new check" stays for the two places where a full check is set against "Check again": the recheck line and the footer. | |
+| 9 stronger CSV test | Test. | The real-report CSV test again has a floor (at least 30 health rows for a report from before the signals) and checks that a health row names its cluster ("Website: ..."). It also checks that no item is in both sections. | `test/agency-report.test.js` |
+| 10 numbers in "How we checked" | Code. | Words for one to nine ("Claude three times, ChatGPT once and Perplexity once"), digits from 10. | `grade-html.js` (`timesWord`) |
+
+### Deviations for the owner to approve (batch 6 fix B)
+
+| Earlier rule | Was | As built | Why |
+|---|---|---|---|
+| Batch 6 item 5 (voice and sites right under the score) | the same order on screen and on paper | on paper the health map comes first, then "Who AI named" and "Sites AI used" | Fix B item 1: the score box and the map on page 1. The screen keeps item 5's order. |
+| Batch 5 K4 (on screen the free listing card stays with "Prepared by") | the web page kept the listing card, kicker and header button | the web page follows the printout when "Prepared by" is set | Fix B item 4. |
+| 13.1 (a table of every business named) | a table from one answer | a plain sentence for one answer, the table from two | Fix B item 6: one answer reads as a ranking. |
+| 13.4 print (every health row) | every health row printed | only the rows that are not green, with one line saying everything else passed | Fix B item 1. |
+
+### Older test lines changed in fix B
+
+| Where | Old | New | Why |
+|---|---|---|---|
+| `test/agency-report.test.js` (13.1) | the voice table for one answer ("0 of 1") | the table for two answers ("0 of 2") | item 6 |
+| `test/agency-report.test.js` (K2) | "4 of 4 points" and "Tip:" | "Full points, one fix below" and "Fix:"; never "Partly" with "N of N points" for a tip; no "Tip:" on the page | items 5, 7 |
+| `test/agency-report.test.js` (K4) | on screen with Prepared by, the free listing card stays and there is no "Powered by" | no free listing card, and the "Powered by" line | item 4 |
+| `test/agency-report.test.js` (13.4, K17) | at least 1 health row; no health row named in `CHECK_ROW_NAMES` | at least 30 health rows; a "Website: ..." cluster; no item in both the check and health sections | items 2, 9 |
+| `test/agency-report.test.js` (batch 6 item 8) | "Claude 3 times" | "Claude three times", and no digits | item 10 |
+| `test/grade-signals-flow.test.js` (Requirement 13) | the "0 of 1" voice table row | the one-answer sentence, and no table | item 6 |
+
+New tests (`test/agency-report.test.js`): must-fix 2 on the real shape (and an old report keeps its row), must-fix 1 (print order, the health note, green rows hidden, map width, kit boxes may break), must-fix 3 (the heading rule comes after the Old Numbers rule), item 4 (the web page with and without a name), item 6, item 10.
+
 ## Batch 6, fix A (batch6-fix-A-2026-11-25.md, 3 failures: 1882 of 1885)
 
 | Failure | Decision | Change |

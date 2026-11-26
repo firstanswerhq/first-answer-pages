@@ -13,11 +13,12 @@ import {
   shareOfVoice, sitesUsed, evidence, evidenceTime, reportCsv, csvCell, cleanPreparedBy, CSV_COLUMNS, PREPARED_BY_MAX,
   answersOf, isGoogleProfileUrl, csvDate,
 } from '../server/lib/agency-report.js';
-import { CHECK_ROW_NAMES } from '../server/lib/health-map.js';
+import { CHECK_ROW_NAMES, CHECK_ROW_IDS } from '../server/lib/health-map.js';
+import { CHECKS } from '../server/lib/grade-checks.js';
 import {
   voiceSection, sitesSection, printPage, reportCsvFor, reportPage, notCheckedLine, answersFromLine, POWERED_BY, ALREADY_HAVE,
   PRINT_KIT_LINE, SEND_THIS_PAGE, PRINT_CARDS_NOTE, PRINT_FOOTER_TAIL, PRINT_FOR_CLIENTS, SNAPSHOT_LINE, NO_QUESTION_SAVED,
-  howWeChecked, voiceSummary, failedNote,
+  howWeChecked, voiceSummary, failedNote, PRINT_HEALTH_NOTE, oneAnswerLine,
 } from '../server/lib/grade-html.js';
 import { FOUNDING_NOTE, MAP_INTRO_NO_LISTING, healthModel } from '../server/lib/health-map.js';
 import { REPLACE_CAPITALS, STREET_PLACEHOLDER, ZIP_PLACEHOLDER, jsonLdBlock } from '../server/lib/fix-kit.js';
@@ -78,9 +79,10 @@ test('13.1: who AI named across the answers that came back; the checked business
   // Named nowhere: still a row, at 0.
   const none = shareOfVoice(grade([answer({ competitors: ['Ridge Plumbing'] })]));
   assert.deepEqual(none.rows.find(r => r.own), { name: 'Zephyr Plumbing', count: 0, own: true });
-  const html = voiceSection(grade([answer({ competitors: ['Ridge <b>Plumbing</b>'] })]));
-  assert.match(html, /<h2>Who AI named, across 1 answer<\/h2>/);
-  assert.match(html, /<tr class="grade-voice-you"><td><strong>Zephyr Plumbing<\/strong> \(you\)<\/td><td>0 of 1<\/td><\/tr>/);
+  // Batch 6 fix B item 6: the table shows from 2 answers (with 1 there is nothing to rank; see the one-answer test).
+  const html = voiceSection(grade([answer({ competitors: ['Ridge <b>Plumbing</b>'] }), answer()]));
+  assert.match(html, /<h2>Who AI named, across 2 answers<\/h2>/);
+  assert.match(html, /<tr class="grade-voice-you"><td><strong>Zephyr Plumbing<\/strong> \(you\)<\/td><td>0 of 2<\/td><\/tr>/);
   assert.ok(html.includes('Ridge &lt;b&gt;Plumbing&lt;/b&gt;'), 'escaped');
   assert.equal(voiceSection(grade([])), '');
 });
@@ -234,8 +236,13 @@ test('13.4, batch 5 K17: one header row first; the report\'s own columns on ever
   assert.equal(answerRows.length, 2, 'one row per answer that came back, no more');
   // Batch 6 item 7a: a scored Check is one "check" row, never also a "health" row, and the Free listing group is out.
   const health = csvSection(text, 'health');
-  assert.ok(health.length >= 1);
-  assert.equal(health.some(r => CHECK_ROW_NAMES.has(r.item)), false, 'no check counted twice');
+  // Fix B item 9: a sensible floor again. This report is from before the signals, so its signal rows are "Not checked"
+  // rows: 9 on the Website node, 4 Google profile, 3 Reviews, 6 Details match, 6 Links, plus the answers' rows. The
+  // check rows for the Checks with no stored result stay (12 of them), since they have no "check" row.
+  assert.ok(health.length >= 30, `${health.length} health rows`);
+  assert.ok(health.some(r => r.group.startsWith('Website: ')), 'a health row still names its cluster');
+  const checkItems = new Set(csvSection(text, 'check').map(r => r.item));
+  assert.equal(health.some(r => checkItems.has(r.item)), false, 'no check counted twice');
   assert.equal(health.some(r => r.group === 'Free listing'), false);
   const titleRows = csvSection(text, 'check').filter(r => r.item === 'Page title names your city and service');
   assert.equal(titleRows.length, 1, 'the check is one "check" row');
@@ -345,7 +352,10 @@ test('K2: a passed check whose details could not be read has the same tip on its
   const g = grade([answer()], { results: [RESULT('tap-to-call', 'pass'), RESULT('address-shown', 'pass')] });
   const html = reportPage(g, { leadGate: false });
   // Batch 6 item 4: never a green mark next to "but": both say "Partly", with the same tip; the points don't change.
-  assert.match(html, /<li class="grade-check partly"><span class="grade-result">Partly<\/span><strong>Tap-to-call phone number<\/strong><br><span class="grade-points">4 of 4 points<\/span>[\s\S]*?<p class="hint grade-tip"><strong>Tip:<\/strong> We saw a tap-to-call link but couldn(?:'|&#39;)t read the number\./);
+  // Fix B items 5 and 7: "Full points, one fix below" instead of "4 of 4 points", and "Fix:" as the one word for advice.
+  assert.match(html, /<li class="grade-check partly"><span class="grade-result">Partly<\/span><strong>Tap-to-call phone number<\/strong><br><span class="grade-points">Full points, one fix below<\/span>[\s\S]*?<p class="hint grade-tip"><strong>Fix:<\/strong> We saw a tap-to-call link but couldn(?:'|&#39;)t read the number\./);
+  assert.equal(/Partly<\/span><strong>[^<]*<\/strong><br><span class="grade-points">\d+ of \d+ points/.test(html), false, 'never "Partly" with "N of N points" for a tip');
+  assert.equal(html.includes('<strong>Tip:</strong>'), false);
   assert.match(html, /<strong class="health-row-name">Tap-to-call phone number:<\/strong> <span class="health-status">Found a link, but not the number<\/span>/);
   assert.match(html, /<li class="health-row health-partly"><span class="health-sym" aria-hidden="true">!<\/span><strong class="health-row-name">Tap-to-call phone number:/);
   assert.equal(/<li class="health-row health-good">(?:(?!<\/li>).)*but not/.test(html), false, 'no green mark next to "but"');
@@ -362,11 +372,11 @@ test('K4: with "Prepared by" set, the printout has none of our sales lines and o
   }
   assert.ok(print.includes(`<p class="hint grade-powered">${POWERED_BY}</p>`));
   assert.equal((print.match(/First Answer Pages/g) ?? []).length >= 1, true);
-  // On screen, "Want help?" is hidden when "Prepared by" is set; the free listing card stays.
+  // Batch 6 fix B item 4: on screen, with "Prepared by" set, the web page follows the same rules as the printout.
   const screen = reportPage(g, { leadGate: false });
   assert.equal(screen.includes('Want help?'), false);
-  assert.ok(screen.includes('Your free listing in our directory'));
-  assert.equal(screen.includes(POWERED_BY), false);
+  assert.equal(screen.includes('Your free listing in our directory'), false);
+  assert.ok(screen.includes(`<p class="hint grade-powered">${POWERED_BY}</p>`));
   // Without "Prepared by", everything is as before.
   const ours = grade([answer()], { results: [RESULT('business-labeled', 'fail')] });
   assert.ok(reportPage(ours, { leadGate: false }).includes('Want help?'));
@@ -549,7 +559,9 @@ test('batch 6 item 8: "How we checked" from the real counts, a snapshot, never a
   const g = grade([
     answer({ named: true }), answer(), answer(), answer({ provider: 'chatgpt' }), answer({ provider: 'perplexity' }),
   ]);
-  assert.match(howWeChecked(g), /^We asked one question and got answers from Claude 3 times, ChatGPT once,? and Perplexity once\. /);
+  // Fix B item 10: words for one to nine.
+  assert.match(howWeChecked(g), /^We asked one question and got answers from Claude three times, ChatGPT once,? and Perplexity once\. /);
+  assert.equal(/\d/.test(howWeChecked(g)), false, 'no digits next to "once"');
   assert.ok(howWeChecked(g).endsWith(SNAPSHOT_LINE));
   assert.equal(howWeChecked(grade([answer()])), `We asked one question and got answers from Claude once. ${SNAPSHOT_LINE}`);
   assert.equal(howWeChecked(grade([])), '');
@@ -584,4 +596,102 @@ test('batch 6 nits 11 to 13: lower-case "your fix kit", lining numerals, and "th
   assert.equal(failedNote(1).startsWith('1 check makes up your score.'), true);
   const css = await fs.readFile(fileURLToPath(new URL('../public/css/style.css', import.meta.url)), 'utf8');
   assert.match(css, /font-variant-numeric: lining-nums;/);
+});
+
+// ---- Batch 6, fix B (batch6-fix-B-2026-11-26.md) ------------------------------------------------------------------
+
+/** A stored Grade of the real shape: every scored Check has a result, as a finished check stores them. */
+function realGrade(ai, extra = {}) {
+  const results = CHECKS.filter(c => c.id !== 'google-profile')
+    .map((c, k) => ({ id: c.id, result: c.id === 'ai-named' ? 'fail' : (k % 3 === 0 ? 'fail' : 'pass'), detail: 'stored detail' }));
+  return grade(ai, { results, found: { phone: '(615) 555-0142', address: '12 Main St, Nashville, TN 37203', hours: [] }, ...extra });
+}
+
+const FIVE = () => [
+  answer({ named: true, competitors: ['Hollow Creek'] }), answer({ competitors: ['Hollow Creek'] }), answer({ named: true, competitors: ['Hollow Creek'] }),
+  answer({ provider: 'chatgpt', competitors: ['Hollow Creek'] }), answer({ provider: 'perplexity', named: true, competitors: ['Hollow Creek'] }),
+];
+
+test('fix B must-fix 2: on a real report no Check is in both the "check" and the "health" sections, matched by id', () => {
+  for (const g of [realGrade(FIVE()), realGrade(FIVE(), { preparedBy: 'Acme' }), realGrade([answer()], { input: { ...INPUT, noStorefront: true } })]) {
+    const text = reportCsvFor(g);
+    const checks = csvSection(text, 'check');
+    const health = csvSection(text, 'health');
+    assert.equal(checks.length, 14, 'the 13 website checks and the AI check, once each');
+    const checkItems = new Set(checks.map(r => r.item));
+    assert.deepEqual(health.filter(r => checkItems.has(r.item)).map(r => r.item), [], 'no check counted twice');
+    // Every health row that shows a Check is gone, by id, whatever its name (the no-storefront address row too).
+    assert.deepEqual(health.filter(r => CHECK_ROW_IDS.has(r.item)).map(r => r.item), []);
+    for (const r of checks) assert.ok(['Pass', 'Partly', 'Needs work', 'Not checked'].includes(r.status), r.status);
+  }
+  // An old report with no stored result for a Check keeps that Check's health row (it has no "check" row to replace it).
+  const old = reportCsvFor(grade([answer()], { results: [] }));
+  assert.ok(csvSection(old, 'health').some(r => r.item === 'Tap-to-call phone number'));
+  assert.equal(csvSection(old, 'check').some(r => r.item === 'Tap-to-call phone number'), false);
+});
+
+test('fix B must-fix 1: the print page puts the map right after the score box; the list prints only rows that are not green', async () => {
+  const g = realGrade(FIVE());
+  const print = printPage(g);
+  const top = print.indexOf('<div class="grade-top">');
+  const health = print.indexOf('<section class="health"');
+  const voice = print.indexOf('<section class="grade-voice">');
+  assert.ok(top < health && health < voice, 'score box, then the health map, then "Who AI named"');
+  assert.ok(print.includes(`<p class="hint grade-print-only">${PRINT_HEALTH_NOTE}</p>\n  <div class="health-layout">`));
+  // On screen the order of batch 6 item 5 stays.
+  const screen = reportPage(g, { leadGate: false });
+  assert.ok(screen.indexOf('<section class="grade-voice">') < screen.indexOf('<section class="health"'));
+  assert.equal(screen.includes(PRINT_HEALTH_NOTE), false);
+  const css = await fs.readFile(fileURLToPath(new URL('../public/css/style.css', import.meta.url)), 'utf8');
+  const prints = [...css.matchAll(/@media print \{([\s\S]*?)\n\}/g)].map(m => m[1]).join('\n');
+  assert.match(prints, /\.health-row\.health-good \{ display: none !important; \}/);
+  const width = Number(/\.health-map \{[^}]*max-width: ([\d.]+)rem/.exec(prints)?.[1]);
+  assert.ok(width <= 12, `${width}rem`);
+  assert.equal(/\.kit-item[,\s][^{]*\{ break-inside: avoid/.test(prints), false, 'a kit box may break, so no half-empty pages');
+});
+
+test('fix B must-fix 3: the report headings draw their digits with lining figures, not the digits-only display font', async () => {
+  const css = await fs.readFile(fileURLToPath(new URL('../public/css/style.css', import.meta.url)), 'utf8');
+  // The rule that puts the digits-only font first on every h1, h2 and h3 (not its @font-face).
+  const oldNumbers = css.lastIndexOf('font-family: "Old Numbers", "Fira Sans Condensed"');
+  const rule = /\.grade-report h2, \.grade-report h3, \.grade-report h4, \.health h2, \.health h3, \.health h4, \.kit-item h3 \{\s*font-family: "Fira Sans Condensed"[^}]*font-variant-numeric: lining-nums;[^}]*font-feature-settings: "lnum" 1;/.exec(css);
+  assert.ok(rule, 'the rule is there');
+  assert.ok(oldNumbers !== -1 && rule.index > oldNumbers, 'it comes after the "Old Numbers" rule, so it wins');
+});
+
+test('fix B item 4: with "Prepared by" set, the web page follows the printout: kicker, no listing, no header button', () => {
+  const g = realGrade([answer()], { preparedBy: 'Music City Web Co.' });
+  const html = reportPage(g, { leadGate: false });
+  assert.ok(html.includes('<span class="grade-eyebrow-sub grade-prepared-by">Prepared by Music City Web Co.</span>'));
+  for (const text of ['Report &middot; First Answer Pages', 'List your business free', 'class="nav-cta"', 'Claim my free listing',
+    'data-main="listing"', 'Listed on First Answer Pages', 'Want help?', 'Ask us to remove this report']) {
+    assert.equal(html.includes(text), false, text);
+  }
+  assert.ok(html.includes(`<p class="hint grade-powered">${POWERED_BY}</p>`));
+  assert.ok(html.includes('Only people with this link can see this report. To have it removed, contact First Answer Pages:'));
+  // Without a name, the web page is as before.
+  const ours = reportPage(realGrade([answer()]), { leadGate: false });
+  for (const text of ['Report &middot; First Answer Pages', 'List your business free', 'Claim my free listing', 'Ask us to remove this report']) {
+    assert.ok(ours.includes(text), text);
+  }
+  assert.equal(ours.includes(POWERED_BY), false);
+});
+
+test('fix B item 6: with one answer there is no table, only a plain sentence', () => {
+  const one = grade([answer({ competitors: ['Ridge Plumbing', 'Ace <b>Drains</b>'] })]);
+  const html = voiceSection(one);
+  assert.equal(html.includes('<table'), false);
+  assert.ok(html.includes('<h2>Who AI named, across 1 answer</h2>'));
+  // The names come in share-of-voice order (most answers first, then A to Z), escaped.
+  assert.ok(html.includes("<p class=\"grade-voice-summary\">The one answer didn&#39;t name you, and named Ace &lt;b&gt;Drains&lt;/b&gt; and Ridge Plumbing.</p>"));
+  assert.equal(oneAnswerLine([{ name: 'Zephyr', count: 1, own: true }]), 'The one answer named you.');
+  assert.equal(oneAnswerLine([{ name: 'Zephyr', count: 1, own: true }, { name: 'Ridge', count: 1, own: false }]), 'The one answer named you, and also named Ridge.');
+  assert.ok(voiceSection(grade([answer(), answer()])).includes('<table'), 'two answers keep the table');
+});
+
+test('fix B item 10: "How we checked" uses words for one to nine', () => {
+  const nine = grade(Array.from({ length: 9 }, () => answer()));
+  assert.match(howWeChecked(nine), /from Claude nine times\./);
+  const twelve = grade(Array.from({ length: 12 }, () => answer()));
+  assert.match(howWeChecked(twelve), /from Claude 12 times\./);
 });

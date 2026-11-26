@@ -179,13 +179,15 @@ export function markDemo(html) {
  * @returns {string}
  */
 export function layout({
-  title, body, jsonLd, scripts, demo = false, siteName = DEFAULT_SITE_NAME, canonical, description, head = '',
+  title, body, jsonLd, scripts, demo = false, siteName = DEFAULT_SITE_NAME, canonical, description, head = '', navCta = true,
 }) {
-  const page = renderLayout({ title, body, jsonLd, scripts, siteName, canonical, description, head });
+  const page = renderLayout({ title, body, jsonLd, scripts, siteName, canonical, description, head, navCta });
   return demo ? markDemo(page) : page;
 }
 
-function renderLayout({ title, body, jsonLd, scripts, siteName, canonical, description, head }) {
+// `navCta: false` leaves out the header's "List your business free" button (an agency's report, high-tech-look batch 6
+// fix B). Every other page keeps it, so public pages are unchanged.
+function renderLayout({ title, body, jsonLd, scripts, siteName, canonical, description, head, navCta = true }) {
   const name = escapeHtml(siteName);
   const descTag = typeof description === 'string' && description.trim() !== ''
     ? `\n  <meta name="description" content="${escapeHtml(description.replace(/\s+/g, ' ').trim())}">`
@@ -214,8 +216,7 @@ function renderLayout({ title, body, jsonLd, scripts, siteName, canonical, descr
 <body>
   <nav class="site-nav">
     <a class="brand" href="/">${name}</a>
-    <a class="nav-cta" href="/rise">List your business free</a>
-  </nav>
+${navCta === false ? '' : '    <a class="nav-cta" href="/rise">List your business free</a>\n'}  </nav>
   <main>
 ${body}
   </main>
