@@ -31,10 +31,13 @@ export const SYMBOLS = Object.freeze({ good: '\u2713', partly: '!', missing: '\u
 export const MAP_TITLE = 'Health of your setup';
 // Step 2 reader review H1: say what the colors are; the score is named the same way as at the top of the page.
 // J10 ("partway", "yellow") and J4/W7 (the "i" of the free listing is explained).
-export const MAP_INTRO = "Every check we ran, at a glance. Green is good, yellow is partway there, red needs work, gray means we couldn't check it. The i marks your free listing: information, not health. Your score is at the top of the page.";
+// Batch 5 K19: about the reader, not about us.
+export const MAP_INTRO = "Every check we ran, at a glance. Green is good, yellow is partway there, red needs work, gray means we couldn't check it. i = about your free listing, not part of your health.";
 export const CLICK_HINT = 'Click a circle to see its checks.';
-/** Shown under the "Speaks AI's language" cluster heading, so the reader knows where it counts (J6). */
-export const SPEAKS_NOTE = "These checks don't count toward your score yet.";
+/** Shown under the "Speaks AI's language" cluster heading, so the reader knows where it counts (J6, K19: no "yet"). */
+export const SPEAKS_NOTE = "These checks don't count toward your score.";
+/** Batch 5 K9: the first Website cluster. */
+export const BASICS_CLUSTER = 'Website basics';
 // Step 2 review V3: true at any later time (the spots were open when the check ran), and the listing is free.
 export const FOUNDING_NOTE = 'When we ran this check, Founding Member spots were still open. Listing is free; Founding Members pay once for the optional Verified stamp.';
 export const TAP_HINT = 'Tap a circle to see its checks.';
@@ -59,9 +62,10 @@ export const MAIN_NODES = Object.freeze([
  * review H6, H9); `words` turns a status label that repeats the name into a short answer (H7).
  */
 export const SUB_NODES = Object.freeze([
-  // 1. Website. "Website is reachable" (Requirement 12) comes first: nothing else works if the site doesn't open.
-  { main: 'website', cluster: 'Website is reachable', name: 'Security certificate', path: 'website.certificate' },
-  { main: 'website', cluster: 'Website is reachable', name: 'Website address works', path: 'website.addressWorks', words: { Works: 'Yes' } },
+  // 1. Website. "Website basics" (Requirement 12; named "Website is reachable" before batch 5 K9) comes first:
+  // nothing else works if the site doesn't open.
+  { main: 'website', cluster: BASICS_CLUSTER, name: 'Security certificate', path: 'website.certificate' },
+  { main: 'website', cluster: BASICS_CLUSTER, name: 'Website address works', path: 'website.addressWorks', words: { Works: 'Yes' } },
   { main: 'website', cluster: 'Can AI read your website', name: 'Your website lets AI assistants read it (robots.txt)', check: 'ai-bots-allowed', words: { pass: 'Yes', fail: 'No, it blocks some' } },
   { main: 'website', cluster: 'Can AI read your website', name: 'Page list for search engines (sitemap)', path: 'website.sitemap' },
   { main: 'website', cluster: 'Can AI read your website', name: 'Text AI can read', path: 'website.wordsInPage', words: { 'Found in the page': 'Yes' } },
@@ -129,6 +133,31 @@ const sentence = text => String(text).trim().replace(/([^.!?])$/, '$1.');
 export const ADDRESS_ONE_LINE = 'Write your full street address on one line, like "123 Main St, Nashville, TN 37201", so we can compare it with Google.';
 export const PHONE_AS_TEXT = "We saw a tap-to-call link but couldn't read the number. Write the number as plain text too.";
 
+/**
+ * The tip for a Check that passed but whose details could not all be read (J1, J2, batch 5 K2): the health map row and
+ * the score card show the same words. Null when there is nothing to add.
+ */
+export function checkTip(id, input, found) {
+  if (!found) return null;
+  const storefront = input?.noStorefront !== true;
+  if (id === 'address-shown' && storefront && !addressParts(found.address)) {
+    return { label: 'Found, but not on one line', reason: ADDRESS_ONE_LINE };
+  }
+  if (id === 'tap-to-call' && !found.phone) return { label: 'Found a link, but not the number', reason: PHONE_AS_TEXT };
+  return null;
+}
+
+/**
+ * Batch 5 K10: one name per check on the whole report (health map, score cards, "Fix these first", fix kit, CSV): the
+ * health map's plain name, with the technical term in brackets. The service-area name for a business with no
+ * storefront. Null for a check the map doesn't show (the caller keeps its own label).
+ */
+export function checkName(id, input) {
+  const def = SUB_NODES.find(d => d.check === id);
+  if (!def) return null;
+  return def.serviceAreaName && input?.noStorefront === true ? def.serviceAreaName : def.name;
+}
+
 function checkSub(def, result, input, found) {
   const storefront = input?.noStorefront !== true;
   const name = def.serviceAreaName && !storefront ? def.serviceAreaName : def.name;
@@ -136,12 +165,10 @@ function checkSub(def, result, input, found) {
   const r = result?.result;
   if (r === 'pass') {
     // The same facts the listing card uses (J1, J2): "Good" only when what the page shows could also be read.
-    if (def.check === 'address-shown' && storefront && found && !addressParts(found.address)) {
-      return { ...base, status: 'partly', label: 'Found, but not on one line', reason: ADDRESS_ONE_LINE };
-    }
-    if (def.check === 'tap-to-call' && found && !found.phone) {
-      return { ...base, status: 'partly', label: 'Found a link, but not the number', reason: PHONE_AS_TEXT };
-    }
+    // Batch 5 K2: one verdict per check. The check passed, so the row is green like its score card; what could not be
+    // read is a tip, and the score card shows the same tip (checkTip).
+    const tip = checkTip(def.check, input, found);
+    if (tip) return { ...base, status: 'good', label: tip.label, reason: tip.reason };
     return { ...base, status: 'good', label: def.words?.pass ?? 'Good' };
   }
   if (r === 'fail') return { ...base, status: 'missing', label: def.words?.fail ?? 'Needs work' };
@@ -170,7 +197,7 @@ function signalSub(def, row, old) {
  * The free listing rows as information (Step 2 review V3, reader H8): no health color, no fix; plain words that say
  * what is so ("Not yet. It's free, claim it below.").
  */
-function listingSub(def, row, old, notListed) {
+function listingSub(def, row, old, notListed, agency = false) {
   if (!row || row.status === 'info') return null;
   // A report from before these checks: gray "Not checked", like every other row of it (W7).
   if (old) return { name: def.name, cluster: null, status: 'not_checked', label: 'Not checked', reason: OLD_REPORT_SHORT };
@@ -179,17 +206,18 @@ function listingSub(def, row, old, notListed) {
   switch (def.path) {
     case 'listing.listed':
       if (row.status === 'good') return { ...base, label: 'Yes' }; // W5: never "Listed: Listed"
-      if (row.needsClaim) return { ...base, label: "Not yet. It's free, claim it below." };
+      // Batch 5 K4: an agency's report (Prepared by) has no "claim it below" line.
+      if (row.needsClaim) return { ...base, label: agency ? 'Not yet' : "Not yet. It's free, claim it below." };
       return unsure();
     case 'listing.verified':
       if (row.status === 'good') return { ...base, label: 'Yes' };
       if (row.status === 'partly') return { ...base, label: 'Not yet' };
-      if (notListed) return { ...base, label: 'Available after you claim your listing.' };
+      if (notListed) return { ...base, label: agency ? 'No listing yet' : 'Available after you claim your listing.' };
       return unsure();
     case 'listing.matchesWebsite':
     case 'listing.linksToWebsite': {
       // Nothing to check before there is a listing: never a gray "couldn't check" (J4, W4).
-      if (notListed) return { ...base, label: 'After you claim your listing.' };
+      if (notListed) return { ...base, label: agency ? 'No listing yet' : 'After you claim your listing.' };
       if (row.status === 'not_checked') return unsure();
       const words = { Matches: 'Yes', "Doesn't match": "Doesn't match", Linked: 'Yes', 'No website on the listing': 'No website on the listing' };
       return { ...base, label: words[row.label] ?? String(row.label ?? '') };
@@ -253,7 +281,7 @@ function listingLabel(subs, old) {
  * @param {{ score: number|null, aiRows: Array<{ name: string, status: string, label: string }>, aiStatus: string,
  *           aiReason?: string }} opts  `aiReason` is the one line shown when there is no answer (H5)
  */
-export function healthModel(grade, { score = null, aiRows = [], aiStatus = 'not_checked', aiReason, found } = {}) {
+export function healthModel(grade, { score = null, aiRows = [], aiStatus = 'not_checked', aiReason, found, agency = false } = {}) {
   const results = new Map((Array.isArray(grade?.results) ? grade.results : []).filter(r => r && typeof r.id === 'string').map(r => [r.id, r]));
   const old = !grade?.signals || typeof grade.signals !== 'object';
   const rows = new Map(signalRows(old ? undefined : grade.signals).map(r => [r.path, r]));
@@ -267,7 +295,7 @@ export function healthModel(grade, { score = null, aiRows = [], aiStatus = 'not_
       subs = SUB_NODES.filter(d => d.main === node.id)
         .map(d => {
           if (d.check) return checkSub(d, results.get(d.check), input, found);
-          if (node.id === 'listing') return listingSub(d, rows.get(d.path), old, notListed);
+          if (node.id === 'listing') return listingSub(d, rows.get(d.path), old, notListed, agency);
           return signalSub(d, rows.get(d.path), old);
         })
         .filter(Boolean);
@@ -281,7 +309,8 @@ export function healthModel(grade, { score = null, aiRows = [], aiStatus = 'not_
     const out = { id: node.id, name: node.name, lines: node.lines, status, label, subs };
     if (node.id === 'ai' && subs.length === 0 && aiReason) out.reason = String(aiReason);
     if (node.id === 'links') out.socials = socialsCluster(old ? undefined : grade.signals);
-    if (node.id === 'listing' && !old && grade.signals?.listing?.founding?.status === 'info') out.note = FOUNDING_NOTE;
+    // K4: no Founding Member pitch on an agency's report.
+    if (node.id === 'listing' && !old && !agency && grade.signals?.listing?.founding?.status === 'info') out.note = FOUNDING_NOTE;
     return out;
   });
   return { name: String(input.name ?? ''), score: Number.isInteger(score) ? score : null, old, mains };

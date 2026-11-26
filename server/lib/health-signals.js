@@ -238,6 +238,8 @@ export function aliveSignals({ hasSite, alive, now }) {
   else if (a?.wwwOnly) addressWorks = unknown('addressWorks', 'Your website address seems to work only with "www." in front. Try both ways in your browser.');
   // X9: an expired certificate was seen, so the address did resolve and answer.
   else if (a?.reached || a?.certExpired) addressWorks = good('addressWorks', 'Works');
+  // Batch 5 K9: with no facts from the connection, say only that this wasn't tested, never that the site was unreachable.
+  else if (!a) addressWorks = unknown('addressWorks', "We didn't test your website address on this check.");
   else addressWorks = unknown('addressWorks', "We couldn't reach your website this time, so we didn't check this.");
   return { certificate, addressWorks };
 }

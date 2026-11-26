@@ -35,9 +35,12 @@ const LISTINGS = [
   { ...base('rec-sparse', 'Sparse Plumbing', { hours: {} }), website: undefined },
   base('rec-verified', 'Verified Plumbing'),
   base('rec-practice', 'Practice Plumbing'),
+  // Batch 5 Z5: a hand-edited, unreadable confirmation date.
+  base('rec-garbage', 'Garbage Date Plumbing'),
 ].map(l => JSON.parse(JSON.stringify(l)));
 
 const VERIFIED = {
+  'rec-garbage': 'garbage',
   'rec-confirmed': { verifiedDate: '2026-11-01', verifiedAt: '2026-11-01T15:30:00.000Z' },
   'rec-sparse': '2026-10-05',
   'rec-verified': '2026-09-01',
@@ -158,6 +161,34 @@ test('9.1, 9.2: search answers carry the same receipts and fetchedAt; get_listin
   const one = await call('get_listing', { id: 'rec-plain' });
   assert.equal(one.fetchedAt, new Date(NOW).toISOString());
   assert.ok(Number.isFinite(Date.parse(one.fetchedAt)));
+});
+
+test('batch 5 Z3: every dated receipt in a search listing is about a field that is in the answer (hours included)', async () => {
+  const found = await call('search_listings', { query: 'plumbing' });
+  const fieldOf = { phone: 'phone', hours: 'hours', services: 'services', area: 'serviceArea', website: 'website' };
+  for (const l of found.listings) {
+    for (const [field, r] of Object.entries(l.receipts)) {
+      if (r.lastConfirmed !== null) assert.ok(Object.hasOwn(l, fieldOf[field]), `${l.id}: ${field}`);
+    }
+  }
+  const confirmed = found.listings.find(l => l.id === 'rec-confirmed');
+  assert.deepEqual(Object.keys(confirmed.hours), ['monday'], 'the filled-in days only, as get_listing gives them');
+  assert.deepEqual(confirmed.hours, (await call('get_listing', { id: 'rec-confirmed' })).listing.hours);
+  assert.equal('hours' in found.listings.find(l => l.id === 'rec-sparse'), false, 'no filled days: no hours field');
+});
+
+test('batch 5 Z4: "Listing not found" also says when the answer was built', async () => {
+  const r = await handleRpc(ctx, { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'get_listing', arguments: { id: 'no-such' } } }, '127.0.0.1');
+  assert.equal(r.body.result.isError, true);
+  assert.equal(r.body.result.content[0].text, 'Listing not found');
+  assert.deepEqual(r.body.result.structuredContent, { error: 'Listing not found', fetchedAt: new Date(NOW).toISOString() });
+});
+
+test('batch 5 Z5: an unreadable stored confirmation date is never "verified: true"', async () => {
+  const out = await call('get_listing', { id: 'rec-garbage' });
+  assert.deepEqual(out.verification, { verified: false, verifiedDate: null, hash: null });
+  for (const r of Object.values(out.receipts)) assert.deepEqual(r, { lastConfirmed: null, confirmedBy: null });
+  assertNoBareVerified(out);
 });
 
 test('9: the lookup tools say up front that they are free; the wording is plain', () => {

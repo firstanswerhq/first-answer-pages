@@ -13,7 +13,12 @@ import {
   shareOfVoice, sitesUsed, evidence, evidenceTime, reportCsv, csvCell, cleanPreparedBy, CSV_COLUMNS, PREPARED_BY_MAX,
   answersOf, isGoogleProfileUrl,
 } from '../server/lib/agency-report.js';
-import { voiceSection, sitesSection, printPage, reportCsvFor } from '../server/lib/grade-html.js';
+import {
+  voiceSection, sitesSection, printPage, reportCsvFor, reportPage, notCheckedLine, answersFromLine, POWERED_BY, ALREADY_HAVE,
+  PRINT_KIT_LINE, SEND_THIS_PAGE,
+} from '../server/lib/grade-html.js';
+import { FOUNDING_NOTE } from '../server/lib/health-map.js';
+import { REPLACE_CAPITALS, STREET_PLACEHOLDER, ZIP_PLACEHOLDER, jsonLdBlock } from '../server/lib/fix-kit.js';
 
 const INPUT = { name: 'Zephyr Plumbing', city: 'Nashville', state: 'TN', service: 'plumbers', website: 'https://zephyr.example/' };
 const AT = '2026-11-24T18:00:00.000Z';
@@ -86,7 +91,9 @@ test('batch 4 Y1: on a shared host only the business\'s own page is "(your websi
   const own = grade([
     answer({ sources: [{ url: 'https://www.facebook.com/someothercompetitor' }, { url: 'https://m.facebook.com/ZephyrPlumbing/' }] }),
   ], { input: fbInput });
-  assert.deepEqual(sitesUsed(own).rows.map(r => [r.domain, r.count, r.own]), [['facebook.com', 1, true]]);
+  // Batch 5 Z1: the own page is a row of its own; the competitor stays in the plain facebook.com row.
+  assert.deepEqual(sitesUsed(own).rows.map(r => [r.domain, r.count, r.own]),
+    [['facebook.com', 1, false], ['facebook.com/zephyrplumbing', 1, true]]);
   // A shared-host website with no page kept is never marked.
   const bare = grade([answer({ sources: [{ url: 'https://www.facebook.com/zephyrplumbing' }] })], { input: { ...INPUT, website: 'https://www.facebook.com/' } });
   assert.equal(sitesUsed(bare).rows[0].own, false);
@@ -134,31 +141,58 @@ test('13.3: the evidence says who answered, the model, when, and whether it sear
   assert.ok(evidence(answer(), 'Claude').length <= 160);
 });
 
-test('13.4: the CSV has one row per health row and one per answer, in fixed columns, safe for spreadsheets', () => {
+test('13.4, batch 5 K17: one header row first; the report\'s own columns on every row; checks, answers, names and sites', () => {
+  const report = { business: 'Zephyr Plumbing', website: 'https://zephyr.example/', city: 'Nashville', state: 'TN', checkDate: AT, score: 68 };
   const csv = reportCsv({
+    report,
     preparedBy: 'Acme Agency',
-    health: [{ group: 'Website', item: 'Page list for search engines (sitemap)', status: 'Found', detail: '' }],
-    answers: [{ engine: 'Claude', model: 'm', question: 'Who, "best", here?', named: true, date: AT }],
+    checks: [{ group: 'Search basics', item: 'Page title names your city and service', status: 'Pass', earned: 7, points: 7, detail: '' }],
+    health: [{ group: 'Website: Can AI read your website', item: 'Page list for search engines (sitemap)', status: 'Found', detail: '' }],
+    answers: [{
+      engine: 'Claude', model: 'm', webSearch: true, question: 'Who, "best", here?', named: true, answer: '1. Zephyr\n2. Ridge',
+      businesses: ['Zephyr Plumbing', 'Ridge'], sites: ['https://yelp.com/a'], date: AT,
+    }],
+    named: [{ name: 'Ridge', count: 1, total: 1, own: false }],
+    sites: [{ domain: 'yelp.com', url: 'https://yelp.com/a', count: 1, own: false }],
   });
   const lines = csv.trim().split('\r\n');
-  assert.equal(lines[0], 'Prepared by,Acme Agency');
-  assert.equal(lines[1], '');
-  assert.equal(lines[2], CSV_COLUMNS.join(','));
-  assert.deepEqual(CSV_COLUMNS, ['section', 'group', 'item', 'status', 'detail', 'engine', 'model', 'question', 'named', 'date']);
-  assert.equal(lines[3], 'health,Website,Page list for search engines (sitemap),Found,,,,,,');
-  assert.equal(lines[4], `answer,,,,,Claude,m,"Who, ""best"", here?",yes,${AT}`);
+  assert.deepEqual(CSV_COLUMNS, [
+    'business', 'website', 'city', 'state', 'check_date', 'score', 'prepared_by',
+    'section', 'group', 'item', 'status', 'points_earned', 'points_possible', 'detail',
+    'engine', 'model', 'web_search', 'question', 'named', 'answer', 'businesses_named', 'sites_cited', 'date',
+  ]);
+  assert.equal(lines[0], CSV_COLUMNS.join(','), 'nothing above the header row');
+  const meta = ['Zephyr Plumbing', 'https://zephyr.example/', 'Nashville', 'TN', AT, '68', 'Acme Agency'];
+  // A row by column name, so every expected row has exactly the 23 columns.
+  const expectRow = fields => [...meta, ...CSV_COLUMNS.slice(meta.length).map(c => fields[c] ?? '')].map(csvCell).join(',');
+  assert.equal(lines[1], expectRow({
+    section: 'check', group: 'Search basics', item: 'Page title names your city and service', status: 'Pass', points_earned: '7', points_possible: '7',
+  }));
+  assert.equal(lines[2], expectRow({ section: 'health', group: 'Website: Can AI read your website', item: 'Page list for search engines (sitemap)', status: 'Found' }));
+  assert.ok(csv.includes(expectRow({
+    section: 'answer', engine: 'Claude', model: 'm', web_search: 'yes', question: 'Who, "best", here?', named: 'yes',
+    answer: '1. Zephyr\n2. Ridge', businesses_named: 'Zephyr Plumbing; Ridge', sites_cited: 'https://yelp.com/a', date: AT,
+  })));
+  assert.ok(csv.includes(expectRow({ section: 'named', item: 'Ridge', detail: '1 of 1' })));
+  assert.ok(csv.includes(expectRow({ section: 'site', item: 'yelp.com', detail: '1 answer', sites_cited: 'https://yelp.com/a' })));
+  assert.equal(lines[0].split(',').length, CSV_COLUMNS.length);
+  assert.equal(lines[1].split(',').length, CSV_COLUMNS.length);
   assert.equal(csvCell('=HYPERLINK("x")'), `"'=HYPERLINK(""x"")"`, 'never a formula');
   assert.equal(csvCell('+1 615'), "'+1 615");
-  assert.equal(reportCsv({ health: [], answers: [] }).split('\r\n')[0], CSV_COLUMNS.join(','), 'no "Prepared by" line when unset');
+  assert.equal(reportCsv({}).split('\r\n')[0], CSV_COLUMNS.join(','));
 
-  // The real report: one row per list row of the health map, one per stored answer.
-  const g = grade([answer({ named: true }), answer({ provider: 'chatgpt' })]);
+  // The real report: one row per scored check, per health map row, per answer that came back.
+  const g = grade([answer({ named: true, competitors: ['Ridge Plumbing'] }), answer({ provider: 'chatgpt', webSearch: false, sources: [{ url: 'https://yelp.com/x' }] })]);
   const real = reportCsvFor(g).trim().split('\r\n');
   assert.equal(real[0], CSV_COLUMNS.join(','));
-  assert.equal(real.filter(l => l.startsWith('answer,')).length, 2);
-  assert.ok(real.filter(l => l.startsWith('health,')).length >= 40);
-  assert.ok(real.some(l => /^answer,,,,,Claude,claude-test,.*,yes,/.test(l)));
-  assert.ok(real.some(l => /^answer,,,,,ChatGPT,claude-test,.*,no,/.test(l)));
+  assert.ok(real[1].startsWith('Zephyr Plumbing,https://zephyr.example/,Nashville,TN,'));
+  assert.equal(real.filter(l => l.includes(',answer,')).length, 2);
+  assert.ok(real.filter(l => l.includes(',health,')).length >= 40);
+  assert.ok(real.some(l => /,answer,,,,,,,Claude,claude-test,yes,.*,yes,/.test(l)));
+  // K3: an answer from memory lists no cited sites.
+  assert.ok(real.some(l => /,answer,,,,,,,ChatGPT,claude-test,no,.*,no,1\. Some answer,,,/.test(l)));
+  assert.ok(real.some(l => l.includes(',named,,Ridge Plumbing,,,,1 of 2,')));
+  assert.ok(real.some(l => l.includes(',health,Website: Search basics,')), 'the cluster is named with its group');
 });
 
 test('13.4: the print page opens every answer and the print stylesheet hides the menu, buttons, forms and animation', async () => {
@@ -186,6 +220,169 @@ test('13.5: "Prepared by" is text only, one line, at most 60 characters, and esc
   assert.equal(cleanPreparedBy('a\nb\u202Ec'), 'a bc');
   const html = printPage(grade([answer()], { preparedBy: 'Tom & "Jerry"' }));
   assert.ok(html.includes('Prepared by Tom &amp; &quot;Jerry&quot;'));
-  const csv = reportCsv({ preparedBy: '=cmd', health: [], answers: [] });
-  assert.equal(csv.split('\r\n')[0], "Prepared by,'=cmd");
+  // K17: "Prepared by" is a column on every row, guarded against formulas.
+  const csv = reportCsv({ preparedBy: '=cmd', health: [{ group: 'Website', item: 'x', status: 'Found' }] });
+  assert.equal(csv.split('\r\n')[0], CSV_COLUMNS.join(','));
+  assert.ok(csv.split('\r\n')[1].startsWith(",,,,,,'=cmd,health,"));
+});
+
+// ---- Batch 5 (review-2026-11-25-batch4.md Z1-Z5, review-2026-11-25-full-report-reader.md K1-K23) ----------------
+
+const FB_INPUT = { ...INPUT, website: 'https://www.facebook.com/', websitePage: 'https://www.facebook.com/riverbendplumbing' };
+const RESULT = (id, result, extra = {}) => ({ id, result, detail: '', ...extra });
+
+test('Z1: on a shared host the own page is its own "(your website)" row; competitors stay in the plain row', () => {
+  const g = grade([
+    answer({ sources: [{ url: 'https://www.facebook.com/MapleStreetPipe' }] }),
+    answer({ provider: 'chatgpt', sources: [{ url: 'https://www.facebook.com/HollowCreek' }] }),
+    answer({ provider: 'perplexity', sources: [{ url: 'https://m.facebook.com/RiverbendPlumbing/' }] }),
+  ], { input: FB_INPUT, signals: { links: { facebook: { status: 'partly' } } } });
+  const s = sitesUsed(g);
+  assert.deepEqual(s.rows.map(r => [r.domain, r.count, r.own, r.url]), [
+    ['facebook.com', 2, false, 'https://www.facebook.com/MapleStreetPipe'],
+    ['facebook.com/riverbendplumbing', 1, true, 'https://m.facebook.com/RiverbendPlumbing/'],
+  ]);
+  // The Facebook line still counts every answer that cited any facebook.com page.
+  assert.deepEqual(s.gaps, ["AI read Facebook for 3 answers. Your website doesn't link to a Facebook page."]);
+  const html = sitesSection(g);
+  assert.match(html, /<a href="https:\/\/www\.facebook\.com\/MapleStreetPipe" rel="nofollow noopener noreferrer">facebook\.com<\/a>: cited in 2 answers<\/li>/);
+  assert.match(html, /facebook\.com\/riverbendplumbing<\/a>: cited in 1 answer <strong>\(your website\)<\/strong>/);
+  // An own (not shared) domain keeps one row per domain.
+  const own = grade([answer({ sources: [{ url: 'https://zephyr.example/a' }, { url: 'https://www.zephyr.example/b' }] })]);
+  assert.deepEqual(sitesUsed(own).rows.map(r => [r.domain, r.count, r.own]), [['zephyr.example', 1, true]]);
+});
+
+test('Z2: only Google\'s own domains count as a Google Maps page', () => {
+  assert.equal(isGoogleProfileUrl('https://google.evil.com/maps'), false);
+  assert.equal(isGoogleProfileUrl('https://www.google.co.uk/maps/place/x'), true);
+  assert.equal(isGoogleProfileUrl('https://google.de/maps'), true);
+  assert.equal(isGoogleProfileUrl('https://www.google.com.au/maps/x'), true);
+  assert.equal(isGoogleProfileUrl('https://google.com.evil.example/maps'), false);
+});
+
+test('K3: cited sites only from answers that used a live web search; answers from memory say so', () => {
+  const memory = grade([answer({ webSearch: false, sources: [{ url: 'https://yelp.com/a' }] })], { signals: { links: { yelp: { status: 'partly' } } } });
+  const s = sitesUsed(memory);
+  assert.equal(s.hasSources, false);
+  assert.deepEqual(s.gaps, []);
+  assert.match(sitesSection(memory), /<p>These answers came from memory, without a live web search, so no sites were visited\.<\/p>/);
+  const mixed = grade([answer({ sources: [{ url: 'https://bbb.org/x' }] }), answer({ provider: 'chatgpt', webSearch: false, sources: [{ url: 'https://angi.com/y' }] })]);
+  assert.deepEqual(sitesUsed(mixed).rows.map(r => r.domain), ['bbb.org']);
+  assert.match(sitesSection(mixed), /Only answers that used a live web search are counted here\./);
+});
+
+test('K1: an answer stored without its question never shows "undefined"; it falls back to the question asked', () => {
+  const g = grade([answer({ prompt: undefined, named: true })]);
+  const html = reportPage(g, { leadGate: false });
+  assert.equal(/undefined/.test(html), false);
+  assert.ok(html.includes('<strong>Who are the best plumbers in Nashville, TN? Name your top 5.</strong>'));
+});
+
+test('K2: a passed check whose details could not be read has the same tip on its card as in the health map', () => {
+  const g = grade([answer()], { results: [RESULT('tap-to-call', 'pass'), RESULT('address-shown', 'pass')] });
+  const html = reportPage(g, { leadGate: false });
+  assert.match(html, /<li class="grade-check pass"><span class="grade-result">Pass<\/span><strong>Tap-to-call phone number<\/strong>[\s\S]*?<p class="hint grade-tip"><strong>Tip:<\/strong> We saw a tap-to-call link but couldn(?:'|&#39;)t read the number\./);
+  assert.match(html, /<strong class="health-row-name">Tap-to-call phone number:<\/strong> <span class="health-status">Found a link, but not the number<\/span>/);
+  assert.match(html, /<li class="health-row health-good"[^>]*>[\s\S]{0,200}Tap-to-call phone number:/);
+});
+
+test('K4: with "Prepared by" set, the printout has none of our sales lines and one "Powered by" line', () => {
+  const g = grade([answer()], { preparedBy: 'Acme Agency', results: [RESULT('business-labeled', 'fail')] });
+  const print = printPage(g);
+  for (const line of ['Want help?', 'can apply the fixes for you', 'Your free listing in our directory', 'Claim my free listing',
+    'claim it below', FOUNDING_NOTE, 'A free listing gives AI something to read', 'Claim your free listing']) {
+    assert.equal(print.includes(line), false, line);
+  }
+  assert.ok(print.includes(`<p class="hint grade-powered">${POWERED_BY}</p>`));
+  assert.equal((print.match(/First Answer Pages/g) ?? []).length >= 1, true);
+  // On screen, "Want help?" is hidden when "Prepared by" is set; the free listing card stays.
+  const screen = reportPage(g, { leadGate: false });
+  assert.equal(screen.includes('Want help?'), false);
+  assert.ok(screen.includes('Your free listing in our directory'));
+  assert.equal(screen.includes(POWERED_BY), false);
+  // Without "Prepared by", everything is as before.
+  const ours = grade([answer()], { results: [RESULT('business-labeled', 'fail')] });
+  assert.ok(reportPage(ours, { leadGate: false }).includes('Want help?'));
+  assert.ok(printPage(ours).includes('Your free listing in our directory'));
+  assert.equal(printPage(ours).includes(POWERED_BY), false);
+  // The CSV of an agency has no "claim it below" either.
+  assert.equal(reportCsvFor(g).includes('claim it below'), false);
+});
+
+test('K5, K6, K7: the print stylesheet runs sections on, hides screen-only words, and prints the center once', async () => {
+  const css = await fs.readFile(fileURLToPath(new URL('../public/css/style.css', import.meta.url)), 'utf8');
+  const prints = [...css.matchAll(/@media print \{([\s\S]*?)\n\}/g)].map(m => m[1]).join('\n');
+  assert.equal(/\.grade-report > section, \.grade-full > section \{ break-before: page; \}/.test(prints), false, 'no break per section');
+  assert.match(prints, /\.grade-kit \{ break-before: page; \}/);
+  assert.match(prints, /\.grade-check,[^{]*\{ break-inside: avoid; \}/);
+  assert.match(prints, /details > summary, \.copy-btn, \.grade-remove, \.grade-meta a \{ display: none !important; \}/);
+  assert.match(prints, /\.health-orb-name, \.health-orb-score \{ stroke: none !important; paint-order: normal !important;/);
+  const g = grade([answer()], { results: [RESULT('business-labeled', 'fail')] });
+  const print = printPage(g);
+  assert.equal(print.includes(SEND_THIS_PAGE), false);
+  assert.ok(print.includes(PRINT_KIT_LINE));
+  assert.equal(print.includes('the Copy button copies it'), false);
+  assert.ok(reportPage(g, { leadGate: false }).includes(SEND_THIS_PAGE), 'the screen keeps it');
+});
+
+test('K8: "Score by area" says how many points couldn\'t be checked, and which checks', () => {
+  const g = grade([answer()], {
+    results: [RESULT('title-city-service', 'pass'), RESULT('summary', 'not_checked'), RESULT('share-picture', 'not_checked')],
+  });
+  const line = notCheckedLine(g);
+  assert.ok(line.includes("6 points couldn&#39;t be checked this time, so they don&#39;t count for or against you.") || line.includes("6 points couldn't be checked this time, so they don't count for or against you."));
+  assert.ok(line.includes('Not checked: Search summary (the 2 lines under your link in Google) and Picture shown when someone shares your link.'));
+  assert.equal(notCheckedLine(grade([answer()], { results: [RESULT('summary', 'pass')] })), '');
+});
+
+test('K10, K11, K12, K13: one name per check; the kit is linked; boxes already done say so; the label is complete', () => {
+  const g = grade([answer()], {
+    results: [RESULT('business-labeled', 'fail'), RESULT('title-city-service', 'pass'), RESULT('info-sheet', 'pass')],
+    facts: { links: [{ href: 'https://www.facebook.com/zephyrplumbing' }, { href: 'https://www.facebook.com/sharer/sharer.php?u=x' }] },
+  });
+  const html = reportPage(g, { leadGate: false });
+  // The health map's names on the score cards and the kit.
+  assert.ok(html.includes('<strong>Name, phone and address tagged for AI (business label)</strong>'));
+  assert.ok(html.includes('<h3>A short info file for AI (llms.txt)</h3>'));
+  assert.equal(html.includes('Business label for AI'), false);
+  // K11: the full report points at the kit, with a link.
+  assert.ok(html.includes('(<a href="#kit-label">the code is in Your fix kit, at the end of this report</a>)'));
+  assert.equal(html.includes('in your full report)'), false);
+  // K12: boxes for checks that passed.
+  assert.equal((html.match(new RegExp(ALREADY_HAVE.replace(/[.]/g, '\\.'), 'g')) ?? []).length, 2);
+  // K13: the address, sameAs from the profile link found, placeholders and the plain warning.
+  assert.ok(html.includes('so AI can read your name, phone and address.'));
+  assert.ok(html.includes(`<strong>${REPLACE_CAPITALS}</strong>`));
+  const label = jsonLdBlock({ name: 'Zephyr', city: 'Nashville', state: 'TN', sameAs: ['https://www.facebook.com/zephyrplumbing', 'javascript:x'] }, { placeholders: true });
+  assert.ok(label.includes(STREET_PLACEHOLDER) && label.includes(ZIP_PLACEHOLDER));
+  assert.match(label, /"sameAs": \[\s*"https:\/\/www\.facebook\.com\/zephyrplumbing"\s*\]/);
+  assert.ok(html.includes('https://www.facebook.com/zephyrplumbing'));
+  assert.equal(html.includes('sharer.php'), false, 'a share button is never a profile');
+  // Without the option nothing changes (the public listing pages never use it).
+  assert.equal(jsonLdBlock({ name: 'Zephyr', city: 'Nashville', state: 'TN' }).includes(STREET_PLACEHOLDER), false);
+});
+
+test('K15, K16: the share-of-voice heading says where the answers came from; evidence names the stored model and time', () => {
+  const g = grade([
+    answer({ named: true }), answer({ named: true }), answer(),
+    answer({ provider: 'chatgpt' }), answer({ provider: 'perplexity' }),
+  ]);
+  assert.equal(answersFromLine(g), '3 Claude answers plus 1 from ChatGPT and 1 from Perplexity.');
+  assert.ok(voiceSection(g).includes('<p class="hint">3 Claude answers plus 1 from ChatGPT and 1 from Perplexity.</p>'));
+  assert.equal(answersFromLine(grade([answer(), answer()])), '');
+  assert.equal(evidence(answer({ model: 'claude-sonnet-4-5' }), 'Claude'), `Evidence: Claude (model claude-sonnet-4-5), asked ${evidenceTime(AT)}, with a live web search.`);
+});
+
+test('K18, K19, K23: plain button names and sentences about the reader; who can see the report', async () => {
+  const g = grade([answer()]);
+  const html = reportPage(g, { leadGate: false });
+  assert.ok(html.includes('>Print or save as PDF</a>'));
+  assert.equal(html.includes('Download report'), false);
+  assert.ok(html.includes('Only people with this link can see this report.'));
+  const css = await fs.readFile(fileURLToPath(new URL('../public/css/style.css', import.meta.url)), 'utf8');
+  assert.match(css, /\.grade-prepared \.button-secondary \{/);
+  for (const text of [answersFromLine(grade([answer(), answer({ provider: 'chatgpt' })])), POWERED_BY, ALREADY_HAVE, PRINT_KIT_LINE, REPLACE_CAPITALS]) {
+    assert.ok(text.length <= 160, text);
+    assert.equal(/guarantee|\$\d|colour|centre|will (?:name|recommend)/i.test(text), false, text);
+  }
 });

@@ -75,13 +75,14 @@ test('V157: the partial line says "Run a new check", linked to the form with thi
 
 test('V157, V203: "Check again" stays for a Grade with a website; when the AI part is missing the button says what it does', () => {
   const normal = open(grade({ ai: [entry(FREE, true)], results: [...WEBSITE_ONLY, pass('ai-named', { earned: 30 })], state: 'ok' }));
-  assert.ok(normal.includes('>Check again</button>'));
+  // Batch 5 K14: each action is named by what it does.
+  assert.ok(normal.includes('>Check again (website only, fast)</button>'));
   assert.equal(normal.includes('Recheck my website only'), false);
   for (const state of ['failed', 'limit']) {
     const html = open(grade({ state, results: [...WEBSITE_ONLY, notChecked(state === 'limit' ? AI_LIMIT_REACHED : AI_FAILED)] }));
     assert.ok(html.includes('>Recheck my website only</button>'), state);
-    assert.equal(html.includes('>Check again</button>'), false, state);
-    assert.ok(html.includes(`To ask AI again after your changes, <a href="/grade?from=${ID}">run a new check</a>.`), state);
+    assert.equal(html.includes('>Check again (website only, fast)</button>'), false, state);
+    assert.ok(html.includes(`To ask AI again after your changes, <a href="/grade?from=${ID}">run a full new check (asks AI again)</a>.`), state);
   }
 });
 

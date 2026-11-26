@@ -451,9 +451,9 @@ test('Requirement 12: the certificate date from the home page request is read, a
   // A site that does not answer: Not checked, never red.
   const down = await check(await startEnv({ site: fakeSite(defaultRoutes({ '/': () => { throw Object.assign(new Error('x'), { code: 'timeout' }); } })) }));
   assert.equal(down.signals.website.addressWorks.status, 'not_checked');
-  // The rows are in the report, under "Website is reachable".
+  // The rows are in the report, under "Website basics" (batch 5 K9).
   const html = reportPage(soon, { leadGate: false });
-  assert.match(html, /<h4 class="health-cluster">Website is reachable<\/h4>/);
+  assert.match(html, /<h4 class="health-cluster">Website basics<\/h4>/);
   assert.match(html, /<strong class="health-row-name">Security certificate:<\/strong> <span class="health-status">Expires in 5 days<\/span>/);
   assert.ok(html.includes(`<script type="module" src="${HEALTH_SCAN_SCRIPT}"></script>`), 'the scan script is loaded (2.10)');
 });
@@ -470,12 +470,12 @@ test('Requirement 13: the full report has share of voice, evidence and downloads
   assert.match(report, /<h2>Who AI named, across 1 answer<\/h2>/);
   assert.match(report, /<tr class="grade-voice-you"><td><strong>Zephyr Plumbing<\/strong> \(you\)<\/td><td>0 of 1<\/td><\/tr>/);
   assert.match(report, /<p class="hint grade-evidence">Evidence: Claude \(model stub\), asked [^<]+ CT, with a live web search\.<\/p>/);
-  assert.ok(report.includes(`href="/grade/${g.id}/print">Download report</a>`));
+  assert.ok(report.includes(`href="/grade/${g.id}/print">Print or save as PDF</a>`), 'K18');
   assert.ok(report.includes(`href="/grade/${g.id}/data.csv">Download data (CSV)</a>`));
   assert.ok(report.includes("<p>These answers didn't list their sources.</p>"));
   // The locked report has none of these.
   const locked = reportPage(g, { leadGate: true, unlocked: false });
-  assert.equal(locked.includes('Download report'), false);
+  assert.equal(locked.includes('Print or save as PDF'), false);
   assert.equal(locked.includes('Who AI named'), false);
 
   const saved = await fetch(`${base}/grade/${g.id}/prepared-by`, {
@@ -499,9 +499,12 @@ test('Requirement 13: the full report has share of voice, evidence and downloads
   assert.match(csv.headers.get('content-type') ?? '', /^text\/csv/);
   assert.match(csv.headers.get('content-disposition') ?? '', /attachment; filename="ai-visibility-check-/);
   const lines = (await csv.text()).split('\r\n');
-  assert.equal(lines[0], `Prepared by,${stored.preparedBy}`);
-  assert.equal(lines[2], 'section,group,item,status,detail,engine,model,question,named,date');
-  assert.ok(lines.some(l => /^answer,,,,,Claude,stub,.*,no,/.test(l)));
+  // Batch 5 K17: the header row comes first; "Prepared by" and the report's own facts are columns on every row.
+  assert.ok(lines[0].startsWith('business,website,city,state,check_date,score,prepared_by,section,group,item,status,'));
+  assert.ok(lines[1].startsWith(`Zephyr Plumbing,https://zephyr.example/,Nashville,TN,${g.finishedAt},${g.score.score},${stored.preparedBy},`));
+  assert.ok(lines.some(l => /,answer,,,,,,,Claude,stub,yes,"[^"]*",no,/.test(l)));
+  assert.ok(lines.some(l => l.includes(',check,')), 'one row per scored check');
+  assert.ok(lines.some(l => l.includes(',named,,Zephyr Plumbing,you,')), 'the checked business is a named row');
 });
 
 test('U4: lookups older than 30 days are dropped from memory when new ones are kept, even without a recheck', async () => {

@@ -78,7 +78,8 @@ function run(section) {
       if (done || !section.isConnected) return;
       for (const b of branches) b.classList.toggle('health-on', step.lit.includes(b.dataset.main));
       if (caption) caption.textContent = step.caption;
-      if (step.count !== null) scoreTexts.forEach(t => { t.textContent = `Score ${step.count}/100`; });
+      // Batch 5 K20 (owner-approval deviation from 2.10.1): the center keeps the real score the whole time, so a
+      // screenshot mid-scan never shows a number other than the score.
     }, step.at));
   }
   timers.push(window.setTimeout(finish, steps[steps.length - 1].at + 50));

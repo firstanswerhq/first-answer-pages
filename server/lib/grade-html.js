@@ -20,7 +20,9 @@ import {
 import { formatRunTime } from './seance-html.js';
 import { listedNames, splitLists } from './name-match.js';
 import { scoreGrade } from './grade-score.js';
-import { healthModel, healthMapHtml } from './health-map.js';
+import { healthModel, healthMapHtml, checkTip, checkName } from './health-map.js';
+import { hasPlaceholder, REPLACE_CAPITALS } from './fix-kit.js';
+import { registeredDomain } from './name-match.js';
 import {
   shareOfVoice, sitesUsed, evidence, reportCsv, cleanPreparedBy, PREPARED_BY_MAX, answersOf,
 } from './agency-report.js';
@@ -635,7 +637,8 @@ function previewCard(grade) {
   const hours = shown.length
     ? shown.map(x => h(x)).join('; ')
     : blank(hoursPlainTextOnly(grade) ? "Add your hours (we saw them on your website but couldn't copy them)"
-      : googleHours ? 'Add your hours (Google has them, but we only copy hours from your website)' : 'Add your hours');
+      // Batch 5 K19: about what the owner can do, not about how we work.
+      : googleHours ? "Add your hours on your website and we'll fill them in" : 'Add your hours');
   // Only "Add your ..." for what was really not found; when the page shows it but it couldn't be copied, say so (J1, J2).
   const phone = found.phone
     ? `<span class="phone">${h(found.phone)}</span>`
@@ -655,7 +658,11 @@ function previewCard(grade) {
   </div>`;
 }
 
-function topFails(grade) {
+/** Batch 5 K6: the line under "Fix these first" on paper, where the reader is the web team. */
+export const SEND_THIS_PAGE = 'Not a computer person? Send this page to whoever built your website.';
+export const PRINT_KIT_LINE = 'Your web team can use the fix kit at the end.';
+
+function topFails(grade, full = false) {
   // The AI answers are not something the owner can change directly, so they are never a "fix first" item.
   const check = id => checkById(id, grade.input);
   const fails = resultsOf(grade)
@@ -665,8 +672,8 @@ function topFails(grade) {
   if (fails.length === 0) return '';
   return `<div class="grade-top-fails">
     <h2>Fix these first</h2>
-    <p class="hint">Not a computer person? Send this page to whoever built your website.</p>
-    <ul>${fails.map(r => `<li><strong>${h(check(r.id).label)}</strong><br>${h(check(r.id).fix)}</li>`).join('')}</ul>
+    <p class="hint">${SEND_THIS_PAGE}</p>
+    <ul>${fails.map(r => `<li><strong>${h(reportName(r.id, grade.input, check(r.id).label))}</strong><br>${fixHtml(check(r.id).fix, full)}</li>`).join('')}</ul>
   </div>`;
 }
 
@@ -717,6 +724,20 @@ function currentScore(grade) {
   }
 }
 
+/**
+ * Batch 5 K8: the points we couldn't check, and which checks they were, so the reader knows where the rest went. ''
+ * when every shown check ran. Escaped here.
+ */
+export function notCheckedLine(grade) {
+  const shown = new Set(CHECKS.filter(c => GROUPS.find(g => g.id === c.group)?.show !== false).map(c => c.id));
+  const missed = resultsOf(grade).filter(r => r && shown.has(r.id) && r.result !== 'pass' && r.result !== 'fail');
+  const points = missed.reduce((sum, r) => sum + (checkById(r.id, grade.input)?.points ?? 0), 0);
+  if (points <= 0) return '';
+  const names = missed.map(r => checkName(r.id, grade.input) ?? checkById(r.id, grade.input)?.label).filter(Boolean);
+  const listed = names.length <= 2 ? joinAnd(names) : `${names.slice(0, 2).join(', ')} and ${names.length - 2} more`;
+  return ` ${h(`${points} ${points === 1 ? 'point' : 'points'} couldn't be checked this time, so they don't count for or against you.`)} ${h(`Not checked: ${listed}.`)}`;
+}
+
 function groupLines(grade, score = currentScore(grade)) {
   const results = resultsOf(grade);
   const byGroup = score?.byGroup ?? {};
@@ -734,7 +755,7 @@ function groupLines(grade, score = currentScore(grade)) {
   // One line on how the headline score relates to the points below: the same two sums the areas add up to (V135).
   // Both numbers in one sentence (V208): the points earned out of the points checked, and the score that gives.
   const relation = Number.isInteger(score?.score) && Number.isFinite(score.earned) && Number.isFinite(score.available) && score.available > 0
-    ? `\n  <p class="hint">You earned ${score.earned} of the ${score.available} points we ${isPartialScore(grade) ? 'could check today' : 'checked'}. That is ${score.score} out of 100.</p>`
+    ? `\n  <p class="hint">You earned ${score.earned} of the ${score.available} points we ${isPartialScore(grade) ? 'could check today' : 'checked'}. That is ${score.score} out of 100.${notCheckedLine(grade)}</p>`
     : '';
   return lines.length ? `<section class="grade-areas">\n  <h2>Score by area</h2>${relation}\n  <ul class="grade-groups">${lines.join('')}</ul>\n</section>` : '';
 }
@@ -778,15 +799,45 @@ function checkRow(r, input, ctx = {}) {
   }
   // The AI row's advice is not a fix the owner can make, so it reads as what they can do, never as a promise (V205).
   const fixLabel = r.id === 'ai-named' ? 'What you can do:' : 'Fix:';
-  return `<li class="grade-check ${cls}"><span class="grade-result">${word}</span><strong>${h(c.label)}</strong>${pointsHtml}<p>${detailHtml}</p>${cls === 'fail' ? `<p><strong>${fixLabel}</strong> ${h(c.fix)}</p>` : ''}</li>`;
+  // Batch 5 K2: a check that passed but whose details couldn't all be read shows the same tip as its health map row.
+  const tip = cls === 'pass' ? checkTip(r.id, input, ctx.found) : null;
+  const tipHtml = tip ? `<p class="hint grade-tip"><strong>Tip:</strong> ${h(tip.reason)}</p>` : '';
+  return `<li class="grade-check ${cls}"><span class="grade-result">${word}</span><strong>${h(reportName(r.id, input, c.label))}</strong>${pointsHtml}<p>${detailHtml}</p>${tipHtml}${cls === 'fail' ? `<p><strong>${fixLabel}</strong> ${fixHtml(ctx.agency ? agencyFix(c.fix) : c.fix, ctx.full)}</p>` : ''}</li>`;
 }
 
-function allChecks(grade) {
+/** Batch 5 K4: on an agency's printout, advice never points at our free listing. */
+function agencyFix(text) {
+  return String(text ?? '').replace('Claim your free listing and work through the fixes below.', 'Work through the fixes below.');
+}
+
+/** Batch 5 K10: the one name of a check on the report (the health map's name), or its own label. */
+function reportName(id, input, fallback) {
+  return checkName(id, input) ?? fallback;
+}
+
+const IN_FULL_REPORT = '(a few lines of code in your full report)';
+const IN_KIT = 'the code is in Your fix kit, at the end of this report';
+
+/**
+ * A fix sentence, escaped. Batch 5 K11: on the full report, "in your full report" points at the fix kit below, with a
+ * link to the business label block.
+ */
+function fixHtml(text, full) {
+  const s = String(text ?? '');
+  if (!full || !s.includes(IN_FULL_REPORT)) return h(s);
+  const [before, after] = s.split(IN_FULL_REPORT);
+  return `${h(before)}(<a href="#kit-label">${h(IN_KIT)}</a>)${h(after)}`;
+}
+
+function allChecks(grade, { agency = false } = {}) {
   const results = resultsOf(grade);
   return GROUPS.filter(g => g.show !== false).map(g => {
     const ids = new Set(CHECKS.filter(c => c.group === g.id).map(c => c.id));
     const ctx = {
       limited: dailyLimitHit(grade), label: grade.aiMain?.label, runNew: runNewLink(grade), hoursPlainOnly: hoursPlainTextOnly(grade),
+      // The score cards are only on the full report, so their fixes point at the fix kit (K11); the tips use the same
+      // facts as the health map (K2).
+      full: true, found: foundOf(grade), agency,
     };
     const rows = results.filter(r => ids.has(r.id)).map(r => checkRow(r, grade.input, ctx)).join('\n    ');
     return rows ? `<section class="grade-group">
@@ -928,8 +979,12 @@ function answersSection(grade, { now } = {}) {
       if (!counted.has(a)) return `${name} (not counted toward your score)`;
       return mains.length > 1 ? `${name}, answer ${mains.indexOf(a) + 1} of ${mains.length}` : name;
     };
+    // Batch 5 K1: an answer stored without its question falls back to the question "What AI says" shows; never the
+    // word "undefined". With nothing to show, the heading is left out.
+    const question = typeof p === 'string' && p.trim() !== '' ? p : (firstPrompt || freeQuestion(grade.input) || '');
+    const heading = question ? `<strong>${h(question)}</strong>` : '';
     // 13.3: the evidence for each answer, right under the question it answers.
-    return `<li><strong>${h(p)}</strong>${entries.map(a => `
+    return `<li>${heading}${entries.map(a => `
       <p>${label(a)}: ${h(outcome(a, grade.input))}</p>
       <p class="hint grade-evidence">${h(evidence(a, providerLabel(a.provider)))}</p>
       ${answerBlock(a)}`).join('')}</li>`;
@@ -943,7 +998,31 @@ function answersSection(grade, { now } = {}) {
 </section>`;
 }
 
-function fixKit(grade, contactEmail) {
+/** Batch 5 K12: shown on a kit box whose check already passed. */
+export const ALREADY_HAVE = 'You already have one. Use this only if you want to replace it.';
+
+/** Profile addresses on the business's own website (Facebook, Instagram, Yelp, TikTok, LinkedIn), for `sameAs` (K13). */
+const PROFILE_DOMAINS = new Set(['facebook.com', 'instagram.com', 'yelp.com', 'tiktok.com', 'linkedin.com']);
+function profileLinks(grade) {
+  const links = Array.isArray(grade?.facts?.links) ? grade.facts.links : [];
+  const out = [];
+  for (const l of links) {
+    const href = typeof l === 'string' ? l : l?.href;
+    let u;
+    try {
+      u = new URL(String(href));
+    } catch {
+      continue;
+    }
+    if (u.protocol !== 'https:' || !PROFILE_DOMAINS.has(registeredDomain(u.href))) continue;
+    // A share button or the site's own home page is never the business's profile.
+    if (/share|sharer|intent/i.test(u.pathname) || u.pathname.replace(/\/+$/, '') === '') continue;
+    out.push(`${u.origin}${u.pathname.replace(/\/+$/, '')}`);
+  }
+  return [...new Set(out)].slice(0, 5);
+}
+
+function fixKit(grade, contactEmail, { offer = true } = {}) {
   const i = grade.input;
   const found = foundOf(grade);
   const kit = {
@@ -951,38 +1030,44 @@ function fixKit(grade, contactEmail) {
     phone: found.phone ?? '', website: i.website ?? '', address: found.address ?? '', hours: readableHours(found.hours),
   };
   // The business label wants schema.org's own hours format; free text like "Monday to Friday, 8 am to 5 pm" is left out of it.
-  const labelKit = { ...kit, hours: schemaHours(found.hours), noStorefront: i.noStorefront === true };
+  const labelKit = { ...kit, hours: schemaHours(found.hours), noStorefront: i.noStorefront === true, sameAs: profileLinks(grade) };
   const intro = i.website
     ? 'Send this kit to whoever looks after your website. Each box says where it goes, and the Copy button copies it.'
     : 'This kit is ready for when you have a website. Hand it to whoever builds it. Each box says where it goes, and the Copy button copies it.';
+  const passed = id => resultsOf(grade).some(r => r.id === id && r.result === 'pass');
+  const name = (id, fallback) => reportName(id, i, fallback);
+  const label = jsonLdBlock(labelKit, { placeholders: true });
   const items = [
-    ['kit-title', 'Page title', 'Use this as your home page title.', suggestedTitle(kit)],
-    ['kit-summary', 'Page summary', 'Use this as the summary Google shows under your title.', suggestedSummary(kit)],
-    ['kit-label', 'Business label for AI',
-      // No phone found: the block holds a placeholder, and the line above it says to replace it (V137).
-      `Paste this into your home page so AI can read your name and phone.${kit.phone ? '' : ' Put your phone number in before you paste.'}`,
-      jsonLdBlock(labelKit)],
-    ['kit-llms', 'Info sheet for AI (llms.txt)', 'Save this as a plain text file named llms.txt on your website.', llmsDraft(kit)],
+    ['kit-title', name('title-city-service', 'Page title'), 'Use this as your home page title.', suggestedTitle(kit), passed('title-city-service')],
+    ['kit-summary', name('summary', 'Page summary'), 'Use this as the summary Google shows under your title.', suggestedSummary(kit), passed('summary')],
+    ['kit-label', name('business-labeled', 'Business label for AI'),
+      // K13: the technical term once, the address too, and a plain warning when a placeholder is in the block (V137).
+      `Paste this business label (schema.org LocalBusiness markup) into your home page so AI can read your name, phone and address.${hasPlaceholder(label) ? ` ${REPLACE_CAPITALS}` : ''}`,
+      label, passed('business-labeled')],
+    ['kit-llms', name('info-sheet', 'Info sheet for AI (llms.txt)'), 'Save this as a plain text file named llms.txt on your website.', llmsDraft(kit), passed('info-sheet')],
   ];
   const blocked = resultsOf(grade).find(r => r.id === 'ai-bots-allowed' && r.result === 'fail')?.blocked ?? [];
   if (blocked.length > 0) {
-    items.push(['kit-robots', 'robots.txt lines', 'Replace the lines that block these assistants with these lines in your robots.txt file, so they can read your website.', robotsLines(blocked)]);
+    items.push(['kit-robots', 'robots.txt lines', 'Replace the lines that block these assistants with these lines in your robots.txt file, so they can read your website.', robotsLines(blocked), false]);
   }
-  const blocks = items.map(([id, title, help, text]) => `<div class="kit-item">
+  const blocks = items.map(([id, title, help, text, have]) => `<div class="kit-item">
       <h3>${h(title)}</h3>
-      <p class="hint">${h(help)}</p>
+      ${have ? `<p class="hint grade-kit-have"><strong>${h(ALREADY_HAVE)}</strong></p>\n      ` : ''}<p class="hint">${id === 'kit-label' && hasPlaceholder(text)
+    ? `${h(help.replace(` ${REPLACE_CAPITALS}`, ''))} <strong>${h(REPLACE_CAPITALS)}</strong>` : h(help)}</p>
       <pre id="${id}">${h(text)}</pre>
       <button type="button" class="copy-btn button" data-copy="${id}" hidden>Copy</button>
     </div>`).join('\n    ');
+  // K4: with "Prepared by" set, the report is the agency's, so it has no offer of ours.
+  const offerBlock = offer ? `
+<section class="grade-offer">
+  <h2>Want help?</h2>
+  <p>Not sure how to add these? First Answer, the team behind First Answer Pages, can apply the fixes for you. ${contactLink(contactEmail, 'Contact us')} and we will take a look.</p>
+</section>` : '';
   return `<section class="grade-kit">
   <h2>Your fix kit</h2>
   <p>${intro}</p>
   ${blocks}
-</section>
-<section class="grade-offer">
-  <h2>Want help?</h2>
-  <p>Not sure how to add these? First Answer, the team behind First Answer Pages, can apply the fixes for you. ${contactLink(contactEmail, 'Contact us')} and we will take a look.</p>
-</section>`;
+</section>${offerBlock}`;
 }
 
 function leadForm(grade, { values = {}, errors = {} } = {}) {
@@ -1014,7 +1099,8 @@ function leadForm(grade, { values = {}, errors = {} } = {}) {
 
 function recheckBlock(grade, rechecking) {
   // One sentence, used under the recheck button and on a report with no website (V251, V257, S17).
-  const askAgain = `To ask AI again after your changes, ${runNewLink(grade, 'run a new check')}.`;
+  // Batch 5 K14: each action is named by what it does.
+  const askAgain = `To ask AI again after your changes, ${runNewLink(grade, 'run a full new check (asks AI again)')}.`;
   if (!grade.input.website) {
     return `<p class="hint">You didn't give a website, so there is nothing to check again. Your fix kit still has a draft you can use. ${askAgain}</p>`;
   }
@@ -1032,7 +1118,7 @@ function recheckBlock(grade, rechecking) {
   parts.push(aiMissing
     ? `<form method="POST" action="/grade/${h(grade.id)}/recheck"><button type="submit" class="button">Recheck my website only</button></form>
   <p class="hint">Fixed something on your website? This reads your website again and doesn't ask AI again. ${askAgain}</p>`
-    : `<form method="POST" action="/grade/${h(grade.id)}/recheck"><button type="submit" class="button">Check again</button></form>
+    : `<form method="POST" action="/grade/${h(grade.id)}/recheck"><button type="submit" class="button">Check again (website only, fast)</button></form>
   <p class="hint">Fixed something? Check again to see your new score. This reads your website again and doesn't ask AI again. ${askAgain}</p>`);
   return `<section class="grade-recheck">\n  <h2>Made some changes?</h2>\n  ${parts.join('\n  ')}\n</section>`;
 }
@@ -1060,7 +1146,11 @@ export function reportPage(storedGrade, opts = {}) {
     secondPending = [],
     // The current time in ms, so an answer older than 10 minutes says when it was asked.
     now,
+    // Batch 5 K4: the printable report of an agency (Prepared by set) carries no sales lines of ours.
+    agency = false,
   } = opts;
+  // "Prepared by" set: the report is the agency's, so the "Want help?" offer is left out on screen too (K4).
+  const prepared = cleanPreparedBy(grade.preparedBy) !== '';
   const i = grade.input;
   const full = !leadGate || unlocked;
   // One rule for every number on the page: worked out once from the stored results with the current points,
@@ -1078,7 +1168,7 @@ export function reportPage(storedGrade, opts = {}) {
   const noWebsite = !i.website
     ? (limited
       ? '<p class="notice" role="status">We couldn\'t run any checks this time. Please try again tomorrow.</p>'
-      : '<p class="notice" role="status">We could only run the AI check. Add a website to get a score. A free listing gives AI something to read about the business.</p>')
+      : `<p class="notice" role="status">We could only run the AI check. Add a website to get a score.${agency ? '' : ' A free listing gives AI something to read about the business.'}</p>`)
     : '';
   // A score that leaves out the AI part is marked as partial, and never set beside an earlier score.
   const partial = isPartialScore(grade);
@@ -1119,19 +1209,24 @@ export function reportPage(storedGrade, opts = {}) {
   </div>
 </div>`;
 
-  const claim = `<div class="grade-fix">
+  const claim = agency
+    ? `<div class="grade-fix">
+  ${topFails(grade, full)}
+</div>`
+    : `<div class="grade-fix">
   <div>
     <h2>Your free listing in our directory</h2>
     ${previewCard(grade)}
     <form method="POST" action="/grade/${h(grade.id)}/claim"><button type="submit" class="button">Claim my free listing</button></form>
     <p class="hint">A free listing for your business in our directory, First Answer Pages. Next, check the details and send it to us. Nothing goes live until you send it and we approve it.</p>
   </div>
-  ${topFails(grade)}
+  ${topFails(grade, full)}
 </div>`;
 
   const when = grade.finishedAt || grade.createdAt;
+  // Batch 5 K23: who can see the report, next to the way to remove it. K4: an agency's printout ends with one line.
   const foot = `<p class="grade-meta">Automated check, ${h(whenText(when))}. AI assistants pick up changes over days to weeks, so ${runNewLink(grade, 'run a new check')} after you make fixes.</p>
-<p class="hint">Ask us to remove this report: ${contactLink(contactEmail, contactEmail || 'contact page')}.</p>`;
+<p class="hint grade-remove">Only people with this link can see this report. Ask us to remove this report: ${contactLink(contactEmail, contactEmail || 'contact page')}.</p>${agency ? `\n<p class="hint grade-powered">${POWERED_BY}</p>` : ''}`;
 
   const justOpened = opened && full && leadGate && unlocked
     ? '<p class="notice saved-note" role="status">Your full report is open.</p>'
@@ -1141,9 +1236,9 @@ export function reportPage(storedGrade, opts = {}) {
     ? `<div class="grade-full" id="full-report">
   ${justOpened}
   ${downloadBlock(grade)}
-  ${allChecks(grade)}
+  ${allChecks(grade, { agency })}
   ${answersSection(grade, { now })}
-  ${fixKit(grade, contactEmail)}
+  ${fixKit(grade, contactEmail, { offer: !prepared && !agency })}
   ${recheckBlock(grade, rechecking)}
 </div>`
     : leadForm(grade, { values: leadValues, errors: leadErrors });
@@ -1151,7 +1246,7 @@ export function reportPage(storedGrade, opts = {}) {
   // The health map (high-tech-look Requirement 2): the plain list and the map of the same signals, right under the
   // score. It shows the existing score and changes nothing; the fix sentences show only in the full report.
   // `found` is what the listing card shows, so the rows and the card never disagree (J1, J2).
-  const healthMap = healthMapHtml(healthModel(grade, { score: scored ? s.score : null, found: foundOf(grade), ...aiHealth(grade) }), {
+  const healthMap = healthMapHtml(healthModel(grade, { score: scored ? s.score : null, found: foundOf(grade), agency, ...aiHealth(grade) }), {
     full,
     // Every "Run a new check" in a reason is the report's own link (V244).
     runNew: text => runNewLink(grade, text),
@@ -1181,10 +1276,30 @@ ${foot}
 /** The one-time scan when the health map first comes into view (2.10; decoration only). */
 export const HEALTH_SCAN_SCRIPT = '/js/health-scan.js';
 
+/** Batch 5 K4: the one line about us on an agency's printable report. */
+export const POWERED_BY = 'Powered by First Answer Pages';
+
 /** The small script that turns the health map's orb (decoration only). */
 export const HEALTH_ORB_SCRIPT = '/js/health-orb.js';
 
 // ---- Requirement 13: the agency-grade parts of the full report --------------------------------------------------------
+
+/**
+ * Batch 5 K15: which assistants the answers came from, when there are several ("3 Claude answers plus 1 from ChatGPT
+ * and 1 from Perplexity."). The main assistant first. '' when they all came from one.
+ */
+export function answersFromLine(grade) {
+  const counts = new Map();
+  for (const a of answersOf(grade)) {
+    const label = providerLabel(a.provider);
+    counts.set(label, (counts.get(label) ?? 0) + 1);
+  }
+  if (counts.size < 2) return '';
+  const main = grade.aiMain?.label && counts.has(grade.aiMain.label) ? grade.aiMain.label : [...counts.keys()][0];
+  const n = counts.get(main);
+  const rest = [...counts.entries()].filter(([label]) => label !== main).map(([label, k]) => `${k} from ${label}`);
+  return `${n} ${main} ${n === 1 ? 'answer' : 'answers'} plus ${joinAnd(rest)}.`;
+}
 
 /** 13.1: "Who AI named, across N answers", with the checked business always a row (even at 0), highlighted. */
 export function voiceSection(grade) {
@@ -1193,8 +1308,9 @@ export function voiceSection(grade) {
   const body = rows.map(r => (r.own
     ? `<tr class="grade-voice-you"><td><strong>${h(r.name)}</strong> (you)</td><td>${r.count} of ${total}</td></tr>`
     : `<tr><td>${h(r.name)}</td><td>${r.count} of ${total}</td></tr>`)).join('\n      ');
+  const from = answersFromLine(grade);
   return `<section class="grade-voice">
-  <h2>${h(`Who AI named, across ${total} ${total === 1 ? 'answer' : 'answers'}`)}</h2>
+  <h2>${h(`Who AI named, across ${total} ${total === 1 ? 'answer' : 'answers'}`)}</h2>${from ? `\n  <p class="hint">${h(from)}</p>` : ''}
   <table class="grade-voice-table">
     <thead><tr><th scope="col">Business</th><th scope="col">Answers that named it</th></tr></thead>
     <tbody>
@@ -1206,18 +1322,20 @@ export function voiceSection(grade) {
 
 /** 13.2: "Sites AI used to answer", only from the sources stored on the answers. */
 export function sitesSection(grade) {
-  const { hasSources, rows, gaps } = sitesUsed(grade);
+  const { hasSources, rows, gaps, fromMemory } = sitesUsed(grade);
   if ((Array.isArray(grade.ai) ? grade.ai : []).length === 0) return '';
   if (!hasSources) {
+    // Batch 5 K3: answers from memory list no visited sites, and the page says so in plain words.
     return `<section class="grade-sites">
   <h2>Sites AI used to answer</h2>
-  <p>These answers didn't list their sources.</p>
+  <p>${fromMemory ? 'These answers came from memory, without a live web search, so no sites were visited.' : "These answers didn't list their sources."}</p>
 </section>`;
   }
   const items = rows.map(r => `<li><a href="${h(r.url)}" rel="nofollow noopener noreferrer">${h(r.domain)}</a>: ${r.count === 1 ? 'cited in 1 answer' : `cited in ${r.count} answers`}${r.own ? ' <strong>(your website)</strong>' : ''}</li>`).join('\n    ');
   const gapLines = gaps.map(g => `<p class="grade-sites-gap">${h(g)}</p>`).join('\n  ');
   return `<section class="grade-sites">
   <h2>Sites AI used to answer</h2>
+  <p class="hint">Only answers that used a live web search are counted here.</p>
   <ul class="grade-sites-list">
     ${items}
   </ul>${gapLines ? `\n  ${gapLines}` : ''}
@@ -1230,8 +1348,8 @@ function downloadBlock(grade) {
   const prepared = cleanPreparedBy(grade.preparedBy);
   return `<section class="grade-download">
   <h2>Share this report</h2>
-  <p><a class="button" href="/grade/${id}/print">Download report</a> <a href="/grade/${id}/data.csv">Download data (CSV)</a></p>
-  <p class="hint">"Download report" opens a clean page for printing. Choose "Save as PDF" in your browser's print window.</p>
+  <p><a class="button" href="/grade/${id}/print">Print or save as PDF</a> <a href="/grade/${id}/data.csv">Download data (CSV)</a></p>
+  <p class="hint">"Print or save as PDF" opens a clean page for printing. Choose "Save as PDF" in your browser's print window.</p>
   <form method="POST" action="/grade/${id}/prepared-by" class="grade-prepared">
     <label for="prepared-by">Prepared by (optional, shows on the downloaded report)</label>
     <input id="prepared-by" name="preparedBy" type="text" maxlength="${PREPARED_BY_MAX}" value="${h(prepared)}" autocomplete="organization">
@@ -1245,8 +1363,12 @@ function downloadBlock(grade) {
  * stylesheet that hides the site's menu, buttons, forms and animation. The browser's own print window saves the PDF.
  */
 export function printPage(grade, opts = {}) {
-  const page = reportPage(grade, { ...opts, leadGate: false });
   const prepared = cleanPreparedBy(grade.preparedBy);
+  // Batch 5 K4: with "Prepared by" set, the printout is the agency's: none of our sales lines, one "Powered by" line.
+  const page = reportPage(grade, { ...opts, leadGate: false, agency: prepared !== '' })
+    // K6: words that only make sense on screen.
+    .split(SEND_THIS_PAGE).join(PRINT_KIT_LINE)
+    .split(', and the Copy button copies it.').join('.');
   const head = `<div class="grade-print-head">${prepared ? `<p class="grade-prepared-by">Prepared by ${h(prepared)}</p>` : ''}
   <p class="hint grade-print-note">Use your browser's Print button and choose "Save as PDF".</p>
 </div>`;
@@ -1261,17 +1383,51 @@ export function printPage(grade, opts = {}) {
 /** 13.4: the report's data as CSV: one row per health row, one per answer. The same facts as the page. */
 export function reportCsvFor(grade) {
   const g = { ...grade, results: scoredResults(grade) };
-  const model = healthModel(g, { score: null, found: foundOf(g), ...aiHealth(g) });
-  const health = model.mains.flatMap(m => m.subs.map(s => ({ group: m.name, item: s.name, status: s.label, detail: s.reason ?? '' })));
+  const prepared = cleanPreparedBy(grade.preparedBy) !== '';
+  // K4: an agency's CSV has no sales lines of ours (no "claim it below").
+  const model = healthModel(g, { score: null, found: foundOf(g), agency: prepared, ...aiHealth(g) });
+  const s = currentScore(g);
+  // Batch 5 K17: the report's own columns on every row, so many clients can sit in one sheet.
+  const report = {
+    business: g.input?.name ?? '', website: g.input?.websitePage || g.input?.website || '', city: g.input?.city ?? '',
+    state: g.input?.state ?? '', checkDate: g.finishedAt || g.createdAt || '', score: Number.isInteger(s.score) ? s.score : null,
+  };
+  const groupLabel = id => GROUPS.find(x => x.id === id)?.label ?? '';
+  const checks = resultsOf(g).map(r => {
+    const c = checkById(r.id, g.input);
+    if (!c || GROUPS.find(x => x.id === c.group)?.show === false) return null;
+    const ran = r.result === 'pass' || r.result === 'fail';
+    const earned = !ran ? '' : r.id === 'ai-named' && Number.isFinite(r.earned) ? r.earned : (r.result === 'pass' ? c.points : 0);
+    return {
+      group: groupLabel(c.group), item: reportName(r.id, g.input, c.label),
+      status: r.result === 'pass' ? 'Pass' : r.result === 'fail' ? 'Needs work' : 'Not checked',
+      earned, points: c.points, detail: String(r.detail ?? ''),
+    };
+  }).filter(Boolean);
+  // The health rows name their cluster too ("Website: Search basics"), so the groups read right in a sheet.
+  const health = model.mains.flatMap(m => m.subs.map(sub => ({
+    group: sub.cluster ? `${m.name}: ${sub.cluster}` : m.name, item: sub.name, status: sub.label, detail: sub.reason ?? '',
+  })));
   // Batch 4 Y4: the same answers as "Who AI named, across N answers" (an answer with no text is skipped).
   const answers = answersOf({ ai: aiOf(g) }).map(a => ({
     engine: providerLabel(a.provider),
     model: typeof a.model === 'string' ? a.model : '',
+    webSearch: a.webSearch === true,
     question: String(a.prompt ?? ''),
     named: a.named === true,
+    answer: readableAnswer(a.answer ?? ''),
+    businesses: [...(a.named === true ? [String(g.input?.name ?? '')] : []),
+      ...(Array.isArray(a.competitors) ? a.competitors.filter(n => typeof n === 'string' && n.trim() !== '') : [])],
+    // K3: cited sites only for an answer that used a live web search.
+    sites: a.webSearch === true && Array.isArray(a.sources)
+      ? [...new Set(a.sources.map(src => src?.url).filter(u => typeof u === 'string' && /^https?:\/\//i.test(u)))]
+      : [],
     date: typeof a.at === 'string' ? a.at : '',
   }));
-  return reportCsv({ preparedBy: grade.preparedBy, health, answers });
+  const voice = shareOfVoice(g);
+  const named = voice.rows.map(r => ({ ...r, total: voice.total }));
+  const sites = sitesUsed(g).rows;
+  return reportCsv({ report, preparedBy: grade.preparedBy, checks, health, answers, named, sites });
 }
 
 /**

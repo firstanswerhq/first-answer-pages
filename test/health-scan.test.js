@@ -97,6 +97,15 @@ test('batch 4 Y2: the print page never loads the scan; the script also stops on 
   assert.match(js, /stopScan = finish;/);
 });
 
+test('batch 5 K20: during the scan the center keeps the real score; circles not lit yet stay readable', async () => {
+  const js = await fs.readFile(fileURLToPath(new URL('../public/js/health-scan.js', import.meta.url)), 'utf8');
+  assert.equal(/textContent = `Score \$\{step\.count\}/.test(js), false, 'the scan never writes a counting score');
+  assert.match(js, /t\.textContent = original\[i\]/, 'the score text is still put back as the server wrote it');
+  const css = await fs.readFile(fileURLToPath(new URL('../public/css/style.css', import.meta.url)), 'utf8');
+  const dim = Number(/\.health-scanning \.health-branch \{ opacity: ([\d.]+);/.exec(css)?.[1]);
+  assert.ok(dim >= 0.4, `dimmed to ${dim}`);
+});
+
 test('batch 4 Y6: a swapped-in map is watched instead of the removed one, until the scan has played', async () => {
   const js = await fs.readFile(fileURLToPath(new URL('../public/js/health-scan.js', import.meta.url)), 'utf8');
   assert.match(js, /if \(!now \|\| now === watched\) return;/, 'a new .health node is noticed');
@@ -140,7 +149,8 @@ test('2.10: the page has the pieces the scan needs; the caption is aria-hidden; 
   assert.match(html, /class="health-orb-score" data-score="68">Score 68\/100</);
   const css = await fs.readFile(fileURLToPath(new URL('../public/css/style.css', import.meta.url)), 'utf8');
   // Only the class the script adds while it plays dims the branches.
-  assert.match(css, /\.health-scanning \.health-branch \{ opacity: 0\.12;/);
+  // Batch 5 K20: dimmed, but never so dim that a circle looks switched off.
+  assert.match(css, /\.health-scanning \.health-branch \{ opacity: 0\.45;/);
   assert.equal(/(?<!health-scanning )\.health-branch \{[^}]*opacity: 0/.test(css.replace(/\.health-scanning \.health-branch \{[^}]*\}/g, '')), false);
   const reduced = css.slice(css.lastIndexOf('@media (prefers-reduced-motion: reduce)'));
   assert.match(reduced, /\.health-scanning \.health-branch \{ opacity: 1; transition: none; \}/);

@@ -130,6 +130,10 @@ test('12.1b: the address is red only when the name no longer resolves (twice); a
   const timeout = at({ reached: false });
   assert.equal(timeout.status, 'not_checked', 'a timeout or other error is never red');
   assert.ok(timeout.reason);
+  // Batch 5 K9: with no facts from the connection, it says only that the address wasn't tested.
+  assert.equal(at(null).status, 'not_checked');
+  assert.equal(at(null).reason, "We didn't test your website address on this check.");
+  assert.equal(/couldn't reach/.test(at(null).reason), false);
   // Batch 3 X9: an expired certificate was seen, so the address resolved and answered.
   assert.deepEqual([at({ reached: false, certExpired: true }).status, at({ reached: false, certExpired: true }).label], ['good', 'Works']);
 });

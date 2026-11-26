@@ -68,8 +68,11 @@ export function isGoogleProfileUrl(url) {
   if (!/^https?:$/.test(u.protocol)) return false;
   const host = u.hostname.toLowerCase().replace(/\.$/, '').replace(/^www\./, '');
   if (host === 'maps.google.com' || host === 'business.google.com' || host === 'g.page' || host === 'maps.app.goo.gl') return true;
-  return /^google\.[a-z.]+$/.test(host) && /^\/maps(?:\/|$)/i.test(u.pathname);
+  // Batch 5 Z2: only Google's own domains (google.com, google.de, google.co.uk, google.com.au), never google.evil.com.
+  return GOOGLE_HOST.test(host) && /^\/maps(?:\/|$)/i.test(u.pathname);
 }
+
+const GOOGLE_HOST = /^google\.(?:com|[a-z]{2}|co\.[a-z]{2}|com\.[a-z]{2})$/;
 
 /**
  * True when a source is the business's own website (batch 4 Y1). An own domain matches by `sameSite`. On a shared host
@@ -89,42 +92,55 @@ function ownSource(input, url) {
  * @returns {{ hasSources: boolean, rows: Array<{ domain: string, url: string, count: number, own: boolean }>, gaps: string[] }}
  */
 export function sitesUsed(grade) {
-  const answers = answersOf(grade);
+  const all = answersOf(grade);
+  // Batch 5 K3: only answers that really ran a live web search have cited sites. Sources stored on an answer that
+  // answered from memory are never shown, so a site list never sits next to "without a live web search".
+  const answers = all.filter(a => a.webSearch === true);
+  const fromMemory = all.some(a => a.webSearch !== true && Array.isArray(a.sources) && a.sources.length > 0);
   const input = grade?.input ?? {};
-  const byDomain = new Map();
+  const sharedSite = SHARED_DOMAINS.has(registeredDomain(String(input.website ?? '')));
+  const byKey = new Map();
+  const domainAnswers = new Map(); // registered domain -> answers that cited any page there (for the gap lines)
   let googleProfileAnswers = 0;
   for (const a of answers) {
     const seen = new Set();
+    const domains = new Set();
     let googleProfile = false;
     for (const s of Array.isArray(a.sources) ? a.sources : []) {
       if (!s || typeof s.url !== 'string' || !/^https?:\/\//i.test(s.url)) continue;
       const domain = registeredDomain(s.url);
       if (!domain) continue;
       if (isGoogleProfileUrl(s.url)) googleProfile = true;
-      if (!byDomain.has(domain)) byDomain.set(domain, { domain, url: s.url, count: 0, own: false });
-      const row = byDomain.get(domain);
-      // The row is the business's own website when at least one of its sources is (Y1).
-      if (!row.own && ownSource(input, s.url)) row.own = true;
-      if (seen.has(domain)) continue;
-      seen.add(domain);
+      domains.add(domain);
+      // Batch 5 Z1: on a shared host, the business's own page is its own row (keyed by the page); every other page on
+      // that host stays in the plain domain row, never "(your website)".
+      const ownPage = sharedSite && ownSource(input, s.url);
+      const key = ownPage ? `page:${pageKey(s.url)}` : domain;
+      if (!byKey.has(key)) byKey.set(key, { domain: ownPage ? pageKey(s.url) : domain, url: s.url, count: 0, own: ownPage });
+      const row = byKey.get(key);
+      // An own (not shared) domain: the row is the business's website (Y1).
+      if (!ownPage && !sharedSite && !row.own && ownSource(input, s.url)) row.own = true;
+      if (seen.has(key)) continue;
+      seen.add(key);
       row.count += 1;
     }
+    for (const d of domains) domainAnswers.set(d, (domainAnswers.get(d) ?? 0) + 1);
     if (googleProfile) googleProfileAnswers += 1;
   }
-  const rows = [...byDomain.values()].sort((x, y) => y.count - x.count || x.domain.localeCompare(y.domain));
+  const rows = [...byKey.values()].sort((x, y) => y.count - x.count || x.domain.localeCompare(y.domain));
   const links = grade?.signals?.links ?? {};
   const gaps = [];
   for (const d of DIRECTORIES) {
-    const row = byDomain.get(d.domain);
     // Only when we know the website doesn't link there (a checked "Not linked"), never a guess.
     if (links[d.link]?.status !== 'partly') continue;
     // Google: the answers that cited a profile or Maps page (g.page and maps.app.goo.gl have no google.com row).
-    const count = d.profileOnly ? googleProfileAnswers : (row?.count ?? 0);
+    // The others: the answers that cited any page on that site, the own page included (Z1).
+    const count = d.profileOnly ? googleProfileAnswers : (domainAnswers.get(d.domain) ?? 0);
     if (count === 0) continue;
     const forWhat = count === 1 ? 'for one answer' : `for ${count} answers`;
     gaps.push(`AI read ${d.name} ${forWhat}. Your website doesn't link to ${d.page}.`);
   }
-  return { hasSources: rows.length > 0, rows, gaps };
+  return { hasSources: rows.length > 0, rows, gaps, searchAnswers: answers.length, fromMemory };
 }
 
 /** A time as "Nov 24, 2026, 12:00 PM CT" (the owner's time zone). */
@@ -162,24 +178,52 @@ export function csvCell(value) {
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-export const CSV_COLUMNS = Object.freeze(['section', 'group', 'item', 'status', 'detail', 'engine', 'model', 'question', 'named', 'date']);
+/**
+ * Batch 5 K17: one header row first (nothing above it), and every row carries the report's own columns (business,
+ * website, city, state, check date, score, prepared by), so an agency can stack many clients in one sheet.
+ */
+export const CSV_COLUMNS = Object.freeze([
+  'business', 'website', 'city', 'state', 'check_date', 'score', 'prepared_by',
+  'section', 'group', 'item', 'status', 'points_earned', 'points_possible', 'detail',
+  'engine', 'model', 'web_search', 'question', 'named', 'answer', 'businesses_named', 'sites_cited', 'date',
+]);
 
 /**
- * 13.4: the report's data as CSV. One row per health row (section "health") and one per answer (section "answer"),
- * the same facts as the page. "Prepared by" is the first line when it is set (13.5).
- * @param {{ preparedBy?: string, health: Array<{ group: string, item: string, status: string, detail?: string }>,
- *           answers: Array<{ engine: string, model?: string, question: string, named: boolean, date: string }> }} data
+ * 13.4 and K17: the report's data as CSV, the same facts as the page. Sections:
+ *  - "check": one per scored check, with its area, status and points;
+ *  - "health": one per health map row;
+ *  - "answer": one per answer, with its text, the businesses it named and the sites it cited;
+ *  - "named": one per business named across the answers, with how many answers named it;
+ *  - "site": one per site the answers cited (live web search only), with how many answers cited it.
+ * @param {{ report?: { business?: string, website?: string, city?: string, state?: string, checkDate?: string,
+ *   score?: number|null }, preparedBy?: string, checks?: object[], health?: object[], answers?: object[],
+ *   named?: object[], sites?: object[] }} data
  */
-export function reportCsv({ preparedBy = '', health = [], answers = [] }) {
-  const lines = [];
-  const name = cleanPreparedBy(preparedBy);
-  if (name) lines.push([csvCell('Prepared by'), csvCell(name)].join(','), '');
-  lines.push(CSV_COLUMNS.join(','));
+export function reportCsv({ report = {}, preparedBy = '', checks = [], health = [], answers = [], named = [], sites = [] }) {
+  const meta = [
+    report.business ?? '', report.website ?? '', report.city ?? '', report.state ?? '', report.checkDate ?? '',
+    Number.isInteger(report.score) ? String(report.score) : '', cleanPreparedBy(preparedBy),
+  ];
+  const row = rest => [...meta, ...rest].map(csvCell).join(',');
+  const blank = n => Array.from({ length: n }, () => '');
+  const lines = [CSV_COLUMNS.join(',')];
+  for (const c of checks) {
+    lines.push(row(['check', c.group, c.item, c.status, String(c.earned ?? ''), String(c.points ?? ''), c.detail ?? '', ...blank(9)]));
+  }
   for (const r of health) {
-    lines.push(['health', r.group, r.item, r.status, r.detail ?? '', '', '', '', '', ''].map(csvCell).join(','));
+    lines.push(row(['health', r.group, r.item, r.status, '', '', r.detail ?? '', ...blank(9)]));
   }
   for (const a of answers) {
-    lines.push(['answer', '', '', '', '', a.engine, a.model ?? '', a.question, a.named ? 'yes' : 'no', a.date].map(csvCell).join(','));
+    lines.push(row([
+      'answer', '', '', '', '', '', '', a.engine, a.model ?? '', a.webSearch === true ? 'yes' : 'no', a.question,
+      a.named ? 'yes' : 'no', a.answer ?? '', (a.businesses ?? []).join('; '), (a.sites ?? []).join('; '), a.date,
+    ]));
+  }
+  for (const n of named) {
+    lines.push(row(['named', '', n.name, n.own ? 'you' : '', '', '', `${n.count} of ${n.total}`, ...blank(9)]));
+  }
+  for (const s of sites) {
+    lines.push(row(['site', '', s.domain, s.own ? 'your website' : '', '', '', `${s.count} ${s.count === 1 ? 'answer' : 'answers'}`, ...blank(4), '', '', '', s.url ?? '', '']));
   }
   return `${lines.join('\r\n')}\r\n`;
 }

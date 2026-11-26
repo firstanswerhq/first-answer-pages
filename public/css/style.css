@@ -2528,19 +2528,40 @@ a.tel,
 .grade-prepared label { flex-basis: 100%; font-weight: 600; }
 .grade-prepared input { min-height: 2.5rem; max-width: 22rem; width: 100%; padding: 0 0.5rem; }
 .grade-prepared-by { font-weight: 700; font-size: 1.1rem; }
+/* Batch 5 K18: the Save button looks like the other buttons on the page. */
+.grade-prepared .button-secondary {
+  min-height: 2.5rem; padding: 0.45rem 1.1rem; border: 2px solid var(--color-primary); border-radius: var(--radius);
+  background: transparent; color: var(--color-primary); font: inherit; font-weight: 700; cursor: pointer;
+}
+.grade-prepared .button-secondary:hover { background: var(--color-primary); color: #fff; }
+.grade-prepared .button-secondary:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+.grade-tip, .grade-kit-have { margin: 0.25rem 0 0; }
+.grade-powered { text-align: center; }
 
 /* The downloaded report (13.4): the browser's print-to-PDF. No menu, no buttons or forms, no animation; the map is a
    still picture (the wide drawing); every answer is open; each section starts on a new page. */
 @media print {
   .grade-download, .grade-print-note, form, .health-orb-host, .health-flow, .health-tap, .health-click,
   .health-caption, .health-back, .health-svg-phone, .grade-recheck, .grade-offer { display: none !important; }
+  /* Batch 5 K6: nothing that only works on screen: the "See the full answer" triangles (every answer is open), the
+     Copy buttons, the remove-this-report line and the "run a new check" link. */
+  details > summary, .copy-btn, .grade-remove, .grade-meta a { display: none !important; }
   .health-svg-full { display: block !important; }
   .health-map { position: static !important; max-width: 32rem; break-inside: avoid; }
   .health-layout { display: block; }
   *, *::before, *::after { animation: none !important; transition: none !important; }
   .health-scanning .health-branch { opacity: 1 !important; }
-  .grade-report > section, .grade-full > section { break-before: page; }
-  .health-row, .grade-voice-table tr, .grade-sites-list li { break-inside: avoid; }
+  /* K7: the name and score in the center print once, as plain dark text (no outline copy). */
+  .health-orb-name, .health-orb-score { stroke: none !important; paint-order: normal !important; fill: #0F1B33 !important; }
+  .health-orb { fill: #FFFFFF !important; }
+  .health-orb-halo { display: none; }
+  /* K5: a tight report: sections run on; only the fix kit starts a new page; cards and rows never split. */
+  .grade-kit { break-before: page; }
+  .grade-check, .grade-top-fails li, .health-group, .health-row, .kit-item, .grade-voice-table tr, .grade-sites-list li,
+  .grade-all-answers li > p { break-inside: avoid; }
+  .grade-report h2, .grade-report h3 { break-after: avoid; }
+  .grade-score, .grade-top { margin-bottom: 0.5rem; }
+  .grade-print-head { margin: 0 0 0.5rem; }
   a[href^="http"]::after { content: " (" attr(href) ")"; font-size: 0.8em; }
 }
 
@@ -2581,7 +2602,8 @@ a.tel,
 .health-back { display: none; }
 /* The one-time scan (high-tech-look 2.10): while it plays, each main node and its checks light up in turn. Without the
    script nothing here applies, so the map shows its final state. */
-.health-scanning .health-branch { opacity: 0.12; transition: opacity 0.35s ease-out; }
+/* Batch 5 K20: circles not lit yet stay readable (0.45), so none ever looks switched off. */
+.health-scanning .health-branch { opacity: 0.45; transition: opacity 0.35s ease-out; }
 .health-scanning .health-branch.health-on { opacity: 1; }
 /* A fixed height, empty or not, so nothing below the map moves when the scan starts or ends (batch 3 X12). */
 .health-caption { margin: 0; padding: 0 0.75rem; min-height: 1.4em; color: var(--health-ink); font-size: 0.95rem; text-align: center; }

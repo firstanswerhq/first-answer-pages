@@ -663,3 +663,65 @@ The score, the Checks and every public page are unchanged. No report content is 
 | Y7 | Approved by the owner and added to the deviations table above. | |
 
 Tests: `test/agency-report.test.js` (Y1 competitor and own Facebook page, a shared host with no page; Y3 support and search pages, Maps, g.page and maps.app.goo.gl; Y4 CSV count), `test/health-scan.test.js` (Y2 print page and guards; Y6 re-watching). No older test line changed for batch 4.
+
+# Batch 5 fixes (batch5-fixes-2026-11-25.md: Z1-Z5 from review-2026-11-25-batch4.md, K1-K23 from review-2026-11-25-full-report-reader.md)
+
+The score, the Checks and every public page (robots.txt, sitemap, JSON-LD, noindex, the listing pages) are unchanged. The business label option for placeholders is used only by the report's fix kit. No report content is added only by JavaScript. Every new sentence is 160 characters or less, in American spelling, with no promise that AI will name a business.
+
+| Item | As built | Where |
+|---|---|---|
+| Z1 | On a shared host, the business's own page is its own row in "Sites AI used" (keyed by `pageKey`, shown as the page, linked to it, `own: true`, counted once per answer). Every other page on that host stays in the plain domain row with no "(your website)". An own domain keeps one row per domain. The Facebook, Yelp, Instagram and TikTok lines count the answers that cited any page on that site. | `agency-report.js` (`sitesUsed`) |
+| Z2 | `isGoogleProfileUrl` accepts only Google's own domains (google.com, google.de, google.co.uk, google.com.au and the like) with a `/maps` path, never google.evil.com. | `agency-report.js` |
+| Z3 | Search listings return their hours (the filled-in days, the same as get_listing), so the hours receipt is about a field in the answer. | `mcp.js` (`summarize`) |
+| Z4 | "Listing not found" also has `structuredContent: { error, fetchedAt }`. The text and `isError` are unchanged. | `mcp.js` |
+| Z5 | A confirmation counts only when its stored date can be read (`ownerConfirmation`), so an unreadable date gives the unconfirmed shape and null receipts. | `mcp.js` |
+| K1 | An answer stored without its question falls back to the question "What AI says" shows. If nothing is left, the heading is left out. "undefined" is never shown. | `grade-html.js` (`answersSection`) |
+| K2 | One verdict per check. A tap-to-call link or street address that passed but couldn't be read is green in the health map, like its card, and both show the same tip (`checkTip`). | `health-map.js`, `grade-html.js` (`checkRow`) |
+| K3 | "Sites AI used" counts only answers that ran a live web search, and it says so. Answers from memory have no cited sites ("These answers came from memory, without a live web search, so no sites were visited."). The CSV lists cited sites only for search answers. | `agency-report.js`, `grade-html.js` |
+| K4 | With "Prepared by" set, the printable report and the CSV carry no sales lines of ours. Removed: the Founding Member note, "claim it below" and the other claim lines (they read "Not yet" or "No listing yet"), the free listing card and claim button, "Want help?", the no-website free listing sentence and the AI card's "Claim your free listing" advice. One small line ends the printout: "Powered by First Answer Pages". On screen with "Prepared by" set, "Want help?" is hidden. Without "Prepared by", everything is as before. | `grade-html.js` (`reportPage` `agency`, `printPage`, `fixKit`, `agencyFix`), `health-map.js` |
+| K5 | The print stylesheet no longer breaks before every section. Only the fix kit starts a new page. Cards, rows, kit boxes and answers never split, and headings stay with what follows. | `style.css` |
+| K6 | On paper, these are hidden: the "See the full answer" triangles (every answer is open), Copy buttons, the remove line and the "run a new check" link. "Send this page..." becomes "Your web team can use the fix kit at the end.", and the Copy sentence is dropped. | `style.css`, `grade-html.js` (`printPage`) |
+| K7 | In print the center's name and score have no outline copy (no stroke or paint-order), in dark text on a white orb, so they print once. | `style.css` |
+| K8 | Under "Score by area", the points that couldn't be checked are counted, with the checks named (two at most, then "and N more"). | `grade-html.js` (`notCheckedLine`) |
+| K9 | The first Website cluster is "Website basics". With no facts from the connection, the address row says "We didn't test your website address on this check.", never "We couldn't reach your website". | `health-map.js`, `health-signals.js` |
+| K10 | One name per check on the whole report. The health map's plain name, with the technical term in brackets, is used on the score cards, "Fix these first", the fix kit titles and the CSV (`checkName`). The Checks' own labels (used outside the report) are unchanged. | `health-map.js`, `grade-html.js` |
+| K11 | On the full report, "(a few lines of code in your full report)" becomes a link, "(the code is in Your fix kit, at the end of this report)", to `#kit-label`. The locked report keeps its wording. | `grade-html.js` (`fixHtml`) |
+| K12 | A kit box whose check already passed says "You already have one. Use this only if you want to replace it." | `grade-html.js` (`fixKit`) |
+| K13 | The kit's business label names the term once ("schema.org LocalBusiness markup") and mentions the address. It has plain placeholders for a street and ZIP that couldn't be read, `sameAs` for the business's own profile links found on its home page (never share buttons), and a bold "Replace the CAPITAL WORDS before pasting." when a placeholder is in it. | `fix-kit.js` (`jsonLdBlock` options), `grade-html.js` |
+| K14 | The buttons say what they do: "Check again (website only, fast)" and "run a full new check (asks AI again)". "Check again" stays first, so the fair-use page's 11.2 sentence still matches. | `grade-html.js` (`recheckBlock`) |
+| K15 | Under "Who AI named", one line says where the answers came from ("3 Claude answers plus 1 from ChatGPT and 1 from Perplexity."). | `grade-html.js` (`answersFromLine`) |
+| K16 | Already as built: the evidence line shows the stored model string and time ("Claude (model claude-sonnet-4-5), asked Nov 25, 2026, 12:07 PM CT, with a live web search."). The review's "model claude" came from the hand-made sample. The question is the heading above (Y7, approved). | `agency-report.js` |
+| K17 | The CSV has one header row first and nothing above it. Every row has business, website, city, state, check date, score and prepared by. Sections: "check" (each scored check with its area, status and points earned and possible), "health" (the group names its cluster, such as "Website: Search basics"), "answer" (engine, model, web search, question, named, the answer text, businesses named, sites cited, date), "named" (each business with "N of M") and "site" (each cited site with its count and address). | `agency-report.js` (`reportCsv`), `grade-html.js` (`reportCsvFor`) |
+| K18 | The Save button next to "Prepared by" is styled like the page's other buttons. "Download report" is now "Print or save as PDF". | `style.css`, `grade-html.js` |
+| K19 | "These checks don't count toward your score." (no "yet"). The hours line says "Add your hours on your website and we'll fill them in". The intro ends "i = about your free listing, not part of your health." | `health-map.js`, `grade-html.js` |
+| K20 | The scan no longer writes a counting score in the center, so a screenshot mid-scan always shows the real score. Circles not lit yet are dimmed to 0.45, so none looks switched off. | `health-scan.js`, `style.css` |
+| K21 | No change: the phone in the answers came from the sample data. The check never fills in a number it couldn't read from the page. | |
+| K22 | No change to the product: identical answers and the same two names came from the hand-made sample. The demo report the judges see should use real or more varied answers. | |
+| K23 | Next to the remove line: "Only people with this link can see this report." This is true, because report addresses are random, noindex and not linked from any public page. | `grade-html.js` |
+
+## Deviations for the owner to approve (batch 5)
+
+| Requirement | Wording | As built | Why |
+|---|---|---|---|
+| 2.10.1 | "the center counts up to the score" | the center keeps the real score through the scan; the circles light up in turn | K20: a screenshot mid-scan showed "Score 17/100" beside "68 / 100", which also breaks 2.10.2 in spirit. |
+| 12.1 | the cluster is named "Website is reachable" | "Website basics" | K9: the reader saw "Website is reachable" next to "Not checked" and a dozen passed checks. |
+| 13.4 | CSV: one row per health row and per answer, "Prepared by" on the first line | one header row first; report columns on every row; check, named and site rows added; "Prepared by" is a column | K17: a line above the header breaks spreadsheet imports, and agencies need score, points, names and sites. |
+| 13.2 | sites from every answer's stored sources | only from answers that used a live web search | K3: an answer from memory didn't visit the sites it lists. |
+
+Not in this batch: Requirements 9.5 to 9.8 (the Verified badge's checked-by, date and expiry, and the expired state). They are not in batch5-fixes-2026-11-25.md, so they are left for their own step.
+
+## Older test lines changed in batch 5
+
+| Where | Old | New | Why |
+|---|---|---|---|
+| `test/agency-report.test.js` (batch 4 Y1) | own and competitor page in one `facebook.com` row, own true | a `facebook.com` row (own false) and a `facebook.com/zephyrplumbing` row (own true) | Z1 |
+| `test/agency-report.test.js` (13.4 CSV test) | "Prepared by" first line, blank line, 10 columns, `health,...` and `answer,,,,,...` rows | header first, the 23 columns, rows built by column name, check, named and site rows | K17 |
+| `test/agency-report.test.js` (13.5 test) | the first CSV line is `Prepared by,'=cmd` | the header comes first and the prepared_by column holds `'=cmd` | K17 |
+| `test/grade-signals-flow.test.js` (Requirement 13 test) | `Download report` link; CSV `Prepared by` first line and the 10-column header | `Print or save as PDF`; the header starts `business,website,...`; the first row holds the business, score and Prepared by; answer, check and named rows | K17, K18 |
+| `test/grade-signals-flow.test.js` (Requirement 12 test) | `<h4 class="health-cluster">Website is reachable</h4>` | `Website basics` | K9 |
+| `test/health-map.test.js` (H1 test) | MAP_INTRO ends "The i marks your free listing: information, not health. Your score is at the top of the page." | ends "i = about your free listing, not part of your health." | K19 |
+| `test/health-map.test.js` (J2 test) | the address and phone rows are `partly`; title says amber | `good` with the same label and tip; title updated | K2 |
+| `test/health-scan.test.js` (2.10 test) | `opacity: 0.12` | `opacity: 0.45` | K20 |
+| `test/grade-o1-notes.test.js` (V157, V203 test) | `>Check again</button>` and "run a new check" in the recheck hint | `>Check again (website only, fast)</button>` and "run a full new check (asks AI again)" | K14 |
+
+New tests: `test/agency-report.test.js` (Z1, Z2, K1, K2, K3, K4, K5-K7, K8, K10-K13, K15, K16, K18, K19, K23), `test/mcp-receipts.test.js` (Z3, Z4, Z5), `test/health-scan.test.js` (K20), `test/website-alive.test.js` (K9).

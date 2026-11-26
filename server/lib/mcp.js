@@ -174,12 +174,7 @@ function hasField(l, field) {
  */
 export function receiptsFor(store, listing, now) {
   const l = publicListing(listing) ?? {};
-  let owner = null;
-  try {
-    owner = verificationFor(store, listing);
-  } catch {
-    owner = null;
-  }
+  const owner = ownerConfirmation(store, listing);
   const ownerAt = storedDate(owner?.verifiedAt) ?? storedDate(owner?.verifiedDate);
   const check = verifiedCheckFor(store, listing, now);
   const unknown = () => ({ lastConfirmed: null, confirmedBy: null });
@@ -193,8 +188,26 @@ export function receiptsFor(store, listing, now) {
   return out;
 }
 
+/** Hours as the filled-in days only, the same as the page, the JSON-LD and get_listing. */
+function filledHoursObject(hours) {
+  if (!hours || typeof hours !== 'object') return {};
+  return Object.fromEntries(filledHours(hours).map(([day, text]) => [day.toLowerCase(), text]));
+}
+
+/** "Details confirmed by the business", only with a readable stored date (batch 5 Z5), else null. */
+function ownerConfirmation(store, listing) {
+  let v = null;
+  try {
+    v = verificationFor(store, listing);
+  } catch {
+    v = null;
+  }
+  return v && storedDate(v.verifiedDate) ? v : null;
+}
+
 function summarize(ctx, listing, now) {
   const l = publicListing(listing);
+  const hours = filledHoursObject(l.hours);
   return {
     id: l.id,
     name: l.name,
@@ -205,6 +218,8 @@ function summarize(ctx, listing, now) {
     serviceArea: l.serviceArea,
     description: l.description,
     services: l.services,
+    // Batch 5 Z3: the hours are returned too, so the hours receipt is about a field that is in the answer.
+    ...(Object.keys(hours).length > 0 ? { hours } : {}),
     url: listingUrl(ctx, l.id),
     // The link to the business's reviews, only when it has a valid one; never a rating, count or review text.
     // The business's own website (publicListing has already checked it again), only when it has one.
@@ -248,10 +263,14 @@ function searchListings(ctx, args) {
 }
 
 function getListing(ctx, args) {
-  const listing = ctx.store.findById(args.id);
-  if (!listing) return toolFailure('Listing not found');
   const at = fetchedAt(ctx);
-  const v = verificationFor(ctx.store, listing);
+  const listing = ctx.store.findById(args.id);
+  // Batch 5 Z4: the "not found" answer is a lookup answer too, so it says when it was built.
+  if (!listing) {
+    return { ...toolFailure('Listing not found'), structuredContent: { error: 'Listing not found', fetchedAt: at } };
+  }
+  // Z5: an unreadable stored date is never "verified: true".
+  const v = ownerConfirmation(ctx.store, listing);
   // "Details confirmed by the business" (the tamper-check hash): the identifiers keep their old names, and a confirmed
   // listing also says who confirmed it and keeps the owner's wording (high-tech-look 9.3).
   const verification = v
@@ -262,9 +281,7 @@ function getListing(ctx, args) {
     : { verified: false, verifiedDate: null, hash: null };
   // Hours: only the days the owner filled in, the same as the page and JSON-LD.
   const out = publicListing(listing);
-  if (out && out.hours && typeof out.hours === 'object') {
-    out.hours = Object.fromEntries(filledHours(out.hours).map(([day, text]) => [day.toLowerCase(), text]));
-  }
+  if (out && out.hours && typeof out.hours === 'object') out.hours = filledHoursObject(out.hours);
   return toolSuccess({
     listing: out,
     verification,

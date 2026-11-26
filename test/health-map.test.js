@@ -76,7 +76,8 @@ test('the section: the plain list comes first, the map after it, and the map is 
 });
 
 test('H1: the intro says what the colors mean, and the orb shows the score in the report\'s own form', () => {
-  assert.equal(MAP_INTRO, "Every check we ran, at a glance. Green is good, yellow is partway there, red needs work, gray means we couldn't check it. The i marks your free listing: information, not health. Your score is at the top of the page.");
+  // Batch 5 K19: about the reader, not about us.
+  assert.equal(MAP_INTRO, "Every check we ran, at a glance. Green is good, yellow is partway there, red needs work, gray means we couldn't check it. i = about your free listing, not part of your health.");
   // Every sentence 160 characters or less (J10: "partway"; J4/W7: the "i" is explained).
   for (const s of MAP_INTRO.split(/(?<=[.!?])\s+/)) assert.ok(s.length <= 160, s);
   assert.equal(/part way/.test(MAP_INTRO), false);
@@ -331,14 +332,15 @@ test('V3/H8: the free listing has no health color; plain words; the Founding not
   ]);
 });
 
-test('J2: a home-page address or phone that could not be read is amber, with what to do, never "Good"', () => {
+test('J2, batch 5 K2: a passed address or phone that could not be read is green like its card, with a tip, never "Good"', () => {
   const results = RESULTS.map(r => (['address-shown', 'tap-to-call'].includes(r.id) ? { ...r, result: 'pass' } : r));
   const sparse = model(grade({ results }), { found: { phone: '', address: '', hours: [] } });
   const web = sparse.mains.find(x => x.id === 'website').subs;
   const address = web.find(s => s.name === 'Street address on the home page');
-  assert.deepEqual([address.status, address.label, address.reason], ['partly', 'Found, but not on one line', ADDRESS_ONE_LINE]);
+  // Batch 5 K2: one verdict per check. The check passed, so the row is green like its score card, with the same tip.
+  assert.deepEqual([address.status, address.label, address.reason], ['good', 'Found, but not on one line', ADDRESS_ONE_LINE]);
   const phone = web.find(s => s.name === 'Tap-to-call phone number');
-  assert.deepEqual([phone.status, phone.label, phone.reason], ['partly', 'Found a link, but not the number', PHONE_AS_TEXT]);
+  assert.deepEqual([phone.status, phone.label, phone.reason], ['good', 'Found a link, but not the number', PHONE_AS_TEXT]);
   const full = model(grade({ results }), { found: { phone: '(615) 555-0142', address: '12 Main St, Nashville, TN 37203', hours: [] } });
   const fw = full.mains.find(x => x.id === 'website').subs;
   assert.equal(fw.find(s => s.name === 'Street address on the home page').label, 'Good');

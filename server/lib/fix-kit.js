@@ -97,7 +97,21 @@ export function suggestedSummary(found) {
   return cutAtWord(s, SUMMARY_MAX);
 }
 
-export function jsonLdBlock(found) {
+/** Placeholders the report's kit puts in for a street or ZIP it couldn't read (batch 5 K13). */
+export const STREET_PLACEHOLDER = 'ADD YOUR STREET ADDRESS';
+export const ZIP_PLACEHOLDER = 'ADD YOUR ZIP CODE';
+/** The line shown above a block that holds a placeholder (K13). */
+export const REPLACE_CAPITALS = 'Replace the CAPITAL WORDS before pasting.';
+
+/** True when a built block still holds a placeholder the owner must replace. */
+export const hasPlaceholder = text => [PHONE_PLACEHOLDER, STREET_PLACEHOLDER, ZIP_PLACEHOLDER].some(p => String(text).includes(p));
+
+/**
+ * The business label (schema.org LocalBusiness markup). `options.placeholders` (the report's kit, K13) puts plain
+ * placeholders in for a street and ZIP that couldn't be read, never an invented value. `found.sameAs` is a list of the
+ * business's own profile addresses that the check found linked from its website.
+ */
+export function jsonLdBlock(found, options = {}) {
   const f = clean(found);
   const data = { '@context': 'https://schema.org', '@type': 'LocalBusiness', name: f.name };
   // No phone found: a plain placeholder the owner must replace (never an invented number) (V137).
@@ -105,16 +119,18 @@ export function jsonLdBlock(found) {
   if (f.website) data.url = f.website;
   // A business that goes to its customers ("no storefront") names its area and no address at all.
   const noStorefront = found?.noStorefront === true;
-  if (!noStorefront && (f.address || f.city || f.state)) {
+  if (!noStorefront && (f.address || f.city || f.state || options.placeholders)) {
     const addr = { '@type': 'PostalAddress' };
     // Only the street goes in streetAddress; the city, state and ZIP each have their own field (V144).
     const whole = usAddressStyle(f.address);
     const street = stripAddressTail(whole, f.city, f.state);
     const zip = street !== whole ? /\b(\d{5}(?:-\d{4})?)\s*$/.exec(whole)?.[1] : undefined;
     if (street) addr.streetAddress = street;
+    else if (options.placeholders) addr.streetAddress = STREET_PLACEHOLDER;
     if (f.city) addr.addressLocality = f.city;
     if (f.state) addr.addressRegion = f.state;
     if (zip) addr.postalCode = zip;
+    else if (options.placeholders) addr.postalCode = ZIP_PLACEHOLDER;
     data.address = addr;
   }
   if (f.hours.length) data.openingHours = f.hours;
@@ -123,6 +139,9 @@ export function jsonLdBlock(found) {
   } else if (f.city) {
     data.areaServed = f.city;
   }
+  const sameAs = [...new Set((Array.isArray(found?.sameAs) ? found.sameAs : [])
+    .map(u => String(u ?? '').trim()).filter(u => /^https:\/\/[^\s"<>]+$/i.test(u)))];
+  if (sameAs.length > 0) data.sameAs = sameAs;
   // Built only from what the owner typed and the page showed: never a rating or a review.
   const json = JSON.stringify(data, null, 2).replace(/</g, '\\u003c');
   return `<script type="application/ld+json">\n${json}\n</script>`;
