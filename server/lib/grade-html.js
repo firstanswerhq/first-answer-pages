@@ -20,7 +20,7 @@ import {
 import { formatRunTime } from './seance-html.js';
 import { listedNames, splitLists } from './name-match.js';
 import { scoreGrade } from './grade-score.js';
-import { healthModel, healthMapHtml, checkTip, checkName } from './health-map.js';
+import { healthModel, healthMapHtml, checkTip, checkName, CHECK_ROW_NAMES } from './health-map.js';
 import { hasPlaceholder, REPLACE_CAPITALS } from './fix-kit.js';
 import { registeredDomain } from './name-match.js';
 import {
@@ -770,10 +770,14 @@ function checkRow(r, input, ctx = {}) {
   // A result stored without `earned` (an older Grade) stays "Pass".
   const partly = r.id === 'ai-named' && cls === 'pass' && Number.isFinite(r.earned) && r.earned < c.points;
   if (partly) cls = 'partly';
+  // Batch 6 item 4: a check that passed but whose details couldn't all be read says "Partly", like its health map row,
+  // with the same tip. A display label only: the stored result, the points and the score don't change.
+  const tip = cls === 'pass' ? checkTip(r.id, input, ctx.found) : null;
+  if (tip) cls = 'partly';
   const word = { pass: 'Pass', partly: 'Partly', fail: 'Needs work', not_checked: 'Not checked' }[cls];
   let points = 'Not counted';
   if (cls !== 'not_checked') {
-    const earned = r.id === 'ai-named' && Number.isFinite(r.earned) ? r.earned : (cls === 'pass' ? c.points : 0);
+    const earned = r.id === 'ai-named' && Number.isFinite(r.earned) ? r.earned : (r.result === 'pass' ? c.points : 0);
     points = `${earned} of ${c.points} points`;
   }
   // Under "Partly" a leading "Yes. " would sit oddly beside a weak result; it is left off here, never in storage (V153).
@@ -799,8 +803,7 @@ function checkRow(r, input, ctx = {}) {
   }
   // The AI row's advice is not a fix the owner can make, so it reads as what they can do, never as a promise (V205).
   const fixLabel = r.id === 'ai-named' ? 'What you can do:' : 'Fix:';
-  // Batch 5 K2: a check that passed but whose details couldn't all be read shows the same tip as its health map row.
-  const tip = cls === 'pass' ? checkTip(r.id, input, ctx.found) : null;
+  // Batch 5 K2: the same tip as its health map row (the tip was worked out above).
   const tipHtml = tip ? `<p class="hint grade-tip"><strong>Tip:</strong> ${h(tip.reason)}</p>` : '';
   return `<li class="grade-check ${cls}"><span class="grade-result">${word}</span><strong>${h(reportName(r.id, input, c.label))}</strong>${pointsHtml}<p>${detailHtml}</p>${tipHtml}${cls === 'fail' ? `<p><strong>${fixLabel}</strong> ${fixHtml(ctx.agency ? agencyFix(c.fix) : c.fix, ctx.full)}</p>` : ''}</li>`;
 }
@@ -816,7 +819,8 @@ function reportName(id, input, fallback) {
 }
 
 const IN_FULL_REPORT = '(a few lines of code in your full report)';
-const IN_KIT = 'the code is in Your fix kit, at the end of this report';
+// Batch 6 nit 11: "your fix kit" in lower case.
+const IN_KIT = 'the code is in your fix kit, at the end of this report';
 
 /**
  * A fix sentence, escaped. Batch 5 K11: on the full report, "in your full report" points at the fix kit below, with a
@@ -848,6 +852,9 @@ function allChecks(grade, { agency = false } = {}) {
   </section>` : '';
   }).join('\n  ');
 }
+
+/** Batch 6 item 10: the heading for answers stored without their question, next to answers that kept theirs. */
+export const NO_QUESTION_SAVED = 'Answer, question not saved';
 
 const QUESTIONS_NOT_ASKED = "The other questions were not asked because today's limit for AI questions was reached.";
 
@@ -981,7 +988,12 @@ function answersSection(grade, { now } = {}) {
     };
     // Batch 5 K1: an answer stored without its question falls back to the question "What AI says" shows; never the
     // word "undefined". With nothing to show, the heading is left out.
-    const question = typeof p === 'string' && p.trim() !== '' ? p : (firstPrompt || freeQuestion(grade.input) || '');
+    // Batch 6 item 10: the fallback is used only when no answer kept its question. An answer without one next to answers
+    // with one gets a neutral heading, so it is never shown under a question it didn't answer.
+    const hasQuestion = q => typeof q === 'string' && q.trim() !== '';
+    const noneSaved = all.every(a => !hasQuestion(a.prompt));
+    const question = hasQuestion(p) ? p
+      : noneSaved ? ([firstPrompt, freeQuestion(grade.input)].find(hasQuestion) ?? '') : NO_QUESTION_SAVED;
     const heading = question ? `<strong>${h(question)}</strong>` : '';
     // 13.3: the evidence for each answer, right under the question it answers.
     return `<li>${heading}${entries.map(a => `
@@ -1198,7 +1210,10 @@ export function reportPage(storedGrade, opts = {}) {
 
   const top = `<div class="grade-top">
   <div class="grade-score">
-    <p class="grade-eyebrow"><span class="grade-eyebrow-title">AI Visibility Check</span><span class="grade-eyebrow-sub">Report &middot; First Answer Pages</span></p>
+    <p class="grade-eyebrow"><span class="grade-eyebrow-title">AI Visibility Check</span>${agency && prepared
+    // Batch 6 item 2: an agency's report says whose it is, in the kicker, at the same size.
+    ? `<span class="grade-eyebrow-sub grade-prepared-by">Prepared by ${h(cleanPreparedBy(grade.preparedBy))}</span>`
+    : '<span class="grade-eyebrow-sub">Report &middot; First Answer Pages</span>'}</p>
     ${number}
     ${partialLine}
     ${readNotice}
@@ -1226,8 +1241,10 @@ export function reportPage(storedGrade, opts = {}) {
 </div>`;
 
   const when = grade.finishedAt || grade.createdAt;
+  // Batch 6 item 8: how we checked, from the real counts, before the footer.
+  const method = howWeChecked(grade);
   // Batch 5 K23: who can see the report, next to the way to remove it. K4: an agency's printout ends with one line.
-  const foot = `<p class="grade-meta">Automated check, ${h(whenText(when))}. AI assistants pick up changes over days to weeks, so ${runNewLink(grade, FULL_NEW_CHECK)} after you make fixes.</p>
+  const foot = `${method ? `<p class="hint grade-method"><strong>How we checked:</strong> ${h(method)}</p>\n` : ''}<p class="grade-meta">Automated check, ${h(whenText(when))}. AI assistants pick up changes over days to weeks, so ${runNewLink(grade, FULL_NEW_CHECK)} after you make fixes.</p>
 <p class="hint grade-remove">Only people with this link can see this report. Ask us to remove this report: ${contactLink(contactEmail, contactEmail || 'contact page')}.</p>${agency ? `\n<p class="hint grade-powered">${POWERED_BY}</p>` : ''}`;
 
   const justOpened = opened && full && leadGate && unlocked
@@ -1238,6 +1255,7 @@ export function reportPage(storedGrade, opts = {}) {
     ? `<div class="grade-full" id="full-report">
   ${justOpened}
   ${downloadBlock(grade)}
+  <p class="hint grade-print-only">${PRINT_CARDS_NOTE}</p>
   ${allChecks(grade, { agency })}
   ${answersSection(grade, { now })}
   ${fixKit(grade, contactEmail, { offer: !prepared && !agency })}
@@ -1259,9 +1277,9 @@ export function reportPage(storedGrade, opts = {}) {
 
   const body = `<section class="grade-report">
 ${top}
+${agencySections}
 ${healthMap}
 ${aiFree(grade, { googleLive, requester, now, secondPending })}
-${agencySections}
 ${claim}
 ${searchPreview(grade)}
 ${groupLines(grade, s)}
@@ -1277,6 +1295,53 @@ ${foot}
 
 /** The one-time scan when the health map first comes into view (2.10; decoration only). */
 export const HEALTH_SCAN_SCRIPT = '/js/health-scan.js';
+
+/** Batch 6 item 1: on paper the score cards list only what needs work; this line says where the rest are. */
+export const PRINT_CARDS_NOTE = 'Only checks that need work are listed below. Every check is in "Health of your setup" above.';
+/** Batch 6 item 3: the printed footer has no link to click, so it says what to do in words. */
+export const PRINT_FOOTER_TAIL = 'so check again after you make fixes.';
+/** Batch 6 item 9. */
+export const PRINT_FOR_CLIENTS = 'Use the print page for clients; the web page above is for you.';
+/** Batch 6 item 8: the last sentence of "How we checked". Never a promise that AI will name a business. */
+export const SNAPSHOT_LINE = 'AI answers change from day to day, so this is a snapshot, not a ranking.';
+
+const COUNT_WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
+const countWord = n => COUNT_WORDS[n] ?? String(n);
+const timesWord = n => (n === 1 ? 'once' : n === 2 ? 'twice' : `${n} times`);
+
+/**
+ * Batch 6 item 8: "How we checked", from the real counts: how many questions and how many answers came back from each
+ * assistant. '' when no answer came back.
+ */
+export function howWeChecked(grade) {
+  const answers = answersOf({ ai: aiOf(grade) });
+  if (answers.length === 0) return '';
+  const questions = new Set(answers.map(a => a.prompt).filter(p => typeof p === 'string' && p.trim() !== '')).size || 1;
+  const counts = new Map();
+  for (const a of answers) {
+    const label = providerLabel(a.provider);
+    counts.set(label, (counts.get(label) ?? 0) + 1);
+  }
+  const main = grade.aiMain?.label && counts.has(grade.aiMain.label) ? grade.aiMain.label : [...counts.keys()][0];
+  const parts = [`${main} ${timesWord(counts.get(main))}`];
+  for (const [label, n] of counts) if (label !== main) parts.push(`${label} ${timesWord(n)}`);
+  const asked = questions === 1 ? 'one question' : `${countWord(questions)} questions`;
+  return `We asked ${asked} and got answers from ${joinAnd(parts)}. ${SNAPSHOT_LINE}`;
+}
+
+/**
+ * Batch 6 item 5: one plain line under "Who AI named", from the real counts only ("Two competitors were named in every
+ * answer. You were named in 3 of 5."). '' with one answer.
+ */
+export function voiceSummary(grade) {
+  const { total, rows } = shareOfVoice(grade);
+  if (total < 2) return '';
+  const own = rows.find(r => r.own);
+  const everywhere = rows.filter(r => !r.own && r.count === total).length;
+  const lead = everywhere === 0 ? ''
+    : `${capFirst(countWord(everywhere))} ${everywhere === 1 ? 'competitor was' : 'competitors were'} named in every answer. `;
+  return `${lead}You were named in ${own ? own.count : 0} of ${total}.`;
+}
 
 /** Batch 5 K14, fix B: the link that asks AI again, in the recheck line and the footer alike. */
 export const FULL_NEW_CHECK = 'run a full new check';
@@ -1314,8 +1379,9 @@ export function voiceSection(grade) {
     ? `<tr class="grade-voice-you"><td><strong>${h(r.name)}</strong> (you)</td><td>${r.count} of ${total}</td></tr>`
     : `<tr><td>${h(r.name)}</td><td>${r.count} of ${total}</td></tr>`)).join('\n      ');
   const from = answersFromLine(grade);
+  const summary = voiceSummary(grade);
   return `<section class="grade-voice">
-  <h2>${h(`Who AI named, across ${total} ${total === 1 ? 'answer' : 'answers'}`)}</h2>${from ? `\n  <p class="hint">${h(from)}</p>` : ''}
+  <h2>${h(`Who AI named, across ${total} ${total === 1 ? 'answer' : 'answers'}`)}</h2>${from ? `\n  <p class="hint">${h(from)}</p>` : ''}${summary ? `\n  <p class="grade-voice-summary">${h(summary)}</p>` : ''}
   <table class="grade-voice-table">
     <thead><tr><th scope="col">Business</th><th scope="col">Answers that named it</th></tr></thead>
     <tbody>
@@ -1354,7 +1420,7 @@ function downloadBlock(grade) {
   return `<section class="grade-download">
   <h2>Share this report</h2>
   <p><a class="button" href="/grade/${id}/print">Print or save as PDF</a> <a href="/grade/${id}/data.csv">Download data (CSV)</a></p>
-  <p class="hint">"Print or save as PDF" opens a clean page for printing. Choose "Save as PDF" in your browser's print window.</p>
+  <p class="hint">"Print or save as PDF" opens a clean page for printing. Choose "Save as PDF" in your browser's print window. ${PRINT_FOR_CLIENTS}</p>
   <form method="POST" action="/grade/${id}/prepared-by" class="grade-prepared">
     <label for="prepared-by">Prepared by (optional, shows on the downloaded report)</label>
     <input id="prepared-by" name="preparedBy" type="text" maxlength="${PREPARED_BY_MAX}" value="${h(prepared)}" autocomplete="organization">
@@ -1373,8 +1439,11 @@ export function printPage(grade, opts = {}) {
   const page = reportPage(grade, { ...opts, leadGate: false, agency: prepared !== '' })
     // K6: words that only make sense on screen.
     .split(SEND_THIS_PAGE).join(PRINT_KIT_LINE)
-    .split(', and the Copy button copies it.').join('.');
-  const head = `<div class="grade-print-head">${prepared ? `<p class="grade-prepared-by">Prepared by ${h(prepared)}</p>` : ''}
+    .split(', and the Copy button copies it.').join('.')
+    // Batch 6 item 3: the footer's link is not on paper, so the sentence says what to do in words.
+    .replace(/so <a [^>]*>[^<]*<\/a> after you make fixes\./g, PRINT_FOOTER_TAIL);
+  // "Prepared by" is in the title box now (batch 6 item 2), so the print head holds only the print note.
+  const head = `<div class="grade-print-head">
   <p class="hint grade-print-note">Use your browser's Print button and choose "Save as PDF".</p>
 </div>`;
   // Batch 4 Y2: the print page never loads the scan, so a quick print never shows a counting score in the map.
@@ -1403,14 +1472,19 @@ export function reportCsvFor(grade) {
     if (!c || GROUPS.find(x => x.id === c.group)?.show === false) return null;
     const ran = r.result === 'pass' || r.result === 'fail';
     const earned = !ran ? '' : r.id === 'ai-named' && Number.isFinite(r.earned) ? r.earned : (r.result === 'pass' ? c.points : 0);
+    // One vocabulary (batch 6 item 7a): Pass, Partly, Needs work, Not checked, the same words as the score cards.
+    const partlyNow = r.result === 'pass' && (checkTip(r.id, g.input, foundOf(g)) !== null
+      || (r.id === 'ai-named' && Number.isFinite(r.earned) && r.earned < c.points));
     return {
       group: groupLabel(c.group), item: reportName(r.id, g.input, c.label),
-      status: r.result === 'pass' ? 'Pass' : r.result === 'fail' ? 'Needs work' : 'Not checked',
+      status: partlyNow ? 'Partly' : r.result === 'pass' ? 'Pass' : r.result === 'fail' ? 'Needs work' : 'Not checked',
       earned, points: c.points, detail: String(r.detail ?? ''),
     };
   }).filter(Boolean);
   // The health rows name their cluster too ("Website: Search basics"), so the groups read right in a sheet.
-  const health = model.mains.flatMap(m => m.subs.map(sub => ({
+  // Batch 6 item 7a: a row that shows a scored Check is left out here (it has its "check" row, with points), so a pivot
+  // never counts it twice. Item 2: the Free listing group is never in the CSV, with or without "Prepared by".
+  const health = model.mains.filter(m => m.id !== 'listing').flatMap(m => m.subs.filter(sub => !CHECK_ROW_NAMES.has(sub.name)).map(sub => ({
     group: sub.cluster ? `${m.name}: ${sub.cluster}` : m.name, item: sub.name, status: sub.label, detail: sub.reason ?? '',
   })));
   // Batch 4 Y4: the same answers as "Who AI named, across N answers" (an answer with no text is skipped).
@@ -1441,7 +1515,8 @@ export function reportCsvFor(grade) {
  */
 export function failedNote(counted) {
   const lead = counted === 1 ? '1 check makes up your score.' : `${counted} checks make up your score.`;
-  return `${lead} The lights below also show extra checks that don't count toward it.`;
+  // Batch 6 nit 13: "the map", not "the lights" (jargon).
+  return `${lead} The map also shows extra checks that don't count toward your score.`;
 }
 
 /**

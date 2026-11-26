@@ -2527,7 +2527,15 @@ a.tel,
 .grade-prepared { display: flex; flex-wrap: wrap; align-items: end; gap: 0.5rem; }
 .grade-prepared label { flex-basis: 100%; font-weight: 600; }
 .grade-prepared input { min-height: 2.5rem; max-width: 22rem; width: 100%; padding: 0 0.5rem; }
-.grade-prepared-by { font-weight: 700; font-size: 1.1rem; }
+p.grade-prepared-by { font-weight: 700; font-size: 1.1rem; }
+/* Batch 6 item 2: in the title box, "Prepared by" takes the kicker's own size and style. */
+.grade-eyebrow-sub.grade-prepared-by { font-weight: 700; }
+/* Batch 6 item 1: a line only for paper. */
+.grade-print-only { display: none; }
+.grade-voice-summary { margin: 0.3rem 0 0.5rem; font-weight: 600; }
+.grade-method { margin-top: 1rem; }
+/* Batch 6 nit 12: numbers in headings and names are lining figures, so "5" never reads as a letter. */
+.grade-report, .health, .grade-report h2, .grade-report h3, .health-row-name { font-variant-numeric: lining-nums; }
 /* Batch 5 K18: the Save button looks like the other buttons on the page. */
 .grade-prepared .button-secondary {
   min-height: 2.5rem; padding: 0.45rem 1.1rem; border: 2px solid var(--color-primary); border-radius: var(--radius);
@@ -2544,24 +2552,33 @@ a.tel,
   .grade-download, .grade-print-note, form, .health-orb-host, .health-flow, .health-tap, .health-click,
   .health-caption, .health-back, .health-svg-phone, .grade-recheck, .grade-offer { display: none !important; }
   /* Batch 5 K6: nothing that only works on screen: the "See the full answer" triangles (every answer is open), the
-     Copy buttons, the remove-this-report line and the "run a new check" link. */
-  details > summary, .copy-btn, .grade-remove, .grade-meta a { display: none !important; }
+     Copy buttons and the remove-this-report line. (Batch 6 item 3: the footer has no link in print, it says
+     "so check again after you make fixes." in words.) */
+  details > summary, .copy-btn, .grade-remove { display: none !important; }
+  .grade-print-only { display: block !important; }
   .health-svg-full { display: block !important; }
-  .health-map { position: static !important; max-width: 32rem; break-inside: avoid; }
-  .health-layout { display: block; }
+  /* Batch 6 item 1: the map is small and first, so the score box and the map share page 1; the list flows after it. */
+  .health-layout { display: flex !important; flex-direction: column; }
+  .health-map { order: -1; position: static !important; max-width: 15rem; margin: 0 auto 0.5rem; break-inside: avoid; }
   *, *::before, *::after { animation: none !important; transition: none !important; }
   .health-scanning .health-branch { opacity: 1 !important; }
   /* K7: the name and score in the center print once, as plain dark text (no outline copy). */
   .health-orb-name, .health-orb-score { stroke: none !important; paint-order: normal !important; fill: #0F1B33 !important; }
   .health-orb { fill: #FFFFFF !important; }
   .health-orb-halo { display: none; }
-  /* K5: a tight report: sections run on; only the fix kit starts a new page; cards and rows never split. */
-  .grade-kit { break-before: page; }
-  .grade-check, .grade-top-fails li, .health-group, .health-row, .kit-item, .grade-voice-table tr, .grade-sites-list li,
+  /* Batch 6 item 1: no forced page breaks at all; only a single row, card or kit box is kept whole. Groups flow. */
+  .grade-check, .grade-top-fails li, .health-row, .kit-item, .grade-voice-table tr, .grade-sites-list li,
   .grade-all-answers li > p { break-inside: avoid; }
-  .grade-report h2, .grade-report h3 { break-after: avoid; }
-  .grade-score, .grade-top { margin-bottom: 0.5rem; }
-  .grade-print-head { margin: 0 0 0.5rem; }
+  .grade-report h2, .grade-report h3, .health-group h3 { break-after: avoid; }
+  .grade-score, .grade-top { margin-bottom: 0.25rem; padding-top: 0; }
+  .grade-score-number .num { font-size: 4rem; }
+  .grade-print-head { margin: 0 0 0.25rem; }
+  .health { margin: 0.5rem 0; }
+  .health-group { margin: 0 0 0.4rem; padding: 0.3rem 0.5rem; }
+  /* Batch 6 item 1: the answers print once, in "Every answer"; "What AI says" keeps its summary and the names. */
+  .grade-ai details, .grade-ai .grade-answer { display: none !important; }
+  /* Batch 6 item 1: the score cards list only what needs work (the health list above has every check). */
+  .grade-check.pass, .grade-check.not_checked { display: none !important; }
   a[href^="http"]::after { content: " (" attr(href) ")"; font-size: 0.8em; }
 }
 

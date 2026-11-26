@@ -728,6 +728,70 @@ Not in this batch: Requirements 9.5 to 9.8 (the Verified badge's checked-by, dat
 
 New tests: `test/agency-report.test.js` (Z1, Z2, K1, K2, K3, K4, K5-K7, K8, K10-K13, K15, K16, K18, K19, K23), `test/mcp-receipts.test.js` (Z3, Z4, Z5), `test/health-scan.test.js` (K20), `test/website-alive.test.js` (K9).
 
+# Batch 6 fixes (batch6-fixes-2026-11-25.md, from review-2026-11-25-batch5.md and review-2026-11-25-batch5-reader.md)
+
+The score, the Checks and every public page are unchanged. No report content is added only by JavaScript. Every new sentence is 160 characters or less, in American spelling, with no promise that AI will name a business.
+
+| Item | As built | Where |
+|---|---|---|
+| 1 | Print: no forced page break at all (the fix kit's `break-before` is gone). Only a single row, card, kit box or answer paragraph is kept whole; health groups and score groups flow. The map prints small (15rem) and first (`order: -1` in a column layout), with a smaller score number, so the score box and the map share page 1. "What AI says" prints its summary and "Other businesses it named" but not the answer text (`.grade-ai details`), which prints once, in "Every answer". The score cards print only Partly and Needs work, under a print-only line: "Only checks that need work are listed below. Every check is in "Health of your setup" above." | `style.css` (`@media print`), `grade-html.js` (`PRINT_CARDS_NOTE`) |
+| 1 (page count) | Not measured: no shell commands may be run here, so no PDF could be made. Measure the real `/print` page with 1 answer and with 5 answers (Claude x3, ChatGPT, Perplexity), and add the counts to this row. | |
+| 2 | With "Prepared by" set, the title box kicker is "Prepared by <name>" (same size as the kicker, in place of "Report · First Answer Pages"), and the separate line above the box is gone. `healthModel` leaves the whole Free listing group out when `agency` is true (bubble, rows and note), so the map has six nodes and the intro drops its "i = about your free listing" line (`MAP_INTRO_NO_LISTING`). The CSV never has the Free listing group, with or without "Prepared by". | `grade-html.js`, `health-map.js` |
+| 3 | The printed footer's link is replaced by words: "AI assistants pick up changes over days to weeks, so check again after you make fixes." The screen keeps its "run a full new check" link. | `grade-html.js` (`printPage`, `PRINT_FOOTER_TAIL`), `style.css` |
+| 4 | Never a green mark next to "but": a check that passed but whose phone number or address couldn't be read is "partly" (!) in the health list and map, and its score card says "Partly" with the same tip. The stored result, the points ("4 of 4 points") and the score don't change. The CSV's check row says "Partly". | `health-map.js` (`checkSub`), `grade-html.js` (`checkRow`, `reportCsvFor`) |
+| 5 | "Who AI named" and "Sites AI used" come right after the score box, on screen and in print. A plain line under the table, from the real counts only: "Two competitors were named in every answer. You were named in 3 of 5." With one answer there is no line. | `grade-html.js` (`voiceSummary`) |
+| 6 | Evidence: "Evidence: Claude claude-sonnet-4-5, Nov 25, 2026, 7:23 PM CST, live web search on." (or "off"). The time uses the report's one format and time zone label (`formatRunTime`, CST or CDT), the same as the footer. | `agency-report.js` (`evidence`, `evidenceTime`) |
+| 7 | CSV: (a) a health row that shows a scored Check is left out (it has its "check" row, with points), so nothing is counted twice; check rows use one vocabulary: Pass, Partly, Needs work, Not checked. (b) `check_date` and the answer `date` are Central time, "2026-11-25 19:23", with no seconds. (c) The header is first, 23 columns, formula guard kept. | `agency-report.js` (`csvDate`), `grade-html.js`, `health-map.js` (`CHECK_ROW_NAMES`) |
+| 8 | "How we checked:" at the end of the report and the print page, from the real counts: "We asked one question and got answers from Claude 3 times, ChatGPT once and Perplexity once. AI answers change from day to day, so this is a snapshot, not a ranking." Left out when no answer came back. | `grade-html.js` (`howWeChecked`) |
+| 9 | The share box adds: "Use the print page for clients; the web page above is for you." | `grade-html.js` |
+| 10 | An answer stored without its question, next to answers that kept theirs, is under the heading "Answer, question not saved". The fallback to the question asked is used only when no answer kept its question. | `grade-html.js` (`answersSection`) |
+| Nit 11 | "(the code is in your fix kit, at the end of this report)", lower case. | `grade-html.js` |
+| Nit 12 | Lining numerals on the report and the health list (`font-variant-numeric: lining-nums`). | `style.css` |
+| Nit 13 | "N checks make up your score. The map also shows extra checks that don't count toward your score." | `grade-html.js` (`failedNote`) |
+| Nit 14 | Not done. The "Run a new check" links in health rows and notices are pinned, word for word, by many older tests and reasons (health-signals, V157, V244), and they go to the same page. Changing them is left for a wording pass of its own. | |
+| Nit 15 | `csvCell` looks past leading spaces and line breaks before the formula guard (" =cmd" is guarded). | `agency-report.js` |
+
+## Deviations for the owner to approve (batch 6)
+
+| Requirement or earlier decision | Was | As built | Why |
+|---|---|---|---|
+| Batch 5 K2 (both green) | a passed check that couldn't be fully read was green in the map, "Pass" on its card | "partly" (!) in the map, "Partly" on the card, same tip, same points | Batch 6 item 4: a green mark next to "but" reads as a contradiction. |
+| 13.3 evidence wording | "Evidence: Claude (model m), asked <time> CT, with a live web search." | "Evidence: Claude m, <time> CST, live web search on." | Batch 6 item 6: shorter, and one time zone label on the whole report. |
+| 13.4 print | every score card prints; "What AI says" prints the answer text; the fix kit starts a new page | only Partly and Needs work cards print; answer text prints once ("Every answer"); no forced page break | Batch 6 item 1: 12 pages to the target 6 to 8. |
+| 13.4 CSV | health rows for every map row, including the ones that show a Check; ISO UTC dates | Check rows only once (as "check" rows with points); the Free listing group never; Central time "YYYY-MM-DD HH:MM" | Batch 6 item 7 and item 2. |
+| 2.1, 2.6 (eight nodes, "Free listing") | the Free listing node on every report | left out of an agency's report (Prepared by set) | Batch 6 item 2: the client report reads as the agency's own. |
+| Requirement 13 order | "Who AI named" and "Sites AI used" after "What AI says" | right after the score box | Batch 6 item 5: the block an agency reads first. |
+
+## Older test lines changed in batch 6
+
+| Where | Old | New | Why |
+|---|---|---|---|
+| `test/agency-report.test.js` (13.3) | "Evidence: Claude (model claude-test), asked ... with a live web search."; `evidenceTime` "... PM CT" | "Evidence: Claude claude-test, ... CST, live web search on."; "... PM CST" | item 6 |
+| `test/agency-report.test.js` (K15, K16) | the old evidence wording | the new evidence wording | item 6 |
+| `test/agency-report.test.js` (13.4 print) | `<p class="grade-prepared-by">Prepared by Acme</p>`; `break-before: page` present | the kicker span; no `break-before: page` | items 1, 2 |
+| `test/agency-report.test.js` (K2) | the card `grade-check pass` "Pass", the row `health-good` | `grade-check partly` "Partly" with "4 of 4 points", the row `health-partly` "!", and the CSV check row "Partly" | item 4 |
+| `test/agency-report.test.js` (K5-K7) | `.grade-kit { break-before: page; }`; `.grade-meta a` hidden | no forced break; groups not kept whole; `.grade-meta a` rule gone (the footer has no link in print) | items 1, 3 |
+| `test/agency-report.test.js` (K10-K13) | "the code is in Your fix kit" | "the code is in your fix kit" | nit 11 |
+| `test/agency-report.test.js` (13.4, K17) | check_date and answer date as ISO; at least 40 health rows; a "Website: Search basics" health row | Central "YYYY-MM-DD HH:MM"; no health row repeats a Check, no Free listing rows, check statuses in one vocabulary | item 7 |
+| `test/grade-signals-flow.test.js` (Requirement 13) | the old evidence wording; `<p class="grade-prepared-by">`; `check_date` as ISO | the new wording; the kicker span; `csvDate(finishedAt)` | items 2, 6, 7 |
+| `test/health-map.test.js` (J2) | the two rows `good` | `partly` | item 4 |
+
+New tests (`test/agency-report.test.js`): item 1 (print width limit and order, answers once, cards that need work, the print-only line), item 2 (kicker, no Free listing group in the agency report, model and CSV), item 3 (no broken printed sentence), item 5 (order and the summary line), item 8 (How we checked), item 9, item 10, nits 11 to 13 and 15, and `csvDate`.
+
+## Batch 6, fix A (batch6-fix-A-2026-11-25.md, 3 failures: 1882 of 1885)
+
+| Failure | Decision | Change |
+|---|---|---|
+| `test/agency-report.test.js:175` (K17, the real report part) | Test out of date: I wrote it expecting a "What AI says about your business" check row, but the test's grade has no stored results, so it has no check rows at all. The code is right. | The grade now has a scored "Page title names your city and service" result. The test checks that it is exactly one "check" row (Pass, 7 of 7) and never also a "health" row, so the batch 6 item 7a rule is really tested. |
+| `test/agency-report.test.js:480` (batch 6 item 2) | Test out of date: the page is escaped, so "couldn't" is written `couldn&#39;t`. The page does show the intro without the listing line (the same test also checks that "i = about your free listing" is absent). | The test compares the whole `<p class="hint health-intro">` with the escaped no-listing intro. |
+| `test/grade-report-asks.test.js:174` (V100) | Test out of date: "How we checked" (batch 6 item 8) also says "and got answers from", so a bare `includes('and got')` now matches it. The counting sentence itself is not printed when every ask was answered: `severalAnswers` adds "and got N answers" only when fewer answers came back than were asked. | The test checks the counting sentence (`/and got \d+ answers/` is absent) and that the lead line reads "We just asked Claude 3 times." It keeps the "of the 3" check. |
+
+| Where | Old | New | Why |
+|---|---|---|---|
+| `test/agency-report.test.js` (13.4, K17) | a "What AI says about your business" check row, with no results in the input | a "Page title" result in the input: one check row, Pass 7 of 7, and no health row for it | fix A |
+| `test/agency-report.test.js` (batch 6 item 2) | `print.includes(MAP_INTRO_NO_LISTING)` | the escaped intro paragraph | fix A |
+| `test/grade-report-asks.test.js` (V100) | `all.includes('and got')` is false | `/and got \d+ answers/` is false, and the lead line is "We just asked Claude 3 times." | batch 6 item 8 |
+
 Fix B (batch5-fix-B-2026-11-25.md, 7 failures after fix A):
 
 | Failure | Decision | Change |

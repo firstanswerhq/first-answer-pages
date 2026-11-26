@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { createApp } from '../server/app.js';
 import { createAiBudget } from '../server/lib/ai-budget.js';
 import { reportPage, HEALTH_ORB_SCRIPT, HEALTH_SCAN_SCRIPT } from '../server/lib/grade-html.js';
+import { csvDate } from '../server/lib/agency-report.js';
 
 const NOW = Date.UTC(2026, 10, 24, 18, 0, 0);
 const REPO_DATA = fileURLToPath(new URL('../data/', import.meta.url));
@@ -469,7 +470,8 @@ test('Requirement 13: the full report has share of voice, evidence and downloads
   const report = await (await fetch(`${base}/grade/${g.id}`)).text();
   assert.match(report, /<h2>Who AI named, across 1 answer<\/h2>/);
   assert.match(report, /<tr class="grade-voice-you"><td><strong>Zephyr Plumbing<\/strong> \(you\)<\/td><td>0 of 1<\/td><\/tr>/);
-  assert.match(report, /<p class="hint grade-evidence">Evidence: Claude \(model stub\), asked [^<]+ CT, with a live web search\.<\/p>/);
+  // Batch 6 item 6: the reviewers' wording, with the report's one time zone label.
+  assert.match(report, /<p class="hint grade-evidence">Evidence: Claude stub, [^<]+ C[SD]T, live web search on\.<\/p>/);
   assert.ok(report.includes(`href="/grade/${g.id}/print">Print or save as PDF</a>`), 'K18');
   assert.ok(report.includes(`href="/grade/${g.id}/data.csv">Download data (CSV)</a>`));
   assert.ok(report.includes("<p>These answers didn't list their sources.</p>"));
@@ -491,7 +493,8 @@ test('Requirement 13: the full report has share of voice, evidence and downloads
   assert.equal(print.status, 200);
   assert.match(print.headers.get('x-robots-tag') ?? '', /noindex/);
   const printText = await print.text();
-  assert.ok(printText.includes(`<p class="grade-prepared-by">Prepared by ${stored.preparedBy}</p>`));
+  // Batch 6 item 2: "Prepared by" is the title box's kicker.
+  assert.ok(printText.includes(`<span class="grade-eyebrow-sub grade-prepared-by">Prepared by ${stored.preparedBy}</span>`));
   assert.equal(printText.includes('<b>Acme'), false);
 
   const csv = await fetch(`${base}/grade/${g.id}/data.csv`);
@@ -501,7 +504,8 @@ test('Requirement 13: the full report has share of voice, evidence and downloads
   const lines = (await csv.text()).split('\r\n');
   // Batch 5 K17: the header row comes first; "Prepared by" and the report's own facts are columns on every row.
   assert.ok(lines[0].startsWith('business,website,city,state,check_date,score,prepared_by,section,group,item,status,'));
-  assert.ok(lines[1].startsWith(`Zephyr Plumbing,https://zephyr.example/,Nashville,TN,${g.finishedAt},${g.score.score},${stored.preparedBy},`));
+  // Batch 6 item 7b: the check date in Central time, no seconds.
+  assert.ok(lines[1].startsWith(`Zephyr Plumbing,https://zephyr.example/,Nashville,TN,${csvDate(g.finishedAt)},${g.score.score},${stored.preparedBy},`));
   assert.ok(lines.some(l => /,answer,,,,,,,Claude,stub,yes,"[^"]*",no,/.test(l)));
   assert.ok(lines.some(l => l.includes(',check,')), 'one row per scored check');
   assert.ok(lines.some(l => l.includes(',named,,Zephyr Plumbing,you,')), 'the checked business is a named row');

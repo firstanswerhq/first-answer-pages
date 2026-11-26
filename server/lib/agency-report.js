@@ -14,6 +14,7 @@
 
 import { normalizeForMatch } from './seance.js';
 import { registeredDomain, sameSite, pageKey, SHARED_DOMAINS } from './name-match.js';
+import { formatRunTime } from './seance-html.js';
 
 /** The answers that came back with text: the same set for share of voice, sites, and the CSV (batch 4 Y4). */
 export const answersOf = grade => (Array.isArray(grade?.ai) ? grade.ai : [])
@@ -143,24 +144,36 @@ export function sitesUsed(grade) {
   return { hasSources: rows.length > 0, rows, gaps, searchAnswers: answers.length, fromMemory };
 }
 
-/** A time as "Nov 24, 2026, 12:00 PM CT" (the owner's time zone). */
+/**
+ * A time as "Nov 24, 2026, 12:00 PM CST": the same words and time zone label as every other time on the report
+ * (batch 6 item 6: the footer said CST while the evidence said CT).
+ */
 export function evidenceTime(iso) {
-  const ms = Date.parse(iso);
-  if (!Number.isFinite(ms)) return '';
-  const text = new Date(ms).toLocaleString('en-US', {
-    month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/Chicago',
-  });
-  return `${text} CT`;
+  if (typeof iso !== 'string' || !Number.isFinite(Date.parse(iso))) return '';
+  return formatRunTime(iso);
 }
 
 /**
  * 13.3: one answer's evidence, in plain words: who answered, the model, when, and whether it searched the web live.
+ * Batch 6 item 6: "Evidence: Claude claude-sonnet-4-5, Nov 25, 2026, 7:23 PM CST, live web search on."
  * The exact question is the heading right above it on the page, and a column of its own in the CSV.
  */
 export function evidence(a, label) {
-  const model = typeof a?.model === 'string' && a.model.trim() !== '' ? ` (model ${a.model.trim()})` : '';
+  const model = typeof a?.model === 'string' && a.model.trim() !== '' ? ` ${a.model.trim()}` : '';
   const when = evidenceTime(a?.at);
-  return `Evidence: ${label}${model}${when ? `, asked ${when}` : ''}, ${a?.webSearch === true ? 'with a live web search' : 'without a live web search'}.`;
+  return `Evidence: ${label}${model}${when ? `, ${when}` : ''}, live web search ${a?.webSearch === true ? 'on' : 'off'}.`;
+}
+
+const CSV_TIME = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+});
+
+/** Batch 6 item 7b: a CSV date in Central time, "2026-11-25 19:23", no seconds or milliseconds; '' when unreadable. */
+export function csvDate(iso) {
+  if (typeof iso !== 'string' || !Number.isFinite(Date.parse(iso))) return '';
+  const p = {};
+  for (const part of CSV_TIME.formatToParts(new Date(iso))) p[part.type] = part.value;
+  return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}`;
 }
 
 /** 13.5: the "Prepared by" name: text only, one line, 60 characters at most; '' to clear it. */
@@ -174,7 +187,8 @@ export function cleanPreparedBy(value) {
 /** One CSV cell: quoted when needed, and never read as a formula by a spreadsheet. */
 export function csvCell(value) {
   let s = String(value ?? '');
-  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+  // Batch 6 nit 15: leading spaces or line breaks are looked past, so " =cmd" is guarded too.
+  if (/^\s*[=+\-@\t\r]/.test(s)) s = `'${s}`;
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
@@ -201,7 +215,7 @@ export const CSV_COLUMNS = Object.freeze([
  */
 export function reportCsv({ report = {}, preparedBy = '', checks = [], health = [], answers = [], named = [], sites = [] }) {
   const meta = [
-    report.business ?? '', report.website ?? '', report.city ?? '', report.state ?? '', report.checkDate ?? '',
+    report.business ?? '', report.website ?? '', report.city ?? '', report.state ?? '', csvDate(report.checkDate),
     Number.isInteger(report.score) ? String(report.score) : '', cleanPreparedBy(preparedBy),
   ];
   const row = rest => [...meta, ...rest].map(csvCell).join(',');
@@ -216,7 +230,7 @@ export function reportCsv({ report = {}, preparedBy = '', checks = [], health = 
   for (const a of answers) {
     lines.push(row([
       'answer', '', '', '', '', '', '', a.engine, a.model ?? '', a.webSearch === true ? 'yes' : 'no', a.question,
-      a.named ? 'yes' : 'no', a.answer ?? '', (a.businesses ?? []).join('; '), (a.sites ?? []).join('; '), a.date,
+      a.named ? 'yes' : 'no', a.answer ?? '', (a.businesses ?? []).join('; '), (a.sites ?? []).join('; '), csvDate(a.date),
     ]));
   }
   for (const n of named) {

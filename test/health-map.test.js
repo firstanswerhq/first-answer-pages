@@ -332,15 +332,15 @@ test('V3/H8: the free listing has no health color; plain words; the Founding not
   ]);
 });
 
-test('J2, batch 5 K2: a passed address or phone that could not be read is green like its card, with a tip, never "Good"', () => {
+test('J2, batch 6 item 4: a passed address or phone that could not be read is amber like its card, with a tip, never "Good"', () => {
   const results = RESULTS.map(r => (['address-shown', 'tap-to-call'].includes(r.id) ? { ...r, result: 'pass' } : r));
   const sparse = model(grade({ results }), { found: { phone: '', address: '', hours: [] } });
   const web = sparse.mains.find(x => x.id === 'website').subs;
   const address = web.find(s => s.name === 'Street address on the home page');
-  // Batch 5 K2: one verdict per check. The check passed, so the row is green like its score card, with the same tip.
-  assert.deepEqual([address.status, address.label, address.reason], ['good', 'Found, but not on one line', ADDRESS_ONE_LINE]);
+  // Batch 6 item 4: never a green mark next to "but": "partly", and the score card says "Partly" with the same tip.
+  assert.deepEqual([address.status, address.label, address.reason], ['partly', 'Found, but not on one line', ADDRESS_ONE_LINE]);
   const phone = web.find(s => s.name === 'Tap-to-call phone number');
-  assert.deepEqual([phone.status, phone.label, phone.reason], ['good', 'Found a link, but not the number', PHONE_AS_TEXT]);
+  assert.deepEqual([phone.status, phone.label, phone.reason], ['partly', 'Found a link, but not the number', PHONE_AS_TEXT]);
   const full = model(grade({ results }), { found: { phone: '(615) 555-0142', address: '12 Main St, Nashville, TN 37203', hours: [] } });
   const fw = full.mains.find(x => x.id === 'website').subs;
   assert.equal(fw.find(s => s.name === 'Street address on the home page').label, 'Good');

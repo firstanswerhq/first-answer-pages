@@ -11,13 +11,15 @@ import { fileURLToPath } from 'node:url';
 
 import {
   shareOfVoice, sitesUsed, evidence, evidenceTime, reportCsv, csvCell, cleanPreparedBy, CSV_COLUMNS, PREPARED_BY_MAX,
-  answersOf, isGoogleProfileUrl,
+  answersOf, isGoogleProfileUrl, csvDate,
 } from '../server/lib/agency-report.js';
+import { CHECK_ROW_NAMES } from '../server/lib/health-map.js';
 import {
   voiceSection, sitesSection, printPage, reportCsvFor, reportPage, notCheckedLine, answersFromLine, POWERED_BY, ALREADY_HAVE,
-  PRINT_KIT_LINE, SEND_THIS_PAGE,
+  PRINT_KIT_LINE, SEND_THIS_PAGE, PRINT_CARDS_NOTE, PRINT_FOOTER_TAIL, PRINT_FOR_CLIENTS, SNAPSHOT_LINE, NO_QUESTION_SAVED,
+  howWeChecked, voiceSummary, failedNote,
 } from '../server/lib/grade-html.js';
-import { FOUNDING_NOTE } from '../server/lib/health-map.js';
+import { FOUNDING_NOTE, MAP_INTRO_NO_LISTING, healthModel } from '../server/lib/health-map.js';
 import { REPLACE_CAPITALS, STREET_PLACEHOLDER, ZIP_PLACEHOLDER, jsonLdBlock } from '../server/lib/fix-kit.js';
 
 const INPUT = { name: 'Zephyr Plumbing', city: 'Nashville', state: 'TN', service: 'plumbers', website: 'https://zephyr.example/' };
@@ -162,9 +164,11 @@ test('batch 4 Y4: the CSV has the same answers as "across N answers" (an answer 
 });
 
 test('13.3: the evidence says who answered, the model, when, and whether it searched the web live', () => {
-  assert.equal(evidence(answer(), 'Claude'), `Evidence: Claude (model claude-test), asked ${evidenceTime(AT)}, with a live web search.`);
-  assert.equal(evidenceTime(AT), 'Nov 24, 2026, 12:00 PM CT');
-  assert.equal(evidence(answer({ model: '', webSearch: false }), 'Gemini'), `Evidence: Gemini, asked ${evidenceTime(AT)}, without a live web search.`);
+  // Batch 6 item 6: the reviewers' wording, and one time zone label (CST, the same as every other time on the report).
+  assert.equal(evidence(answer(), 'Claude'), 'Evidence: Claude claude-test, Nov 24, 2026, 12:00 PM CST, live web search on.');
+  assert.equal(evidenceTime(AT), 'Nov 24, 2026, 12:00 PM CST');
+  assert.equal(evidence(answer({ model: '', webSearch: false }), 'Gemini'), 'Evidence: Gemini, Nov 24, 2026, 12:00 PM CST, live web search off.');
+  assert.equal(evidence(answer({ at: 'not a date' }), 'Claude'), 'Evidence: Claude claude-test, live web search on.', 'no time when none was stored');
   assert.ok(evidence(answer(), 'Claude').length <= 160);
 });
 
@@ -189,7 +193,11 @@ test('13.4, batch 5 K17: one header row first; the report\'s own columns on ever
     'engine', 'model', 'web_search', 'question', 'named', 'answer', 'businesses_named', 'sites_cited', 'date',
   ]);
   assert.equal(lines[0], CSV_COLUMNS.join(','), 'nothing above the header row');
-  const meta = ['Zephyr Plumbing', 'https://zephyr.example/', 'Nashville', 'TN', AT, '68', 'Acme Agency'];
+  // Batch 6 item 7b: dates in Central time, "2026-11-24 12:00", no seconds or milliseconds.
+  assert.equal(csvDate(AT), '2026-11-24 12:00');
+  assert.equal(csvDate('2026-07-01T00:30:00.000Z'), '2026-06-30 19:30', 'daylight time');
+  assert.equal(csvDate('not a date'), '');
+  const meta = ['Zephyr Plumbing', 'https://zephyr.example/', 'Nashville', 'TN', csvDate(AT), '68', 'Acme Agency'];
   // A row by column name, so every expected row has exactly the 23 columns.
   const expectRow = fields => [...meta, ...CSV_COLUMNS.slice(meta.length).map(c => fields[c] ?? '')].map(csvCell).join(',');
   assert.equal(lines[1], expectRow({
@@ -198,7 +206,7 @@ test('13.4, batch 5 K17: one header row first; the report\'s own columns on ever
   assert.equal(lines[2], expectRow({ section: 'health', group: 'Website: Can AI read your website', item: 'Page list for search engines (sitemap)', status: 'Found' }));
   assert.ok(csv.includes(expectRow({
     section: 'answer', engine: 'Claude', model: 'm', web_search: 'yes', question: 'Who, "best", here?', named: 'yes',
-    answer: '1. Zephyr\n2. Ridge', businesses_named: 'Zephyr Plumbing; Ridge', sites_cited: 'https://yelp.com/a', date: AT,
+    answer: '1. Zephyr\n2. Ridge', businesses_named: 'Zephyr Plumbing; Ridge', sites_cited: 'https://yelp.com/a', date: csvDate(AT),
   })));
   assert.ok(csv.includes(expectRow({ section: 'named', item: 'Ridge', detail: '1 of 1' })));
   assert.ok(csv.includes(expectRow({ section: 'site', item: 'yelp.com', detail: '1 answer', sites_cited: 'https://yelp.com/a' })));
@@ -206,10 +214,17 @@ test('13.4, batch 5 K17: one header row first; the report\'s own columns on ever
   assert.equal(lines[1].split(',').length, CSV_COLUMNS.length);
   assert.equal(csvCell('=HYPERLINK("x")'), `"'=HYPERLINK(""x"")"`, 'never a formula');
   assert.equal(csvCell('+1 615'), "'+1 615");
+  // Batch 6 nit 15: leading spaces or a line break are looked past.
+  assert.equal(csvCell('  =cmd'), "'  =cmd");
+  assert.equal(csvCell('\n+evil'), `"'\n+evil"`);
+  assert.equal(csvCell('  plain'), '  plain');
   assert.equal(reportCsv({}).split('\r\n')[0], CSV_COLUMNS.join(','));
 
   // The real report: one row per scored check, per health map row, per answer that came back.
-  const g = grade([answer({ named: true, competitors: ['Ridge Plumbing'] }), answer({ provider: 'chatgpt', webSearch: false, sources: [{ url: 'https://yelp.com/x' }] })]);
+  // Batch 6 fix A: the input has a scored Check, so "one check row, never also a health row" is really tested.
+  const g = grade([answer({ named: true, competitors: ['Ridge Plumbing'] }), answer({ provider: 'chatgpt', webSearch: false, sources: [{ url: 'https://yelp.com/x' }] })], {
+    results: [{ id: 'title-city-service', result: 'pass', detail: '' }],
+  });
   const text = reportCsvFor(g);
   const real = text.trim().split('\r\n');
   assert.equal(real[0], CSV_COLUMNS.join(','));
@@ -217,7 +232,17 @@ test('13.4, batch 5 K17: one header row first; the report\'s own columns on ever
   // Batch 5 fix B: rows are read by their section column, never by text that may also sit in another column.
   const answerRows = csvSection(text, 'answer');
   assert.equal(answerRows.length, 2, 'one row per answer that came back, no more');
-  assert.ok(csvSection(text, 'health').length >= 40);
+  // Batch 6 item 7a: a scored Check is one "check" row, never also a "health" row, and the Free listing group is out.
+  const health = csvSection(text, 'health');
+  assert.ok(health.length >= 1);
+  assert.equal(health.some(r => CHECK_ROW_NAMES.has(r.item)), false, 'no check counted twice');
+  assert.equal(health.some(r => r.group === 'Free listing'), false);
+  const titleRows = csvSection(text, 'check').filter(r => r.item === 'Page title names your city and service');
+  assert.equal(titleRows.length, 1, 'the check is one "check" row');
+  assert.deepEqual([titleRows[0].status, titleRows[0].points_earned, titleRows[0].points_possible], ['Pass', '7', '7']);
+  assert.equal(health.some(r => r.item === 'Page title names your city and service'), false, 'and never also a health row');
+  for (const r of csvSection(text, 'check')) assert.ok(['Pass', 'Partly', 'Needs work', 'Not checked'].includes(r.status), r.status);
+  for (const r of parseCsv(text).slice(1)) assert.ok(r[4] === '' || /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(r[4]), r[4]);
   const claude = answerRows.find(r => r.engine === 'Claude');
   assert.deepEqual([claude.model, claude.web_search, claude.named], ['claude-test', 'yes', 'yes']);
   // K3: an answer from memory lists no cited sites.
@@ -225,7 +250,7 @@ test('13.4, batch 5 K17: one header row first; the report\'s own columns on ever
   assert.deepEqual([chatgpt.model, chatgpt.web_search, chatgpt.named, chatgpt.answer, chatgpt.sites_cited], ['claude-test', 'no', 'no', '1. Some answer', '']);
   const ridge = csvSection(text, 'named').find(r => r.item === 'Ridge Plumbing');
   assert.equal(ridge.detail, '1 of 2');
-  assert.ok(csvSection(text, 'health').some(r => r.group === 'Website: Search basics'), 'the cluster is named with its group');
+  assert.ok(csvSection(text, 'health').every(r => r.group !== ''), 'every health row names its group');
   // Every row has every column.
   for (const row of parseCsv(text)) assert.equal(row.length, CSV_COLUMNS.length);
 });
@@ -235,7 +260,9 @@ test('13.4: the print page opens every answer and the print stylesheet hides the
   const html = printPage(g);
   assert.equal(html.includes('<details>'), false, 'every answer is open');
   assert.match(html, /<section class="grade-report grade-print">/);
-  assert.match(html, /<p class="grade-prepared-by">Prepared by Acme<\/p>/);
+  // Batch 6 item 2: "Prepared by" is the title box's kicker.
+  assert.match(html, /<span class="grade-eyebrow-sub grade-prepared-by">Prepared by Acme<\/span>/);
+  assert.equal(html.includes('Report &middot; First Answer Pages'), false);
   assert.match(html, /<meta name="robots" content="noindex, nofollow">/, 'still noindex');
   const css = await fs.readFile(fileURLToPath(new URL('../public/css/style.css', import.meta.url)), 'utf8');
   const prints = [...css.matchAll(/@media print \{([\s\S]*?)\n\}/g)].map(m => m[1]).join('\n');
@@ -244,7 +271,8 @@ test('13.4: the print page opens every answer and the print stylesheet hides the
   assert.match(prints, /animation: none !important/);
   assert.match(prints, /\.health-orb-host/);
   assert.match(prints, /\.grade-download[\s\S]*form/);
-  assert.match(prints, /break-before: page/);
+  // Batch 6 item 1: no forced page break anywhere (the report runs on to 6 to 8 pages).
+  assert.equal(/break-before: page/.test(prints), false);
 });
 
 test('13.5: "Prepared by" is text only, one line, at most 60 characters, and escaped everywhere', () => {
@@ -316,9 +344,13 @@ test('K1: an answer stored without its question never shows "undefined"; it fall
 test('K2: a passed check whose details could not be read has the same tip on its card as in the health map', () => {
   const g = grade([answer()], { results: [RESULT('tap-to-call', 'pass'), RESULT('address-shown', 'pass')] });
   const html = reportPage(g, { leadGate: false });
-  assert.match(html, /<li class="grade-check pass"><span class="grade-result">Pass<\/span><strong>Tap-to-call phone number<\/strong>[\s\S]*?<p class="hint grade-tip"><strong>Tip:<\/strong> We saw a tap-to-call link but couldn(?:'|&#39;)t read the number\./);
+  // Batch 6 item 4: never a green mark next to "but": both say "Partly", with the same tip; the points don't change.
+  assert.match(html, /<li class="grade-check partly"><span class="grade-result">Partly<\/span><strong>Tap-to-call phone number<\/strong><br><span class="grade-points">4 of 4 points<\/span>[\s\S]*?<p class="hint grade-tip"><strong>Tip:<\/strong> We saw a tap-to-call link but couldn(?:'|&#39;)t read the number\./);
   assert.match(html, /<strong class="health-row-name">Tap-to-call phone number:<\/strong> <span class="health-status">Found a link, but not the number<\/span>/);
-  assert.match(html, /<li class="health-row health-good"[^>]*>[\s\S]{0,200}Tap-to-call phone number:/);
+  assert.match(html, /<li class="health-row health-partly"><span class="health-sym" aria-hidden="true">!<\/span><strong class="health-row-name">Tap-to-call phone number:/);
+  assert.equal(/<li class="health-row health-good">(?:(?!<\/li>).)*but not/.test(html), false, 'no green mark next to "but"');
+  // The CSV says the same word for the check.
+  assert.ok(csvSection(reportCsvFor(g), 'check').some(r => r.item === 'Tap-to-call phone number' && r.status === 'Partly' && r.points_earned === '4'));
 });
 
 test('K4: with "Prepared by" set, the printout has none of our sales lines and one "Powered by" line', () => {
@@ -348,9 +380,11 @@ test('K5, K6, K7: the print stylesheet runs sections on, hides screen-only words
   const css = await fs.readFile(fileURLToPath(new URL('../public/css/style.css', import.meta.url)), 'utf8');
   const prints = [...css.matchAll(/@media print \{([\s\S]*?)\n\}/g)].map(m => m[1]).join('\n');
   assert.equal(/\.grade-report > section, \.grade-full > section \{ break-before: page; \}/.test(prints), false, 'no break per section');
-  assert.match(prints, /\.grade-kit \{ break-before: page; \}/);
+  // Batch 6 item 1: no forced page break at all, and groups flow (only single rows and cards are kept whole).
+  assert.equal(/break-before: page/.test(prints), false);
   assert.match(prints, /\.grade-check,[^{]*\{ break-inside: avoid; \}/);
-  assert.match(prints, /details > summary, \.copy-btn, \.grade-remove, \.grade-meta a \{ display: none !important; \}/);
+  assert.equal(/\.health-group[,\s][^{]*\{ break-inside: avoid/.test(prints), false, 'a whole health group is never kept on one page');
+  assert.match(prints, /details > summary, \.copy-btn, \.grade-remove \{ display: none !important; \}/);
   assert.match(prints, /\.health-orb-name, \.health-orb-score \{ stroke: none !important; paint-order: normal !important;/);
   const g = grade([answer()], { results: [RESULT('business-labeled', 'fail')] });
   const print = printPage(g);
@@ -381,7 +415,8 @@ test('K10, K11, K12, K13: one name per check; the kit is linked; boxes already d
   assert.ok(html.includes('<h3>A short info file for AI (llms.txt)</h3>'));
   assert.equal(html.includes('Business label for AI'), false);
   // K11: the full report points at the kit, with a link.
-  assert.ok(html.includes('(<a href="#kit-label">the code is in Your fix kit, at the end of this report</a>)'));
+  // Batch 6 nit 11: lower case.
+  assert.ok(html.includes('(<a href="#kit-label">the code is in your fix kit, at the end of this report</a>)'));
   assert.equal(html.includes('in your full report)'), false);
   // K12: boxes for checks that passed.
   assert.equal((html.match(new RegExp(ALREADY_HAVE.replace(/[.]/g, '\\.'), 'g')) ?? []).length, 2);
@@ -405,7 +440,7 @@ test('K15, K16: the share-of-voice heading says where the answers came from; evi
   assert.equal(answersFromLine(g), '3 Claude answers plus 1 from ChatGPT and 1 from Perplexity.');
   assert.ok(voiceSection(g).includes('<p class="hint">3 Claude answers plus 1 from ChatGPT and 1 from Perplexity.</p>'));
   assert.equal(answersFromLine(grade([answer(), answer()])), '');
-  assert.equal(evidence(answer({ model: 'claude-sonnet-4-5' }), 'Claude'), `Evidence: Claude (model claude-sonnet-4-5), asked ${evidenceTime(AT)}, with a live web search.`);
+  assert.equal(evidence(answer({ model: 'claude-sonnet-4-5' }), 'Claude'), `Evidence: Claude claude-sonnet-4-5, ${evidenceTime(AT)}, live web search on.`);
 });
 
 test('K18, K19, K23: plain button names and sentences about the reader; who can see the report', async () => {
@@ -420,4 +455,133 @@ test('K18, K19, K23: plain button names and sentences about the reader; who can 
     assert.ok(text.length <= 160, text);
     assert.equal(/guarantee|\$\d|colour|centre|will (?:name|recommend)/i.test(text), false, text);
   }
+});
+
+// ---- Batch 6 (batch6-fixes-2026-11-25.md, from review-2026-11-25-batch5.md and review-2026-11-25-batch5-reader.md) --
+
+/** Every sentence of a text, split at its ends. */
+const sentencesOf = text => String(text).split(/(?<=[.!?])\s+/).filter(Boolean);
+
+test('batch 6 item 1: in print the map is small and first, answers print once, and the cards list only what needs work', async () => {
+  const css = await fs.readFile(fileURLToPath(new URL('../public/css/style.css', import.meta.url)), 'utf8');
+  const prints = [...css.matchAll(/@media print \{([\s\S]*?)\n\}/g)].map(m => m[1]).join('\n');
+  // The map has a print width limit small enough to share page 1 with the score box.
+  const width = /\.health-map \{[^}]*max-width: ([\d.]+)rem/.exec(prints);
+  assert.ok(width, 'the map has a print width limit');
+  assert.ok(Number(width[1]) <= 18, `${width[1]}rem`);
+  assert.match(prints, /\.health-map \{[^}]*order: -1/, 'the map comes before the list on paper');
+  assert.match(prints, /\.grade-ai details, \.grade-ai \.grade-answer \{ display: none !important; \}/);
+  assert.match(prints, /\.grade-check\.pass, \.grade-check\.not_checked \{ display: none !important; \}/);
+  assert.match(prints, /\.grade-print-only \{ display: block !important; \}/);
+  assert.match(css, /\n\.grade-print-only \{ display: none; \}/, 'the paper-only line is hidden on screen');
+  // "What AI says" keeps its summary and the names; the full text is in "Every answer".
+  const g = grade([answer({ named: true, competitors: ['Ridge Plumbing'] })], { results: [RESULT('business-labeled', 'fail')] });
+  const print = printPage(g);
+  assert.ok(print.includes(PRINT_CARDS_NOTE));
+  const whatAiSays = /<section class="grade-ai">[\s\S]*?<\/section>/.exec(print)?.[0] ?? '';
+  assert.ok(whatAiSays.includes('Ridge Plumbing'));
+  assert.ok(/<section class="grade-all-answers">[\s\S]*grade-answer/.test(print), 'the full answer is in "Every answer"');
+});
+
+test('batch 6 item 2: "Prepared by" is the kicker, and the agency report has no Free listing group at all', async () => {
+  const g = grade([answer()], { preparedBy: 'Harbor Digital Marketing', results: [RESULT('business-labeled', 'fail')] });
+  const print = printPage(g);
+  assert.ok(print.includes('<span class="grade-eyebrow-sub grade-prepared-by">Prepared by Harbor Digital Marketing</span>'));
+  assert.equal(print.includes('Report &middot; First Answer Pages'), false);
+  for (const text of ['Listed on First Answer Pages', 'Verified stamp', 'Listing matches your website', 'Listing links to your website',
+    'Free listing', 'i = about your free listing', 'data-main="listing"']) {
+    assert.equal(print.includes(text), false, text);
+  }
+  // Batch 6 fix A: the page is escaped ("couldn&#39;t"), so the intro is compared as it is written in the page.
+  assert.ok(print.includes(`<p class="hint health-intro">${MAP_INTRO_NO_LISTING.replace(/'/g, '&#39;')}</p>`), 'the intro without the listing line');
+  assert.equal((print.match(/<g class="health-branch" data-main="/g) ?? []).length, 12, 'six nodes in each of the two drawings');
+  assert.ok(print.includes(`<p class="hint grade-powered">${POWERED_BY}</p>`));
+  // The model itself leaves the group out, so the CSV follows.
+  const model = healthModel(g, { agency: true });
+  assert.equal(model.mains.some(m => m.id === 'listing'), false);
+  assert.equal(model.mains.length, 6);
+  assert.ok(healthModel(g).mains.some(m => m.id === 'listing'), 'our own report keeps it');
+  // Without "Prepared by" the kicker and the listing group stay.
+  const ours = printPage(grade([answer()]));
+  assert.ok(ours.includes('Report &middot; First Answer Pages'));
+  assert.ok(ours.includes('Free listing'));
+  // The CSV never has the Free listing group, with or without "Prepared by".
+  for (const x of [g, { ...g, preparedBy: '' }]) {
+    const csv = reportCsvFor(x);
+    assert.equal(csv.includes('Listed on First Answer Pages'), false);
+    assert.equal(csv.includes('claim it below'), false);
+    assert.equal(csvSection(csv, 'health').some(r => r.group === 'Free listing'), false);
+  }
+});
+
+test('batch 6 item 3: no printed sentence is left broken; the footer says what to do in words', () => {
+  const print = printPage(grade([answer()]));
+  assert.equal(print.includes('so after you make fixes'), false);
+  const meta = /<p class="grade-meta">[\s\S]*?<\/p>/.exec(print)?.[0] ?? '';
+  assert.ok(meta.includes(PRINT_FOOTER_TAIL));
+  assert.equal(/<a /.test(meta), false, 'no link left in the printed footer');
+  assert.equal(PRINT_FOOTER_TAIL, 'so check again after you make fixes.');
+  // On screen the footer keeps its link.
+  assert.match(reportPage(grade([answer()]), { leadGate: false }), /so <a href="\/grade\?from=[^"]+">run a full new check<\/a> after you make fixes\./);
+});
+
+test('batch 6 item 5: "Who AI named" and "Sites AI used" come right after the score box, with one line from the real counts', () => {
+  const g = grade([
+    answer({ named: true, competitors: ['Hollow Creek', 'Maple Street'] }), answer({ named: true, competitors: ['Hollow Creek', 'Maple Street'] }),
+    answer({ competitors: ['Hollow Creek', 'Maple Street'] }),
+    answer({ provider: 'chatgpt', named: true, competitors: ['Hollow Creek', 'Maple Street'] }),
+    answer({ provider: 'perplexity', competitors: ['Hollow Creek', 'Maple Street', 'Ridge'] }),
+  ]);
+  assert.equal(voiceSummary(g), 'Two competitors were named in every answer. You were named in 3 of 5.');
+  assert.equal(voiceSummary(grade([answer({ competitors: ['Ridge'] }), answer({ named: true })])), 'You were named in 1 of 2.');
+  assert.equal(voiceSummary(grade([answer()])), '', 'one answer: nothing to sum up');
+  const html = reportPage(g, { leadGate: false });
+  assert.ok(html.includes('<p class="grade-voice-summary">Two competitors were named in every answer. You were named in 3 of 5.</p>'));
+  const score = html.indexOf('<div class="grade-top">');
+  const voice = html.indexOf('<section class="grade-voice">');
+  const sites = html.indexOf('<section class="grade-sites">');
+  const health = html.indexOf('<section class="health"');
+  assert.ok(score < voice && voice < sites && sites < health, 'score box, then who AI named, then sites, then the health map');
+  for (const s of sentencesOf(voiceSummary(g))) assert.ok(s.length <= 160, s);
+});
+
+test('batch 6 item 8: "How we checked" from the real counts, a snapshot, never a promise', () => {
+  const g = grade([
+    answer({ named: true }), answer(), answer(), answer({ provider: 'chatgpt' }), answer({ provider: 'perplexity' }),
+  ]);
+  assert.match(howWeChecked(g), /^We asked one question and got answers from Claude 3 times, ChatGPT once,? and Perplexity once\. /);
+  assert.ok(howWeChecked(g).endsWith(SNAPSHOT_LINE));
+  assert.equal(howWeChecked(grade([answer()])), `We asked one question and got answers from Claude once. ${SNAPSHOT_LINE}`);
+  assert.equal(howWeChecked(grade([])), '');
+  const html = reportPage(g, { leadGate: false });
+  assert.ok(html.includes(`<p class="hint grade-method"><strong>How we checked:</strong> ${howWeChecked(g)}</p>`));
+  assert.ok(printPage(g).includes('<strong>How we checked:</strong>'));
+  for (const s of sentencesOf(howWeChecked(g))) {
+    assert.ok(s.length <= 160, s);
+    assert.equal(/guarantee|will (?:name|recommend)|\$\d|colour|centre/i.test(s), false, s);
+  }
+});
+
+test('batch 6 item 9: the share box says which page is for clients', () => {
+  const html = reportPage(grade([answer()]), { leadGate: false });
+  assert.ok(html.includes(PRINT_FOR_CLIENTS));
+  assert.equal(PRINT_FOR_CLIENTS, 'Use the print page for clients; the web page above is for you.');
+});
+
+test('batch 6 item 10: an answer without its question, next to answers with one, gets a neutral heading', () => {
+  const mixed = grade([answer({ named: true }), answer({ provider: 'chatgpt', prompt: undefined })]);
+  const html = reportPage(mixed, { leadGate: false });
+  const every = /<section class="grade-all-answers">[\s\S]*?<\/section>/.exec(html)?.[0] ?? '';
+  assert.ok(every.includes(`<strong>${NO_QUESTION_SAVED}</strong>`));
+  assert.equal((every.match(/<strong>Who are the best plumbers in Nashville, TN\? Name your top 5\.<\/strong>/g) ?? []).length, 1, 'the real question once');
+  // When no answer kept its question, the question asked is used (batch 5 K1).
+  const none = reportPage(grade([answer({ prompt: undefined })]), { leadGate: false });
+  assert.equal(none.includes(NO_QUESTION_SAVED), false);
+});
+
+test('batch 6 nits 11 to 13: lower-case "your fix kit", lining numerals, and "the map" instead of "the lights"', async () => {
+  assert.equal(failedNote(13), "13 checks make up your score. The map also shows extra checks that don't count toward your score.");
+  assert.equal(failedNote(1).startsWith('1 check makes up your score.'), true);
+  const css = await fs.readFile(fileURLToPath(new URL('../public/css/style.css', import.meta.url)), 'utf8');
+  assert.match(css, /font-variant-numeric: lining-nums;/);
 });

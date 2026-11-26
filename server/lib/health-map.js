@@ -33,6 +33,8 @@ export const MAP_TITLE = 'Health of your setup';
 // J10 ("partway", "yellow") and J4/W7 (the "i" of the free listing is explained).
 // Batch 5 K19: about the reader, not about us.
 export const MAP_INTRO = "Every check we ran, at a glance. Green is good, yellow is partway there, red needs work, gray means we couldn't check it. i = about your free listing, not part of your health.";
+/** Batch 6 item 2: the intro without the free listing line, for a report with no Free listing group. */
+export const MAP_INTRO_NO_LISTING = "Every check we ran, at a glance. Green is good, yellow is partway there, red needs work, gray means we couldn't check it.";
 export const CLICK_HINT = 'Click a circle to see its checks.';
 /** Shown under the "Speaks AI's language" cluster heading, so the reader knows where it counts (J6, K19: no "yet"). */
 export const SPEAKS_NOTE = "These checks don't count toward your score.";
@@ -152,6 +154,9 @@ export function checkTip(id, input, found) {
  * health map's plain name, with the technical term in brackets. The service-area name for a business with no
  * storefront. Null for a check the map doesn't show (the caller keeps its own label).
  */
+/** Batch 6 item 7a: the names of the health rows that show a Check (the CSV has a "check" row for each of those). */
+export const CHECK_ROW_NAMES = Object.freeze(new Set(SUB_NODES.filter(d => d.check).flatMap(d => [d.name, d.serviceAreaName].filter(Boolean))));
+
 export function checkName(id, input) {
   const def = SUB_NODES.find(d => d.check === id);
   if (!def) return null;
@@ -165,10 +170,10 @@ function checkSub(def, result, input, found) {
   const r = result?.result;
   if (r === 'pass') {
     // The same facts the listing card uses (J1, J2): "Good" only when what the page shows could also be read.
-    // Batch 5 K2: one verdict per check. The check passed, so the row is green like its score card; what could not be
-    // read is a tip, and the score card shows the same tip (checkTip).
+    // Batch 6 item 4: never a green mark next to "but". A check that passed but whose details could not be read is
+    // "partly" here, and its score card says "Partly" with the same tip (checkTip). The points don't change.
     const tip = checkTip(def.check, input, found);
-    if (tip) return { ...base, status: 'good', label: tip.label, reason: tip.reason };
+    if (tip) return { ...base, status: 'partly', label: tip.label, reason: tip.reason };
     return { ...base, status: 'good', label: def.words?.pass ?? 'Good' };
   }
   if (r === 'fail') return { ...base, status: 'missing', label: def.words?.fail ?? 'Needs work' };
@@ -287,7 +292,8 @@ export function healthModel(grade, { score = null, aiRows = [], aiStatus = 'not_
   const rows = new Map(signalRows(old ? undefined : grade.signals).map(r => [r.path, r]));
   const notListed = rows.get('listing.listed')?.needsClaim === true;
   const input = grade?.input ?? {};
-  const mains = MAIN_NODES.map(node => {
+  // Batch 6 item 2: an agency's report (Prepared by) has no Free listing group at all: no bubble, no rows, no note.
+  const mains = MAIN_NODES.filter(node => !(agency && node.id === 'listing')).map(node => {
     let subs;
     if (node.id === 'ai') {
       subs = aiRows.map(r => ({ name: r.name, cluster: null, status: statusOf(r.status), label: r.label }));
@@ -538,7 +544,7 @@ export function healthMapHtml(model, { full = false, runNew } = {}) {
   const oldNote = model.old ? `\n  <p class="health-note health-old">${reasonHtml(OLD_REPORT_NOTE, runNew)}</p>` : '';
   return `<section class="health" aria-labelledby="health-title">
   <h2 id="health-title">${MAP_TITLE}</h2>
-  <p class="hint health-intro">${h(MAP_INTRO)}</p>${oldNote}
+  <p class="hint health-intro">${h(model.mains.some(m => m.id === 'listing') ? MAP_INTRO : MAP_INTRO_NO_LISTING)}</p>${oldNote}
   <div class="health-layout">
     <div class="health-list">
 ${model.mains.map(m => groupHtml(m, full, runNew)).join('\n')}

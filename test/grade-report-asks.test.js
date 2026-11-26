@@ -179,9 +179,11 @@ test('V100: fewer answers than asks: "and got 2 answers", counted "of the 2"', (
   const carried = render([answer(NAMED_TEXT, { named: true, position: 1, ask: 1 }), answer(NOT_NAMED_TEXT, { ask: 3 })]
     .map(a => ({ ...a, reusedFrom: '2026-11-19T15:00:00.000Z' })));
   assert.match(carried, /<p>We asked Claude 3 times on [^<]*Nov[^<]*19[^<]* and got 2 answers\. Claude named your business in 1 of the 2\.<\/p>/);
-  // Every ask answered: the sentence is as before.
+  // Every ask answered: the sentence is as before. Batch 6 fix A: the check is on the counting sentence itself ("and got
+  // N answers"), since "How we checked" at the end of the report also says "and got answers from ...".
   const all = render([ANSWER_1, ANSWER_2, ANSWER_3]);
-  assert.equal(all.includes('and got'), false);
+  assert.equal(/and got \d+ answers/.test(all), false);
+  assert.ok(all.includes('<p>We just asked Claude 3 times. '), 'the lead line has no "and got" part');
   assert.equal(all.includes('of the 3'), false);
 });
 
