@@ -725,3 +725,5 @@ Not in this batch: Requirements 9.5 to 9.8 (the Verified badge's checked-by, dat
 | `test/grade-o1-notes.test.js` (V157, V203 test) | `>Check again</button>` and "run a new check" in the recheck hint | `>Check again (website only, fast)</button>` and "run a full new check (asks AI again)" | K14 |
 
 New tests: `test/agency-report.test.js` (Z1, Z2, K1, K2, K3, K4, K5-K7, K8, K10-K13, K15, K16, K18, K19, K23), `test/mcp-receipts.test.js` (Z3, Z4, Z5), `test/health-scan.test.js` (K20), `test/website-alive.test.js` (K9).
+
+Fix A (batch5-fix-A-2026-11-25.md): in `reportPage`, the Requirement 13 sections value was renamed `agencySections`, so it no longer clashes with the K4 yes/no `agency` option (a SyntaxError that stopped grade-html.js from loading). `healthModel` gets the yes/no `agency`, as intended. Every other K4 edit (allChecks, checkRow, fixKit, printPage, reportCsvFor, health-map.js listingSub and healthModel, mcp.js) was read again for names declared twice. No other clash was found.

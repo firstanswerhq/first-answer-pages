@@ -1253,13 +1253,13 @@ export function reportPage(storedGrade, opts = {}) {
   });
 
   // Requirement 13 (full report): who AI named across every answer, and the sites the answers used.
-  const agency = full ? `${voiceSection(grade)}\n${sitesSection(grade)}` : '';
+  const agencySections = full ? `${voiceSection(grade)}\n${sitesSection(grade)}` : '';
 
   const body = `<section class="grade-report">
 ${top}
 ${healthMap}
 ${aiFree(grade, { googleLive, requester, now, secondPending })}
-${agency}
+${agencySections}
 ${claim}
 ${searchPreview(grade)}
 ${groupLines(grade, s)}
