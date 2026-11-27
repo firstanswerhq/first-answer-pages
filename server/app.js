@@ -178,6 +178,26 @@ export function createApp(deps = {}) {
     // Tests only: a fake pause before the retry and a short limit for second opinions.
     ...(deps.graderTiming ?? {}),
   });
+  // The monthly watch's reader (addon-monthly-watch): the same grader made with no extra assistants, used only for
+  // `readFree`, so a monthly reading asks the main assistant once and no second opinion. The grader above, its second
+  // opinions and its progress code are untouched.
+  ctx.watchReader = createGrader({
+    guard: ctx.gradeGuard,
+    store,
+    assistantProvider: ctx.assistantProvider,
+    extraAssistants: [],
+    nameChecker: deps.nameChecker !== undefined ? deps.nameChecker : createNameCheck(config),
+    placesLookup: null,
+    bingLookup: null,
+    aiBudget: ctx.aiBudget,
+    safeFetcher: ctx.safeFetcher,
+    draftStore: createDraftStore({ store, clock, newId: ctx.newId }),
+    notifier: ctx.notifier,
+    clock,
+    newId: ctx.newGradeId,
+    config,
+    ...(deps.graderTiming ?? {}),
+  });
 
   // IndexNow (Bing ping): real sites only; tests send only with their own fetch.
   if (deps.indexNow) {

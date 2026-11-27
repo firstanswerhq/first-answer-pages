@@ -2249,10 +2249,58 @@ export function createGrader({
     return found;
   }
 
+  // ---- the monthly watch (addon-monthly-watch task 5) -----------------------------------------------------------------
+
+  /**
+   * One monthly reading: the free question (`freeQuestion(input)`, so the owner's own words are used) asked of the
+   * main assistant once, through the existing `askQuestion`, with no Grade, no extra questions, no lookups and no
+   * website read. The watch builds this on a grader made with no extra assistants, so no second opinion is asked
+   * (askQuestion itself is unchanged). Nothing is stored here and nothing is logged about the answer.
+   * @returns {Promise<{ named: boolean, position: number|null, total: number, competitors: string[],
+   *   state: 'ok'|'limit'|'failed'|'not_connected'|'off' }>}
+   */
+  async function readFree(rawInput) {
+    const none = state => ({ named: false, position: null, total: 0, competitors: [], state });
+    const checked = normalizeGradeInput(rawInput);
+    if (!checked.ok) return none('failed');
+    const { input } = checked;
+    let outcome;
+    try {
+      outcome = await askQuestion({ input, prompt: freeQuestion(input), existing: [], asks: 1 });
+    } catch {
+      log('watch-read-failed');
+      return none('failed');
+    }
+    const entry = (outcome.entries ?? []).find(e => isEntry(e) && !isSecondOpinion(e));
+    if (outcome.mainState !== 'ok' || !entry) return none(outcome.mainState === 'ok' ? 'failed' : outcome.mainState);
+    return {
+      named: entry.named === true,
+      position: Number.isInteger(entry.position) ? entry.position : null,
+      total: Number.isInteger(entry.total) ? entry.total : 0,
+      competitors: Array.isArray(entry.competitors) ? entry.competitors.filter(n => typeof n === 'string') : [],
+      state: 'ok',
+    };
+  }
+
+  /**
+   * Who may start a watch (requirement 2): a finished Grade whose business has claimed a listing, either a Draft made
+   * from this Grade, or a published listing for the same business (`listingInfoFor`).
+   * @returns {Promise<boolean>}
+   */
+  async function watchEligible(id) {
+    const grade = await get(id);
+    if (!grade || grade.status !== 'done' || !grade.input || typeof grade.input !== 'object') return false;
+    const drafts = [...(Array.isArray(grade.draftIds) ? grade.draftIds : []), grade.draftId].filter(Boolean);
+    if (drafts.length > 0) return true;
+    return listingInfoFor(grade.input).state === 'listed';
+  }
+
   return {
     start,
     repeatCheck,
     setPreparedBy,
+    readFree,
+    watchEligible,
     run: id => { startRun(id); return active.get(id) ?? Promise.resolve(); },
     get,
     peek: id => (live.has(id) ? structuredClone(live.get(id)) : undefined),

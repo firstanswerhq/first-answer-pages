@@ -85,6 +85,21 @@ export function createMockNotifier({ maxSent } = {}) {
       notifier.humanChecks.push(humanCheckCounts(counts));
       while (notifier.humanChecks.length > cap) notifier.humanChecks.shift();
     },
+    /**
+     * Monthly watch emails to an owner (addon-monthly-watch): recorded in memory only. `failOwnerSends` makes the next
+     * that many sends fail (sent: false), for the "3 failed sends pause the watch" rule.
+     */
+    owners: [],
+    failOwnerSends: 0,
+    async sendToOwner({ to, subject, text, headers } = {}) {
+      if (notifier.failOwnerSends > 0) {
+        notifier.failOwnerSends -= 1;
+        return { notifier: 'mock', sent: false, error: 'mock_failure' };
+      }
+      notifier.owners.push({ to, subject, text, headers: { ...(headers ?? {}) } });
+      while (notifier.owners.length > cap) notifier.owners.shift();
+      return { notifier: 'mock', sent: true };
+    },
   };
   return notifier;
 }
@@ -111,6 +126,14 @@ export function createConsoleNotifier({ write = line => process.stdout.write(lin
     async notifyHumanCheck(counts) {
       write(JSON.stringify({ event: 'grader-human-check', ...humanCheckCounts(counts) }) + '\n');
     },
+    /**
+     * Monthly watch email to an owner: nothing is sent (the console can't deliver email). One line says an email was
+     * due, with no address, subject or text (an owner's email is never logged).
+     */
+    async sendToOwner() {
+      write(`${JSON.stringify({ event: 'watch-email' })}\n`);
+      return { notifier: 'console', sent: false };
+    },
   };
 }
 
@@ -132,7 +155,25 @@ export function createNoneNotifier() {
     async notifyHumanCheck() {
       return { notifier: 'none', sent: false };
     },
+    async sendToOwner() {
+      return { notifier: 'none', sent: false };
+    },
   };
+}
+
+/** The only headers an owner's email may carry (the unsubscribe pair, RFC 2369 and RFC 8058). */
+export const OWNER_HEADERS = Object.freeze(['List-Unsubscribe', 'List-Unsubscribe-Post']);
+
+/** The allowed headers, as one-line strings (no CR or LF, so no header can be added through a value). */
+function ownerHeaders(headers) {
+  const out = {};
+  for (const name of OWNER_HEADERS) {
+    const v = headers?.[name];
+    if (typeof v !== 'string') continue;
+    const line = v.replace(/[\r\n\u0000-\u001F\u007F]/g, '').trim();
+    if (line !== '' && line.length <= 1000) out[name] = line;
+  }
+  return out;
 }
 
 const RESEND_URL = 'https://api.resend.com/emails';
@@ -248,7 +289,42 @@ export function createResendNotifier({ apiKey, from, adminEmail, fetch: fetchImp
         ].join('\n'),
       });
     },
+    sendToOwner,
   };
+
+  /**
+   * One plain-text email to a business owner (the monthly watch, addon-monthly-watch requirement 12), to one valid
+   * address only, with only the unsubscribe headers. Never throws; never puts the key or the address in its result;
+   * failures give the error name only. The same time limit as the admin emails.
+   */
+  async function sendToOwner({ to, subject, text, headers } = {}) {
+    const fail = error => ({ notifier: 'resend', sent: false, error });
+    const address = typeof to === 'string' ? to.trim() : '';
+    if (!address || address.length > 254 || !EMAIL_RE.test(address)) return fail('invalid_to');
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const extra = ownerHeaders(headers);
+      const res = await fetchImpl(RESEND_URL, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from,
+          to: [address],
+          subject: plainText(subject).replace(/\s+/g, ' ').slice(0, 200),
+          text: plainText(text),
+          ...(Object.keys(extra).length > 0 ? { headers: extra } : {}),
+        }),
+        signal: controller.signal,
+      });
+      if (!res.ok) return fail(`http_${res.status}`);
+      return { notifier: 'resend', sent: true };
+    } catch (err) {
+      return fail(err?.name === 'AbortError' ? 'TimeoutError' : (err?.name ?? 'Error'));
+    } finally {
+      clearTimeout(timer);
+    }
+  }
 
   /** One plain-text email to the admin address. Never throws; failures give the error name only. */
   async function sendToAdmin({ subject, text }) {
