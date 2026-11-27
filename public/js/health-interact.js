@@ -182,7 +182,6 @@ function initInteract() {
     ctx.lineWidth = 2 * scale;
     ctx.stroke();
 
-    // Name text
     ctx.fillStyle = TEXT_DIM;
     ctx.font = `${Math.round(14 * scale)}px system-ui, sans-serif`;
     ctx.textAlign = 'center';
@@ -195,7 +194,6 @@ function initInteract() {
     const pulse = 1 + 0.06 * Math.sin(pulseAngle) * t;
     const r = node.r * pulse;
 
-    // Outer glow rings
     for (let i = 3; i > 0; i--) {
       ctx.beginPath();
       ctx.arc(node.x, node.y, r + i * 8 * scale * t, 0, Math.PI * 2);
@@ -206,29 +204,24 @@ function initInteract() {
     }
     ctx.globalAlpha = 1;
 
-    // Main ring
     ctx.beginPath();
     ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
     ctx.strokeStyle = color;
     ctx.lineWidth = 3 * scale * t;
     ctx.stroke();
 
-    // Fill with semi-transparent dark
     ctx.beginPath();
     ctx.arc(node.x, node.y, r - 2, 0, Math.PI * 2);
     ctx.fillStyle = BG_DARK;
     ctx.globalAlpha = 0.7 * t;
     ctx.fill();
     ctx.globalAlpha = 1;
-
-    // Name text (brighter when active)
     ctx.fillStyle = TEXT_LIGHT;
     ctx.font = `bold ${Math.round(16 * scale)}px system-ui, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(node.name, node.x, node.y - 8 * scale);
 
-    // Status label
     ctx.fillStyle = color;
     ctx.font = `${Math.round(13 * scale)}px system-ui, sans-serif`;
     ctx.fillText(node.label, node.x, node.y + 14 * scale);
@@ -246,7 +239,6 @@ function initInteract() {
       const baseAngle = subs.length > 1
         ? node.deg - spread / 2 + (k * spread) / (subs.length - 1)
         : node.deg;
-      // Slight orbital drift for life
       const angle = baseAngle + Math.sin(subOrbitAngle + k * 0.7) * 3;
       const [sx, sy] = polar(node.x, node.y, rOrbit, angle);
       sub._drawX = sx;
@@ -256,7 +248,6 @@ function initInteract() {
       const color = COLORS[sub.status] || COLORS.not_checked;
       const isActiveSub = activeSub && activeSub.name === sub.name;
 
-      // Connection line from main to sub
       ctx.beginPath();
       const [lx1, ly1] = polar(node.x, node.y, node.r + 4 * scale, angle);
       const [lx2, ly2] = polar(node.x, node.y, rOrbit - sub.r * t - 2, angle);
@@ -270,19 +261,15 @@ function initInteract() {
       ctx.setLineDash([]);
       ctx.globalAlpha = 1;
 
-      // Sub node circle
       const subPulse = isActiveSub ? 1 + 0.08 * Math.sin(pulseAngle * 1.5) : 1;
       const sr = sub.r * t * subPulse;
 
-      // Glow
       ctx.beginPath();
       ctx.arc(sx, sy, sr + 4 * scale, 0, Math.PI * 2);
       ctx.fillStyle = color;
       ctx.globalAlpha = (isActiveSub ? 0.2 : 0.08) * t;
       ctx.fill();
       ctx.globalAlpha = 1;
-
-      // Ring
       ctx.beginPath();
       ctx.arc(sx, sy, sr, 0, Math.PI * 2);
       ctx.strokeStyle = color;
@@ -292,15 +279,12 @@ function initInteract() {
       }
       ctx.stroke();
 
-      // Fill
       ctx.beginPath();
       ctx.arc(sx, sy, sr - 1, 0, Math.PI * 2);
       ctx.fillStyle = BG_DARK;
       ctx.globalAlpha = 0.8 * t;
       ctx.fill();
       ctx.globalAlpha = 1;
-
-      // Status symbol
       const symbols = { good: '✓', partly: '!', missing: '✕', not_checked: '?', info: 'i' };
       ctx.fillStyle = color;
       ctx.font = `bold ${Math.round(12 * scale * t)}px system-ui, sans-serif`;
