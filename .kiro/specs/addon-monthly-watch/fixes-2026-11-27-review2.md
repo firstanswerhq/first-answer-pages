@@ -1,0 +1,6 @@
+# Monthly watch: second review findings (2026-11-27)
+
+1. IMPORTANT. A repeat start on a Grade that already has a watch must not send the visitor to that watch's page (it holds the stop token). On `existing`, show a plain message page: "A monthly check is already set up for this report." No link to the watch, no masked address, no stop button. Only the person who started it (they got the email link) can manage it. Test: second start on the same Grade returns the message and the body holds no watch id or stop token.
+2. Wording when email is off (alerts show on the watch page only): do not say "We will tell you..." or "We email you only if...". Say "If the answer changes, it will show on your watch page." Test both modes.
+3. The assistant name: use the provider's real label (assistantLabel) on pages and emails instead of the hard-coded "Claude"; remove the dead code if you decide not to use it. Test a non-Claude provider.
+4. When the first ask of a changed reading succeeds and the second hits the daily cap, keep the first answer as the reading and mark the watch "second opinion pending" instead of throwing it away; do not bump runs.count for a postponement. If that is too large, add a log line and a test documenting the current behavior instead.
