@@ -8,13 +8,13 @@ import { readFileSync } from 'node:fs';
 
 import { parseGradeMainAsks, DEFAULT_GRADE_MAIN_ASKS, configFromEnv } from '../server/lib/config.js';
 
-test('E1: GRADE_MAIN_ASKS unset gives 3, with no warning', () => {
+test('E1: GRADE_MAIN_ASKS unset gives 1, with no warning', () => {
   const warnings = [];
   const warn = msg => warnings.push(String(msg));
-  assert.equal(DEFAULT_GRADE_MAIN_ASKS, 3);
-  assert.equal(parseGradeMainAsks(undefined, warn), 3);
-  assert.equal(parseGradeMainAsks('', warn), 3);
-  assert.equal(parseGradeMainAsks('   ', warn), 3);
+  assert.equal(DEFAULT_GRADE_MAIN_ASKS, 1);
+  assert.equal(parseGradeMainAsks(undefined, warn), 1);
+  assert.equal(parseGradeMainAsks('', warn), 1);
+  assert.equal(parseGradeMainAsks('   ', warn), 1);
   assert.deepEqual(warnings, []);
 });
 
@@ -28,10 +28,10 @@ test('E1: GRADE_MAIN_ASKS 1, 2 and 3 are read as given, with no warning', () => 
   assert.deepEqual(warnings, []);
 });
 
-test('E1: GRADE_MAIN_ASKS 0, 4, "x" and other bad values warn without echoing the value and give 3', () => {
+test('E1: GRADE_MAIN_ASKS 0, 4, "x" and other bad values warn without echoing the value and give 1', () => {
   for (const bad of ['0', '4', 'x', '-1', '2.5', '1e0', '03', 'three', '99', 'secret-value-7']) {
     const warnings = [];
-    assert.equal(parseGradeMainAsks(bad, msg => warnings.push(String(msg))), 3, bad);
+    assert.equal(parseGradeMainAsks(bad, msg => warnings.push(String(msg))), 1, bad);
     assert.equal(warnings.length, 1, bad);
     assert.match(warnings[0], /GRADE_MAIN_ASKS/);
     if (bad.length > 1) assert.equal(warnings[0].includes(bad), false, `${bad} is not echoed`);
@@ -46,11 +46,11 @@ test('E1: GRADE_MAIN_ASKS 0, 4, "x" and other bad values warn without echoing th
 
 test('E1: configFromEnv reads gradeMainAsks', () => {
   const quiet = { warn() {} };
-  assert.equal(configFromEnv({}, quiet).gradeMainAsks, 3);
+  assert.equal(configFromEnv({}, quiet).gradeMainAsks, 1);
   assert.equal(configFromEnv({ GRADE_MAIN_ASKS: '1' }, quiet).gradeMainAsks, 1);
   assert.equal(configFromEnv({ GRADE_MAIN_ASKS: '2' }, quiet).gradeMainAsks, 2);
   assert.equal(configFromEnv({ GRADE_MAIN_ASKS: '3' }, quiet).gradeMainAsks, 3);
-  for (const bad of ['0', '4', 'x']) assert.equal(configFromEnv({ GRADE_MAIN_ASKS: bad }, quiet).gradeMainAsks, 3, bad);
+  for (const bad of ['0', '4', 'x']) assert.equal(configFromEnv({ GRADE_MAIN_ASKS: bad }, quiet).gradeMainAsks, 1, bad);
   const warnings = [];
   configFromEnv({ GRADE_MAIN_ASKS: 'secret-value-7' }, { warn: msg => warnings.push(String(msg)) });
   assert.ok(warnings.some(w => w.includes('GRADE_MAIN_ASKS')));
@@ -59,5 +59,5 @@ test('E1: configFromEnv reads gradeMainAsks', () => {
 
 test('E1: the README lists GRADE_MAIN_ASKS with its default', () => {
   const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
-  assert.match(readme, /\| `GRADE_MAIN_ASKS` \| `3` \|/);
+  assert.match(readme, /\| `GRADE_MAIN_ASKS` \| `1` \|/);
 });

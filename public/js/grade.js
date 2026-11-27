@@ -23,6 +23,21 @@ function setupCopyButtons(root) {
   }
 }
 
+// Update the progress bar without a full page swap.
+function updateProgressBar(doneSteps, totalSteps) {
+  const bar = document.querySelector('.scan-progress-fill');
+  const glow = document.querySelector('.scan-progress-glow');
+  const label = document.querySelector('.scan-progress-label');
+  const wrap = document.querySelector('.scan-progress-bar');
+  if (!bar || !label || !wrap) return;
+  const pct = Math.round((doneSteps / totalSteps) * 100);
+  bar.style.width = pct + '%';
+  wrap.style.setProperty('--pct', pct + '%');
+  wrap.setAttribute('aria-valuenow', pct);
+  if (glow) glow.style.left = 'calc(' + pct + '% - 2rem)';
+  label.textContent = pct + '%';
+}
+
 // Replace the page's <main> with the one the server renders now (no full reload).
 async function swapInPage() {
   const res = await fetch(window.location.href, { headers: { Accept: 'text/html' }, credentials: 'same-origin' });
@@ -40,6 +55,7 @@ async function swapInPage() {
 function watchScan(scan) {
   const url = scan.dataset.statusUrl;
   if (!url) return;
+  const totalSteps = parseInt(scan.dataset.totalSteps, 10) || 5;
   let seenSteps = -1;
   let tries = 0;
   const poll = async () => {
@@ -50,6 +66,8 @@ function watchScan(scan) {
         const status = await res.json();
         const changed = status.done || status.steps.length !== seenSteps;
         seenSteps = status.steps.length;
+        // Update progress bar smoothly before swapping
+        updateProgressBar(seenSteps, totalSteps);
         if (changed && (await swapInPage())) {
           if (status.done) return; // the report is showing now
           const next = document.querySelector('[data-grade-scan]');

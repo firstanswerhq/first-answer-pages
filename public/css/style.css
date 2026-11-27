@@ -1041,6 +1041,71 @@ details.advanced summary {
   margin-bottom: 1.25rem;
 }
 
+/* Progress bar */
+.scan-progress-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.scan-progress-bar {
+  position: relative;
+  flex: 1;
+  height: 1rem;
+  background: rgba(100, 116, 139, 0.2);
+  border-radius: 0.5rem;
+  overflow: hidden;
+  border: 1px solid rgba(100, 116, 139, 0.15);
+}
+
+.scan-progress-fill {
+  position: absolute;
+  inset: 0;
+  width: var(--pct, 0%);
+  background: linear-gradient(90deg, #0ea5e9, #67e8f9, #0ea5e9);
+  background-size: 200% 100%;
+  border-radius: 0.5rem;
+  transition: width 0.6s ease-out;
+  animation: scan-shimmer 2s linear infinite;
+}
+
+.scan-progress-glow {
+  position: absolute;
+  top: 0;
+  left: calc(var(--pct, 0%) - 2rem);
+  width: 2rem;
+  height: 100%;
+  background: radial-gradient(ellipse at center, rgba(103, 232, 249, 0.6), transparent);
+  border-radius: 0.5rem;
+  transition: left 0.6s ease-out;
+  animation: scan-pulse 1.5s ease-in-out infinite;
+}
+
+.scan-progress-label {
+  font-weight: 700;
+  font-size: 0.95rem;
+  min-width: 2.5rem;
+  text-align: right;
+  color: #67e8f9;
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes scan-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes scan-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scan-progress-fill { animation: none; }
+  .scan-progress-glow { animation: none; opacity: 0.5; }
+}
+
 /* Scanning progress */
 .grade-steps {
   list-style: none;

@@ -44,9 +44,9 @@ export const AI_FAILED = "AI didn't answer this time. You can run the check agai
 
 const STALE_AFTER_MS = 4 * 60 * 1000;
 const REUSE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
-const AI_TIMEOUT_MS = 120 * 1000;
+const AI_TIMEOUT_MS = 45 * 1000;
 const NOTIFY_TIMEOUT_MS = 5 * 1000;
-const SECOND_OPINION_TIMEOUT_MS = 45 * 1000; // a second opinion never holds up the report
+const SECOND_OPINION_TIMEOUT_MS = 15 * 1000; // a second opinion never holds up the report
 const RETRY_DEFAULT_SECONDS = 5; // pause before the one retry after a 429 or 529 with no retry-after
 const RETRY_MAX_SECONDS = 20;
 const DEFAULT_MAX_RUNNING = 20;
