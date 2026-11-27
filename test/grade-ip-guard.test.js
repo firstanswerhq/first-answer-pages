@@ -109,6 +109,21 @@ test('Property 1: IPv6 public-address test matches the range table (all spelling
   }), { numRuns: 500 });
 });
 
+test('Property 1: compressed embedded-IPv4 forms (mapped, compatible, NAT64) match the oracle', () => {
+  fc.assert(fc.property(fc.constantFrom('mapped', 'compat', 'nat64'), v4Number, (kind, n) => {
+    const hi = Math.floor(n / 65536);
+    const lo = n % 65536;
+    const groups = kind === 'mapped' ? [0, 0, 0, 0, 0, 0xffff, hi, lo]
+      : kind === 'compat' ? [0, 0, 0, 0, 0, 0, hi, lo]
+        : [0x64, 0xff9b, 0, 0, 0, 0, hi, lo];
+    const prefix = kind === 'mapped' ? '::ffff:' : kind === 'compat' ? '::' : '64:ff9b::';
+    const expected = oracleV6(groups);
+    assert.equal(expected, oracleV4(BigInt(n)));
+    assert.equal(isPublicAddress(prefix + dotted(n)), expected, prefix + dotted(n));
+    assert.equal(isPublicAddress(prefix + hex(hi) + ':' + hex(lo)), expected);
+  }), { numRuns: 300 });
+});
+
 test('Property 1: anything that is not a clean address is refused', () => {
   fc.assert(fc.property(fc.string(), s => {
     // Random strings are almost never addresses; if net.isIP rejects them they must be false.

@@ -32,6 +32,14 @@ services:
         value: "on"
       - key: GRADE_AI_CALLS_PER_DAY
         value: "60"
+      - key: GRADE_NETWORK_PER_DAY
+        value: "20"
+      # The human check on the AI Visibility Check form (Cloudflare Turnstile).
+      # Off until both are set. Deleting either one turns it off again.
+      - key: TURNSTILE_SITE_KEY
+        sync: false
+      - key: TURNSTILE_SECRET_KEY
+        sync: false
       - key: SITE_NAME
         sync: false
       # Shown on the About and Privacy pages and in the footer.

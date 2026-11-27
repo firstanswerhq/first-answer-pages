@@ -11,7 +11,10 @@
  * Record shape (trust.json, keyed by listing id):
  *   { plan: 'founder'|'yearly', paidAt, paidThrough|null, paymentRef,
  *     pendingCheckout, phone: { number, at }, identity: { ref, at, name },
- *     paymentIntents, pendingIdCheck, idAttempts, idFailed, removedAt, refundedAt, test }
+ *     paymentIntents, pendingIdCheck, idAttempts, idFailed, removedAt, refundedAt, test,
+ *     waivedAt, waivedBy }
+ * `waivedAt` and `waivedBy: 'admin'` are set when the admin waives the fee: the listing counts as paid, with no
+ * payment. The phone code and the photo ID check are still needed. Nothing about it is shown to the public.
  * `refundedAt` is set when the last payment is refunded or disputed; a new payment clears it.
  * `test: true` marks a practice run made with a Stripe test key.
  */
@@ -77,8 +80,11 @@ export function trustStatus(record, listing, now) {
   const r = record && typeof record === 'object' ? record : {};
   const nowMs = new Date(now).getTime();
   const through = Date.parse(r.paidThrough ?? '');
-  const paid = typeof r.paidAt === 'string' && typeof r.refundedAt !== 'string'
-    && (r.plan === 'founder' || (Number.isFinite(through) && nowMs < through));
+  // The admin can waive the fee for a listing (the owner's own businesses): nothing is paid, and the phone code and
+  // photo ID steps still have to pass. Only the payment is skipped.
+  const waived = typeof r.waivedAt === 'string' && r.waivedBy === 'admin';
+  const paid = waived || (typeof r.paidAt === 'string' && typeof r.refundedAt !== 'string'
+    && (r.plan === 'founder' || (Number.isFinite(through) && nowMs < through)));
   const number = toE164(listing?.phone);
   const phoneOk = Boolean(number) && r.phone?.number === number && typeof r.phone?.at === 'string';
   const idOk = typeof r.identity?.at === 'string' && r.identity?.name === listing?.name;
@@ -88,7 +94,7 @@ export function trustStatus(record, listing, now) {
   const verified = paid && phoneOk && idOk && !removed && !practice;
   const yearly = r.plan === 'yearly' && Number.isFinite(through);
   const out = {
-    paid, phoneOk, idOk, verified, removed, practice,
+    paid, waived, phoneOk, idOk, verified, removed, practice,
     practiceDone: practice && paid && phoneOk && idOk && !removed,
     expired: yearly && typeof r.paidAt === 'string' && nowMs >= through && typeof r.refundedAt !== 'string',
     canRenew: yearly && paid && through - nowMs <= RENEW_WINDOW_MS,

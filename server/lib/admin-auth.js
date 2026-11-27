@@ -54,6 +54,31 @@ export function adminCookieValue(token, issuedAt) {
   return `${t}.${createHmac('sha256', String(token)).update(t).digest('hex')}`;
 }
 
+/**
+ * The owner is never held to the 7-day fair-use rule (high-tech-look 11.3). The admin login cookie only goes to /admin,
+ * so a signed-in admin also gets this short cookie for /grade: `<issuedAt>.<HMAC(token, "grade-admin:" + issuedAt)>`,
+ * never the token, good for 12 hours, and void when ADMIN_TOKEN changes.
+ */
+export const GRADE_ADMIN_COOKIE = 'fap_grade_admin';
+
+export function gradeAdminCookieValue(token, issuedAt) {
+  const t = String(Math.floor(Number(issuedAt)));
+  return `${t}.${createHmac('sha256', String(token)).update(`grade-admin:${t}`).digest('hex')}`;
+}
+
+/** True when the request carries a valid, fresh grade-admin cookie. */
+export function isGradeAdmin(req, expected, now = Date.now()) {
+  if (!expected) return false;
+  const value = readCookie(req?.headers?.cookie, GRADE_ADMIN_COOKIE);
+  if (typeof value !== 'string') return false;
+  const [t] = value.split('.');
+  const issued = Number(t);
+  if (!Number.isFinite(issued) || issued > now + COOKIE_SKEW_MS || now - issued > ADMIN_COOKIE_MAX_AGE * 1000) return false;
+  const want = Buffer.from(gradeAdminCookieValue(expected, issued));
+  const got = Buffer.from(value);
+  return want.length === got.length && timingSafeEqual(want, got);
+}
+
 /** Reads one cookie from the Cookie header by hand. */
 export function readCookie(header, name) {
   if (typeof header !== 'string') return undefined;

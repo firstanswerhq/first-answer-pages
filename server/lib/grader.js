@@ -1,588 +1,1931 @@
 /**
- * grader.js — runs a Grade from start to finish.
+ * grader.js — runs an AI Visibility Grade from start to finish.
  *
- * start(input) stores a `running` Grade and schedules run(id) without
- * awaiting it; the scan page polls. run(id) does the website steps and the
- * AI step together, then builds the free page facts, scores the Checks and
- * marks the Grade `done`. A failed step marks its Checks `not_checked` and the
- * run continues.
+ * createGrader(deps) returns { start, run, get, peek, isStale, recheck, unlock,
+ * claim, startExtraQuestions, remove }. A Grade is stored in the `grades`
+ * collection and a Lead in `leads`. The website is read only through the safe
+ * fetcher. AI answers are untrusted text: they are stored and read here, never
+ * followed, and every page escapes them.
  *
- * Logs hold only the Grade_Id, step names, counts, timings and a fixed failure
- * code for the AI step. Never log typed input, AI answers or lead details. Every background promise ends in a
- * .catch that logs the Grade_Id only.
+ * Logging: only the Grade_Id, step or error codes, counts and timings. Never
+ * typed input, answers, names or lead details.
  */
 
-import { randomUUID } from 'node:crypto';
-import { SafeFetchError } from './safe-fetch.js';
+import { randomBytes } from 'node:crypto';
+import { normalizeForMatch } from './seance.js';
 import { readPageFacts, STREET_PATTERN } from './page-facts.js';
 import { runWebsiteChecks, CHECKS } from './grade-checks.js';
 import { scoreGrade } from './grade-score.js';
-import { analyzeAnswer, isNamed, listedNames, looksLikeSameName, registeredDomain } from './name-match.js';
+import {
+  analyzeAnswer, listedNames, looksLikeSameName, registeredDomain, sameSite, SHARED_DOMAINS, pageKey,
+} from './name-match.js';
 import { DROP_BELOW, NAMED_ABOVE } from './name-check.js';
-import { normalizeForMatch } from './seance.js';
-import { AssistantError } from './assistant.js';
-import { mapCategory, normalizePhone, validateFields } from './listing-fields.js';
+import {
+  normalizePhone, normalizeState, tidyCity, mapCategory, validateFields, US_STATE_CODES, STATE_ERROR,
+  reviewsLinkHost, reviewsLinkOnPage, normalizeWebsite,
+} from './listing-fields.js';
+import { usAddressStyle } from './address-style.js';
+import { parseHoursRange, parseTwentyFourHourRange } from './schema.js';
+import {
+  buildSignals, withoutGoogleValues,
+  OLD_REPORT_REASON, STALE_GOOGLE_REASON, STALE_BING_REASON, LOOKUP_RESERVE_REASON, LOOKUP_LIMIT_REASON,
+} from './health-signals.js';
+import { compareNames } from './health-compare.js';
+import { sitemapAddress } from './sitemap-read.js';
+import { PLACES_ERROR_REASON } from './places.js';
+import { cleanPreparedBy } from './agency-report.js';
+import { BING_ERROR_REASON } from './azure-maps.js';
 
-export const WEBSITE_BUDGET_MS = 30000;
-export const AI_TIMEOUT_MS = 120000;
-export const STALE_AFTER_MS = 4 * 60 * 1000;
-export const REUSE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
-export const MAX_ANSWER_CODE_POINTS = 4000;
-export const MAX_ANALYZED_CODE_POINTS = 20000;
+// ---- constants -------------------------------------------------------------------
 
-export const AI_NOT_CONNECTED = "AI check isn't connected";
 export const AI_LIMIT_REACHED = 'AI check limit reached for today';
-const AI_FAILED = "The AI check didn't finish.";
+export const AI_NOT_CONNECTED = "AI check isn't connected";
+export const AI_FAILED = "AI didn't answer this time. You can run the check again later.";
 
-/** The five Scan_Steps, in order. */
+const STALE_AFTER_MS = 4 * 60 * 1000;
+const REUSE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+const AI_TIMEOUT_MS = 120 * 1000;
+const NOTIFY_TIMEOUT_MS = 5 * 1000;
+const SECOND_OPINION_TIMEOUT_MS = 45 * 1000; // a second opinion never holds up the report
+const RETRY_DEFAULT_SECONDS = 5; // pause before the one retry after a 429 or 529 with no retry-after
+const RETRY_MAX_SECONDS = 20;
+const DEFAULT_MAX_RUNNING = 20;
+const SECOND_RETRY_MAX_SECONDS = 5; // a second opinion's pause before its one retry is never longer than this
+const MAX_ANSWER_CODE_POINTS = 4000;
+const MAX_NAMES_TO_CHECK = 30;
+const MAX_COMPETITORS = 5;
+const MAX_SOURCES = 8;
+const SECOND_OPINION_RESERVE = 12; // second opinions never use the day's last calls
+const SECOND_OPINION_FAILS = 3;
+const SECOND_OPINION_PAUSE_MS = 15 * 60 * 1000;
+const MAX_TEXT_FOR_PATTERNS = 200000;
+// Google and Bing lookup results are kept in memory only (never saved with the Grade), for at most this long, so a
+// recheck can compare the website with them again. After that, or after a restart, a recheck says to run a new check.
+export const LOOKUP_KEEP_MS = 30 * 24 * 60 * 60 * 1000;
+const LOOKUP_KEEP_MAX = 2000; // the most Grades whose lookups are kept in memory at once
+
+// The two "website could not be read" findings. The report reads the stored step findings to tell them apart (V134).
+export const HOME_UNREADABLE = "We couldn't read your home page.";
+export const WEBSITE_UNREACHED = "We couldn't reach your website.";
+const TOO_SLOW = 'Your website took too long to answer.';
+const WEBSITE_BUDGET_MS = 30 * 1000; // Requirement 2.8: the website steps share 30 seconds
+
+const PROVIDER_LABELS = Object.freeze({
+  anthropic: 'Claude',
+  openai: 'ChatGPT',
+  chatgpt: 'ChatGPT',
+  gemini: 'Gemini',
+  grok: 'Grok',
+  perplexity: 'Perplexity',
+  mock: 'The demo assistant',
+});
+
+/** Plain name of an assistant for sentences, from its provider id. */
+export function providerLabel(provider) {
+  return Object.hasOwn(PROVIDER_LABELS, provider) ? PROVIDER_LABELS[provider] : 'The assistant';
+}
+
+const log = line => process.stderr.write(`[grader] ${line}\n`);
+
+// ---- reading what the visitor typed ----------------------------------------------
+
+const BIDI = /[\u200E\u200F\u202A-\u202E\u2066-\u2069]/g;
+const cleanText = v => String(v ?? '').replace(BIDI, '').replace(/\p{Cc}/gu, ' ').replace(/\s+/g, ' ').trim();
+const codePoints = s => Array.from(s).length;
+
+const MESSAGES = Object.freeze({
+  name: 'Type your business name (up to 120 characters).',
+  city: 'Type your city (up to 80 characters).',
+  service: 'Say what you do, like roofers or plumbers (up to 60 characters).',
+  website: 'Type your website like example.com.',
+});
+
+function readWebsiteInput(text) {
+  const t = cleanText(text);
+  if (t === '') return { value: null };
+  if (/\s/.test(t)) return { error: MESSAGES.website };
+  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(t) ? t : `https://${t}`;
+  let url;
+  try {
+    url = new URL(withScheme);
+  } catch {
+    return { error: MESSAGES.website };
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return { error: MESSAGES.website };
+  if (url.username || url.password || !url.hostname.includes('.')) return { error: MESSAGES.website };
+  // On a shared host (a Facebook page) the page typed on the form says which business it is, so it is kept beside the
+  // home page the check reads (high-tech-look 11.1, batch 3 X5). An own domain keeps only its home page, as before.
+  // The check still reads the same home page as before.
+  const path = url.pathname.replace(/\/+$/, '');
+  const id = /\/profile\.php$/i.test(path) && url.searchParams.get('id') ? `?id=${encodeURIComponent(url.searchParams.get('id'))}` : '';
+  const shared = SHARED_DOMAINS.has(registeredDomain(`${url.protocol}//${url.host}/`));
+  const page = shared && path !== '' ? `${url.protocol}//${url.host}${path}${id}` : null;
+  return { value: `${url.protocol}//${url.host}/`, ...(page ? { page } : {}) };
+}
+
+/**
+ * Clean and check the grade form. Direction-flipping marks and control
+ * characters are removed from every field.
+ * @param {object} raw the posted fields
+ * @returns {{ ok: boolean, input?: object, values: object, errors: Record<string, string> }}
+ */
+export function normalizeGradeInput(raw) {
+  const src = raw !== null && typeof raw === 'object' ? raw : {};
+  const name = cleanText(src.name);
+  const city = tidyCity(cleanText(src.city));
+  const stateText = cleanText(src.state);
+  const state = normalizeState(stateText);
+  const service = cleanText(src.service);
+  const websiteText = cleanText(src.website);
+  const values = { name, city, state: stateText, service, website: websiteText };
+  // "We go to our customers (no storefront)": kept only when ticked, so a Grade made without it looks as before.
+  // A browser sends "1" (or "on"); a stored input that is read again holds `true`. Anything else is not ticked.
+  const noStorefront = src.noStorefront === '1' || src.noStorefront === 'on' || src.noStorefront === true;
+  if (noStorefront) values.noStorefront = true;
+  const errors = {};
+  if (name === '' || codePoints(name) > 120) errors.name = MESSAGES.name;
+  if (city === '' || codePoints(city) > 80) errors.city = MESSAGES.city;
+  if (!US_STATE_CODES.has(state)) errors.state = STATE_ERROR;
+  if (service === '' || codePoints(service) > 60) errors.service = MESSAGES.service;
+  const site = readWebsiteInput(websiteText);
+  if (site.error) errors.website = site.error;
+  if (Object.keys(errors).length > 0) return { ok: false, values, errors };
+  const input = { name, city, state, service, website: site.value };
+  // An input that was already cleaned once (the route cleans the form, then start() cleans it again) only has the home
+  // page in `website`, so its kept page is read again here, and kept only when it is on the same host.
+  const kept = site.page ?? (typeof src.websitePage === 'string' ? readWebsiteInput(src.websitePage).page : undefined);
+  if (kept && site.value && new URL(kept).host === new URL(site.value).host) input.websitePage = kept;
+  if (noStorefront) input.noStorefront = true;
+  return { ok: true, values, errors, input };
+}
+
+/**
+ * Fair use (high-tech-look 11.1): is an earlier check about the same business as a new one? With a website, the
+ * registered domain matches; on a shared host (a Facebook page, a wixsite.com site) the whole page must match.
+ * With no website, the same name and city after normalizing.
+ */
+export function sameBusinessInput(earlier, next) {
+  // A missing state on both sides is equal (null, undefined and '' are all "no state").
+  const sameState = String(earlier?.state ?? '').trim().toUpperCase() === String(next?.state ?? '').trim().toUpperCase();
+  const sameCity = normalizeForMatch(next?.city) !== '' && normalizeForMatch(earlier?.city) === normalizeForMatch(next?.city);
+  const wanted = String(next?.website ?? '').trim();
+  if (wanted) {
+    const domain = registeredDomain(wanted);
+    if (!domain || !earlier?.website) return false;
+    // The page typed on the form (`websitePage`), since `website` is only the home page the check reads.
+    const a = pageKey(next.websitePage || wanted);
+    const b = pageKey(earlier.websitePage || earlier.website);
+    if (SHARED_DOMAINS.has(domain)) {
+      // A shared host: the page is the business. The host's own home page alone says nothing.
+      if (a === '' || a === pageKey(`https://${domain}/`)) return false;
+      return a === b;
+    }
+    if (registeredDomain(earlier.website) !== domain) return false;
+    // Batch 3 X5 (owner decision): the same website AND (the same host, or the same city and state). Franchise
+    // locations on their own subdomains in other cities (nashville.x.com and memphis.x.com) are different businesses;
+    // another page of the same host (zephyr.example/about) is the same one. The host ignores www. and m.
+    return hostKey(wanted) === hostKey(earlier.website) || (sameCity && sameState);
+  }
+  // X7: with no website, the same name, city and state.
+  const name = normalizeForMatch(next?.name);
+  return name !== '' && sameCity && sameState && normalizeForMatch(earlier?.name) === name;
+}
+
+/** A website's host, lower case, without a trailing dot and without www. or m. in front ('' when unreadable). */
+function hostKey(website) {
+  try {
+    return new URL(String(website)).hostname.toLowerCase().replace(/\.$/, '').replace(/^(?:www|m)\./, '');
+  } catch {
+    return '';
+  }
+}
+
+/** The key two Grades share when they are about the same business. */
+function reuseKey(input) {
+  return [
+    normalizeForMatch(input.name), normalizeForMatch(input.city), String(input.state).toLowerCase(),
+    normalizeForMatch(input.service), registeredDomain(input.website) || '-',
+  ].join('|');
+}
+
+// ---- the questions and the steps -----------------------------------------------------
+
+// ---- the cleaned service phrase (Feature F, Requirement 24) ------------------------------------------------
+
+/**
+ * Nationality and cuisine words, by their lower-case form, with the capital they always get, whatever was
+ * typed (V122).
+ */
+const KEEP_CAPITAL = new Map([
+  'Mexican', 'Italian', 'Chinese', 'Thai', 'Japanese', 'Indian', 'Greek', 'French', 'Korean', 'Vietnamese',
+  'Cuban', 'Cajun', 'Caribbean', 'Mediterranean', 'American', 'Spanish', 'German', 'Irish', 'Asian', 'Hawaiian',
+  'Brazilian', 'Ethiopian', 'Lebanese', 'Turkish', 'Peruvian', 'Tex-Mex',
+].map(w => [w.toLowerCase(), w]));
+
+/** Last words that are food and get " restaurants" (V123, V125). */
+const FOOD_RESTAURANTS = new Set([
+  'bbq', 'barbecue', 'sushi', 'seafood', 'taco', 'burger', 'wing', 'ramen', 'pho', 'steak',
+  'breakfast', 'brunch', 'lunch', 'dinner', // V129
+]);
+/** Food words typed as plurals: they lose their final "s" before " restaurants" (V125). */
+const FOOD_PLURALS = new Set(['tacos', 'burgers', 'wings']);
+/** The word before "food" that makes the phrase a kind of restaurant (V128). Any other "… food" is a business. */
+const FOOD_BEFORE = new Set(['fast', 'soul', 'comfort', 'street', 'vegan', 'vegetarian', 'southern']);
+/** Shop words (V129): the plural ones lose their final "s" before " shops"; the others add " shops". */
+const SHOP_PLURALS = new Set(['donuts', 'doughnuts', 'bagels', 'cupcakes', 'smoothies']);
+const SHOP_WORDS = new Set(['donut', 'doughnut', 'bagel', 'cupcake', 'smoothie', 'coffee', 'tea', 'boba']);
+const SHOP_PAIRS = new Set(['ice cream', 'frozen yogurt', 'italian ice']);
+
+/** Last words that end in "s" but are not a plural of a business (V113). Any word ending in "ss" is treated the same. */
+const NOT_PLURAL_S = new Set([
+  'arts', 'gas', 'bus', 'lens', 'glass', 'fitness', 'wellness', 'logistics', 'analytics', 'electronics',
+  'cosmetics', 'aesthetics', 'graphics', 'news', 'sales',
+]);
+
+/** Last words that take "es" (V114). */
+const TAKES_ES = new Set(['church', 'wash', 'coach']);
+
+/** Last words whose "y" becomes "ies" (V114). */
+// "grocery" is not on it (V124): it gets "stores" by its own rule (V129), "grocery stores".
+const TAKES_IES = new Set([
+  'company', 'agency', 'bakery', 'brewery', 'winery', 'notary', 'pharmacy', 'nursery', 'laundry',
+  'distillery', 'creamery',
+]);
+
+/** Last words that take "s". A fixed list: there is no general "-er", "-or" or "-ian" rule (V114). */
+const TAKES_S = new Set([
+  'contractor', 'shop', 'service', 'crew', 'store', 'salon', 'studio', 'clinic', 'restaurant', 'cafe', 'firm',
+  'lawyer', 'doctor', 'plumber', 'roofer', 'painter', 'cleaner', 'landscaper', 'mechanic', 'barber',
+  'photographer', 'realtor', 'agent', 'groomer', 'inspector', 'attorney', 'locksmith', 'chiropractor', 'tutor',
+  'tailor', 'jeweler', 'bookkeeper', 'vet', 'trainer', 'walker', 'builder', 'gym', 'spa', 'bar', 'hotel', 'motel',
+  'daycare', 'preschool', 'boutique', 'barbershop', 'place', 'truck', 'home', 'school', 'park', 'diner', 'pub',
+  'mover', 'caterer', 'office', 'center', 'garage', 'dealership', 'cpa', 'dj',
+  'deli', 'steakhouse', // V129. "grill" and "house" are not here: V133 and V132 give them their own rules.
+]);
+
+/** "house" is made plural only after one of these words ("steak houses"); any other "… house" is a business (V132). */
+const HOUSE_BEFORE = new Set(['steak', 'pancake', 'waffle', 'coffee', 'tea', 'chop', 'ale', 'oyster', 'crab', 'fish']);
+
+/** Words ending in "ian" that take "s"; words ending in "ician" do too (V112). */
+const IAN_TAKES_S = new Set(['veterinarian', 'pediatrician', 'dietitian', 'librarian', 'guardian']);
+
+/**
+ * Abbreviations that are raised (V115), looked up by their lower-case form with or without a final "s", whatever
+ * was typed (V119: "CPAs", "cpas" and "Cpas" all give "CPAs"). "it" is handled on its own.
+ */
+const RAISE = new Map([
+  ['a/c', 'A/C'], ['hvac', 'HVAC'], ['cpa', 'CPA'], ['dj', 'DJ'], ['bbq', 'BBQ'], ['rv', 'RV'], ['b&b', 'B&B'],
+  // V130: short abbreviations are capitals however typed ("ac repair" gives "AC repair"). UPS is a brand: left out.
+  ['ac', 'AC'], ['tv', 'TV'], ['cpr', 'CPR'], ['dui', 'DUI'], ['cdl', 'CDL'], ['atv', 'ATV'], ['seo', 'SEO'],
+  ['pc', 'PC'], ['ev', 'EV'], ['hoa', 'HOA'], ['cbd', 'CBD'], ['mri', 'MRI'], ['er', 'ER'], ['av', 'AV'],
+]);
+const raised = lw => {
+  if (RAISE.has(lw)) return RAISE.get(lw);
+  if (lw.length > 1 && lw.endsWith('s') && RAISE.has(lw.slice(0, -1))) return `${RAISE.get(lw.slice(0, -1))}s`;
+  return null;
+};
+
+/** Joining words that do not count when deciding whether a phrase is in Title Case. */
+const JOINING = new Set(['and', 'or', 'of', 'the', 'for', 'in', 'on', 'at', 'by', 'to', 'with', 'a', 'an']);
+
+const hasLower = w => /\p{Ll}/u.test(w);
+const hasUpper = w => /\p{Lu}/u.test(w);
+const hasLetter = w => /\p{L}/u.test(w);
+const startsUpper = w => /^\p{Lu}/u.test(w);
+const lowerFirst = w => {
+  const chars = Array.from(w);
+  return chars.length === 0 ? w : chars[0].toLowerCase() + chars.slice(1).join('');
+};
+
+/** One word's capitals (V115). `lower` says whether its first letter may be made lower case. */
+function caseWord(w, lower) {
+  if (hasUpper(w) && !hasLower(w)) {
+    // All capitals: lowered only when it is 5 or more letters and letters only (PLUMBERS); HVAC, A/C, CPA, B&B stay.
+    return /^\p{L}+$/u.test(w) && Array.from(w).length >= 5 ? w.toLowerCase() : w;
+  }
+  const lw = w.toLowerCase();
+  if (/\p{Ll}\p{Lu}/u.test(w) || KEEP_CAPITAL.has(lw) || lw === 'dr.') return w; // iPhone, Mexican, Dr.
+  return lower ? lowerFirst(w) : w;
+}
+
+/** The last word made plural by the fixed lists, and whether the phrase then names people or businesses. */
+function pluralLast(word) {
+  const lw = word.toLowerCase();
+  if (lw === 'business') return { word: `${word}es`, names: true };
+  if (NOT_PLURAL_S.has(lw) || lw.endsWith('ss')) return { word, names: false }; // martial arts, auto glass
+  if (lw.endsWith('s')) return { word, names: true };
+  if (KEEP_CAPITAL.has(lw)) return { word, names: false }; // never "Italians"
+  if (TAKES_ES.has(lw)) return { word: `${word}es`, names: true };
+  if (TAKES_IES.has(lw)) return { word: `${word.slice(0, -1)}ies`, names: true };
+  if (lw === 'handyman') return { word: `${word.slice(0, -2)}en`, names: true };
+  if (TAKES_S.has(lw) || lw.endsWith('ist') || lw.endsWith('ician') || IAN_TAKES_S.has(lw)) {
+    return { word: `${word}s`, names: true }; // the ending is lower case, so capitals follow the word: CPAs, DJs
+  }
+  return { word, names: false };
+}
+
+/**
+ * The service as it reads in the questions (Requirement 24): `named` is the cleaned phrase with its last word
+ * made plural by the fixed lists, or with " businesses" added. Used in all three questions and the scan step.
+ * The stored input keeps the service as typed. Never throws: odd input gives a best-effort phrase, and every page
+ * escapes it.
+ */
+export function servicePhrase(service) {
+  const text = typeof service === 'string'
+    ? service.replace(/\s+/g, ' ').trim().replace(/[\s.,!?:;]+$/u, '').trim() // V116: "plumbers." reads "plumbers"
+    : '';
+  if (text === '') return { named: '' };
+  try {
+    const words = text.split(' ');
+    let cased;
+    if (words.length >= 2 && hasUpper(text) && !hasLower(text)) {
+      // A phrase of two or more words typed all in capitals is lowered; the lists below then apply (V121).
+      // A word that holds a digit keeps its capitals ("A1 TOWING" gives "A1 towing businesses") (V126).
+      cased = words.map(w => (/\d/.test(w) ? w : w.toLowerCase()));
+    } else {
+      // Title Case: every word with letters starts with a capital, not counting joining words (V115).
+      const counted = words.filter(w => hasLetter(w) && !JOINING.has(w.toLowerCase()));
+      const title = counted.length > 0 && counted.every(startsUpper);
+      cased = words.map((w, i) => caseWord(w, title || i === 0));
+    }
+    // By the lower-case form, whatever was typed: joining words in lower case (V120), keep-capital words with their
+    // capital (V122), abbreviations raised with or without a final "s" (V119).
+    const fixed = cased.map(w => {
+      const lw = w.toLowerCase();
+      if (JOINING.has(lw)) return lw;
+      if (KEEP_CAPITAL.has(lw)) return KEEP_CAPITAL.get(lw);
+      if (lw === 'food') return 'food'; // "FOOD" alone gives "food businesses" (V128)
+      return raised(lw) ?? w;
+    });
+    if (fixed[0] === 'it' && /^(support|services)$/i.test(fixed[1] ?? '')) fixed[0] = 'IT';
+    const food = foodPhrase(fixed);
+    if (food) return { named: food.join(' ') };
+    const last = pluralLast(fixed[fixed.length - 1]);
+    fixed[fixed.length - 1] = last.word;
+    const phrase = fixed.join(' ');
+    return { named: last.names ? phrase : `${phrase} businesses` };
+  } catch {
+    return { named: text };
+  }
+}
+
+/** The fixed food rules (V123), or null when none applies. Nothing general: anything else keeps the other rules. */
+function foodPhrase(words) {
+  const n = words.length;
+  const lw = i => (words[i] ?? '').toLowerCase();
+  // "bed and breakfast", "bed & breakfast": a place to stay, never " restaurants" (V131). Checked before the meals rule.
+  if (n >= 3 && lw(n - 3) === 'bed' && (lw(n - 2) === '&' || lw(n - 2) === 'and') && lw(n - 1) === 'breakfast') {
+    return [...words.slice(0, n - 2), 'and', `${words[n - 1]}s`];
+  }
+  // "Bar & Grill", "bar and grill".
+  if (n >= 3 && lw(n - 3) === 'bar' && (lw(n - 2) === '&' || lw(n - 2) === 'and') && lw(n - 1) === 'grill') {
+    return [...words.slice(0, n - 2), 'and', words[n - 1], 'restaurants'];
+  }
+  // A phrase ending in "grill" is not made plural: "grill restaurants" (V133).
+  if (lw(n - 1) === 'grill') return [...words, 'restaurants'];
+  // "steak house", "coffee house": plural only after these words; any other "… house" is a business (V132).
+  if (n >= 2 && lw(n - 1) === 'house' && HOUSE_BEFORE.has(lw(n - 2))) return [...words.slice(0, n - 1), `${words[n - 1]}s`];
+  // A cuisine word last ("Italian", "authentic Thai").
+  if (KEEP_CAPITAL.has(lw(n - 1))) return [...words, 'restaurants'];
+  if (lw(n - 1) === 'food') {
+    // "Thai food", "Mexican food" read "Thai restaurants". After fast, soul, comfort, street, vegan, vegetarian or
+    // southern, " restaurants" follows "food". Any other phrase ending in "food" ("pet food", "food") is not food
+    // to eat out: it goes on to the normal rules and gets " businesses" (V128).
+    if (n >= 2 && KEEP_CAPITAL.has(lw(n - 2))) return [...words.slice(0, n - 1), 'restaurants'];
+    if (n >= 2 && FOOD_BEFORE.has(lw(n - 2))) return [...words, 'restaurants'];
+    return null;
+  }
+  // "grocery" and a phrase ending in "grocery" ("Indian grocery") give "… grocery stores" (V129).
+  if (lw(n - 1) === 'grocery') return [...words, 'stores'];
+  // Shops (V129): "donuts" gives "donut shops", "ice cream" gives "ice cream shops".
+  if (SHOP_PLURALS.has(lw(n - 1))) return [...words.slice(0, n - 1), words[n - 1].slice(0, -1), 'shops'];
+  if (SHOP_WORDS.has(lw(n - 1)) || (n >= 2 && SHOP_PAIRS.has(`${lw(n - 2)} ${lw(n - 1)}`))) return [...words, 'shops'];
+  // "tacos", "burgers", "wings" lose their final "s" ("taco restaurants"); the singular forms give the same (V125).
+  if (FOOD_PLURALS.has(lw(n - 1))) return [...words.slice(0, n - 1), words[n - 1].slice(0, -1), 'restaurants'];
+  if (FOOD_RESTAURANTS.has(lw(n - 1))) return [...words, 'restaurants'];
+  if (lw(n - 1) === 'pizza') return [...words, 'places'];
+  return null;
+}
+
+/** The question in the free part of a report. */
+export function freeQuestion(input) {
+  return `Who are the best ${servicePhrase(input.service).named} in ${input.city}, ${input.state}? Name your top 5.`;
+}
+
+/** The two questions asked after the report is opened (V111: both use the named phrase). */
+export function extraQuestions(input) {
+  const { named } = servicePhrase(input.service);
+  return [
+    `I'm looking for ${named} in ${input.city}, ${input.state}. Which ones would you recommend?`,
+    `Which ${named} in ${input.city}, ${input.state} do people recommend most?`,
+  ];
+}
+
+/** The five Scan_Steps in order. */
 export function stepNames(input) {
   return [
     'Finding your website',
     'Reading your home page',
     'Checking what AI is allowed to read',
-    `Asking AI to name the best ${input.service} in ${input.city}`,
+    `Asking AI to name the best ${servicePhrase(input.service).named} in ${input.city}`,
     'Drafting your free directory listing',
   ];
 }
 
-const FETCH_FAILURES = Object.freeze({
-  blocked_address: "We can't visit that address.",
-  bad_url: "We couldn't read that website address.",
-  timeout: 'Your website took too long to answer.',
-  too_large: 'Your home page is too large to read.',
-  too_many_redirects: 'Your website sent us around in circles.',
-  connect_failed: "We couldn't reach your website.",
-});
+// ---- hours -----------------------------------------------------------------------------
 
-const failureText = err => (err instanceof SafeFetchError
-  ? FETCH_FAILURES[err.code] ?? FETCH_FAILURES.connect_failed
-  : FETCH_FAILURES.connect_failed);
+const DAY_NAMES = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+const CLOCK = String.raw`\d{1,2}(?::\d{2})?\s?(?:am|pm|a\.m\.|p\.m\.)?`;
+const TIME_RANGE_ANYWHERE = new RegExp(String.raw`${CLOCK}\s*(?:-|\u2013|\u2014|to)\s*${CLOCK}`, 'gi');
 
-const cutCodePoints = (text, n) => Array.from(String(text ?? '')).slice(0, n).join('');
+function dayIndex(token) {
+  const t = token.toLowerCase().replace(/\./g, '');
+  return t.length < 2 ? -1 : DAY_NAMES.findIndex(d => d.startsWith(t));
+}
 
-/** Key used to find an earlier Grade whose AI answers can be reused. */
-export function reuseKey(input) {
-  return [
-    normalizeForMatch(input.name),
-    normalizeForMatch(input.city),
-    String(input.state ?? '').toLowerCase(),
-    normalizeForMatch(input.service),
-    registeredDomain(input.website) || '-',
-  ].join('|');
+/** The days named in a piece of text ("Mo-Fr", "Monday, Wednesday"), or null when unsure. */
+function parseDays(text) {
+  const days = text
+    .replace(/\s*(?:-|\u2013|\u2014)\s*/g, '-')
+    .replace(/\s+(?:to|through|thru)\s+/gi, '-')
+    .replace(/[:;]+/g, ' ');
+  const indexes = new Set();
+  for (const token of days.split(/[\s,&]+/).filter(Boolean)) {
+    if (/^and$/i.test(token)) continue;
+    const parts = token.split('-').filter(Boolean);
+    if (parts.length === 2) {
+      const a = dayIndex(parts[0]);
+      const b = dayIndex(parts[1]);
+      if (a === -1 || b === -1) return null;
+      for (let i = a; ; i = (i + 1) % 7) {
+        indexes.add(i);
+        if (i === b) break;
+      }
+    } else if (parts.length === 1) {
+      const i = dayIndex(parts[0]);
+      if (i === -1) return null;
+      indexes.add(i);
+    } else {
+      return null;
+    }
+  }
+  return indexes.size > 0 ? indexes : null;
 }
 
 /**
- * What the scan found, for the Free_Page_Preview and the Fix_Kit. JSON-LD
- * first, then tel: links and the visible text.
+ * Turn opening-hours lines such as "Mo-Fr 08:00-17:00", "Mo-Fr 08:00-17:00, Sa
+ * 09:00-12:00" or "Monday, Wednesday 9am-5pm" into { monday: '08:00-17:00', ... }.
+ * Each time range takes the days written just before it. A line with a part it
+ * cannot read for sure (a word that is not a day, days with no time) is left out
+ * whole, so the hours stay blank rather than wrong.
+ * @param {string[] | undefined} lines
+ * @returns {Record<string, string>}
  */
-export function extractFound(facts, input) {
-  const found = {
-    name: input.name,
-    service: input.service,
-    city: input.city,
-    state: input.state,
-    website: input.website ?? '',
-    phone: '',
-    address: '',
-    hours: [],
+export function hoursToObject(lines) {
+  const out = {};
+  for (const line of Array.isArray(lines) ? lines : []) {
+    if (typeof line !== 'string') continue;
+    const found = [];
+    let from = 0;
+    let sure = true;
+    for (const m of line.matchAll(TIME_RANGE_ANYWHERE)) {
+      const days = parseDays(line.slice(from, m.index));
+      from = m.index + m[0].length;
+      if (!days) {
+        sure = false;
+        break;
+      }
+      const value = m[0]
+        .replace(/\s*(?:-|\u2013|\u2014|\bto\b)\s*/gi, '-')
+        .replace(/\s+(?=(?:am|pm|a\.m\.|p\.m\.))/gi, '');
+      found.push({ days, value });
+    }
+    if (!sure || found.length === 0) continue;
+    for (const { days, value } of found) {
+      for (const i of [...days].sort((x, y) => x - y)) {
+        if (out[DAY_NAMES[i]] === undefined) out[DAY_NAMES[i]] = value;
+      }
+    }
+  }
+  return out;
+}
+
+function formStyleTime(hourText, minuteText) {
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+  if (hour > 23 || minute > 59) return null;
+  const suffix = hour >= 12 ? 'pm' : 'am';
+  const h12 = hour % 12 === 0 ? 12 : hour % 12;
+  return minute === 0 ? `${h12}${suffix}` : `${h12}:${String(minute).padStart(2, '0')}${suffix}`;
+}
+
+/**
+ * "07:00-18:00" -> "7am-6pm", "08:30-17:00" -> "8:30am-5pm", the way the listing form shows hours.
+ * Any other value (already "9am-5pm", "Closed", free text, "00:00-24:00", a time out of range, or
+ * equal open and close times) is returned as found.
+ * @param {unknown} value
+ */
+export function formStyleHours(value) {
+  // Only a range that cannot mean anything but 24-hour time is changed (V177); "00:00-24:00" is open all day
+  // and becomes "12am-11:59pm" (V178, V179). "8:00-5:00" could be 12-hour times, so it stays as found.
+  const range = parseTwentyFourHourRange(value);
+  if (!range) return value;
+  const opens = formStyleTime(...range.opens.split(':'));
+  const closes = formStyleTime(...range.closes.split(':'));
+  return opens && closes ? `${opens}-${closes}` : value;
+}
+
+/** Applies formStyleHours to every day of a { monday: '07:00-18:00', ... } object. */
+function formStyleHoursObject(hours) {
+  const out = {};
+  for (const [day, value] of Object.entries(hours ?? {})) out[day] = formStyleHours(value);
+  return out;
+}
+
+/** True when one side of a range is clear on its own: it has am or pm, or its hour has a leading zero or is 0 or 13+. */
+function sideIsSure(text) {
+  const t = typeof text === 'string' ? text.trim() : '';
+  if (/[ap]/i.test(t)) return true;
+  const m = /^(\d{1,2}):\d{2}$/.exec(t);
+  if (!m) return false;
+  return (m[1].length === 2 && m[1][0] === '0') || Number(m[1]) === 0 || Number(m[1]) >= 13;
+}
+
+const SCHEMA_DAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
+
+/** "9am" -> "09:00", "17:30" -> "17:30"; null when the time could mean more than one thing. */
+function schemaTime(text) {
+  const m = /^(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?$/i.exec(text.trim());
+  if (!m) return null;
+  let hour = Number(m[1]);
+  const minute = m[2] === undefined ? 0 : Number(m[2]);
+  const meridiem = m[3]?.toLowerCase().replace(/\./g, '');
+  if (meridiem) {
+    if (hour < 1 || hour > 12) return null;
+    hour = (hour % 12) + (meridiem === 'pm' ? 12 : 0);
+  } else if (m[2] === undefined) {
+    return null; // "9" alone: morning or evening?
+  }
+  if (hour > 23 || minute > 59) return null;
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+}
+
+/**
+ * Opening hours in schema.org's own format ("Mo-Fr 08:00-17:00"), for the fix kit's business
+ * label. Anything that cannot be read for sure is left out.
+ * @param {string[] | undefined} lines
+ * @returns {string[]}
+ */
+export function schemaHours(lines) {
+  const byTime = new Map();
+  for (const [day, value] of Object.entries(hoursToObject(lines))) {
+    const [open, close, extra] = value.split('-');
+    if (extra !== undefined) continue;
+    // A whole 24-hour range that cannot mean anything else is read by the one shared reader (V177, V187: open all
+    // day is 00:00-23:59, the same as the form and the JSON-LD). Otherwise each side is read on its own, and a
+    // side with no am or pm is used only when its own hour cannot be a 12-hour time (V185).
+    const whole = parseHoursRange(value); // the same whole-range reader as the JSON-LD (V190)
+    const a = whole ? whole.opens : (sideIsSure(open) ? schemaTime(open ?? '') : null);
+    const b = whole ? whole.closes : (sideIsSure(close) ? schemaTime(close ?? '') : null);
+    if (!a || !b || a === b) continue;
+    const key = `${a}-${b}`;
+    byTime.set(key, [...(byTime.get(key) ?? []), DAY_NAMES.indexOf(day)]);
+  }
+  const out = [];
+  for (const [time, days] of byTime) {
+    const sorted = [...days].sort((x, y) => x - y);
+    const parts = [];
+    for (let i = 0; i < sorted.length;) {
+      let j = i;
+      while (j + 1 < sorted.length && sorted[j + 1] === sorted[j] + 1) j += 1;
+      parts.push(j > i ? `${SCHEMA_DAYS[sorted[i]]}-${SCHEMA_DAYS[sorted[j]]}` : SCHEMA_DAYS[sorted[i]]);
+      i = j + 1;
+    }
+    out.push(`${parts.join(',')} ${time}`);
+  }
+  return out;
+}
+
+const DAY_TITLES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+/** "07:00" -> "7:00 am", "9am" -> "9:00 am"; null when the time could mean more than one thing. */
+function readableTime(text) {
+  const m = /^(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?$/i.exec(text.trim());
+  if (!m) return null;
+  let hour = Number(m[1]);
+  const minute = m[2] ?? '00';
+  const meridiem = m[3]?.toLowerCase().replace(/\./g, '');
+  if (meridiem) {
+    if (hour < 1 || hour > 12) return null;
+    return `${hour}:${minute} ${meridiem}`;
+  }
+  if (m[2] === undefined || hour > 23) return null;
+  const ampm = hour >= 12 ? 'pm' : 'am';
+  hour = hour % 12 === 0 ? 12 : hour % 12;
+  return `${hour}:${minute} ${ampm}`;
+}
+
+/**
+ * Opening hours for people to read: "Monday to Friday, 7:00 am to 6:00 pm". Lines that cannot be
+ * read for sure are shown as they were found.
+ * @param {string[] | undefined} lines
+ * @returns {string[]}
+ */
+export function readableHours(lines) {
+  const found = (Array.isArray(lines) ? lines : []).filter(x => typeof x === 'string' && x.trim() !== '');
+  const byDay = hoursToObject(found);
+  const days = DAY_NAMES.filter(d => byDay[d] !== undefined);
+  if (days.length === 0) return found;
+  const out = [];
+  for (let i = 0; i < days.length;) {
+    let j = i;
+    while (
+      j + 1 < days.length
+      && DAY_NAMES.indexOf(days[j + 1]) === DAY_NAMES.indexOf(days[j]) + 1
+      && byDay[days[j + 1]] === byDay[days[i]]
+    ) j += 1;
+    const first = DAY_TITLES[DAY_NAMES.indexOf(days[i])];
+    const last = DAY_TITLES[DAY_NAMES.indexOf(days[j])];
+    const label = j === i ? first : j === i + 1 ? `${first} and ${last}` : `${first} to ${last}`;
+    const [open, close, extra] = byDay[days[i]].split('-');
+    // Same rule as the Fix Kit label (V188): the shared 24-hour reader first; a side with no am or pm that could be
+    // a 12-hour time makes the line show as found.
+    const whole = parseHoursRange(byDay[days[i]]); // the same whole-range reader as the JSON-LD (V190)
+    const a = whole ? readableTime(whole.opens) : (sideIsSure(open) ? readableTime(open ?? '') : null);
+    const b = whole ? readableTime(whole.closes) : (sideIsSure(close) ? readableTime(close ?? '') : null);
+    out.push(`${label}, ${a && b && a !== b && extra === undefined ? `${a} to ${b}` : byDay[days[i]]}`);
+    i = j + 1;
+  }
+  return out;
+}
+
+/** Providers that are always second opinions; a stored answer from one never counts toward the score. */
+const SECOND_OPINION_PROVIDERS = new Set(['chatgpt', 'gemini', 'grok', 'perplexity']);
+
+/** A stored answer is an object: null, text, numbers and lists are not (a hand-edited grades.json). */
+const isEntry = a => a !== null && typeof a === 'object' && !Array.isArray(a);
+
+/** True for a second-opinion answer, whether or not an older Grade marked it. */
+export const isSecondOpinion = a => Boolean(a) && (a.second === true || SECOND_OPINION_PROVIDERS.has(a.provider));
+
+/**
+ * Phone, hours, address and the best reviews link found on the website. Grades made before `found` existed keep
+ * the first three in `facts`; Grades made before review links were read give an empty `reviewsLink`.
+ */
+export function foundOf(grade) {
+  const found = foundFromGrade(grade);
+  // An address is one line in US style, with no comma before the ZIP, even in a Grade stored before that rule (V144).
+  return typeof found.address === 'string' && found.address !== '' ? { ...found, address: usAddressStyle(found.address) } : found;
+}
+
+function foundFromGrade(grade) {
+  if (grade?.found && typeof grade.found === 'object') {
+    const found = grade.found;
+    return typeof found.reviewsLink === 'string' ? found : { ...found, reviewsLink: '' };
+  }
+  const f = grade?.facts && typeof grade.facts === 'object' ? grade.facts : {};
+  return {
+    phone: typeof f.phone === 'string' ? f.phone : '',
+    hours: Array.isArray(f.hours) ? f.hours.filter(x => typeof x === 'string') : [],
+    address: typeof f.address === 'string' ? f.address : '',
+    website: grade?.input?.website || '',
+    reviewsLink: '',
   };
+}
+
+/**
+ * The website a claim carries over, before `normalizeWebsite` checks it: the check accepts `http` sites and
+ * ports, so an `http://` address becomes `https://` with the same host and path and no port (and no user name,
+ * query string or `#` part). Nothing is fetched or looked up. '' when there is no usable address.
+ * @param {unknown} value the Grade's typed website
+ * @returns {string}
+ */
+export function claimWebsite(value) {
+  if (typeof value !== 'string' || value.trim() === '') return '';
+  try {
+    const url = new URL(value.trim());
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return '';
+    return `https://${url.hostname}${url.pathname || '/'}`;
+  } catch {
+    return '';
+  }
+}
+
+const REVIEW_SITE_RANK = { google: 0, yelp: 1, facebook: 2, nextdoor: 2 };
+
+/**
+ * The best of the home page's review links: a Google link first, then Yelp, then Facebook or Nextdoor, in page
+ * order within each kind; an empty string when none passes both review-link checks.
+ * @param {unknown} links facts.reviewLinks
+ * @returns {string}
+ */
+export function bestReviewsLink(links) {
+  let best = '';
+  let bestRank = Infinity;
+  for (const link of Array.isArray(links) ? links : []) {
+    if (typeof link !== 'string') continue;
+    const site = reviewsLinkOnPage(link);
+    if (site === '' || reviewsLinkHost(link) === '') continue;
+    const rank = REVIEW_SITE_RANK[site];
+    if (rank < bestRank) {
+      best = link.trim();
+      bestRank = rank;
+    }
+  }
+  return best;
+}
+
+/**
+ * True when the Grade has a number for a Score but the AI part was not checked (Claude did not answer, the
+ * daily limit was reached, or the AI check is not connected): the number counts website points only.
+ */
+export function isPartialScore(grade) {
+  const list = Array.isArray(grade?.results) ? grade.results : [];
+  return Number.isInteger(grade?.score?.score) && list.some(r => r && r.id === 'ai-named' && r.result === 'not_checked');
+}
+
+/** True while a "check again" is really running: it stops counting after 4 minutes, like a stale Grade. */
+export function recheckIsRunning(grade, nowMs) {
+  if (!grade?.recheckRunning) return false;
+  const started = Date.parse(grade.recheckStartedAt);
+  return Number.isFinite(started) && nowMs - started <= STALE_AFTER_MS;
+}
+
+const DAY_WORD = String.raw`\b(?:mon(?:day)?|tue(?:s(?:day)?)?|wed(?:nesday)?|thu(?:r(?:s(?:day)?)?)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)\b`;
+const CLOCK_PM = String.raw`\d{1,2}(?::\d{2})?\s?(?:am|pm)(?![a-z])`;
+const HOURS_IN_TEXT = new RegExp(
+  `${DAY_WORD}(?:\\s?(?:-|\u2013|\u2014|to|through)\\s?${DAY_WORD})?[:,]?\\s{0,3}${CLOCK_PM}\\s?(?:-|\u2013|\u2014|to)\\s?${CLOCK_PM}`,
+  'gi',
+);
+const PHONE_IN_TEXT = /\(?\d{3}\)?[\s.\-\u2013]+\d{3}[\s.\-\u2013]\d{4}/g;
+
+// ---- what the scan found on the website ---------------------------------------------------
+
+/** Phone, hours and address from the page: the business label first, then tap-to-call links, then the text. */
+function foundFromFacts(facts, input) {
+  const found = { phone: '', hours: [], address: '', website: input.website || '', reviewsLink: '' };
   if (!facts) return found;
+  found.reviewsLink = bestReviewsLink(facts.reviewLinks);
   const business = facts.jsonLd?.business ?? null;
+  const text = String(facts.text ?? '').slice(0, MAX_TEXT_FOR_PATTERNS);
+
   found.phone = normalizePhone(business?.telephone ?? '');
   if (!found.phone) {
-    for (const link of facts.telLinks ?? []) {
-      found.phone = normalizePhone(link.replace(/^tel:/i, ''));
+    for (const href of facts.telLinks ?? []) {
+      found.phone = normalizePhone(String(href).replace(/^tel:/i, ''));
       if (found.phone) break;
     }
   }
   if (!found.phone) {
-    const m = /(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/.exec(String(facts.text ?? '').slice(0, 200000));
-    found.phone = m ? normalizePhone(m[0]) : '';
+    for (const m of text.matchAll(PHONE_IN_TEXT)) {
+      found.phone = normalizePhone(m[0]);
+      if (found.phone) break;
+    }
   }
-  found.address = business?.address?.text ?? '';
-  if (!found.address) {
-    const m = STREET_PATTERN.exec(String(facts.text ?? '').slice(0, 200000));
-    found.address = m ? m[0] : '';
+
+  if (business?.hours?.length) {
+    found.hours = business.hours.slice(0, 7);
+  } else {
+    const seen = new Set();
+    for (const m of text.matchAll(HOURS_IN_TEXT)) {
+      const h = m[0].replace(/\s+/g, ' ').trim();
+      if (!seen.has(h.toLowerCase())) {
+        seen.add(h.toLowerCase());
+        found.hours.push(h);
+      }
+      if (found.hours.length >= 3) break;
+    }
   }
-  found.hours = Array.isArray(business?.hours) ? business.hours.slice(0, 7) : [];
+
+  found.address = business?.address?.text || (STREET_PATTERN.exec(text)?.[0] ?? '');
   return found;
 }
 
-/** The found fields for a stored Grade (what the Free_Page_Preview and Fix_Kit use). */
-export function foundFromGrade(grade) {
-  const input = grade.input;
-  const facts = grade.facts;
-  return {
-    name: input.name,
-    service: input.service,
-    city: input.city,
-    state: input.state,
-    website: input.website ?? '',
-    phone: facts?.phone ?? '',
-    address: facts?.address ?? '',
-    hours: Array.isArray(facts?.hours) ? facts.hours : [],
-  };
-}
-
-/** The small summary kept on a Grade. Only what the business published on its own website. */
-function summarizeFacts(facts, input) {
+/** The facts kept on a Grade: only what the business published on its own website. */
+function storedFacts(facts, found) {
   if (!facts) return null;
-  const found = extractFound(facts, input);
   return {
     title: facts.title,
     metaDescription: facts.metaDescription,
-    ogImage: facts.ogImage !== '',
-    h1s: facts.h1s.slice(0, 5),
+    ogImage: Boolean(facts.ogImage),
+    h1s: facts.h1s.slice(0, 12),
+    imgCount: facts.imgCount,
+    imgMissingAlt: facts.imgMissingAlt,
+    telCount: facts.telLinks.length,
     phone: found.phone,
     hours: found.hours,
     address: found.address,
-    jsonLdTypes: facts.jsonLd.types.slice(0, 10),
+    jsonLdTypes: facts.jsonLd.types.slice(0, 20),
+    jsonLdBlocks: facts.jsonLd.blockCount,
+    jsonLdUnreadable: facts.jsonLd.unreadableCount,
+    scriptBuilt: facts.scriptBuilt,
+    hasViewport: facts.hasViewport,
   };
+}
+
+function failureFor(err) {
+  switch (err?.code) {
+    case 'blocked_address': return "We can't visit that address because it isn't a public website.";
+    case 'timeout': return TOO_SLOW;
+    case 'too_large': return 'Your home page is too large to check.';
+    default: return undefined;
+  }
+}
+
+const looksLikeHtml = res => /html/i.test(String(res.contentType ?? ''))
+  || /^\s*(?:<!doctype\s+html|<html)/i.test(String(res.text ?? '').slice(0, 200));
+
+// ---- AI answers -------------------------------------------------------------------------------
+
+const codeOf = err => (
+  err && ['timeout', 'provider_failed', 'unparseable'].includes(err.code) ? err.code : 'internal'
+);
+
+function coded(code) {
+  return Object.assign(new Error(code), { code });
+}
+
+/** True when a provider answered 429 (rate limited) or 529 (overloaded). */
+const isBusy = err => Boolean(err) && (err.status === 429 || err.status === 529);
+
+/** Wait `ms`, ending early with a timeout error when `signal` aborts. */
+function pause(ms, signal) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener('abort', () => {
+      clearTimeout(timer);
+      reject(coded('timeout'));
+    }, { once: true });
+  });
+}
+
+/** Run `fn(signal)` with a deadline; the signal aborts when time runs out. */
+async function withDeadline(fn, ms) {
+  const ctrl = new AbortController();
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      ctrl.abort();
+      reject(coded('timeout'));
+    }, ms);
+  });
+  try {
+    return await Promise.race([(async () => fn(ctrl.signal))(), timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /**
- * The `ai-named` Check_Result from the stored AI results.
- * @param {object[]} ai
- * @param {string} [reasonIfNone] used when no answer ran
+ * One shared deadline. `timeout` rejects when it passes; `expired` turns true then.
+ * `stop()` clears the timer, so a finished run leaves nothing waiting.
  */
-/** The free-part AI question (also the question for Google's live answer). */
-export const freePromptFor = input => `Who are the best ${input.service} in ${input.city}, ${input.state}? Name your top 5.`;
-
-/** Assistants asked only as second opinions. */
-export const SECOND_OPINIONS = new Set(['chatgpt', 'gemini', 'grok', 'perplexity']);
-
-/** Display name of a main assistant, for the score lines. */
-export const mainWho = name => (name === 'anthropic' ? 'Claude' : name === 'openai' ? 'OpenAI' : 'AI');
-
-export function aiNamedResult(allAi, reasonIfNone = AI_FAILED) {
-  // Second opinions (ChatGPT, Gemini, Grok, Perplexity) are shown beside the main answers but never scored,
-  // so the score does not move with whether they happened to be asked.
-  const ai = Array.isArray(allAi) ? allAi.filter(a => !SECOND_OPINIONS.has(a?.provider)) : [];
-  const ran = ai.length;
-  if (ran === 0) return { id: 'ai-named', result: 'not_checked', detail: reasonIfNone };
-  const named = ai.filter(a => a.named).length;
-  if (named === 0) {
-    const who = mainWho(ai[0]?.provider);
-    return { id: 'ai-named', result: 'fail', earned: 0, detail: ran === 1 ? `No. ${who} did not name your business.` : `No. ${who} did not name your business in any of ${ran} answers.` };
-  }
-  const points = CHECKS.find(c => c.id === 'ai-named').points;
-  return {
-    id: 'ai-named',
-    result: 'pass',
-    earned: Math.round((points * named) / ran),
-    detail: ran === 1 ? `Yes. ${mainWho(ai[0]?.provider)} named your business.`
-      : named === ran ? `Yes. ${mainWho(ai[0]?.provider)} named your business in all ${ran} answers.`
-        : `Partly. ${mainWho(ai[0]?.provider)} named your business in ${named} of ${ran} answers.`,
-  };
+function startBudget(ms) {
+  let timer;
+  let expired = false;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      expired = true;
+      reject(coded('timeout'));
+    }, ms);
+  });
+  timeout.catch(() => {}); // no unhandled rejection when nothing is racing it
+  return { timeout, get expired() { return expired; }, stop: () => clearTimeout(timer) };
 }
 
-const withTimeout = (promise, ms, message) => new Promise((resolve, reject) => {
-  const timer = setTimeout(() => reject(new Error(message)), ms);
-  timer.unref?.();
-  promise.then(
-    v => { clearTimeout(timer); resolve(v); },
-    e => { clearTimeout(timer); reject(e); },
-  );
-});
+/** Race a promise against the shared deadline; the loser's later result or error is ignored. */
+function within(budget, promise) {
+  Promise.resolve(promise).catch(() => {});
+  return Promise.race([promise, budget.timeout]);
+}
+
+const cut = (text, max) => {
+  const chars = Array.from(text);
+  return chars.length > max ? { text: chars.slice(0, max).join(''), cut: true } : { text, cut: false };
+};
+
+function safeSources(list) {
+  if (!Array.isArray(list)) return [];
+  return list
+    .filter(s => s && typeof s.url === 'string' && /^https?:\/\//i.test(s.url) && typeof s.title === 'string')
+    .slice(0, MAX_SOURCES)
+    .map(s => ({ url: s.url, title: s.title }));
+}
+
+// ---- which answers are the free question's (owner decision D1, Requirement 26) ---------------------------------
+
+/** How the two extra questions start, in every wording they have had. The free question always starts "Who are the best ". */
+const EXTRA_QUESTION_STARTS = Object.freeze(['I need ', "I'm looking for ", 'Which ']);
+
+/**
+ * True for an answer to one of the two extra questions asked after unlocking: flagged `extra: true` when it was
+ * stored, or (in a Grade stored before the flag) recognized by how its question starts.
+ */
+export function isExtraAnswer(a) {
+  if (!a || typeof a !== 'object') return false;
+  if (a.extra === true) return true;
+  const prompt = typeof a.prompt === 'string' ? a.prompt : '';
+  return EXTRA_QUESTION_STARTS.some(start => prompt.startsWith(start));
+}
+
+/**
+ * The main assistant's answers to the free question: its answers that are not extra-question answers, to the
+ * question of the first of them. The extra questions and every second opinion are never in it. Nothing here
+ * compares with today's wording of the question, so a Grade asked with older wording still has its answers.
+ */
+export function freeAnswersOf(ai) {
+  const main = (Array.isArray(ai) ? ai : []).filter(a => a && typeof a === 'object' && !Array.isArray(a) && !isSecondOpinion(a) && !isExtraAnswer(a));
+  return main.length === 0 ? [] : main.filter(a => a.prompt === main[0].prompt);
+}
+
+/** The ai-named Check from the main assistant's answers to the free question (the extra questions never count). */
+function aiNamedResult(ai, aiMain) {
+  const main = freeAnswersOf(ai);
+  if (main.length === 0) {
+    const detail = aiMain?.state === 'limit' ? AI_LIMIT_REACHED
+      : aiMain?.state === 'not_connected' ? AI_NOT_CONNECTED
+        : AI_FAILED;
+    return { id: 'ai-named', result: 'not_checked', detail };
+  }
+  const label = providerLabel(main[0].provider);
+  const ran = main.length;
+  const named = main.filter(a => a.named).length;
+  const earned = Math.round((30 * named) / ran);
+  let detail;
+  if (ran === 1) {
+    detail = named ? `Yes. ${label} named your business.` : `No. ${label} didn't name your business.`;
+  } else {
+    detail = named
+      ? `Yes. ${label} named your business in ${named === ran ? (ran === 2 ? 'both answers' : `all ${ran} answers`) : `${named} of ${ran} answers`}.`
+      : `No. ${label} didn't name your business in any of its ${ran} answers.`; // V142, V207: plain counts everywhere
+  }
+  return { id: 'ai-named', result: named > 0 ? 'pass' : 'fail', detail, earned };
+}
+
+/** Website results plus the ai-named result, in the order of the CHECKS table. */
+function assemble(websiteResults, ai, aiMain) {
+  const all = [...websiteResults.filter(r => r.id !== 'ai-named'), aiNamedResult(ai, aiMain)];
+  const order = new Map(CHECKS.map((c, i) => [c.id, i]));
+  return all.sort((a, b) => (order.get(a.id) ?? 99) - (order.get(b.id) ?? 99));
+}
+
+/**
+ * A Grade's stored results with the `ai-named` result worked out again from its stored answers by the one rule of
+ * Requirement 26 (the free question's answers only), so a Grade stored while the extra questions counted shows the
+ * same number as a new one. Used for every number a page shows: the report, the admin list, the lead's score and a
+ * Recheck's "before" number. Nothing is written. A Grade with no stored `ai-named` result, or with no main answer at
+ * all, keeps its results as they are.
+ */
+export function scoredResults(grade) {
+  const results = Array.isArray(grade?.results) ? grade.results : [];
+  const ai = Array.isArray(grade?.ai) ? grade.ai.filter(a => a && typeof a === 'object' && !Array.isArray(a)) : [];
+  const hasStored = results.some(r => r && r.id === 'ai-named');
+  if (!hasStored || !ai.some(a => !isSecondOpinion(a))) return results;
+  return results.map(r => (r && r.id === 'ai-named' ? aiNamedResult(ai, grade.aiMain) : r));
+}
+
+/** The Score number a report shows for a Grade (the same rule as `reportPage`), or null. */
+export function shownScore(grade) {
+  const results = scoredResults(grade)
+    .filter(r => r && typeof r === 'object' && typeof r.id === 'string');
+  const stored = Number.isInteger(grade?.score?.score) ? grade.score.score : null;
+  if (results.length === 0) return stored;
+  try {
+    const { score } = scoreGrade(results);
+    return Number.isInteger(score) ? score : null;
+  } catch {
+    return stored;
+  }
+}
+
+function scoreOf(results) {
+  const { score, earned, available, failed, counted, byGroup } = scoreGrade(results);
+  return { score, earned, available, failed, counted, byGroup };
+}
+
+// ---- the grader --------------------------------------------------------------------------------
 
 /**
  * @param {{
- *   store: object, assistantProvider: object, aiBudget: object, safeFetcher: object,
- *   draftStore: { create: Function, get: Function },
- *   notifier?: object, clock: { now(): number }, newId: () => string, config: object,
+ *   store: object, assistantProvider: object, extraAssistants?: object[], nameChecker?: object|null,
+ *   aiBudget: object, safeFetcher: object, draftStore: object, notifier?: object,
+ *   clock: { now(): number }, newId: () => string, config: object,
  * }} deps
  */
 export function createGrader({
-  store, assistantProvider, aiBudget, safeFetcher, draftStore, notifier, clock, newId, config,
-  extraAssistants = [],
-  nameChecker = null,
+  store, assistantProvider, extraAssistants = [], nameChecker = null, aiBudget, safeFetcher,
+  draftStore, notifier, clock, newId, config = {}, websiteBudgetMs = WEBSITE_BUDGET_MS, guard = null,
+  // Injectable so tests need no real waiting: the pause before a retry and a second opinion's time limit.
+  sleep = pause, secondOpinionTimeoutMs = SECOND_OPINION_TIMEOUT_MS,
+  // The main assistant's time limit (120 seconds); injectable so a test can cut it short.
+  aiTimeoutMs = AI_TIMEOUT_MS,
+  // The one Google Places lookup and the one Azure Maps (Bing) search of a check; null without their keys.
+  placesLookup = null, bingLookup = null,
 }) {
-  // Second opinions (ChatGPT and so on): asked the same questions as the main assistant.
-  const extras = (Array.isArray(extraAssistants) ? extraAssistants : []).filter(p => p && typeof p.ask === 'function');
-  // A second opinion never spends the last of the day's AI calls: these are kept for the main assistant.
-  const EXTRA_RESERVE = 12;
-  // After this many failures in a row a second opinion is left out for a while.
-  const EXTRA_MAX_FAILS = 3;
-  const EXTRA_PAUSE_MS = 15 * 60 * 1000;
-  const extraHealth = new Map(); // provider name -> { fails, pausedUntil }
-  const extraUsable = provider => {
-    const h = extraHealth.get(provider.name);
-    if (h && h.pausedUntil > nowMs()) return false;
-    const left = typeof aiBudget?.peek === 'function' ? aiBudget.peek({ kind: 'grade' }).remaining : Infinity;
-    return !(left <= EXTRA_RESERVE);
-  };
-  const noteExtra = (provider, ok) => {
-    const h = extraHealth.get(provider.name) ?? { fails: 0, pausedUntil: 0 };
-    if (ok) { h.fails = 0; extraHealth.set(provider.name, h); return; }
-    h.fails += 1;
-    if (h.fails >= EXTRA_MAX_FAILS) { h.fails = 0; h.pausedUntil = nowMs() + EXTRA_PAUSE_MS; }
-    extraHealth.set(provider.name, h);
-  };
-  /** Ask a second opinion, unless it is paused or the day's calls are nearly used up. */
-  const askExtra = async (input, prompt, provider) => {
-    if (!extraUsable(provider)) return { reason: AI_LIMIT_REACHED };
-    const res = await askAi(input, prompt, provider);
-    if (res.entry || res.reason === AI_FAILED) noteExtra(provider, Boolean(res.entry));
-    return res;
-  };
-  /** Providers (main first) that have no stored answer to this prompt yet. */
-  const missingFor = (ai, prompt) => {
-    const have = new Set((ai ?? []).filter(a => a.prompt === prompt).map(a => a.provider));
-    const pool = assistantProvider?.name === 'mock' ? [assistantProvider] : [assistantProvider, ...extras];
-    return pool.filter(p => p && !have.has(p.name));
-  };
   const grades = () => store.collection('grades');
+  const leads = () => store.collection('leads');
   const nowIso = () => new Date(clock.now()).toISOString();
-  const nowMs = () => Number(new Date(clock.now()));
-  const logId = (id, msg) => process.stderr.write(`[grader] id=${id} ${msg}\n`);
+  const extras = Array.isArray(extraAssistants) ? extraAssistants : [];
+  const live = new Map(); // Grade_Id -> running Grade, so status.json need not read the file
+  const active = new Map(); // Grade_Id -> promise of the run, so one id runs once
+  const secondOpinion = new Map(); // assistant name -> { fails, until }
+  // At most GRADE_MAX_RUNNING checks run at once; the rest wait here, first in first out.
+  const maxRunning = Number.isInteger(config.gradeMaxRunning) && config.gradeMaxRunning > 0
+    ? config.gradeMaxRunning
+    : DEFAULT_MAX_RUNNING;
+  const waiting = []; // Grade_Ids in line
+  // Grade_Ids started by this process whose run has not ended yet (from start() to the end of the run). Such a check is
+  // really running, however long the clock says it took, so fair use always counts it (batch 3 X4 follow-up).
+  const ours = new Set();
 
-  /** Running promises, so a second run for the same id is ignored. */
-  const runs = new Map();
-  /** In-memory view of running Grades, for status.json. */
-  const live = new Map();
+  // GRADE_MAIN_ASKS: 1 to 3; a missing or odd value counts as 3 (config.js has already checked a set value).
+  const mainAsks = () => (Number.isInteger(config.gradeMainAsks) && config.gradeMainAsks >= 1 && config.gradeMainAsks <= 3
+    ? config.gradeMainAsks
+    : 3);
 
-  function updateGrade(id, change) {
-    return grades().update(list => {
-      const g = list.find(x => x && x.id === id);
-      if (g) change(g);
-    });
-  }
-
-  async function addStep(id, step) {
-    live.get(id)?.steps.push(step);
-    await updateGrade(id, g => { g.steps.push(step); });
-  }
-
-  /** Run one step; always records it, never throws. */
-  async function timed(id, name, fn, track = true) {
-    const t0 = nowMs();
-    let state = 'done';
-    let finding = '';
-    let value;
+  const watchGuard = () => {
     try {
-      const out = await fn();
-      value = out?.value;
-      finding = out?.finding ?? '';
-      if (out?.state) state = out.state;
+      guard?.watch?.();
     } catch {
-      state = 'failed';
-      finding = 'This step did not finish.';
+      // watching the day's use must never stop a check
     }
-    const step = { name, state, ms: nowMs() - t0, finding };
-    if (track) {
-      try {
-        await addStep(id, step);
-      } catch {
-        logId(id, 'a step was not saved');
-      }
-    }
-    return { value, state };
+  };
+
+  const background = (id, label, fn) => {
+    Promise.resolve().then(fn).catch(() => log(`${label}-failed id=${id}`));
+  };
+
+  async function get(id) {
+    const list = await grades().read();
+    return Array.isArray(list) ? list.find(g => g && g.id === id) : undefined;
   }
 
-  // ---- website part --------------------------------------------------------
+  // A check counts from when it started running (`startedAt`), not from when it was created, so one
+  // that waited in line is not failed for the time it waited. A check still in this process's line is
+  // never stale; one left over from before a restart has no place in the line and goes stale as before.
+  const isStale = (grade, now) => Boolean(grade)
+    && grade.status === 'running'
+    && !waiting.includes(grade.id)
+    && now - Date.parse(grade.startedAt || grade.createdAt) > STALE_AFTER_MS;
 
-  /** The website steps. With track=false (a recheck) no Scan_Step is recorded. */
-  async function websitePart(id, input, track = true) {
-    const names = stepNames(input);
-    const out = { facts: null, robots: null, llms: null, failure: undefined };
-    if (!input.website) {
-      if (track) {
-        for (const name of names.slice(0, 3)) {
-          await addStep(id, { name, state: 'skipped', ms: 0, finding: 'No website given.' });
-        }
-      }
-      return out;
-    }
+  // ---- reading one answer ----------------------------------------------------------------
 
-    let home;
-    const fetchStep = await timed(id, names[0], async () => {
-      try {
-        const res = await safeFetcher.fetchText(input.website, { strictSize: true });
-        if (res.status >= 400) {
-          out.failure = `Your website answered with an error (status ${res.status}).`;
-          return { finding: out.failure, state: 'failed' };
-        }
-        if (!/html|xml|^$/i.test(res.contentType)) {
-          out.failure = "Your home page isn't a web page we can read.";
-          return { finding: out.failure, state: 'failed' };
-        }
-        home = res;
-        return { finding: 'Found your website.' };
-      } catch (err) {
-        out.failure = failureText(err);
-        return { finding: out.failure, state: 'failed' };
-      }
-    }, track);
-    void fetchStep;
+  /** Our own reading of an answer, then Gemini's second look when a checker is on. */
+  async function readAnswer(answer, input, provider) {
+    const business = { name: input.name, city: input.city, state: input.state, service: input.service, website: input.website };
+    const base = analyzeAnswer(answer, business);
+    const plain = { named: base.named, position: base.position, total: base.total, competitors: base.competitors };
+    if (!nameChecker || provider === 'mock') return plain;
 
-    await timed(id, names[1], async () => {
-      if (!home) return { finding: out.failure ?? FETCH_FAILURES.connect_failed, state: 'skipped' };
-      out.facts = readPageFacts(home.text);
-      const n = out.facts.h1s.length;
-      return { finding: `Found ${n} main ${n === 1 ? 'headline' : 'headlines'}.` };
-    }, track);
+    const list = listedNames(answer, business);
+    const names = list.filter(e => !e.own).map(e => e.name).slice(0, MAX_NAMES_TO_CHECK);
+    if (names.length === 0) return plain;
 
-    await timed(id, names[2], async () => {
-      const base = home?.finalUrl ?? input.website;
-      const get = async (path, accept) => {
-        try {
-          const res = await safeFetcher.fetchText(new URL(path, base).href, { accept });
-          return { status: res.status, contentType: res.contentType, text: res.text };
-        } catch {
-          return null;
-        }
-      };
-      [out.robots, out.llms] = await Promise.all([
-        get('/robots.txt', 'text/plain,*/*;q=0.5'),
-        get('/llms.txt', 'text/plain,*/*;q=0.5'),
-      ]);
-      const parts = [];
-      parts.push(out.robots ? "Read your website's rules for AI." : "Couldn't read your website's rules for AI.");
-      parts.push(out.llms ? 'Checked for llms.txt.' : "Couldn't check for llms.txt.");
-      return { finding: parts.join(' ') };
-    }, track);
-    return out;
-  }
-
-  // ---- AI part -------------------------------------------------------------
-
-  /**
-   * Ask the provider one question. Returns { entry } or { reason }.
-   * The mock never consumes budget; in production the mock is not allowed to answer.
-   */
-  async function askAi(input, prompt, provider = assistantProvider) {
-    const isMock = provider?.name === 'mock';
-    if (isMock && config.production === true) return { reason: AI_NOT_CONNECTED };
-    if (!isMock) {
-      const budget = aiBudget.consume({ kind: 'grade' });
-      if (!budget.allowed) return { reason: AI_LIMIT_REACHED };
-    }
-    const t0 = nowMs();
-    try {
-      const category = mapCategory(input.service, store.getCategories()) || '';
-      const res = await withTimeout(provider.ask({
-        prompt,
-        signal: AbortSignal.timeout(AI_TIMEOUT_MS),
-        category,
-        businessName: input.name,
-        consumeExtra: () => (isMock ? true : aiBudget.consume({ kind: 'grade' }).allowed === true),
-      }), AI_TIMEOUT_MS, 'ai timeout');
-      const answer = cutCodePoints(res.answer, MAX_ANSWER_CODE_POINTS);
-      // Read the whole answer for names (bounded), so a business named late is not missed; store the capped one.
-      const analyzed = cutCodePoints(res.answer, MAX_ANALYZED_CODE_POINTS);
-      const analysis = await readAnswer(analyzed, input, isMock);
-      return {
-        entry: {
-          prompt,
-          provider: String(res.provider ?? provider.name ?? ''),
-          model: String(res.model ?? ''),
-          webSearch: res.webSearch === true,
-          answer,
-          named: analysis.named,
-          position: analysis.position,
-          total: analysis.total,
-          competitors: analysis.competitors,
-          ...(analysis.nameCheck && { nameCheck: analysis.nameCheck }),
-          ms: nowMs() - t0,
-          at: nowIso(),
-        },
-      };
-    } catch (err) {
-      // A fixed code only, never the error's message: a message could carry a key, a reply or typed input.
-      const code = err instanceof AssistantError ? err.code
-        : err?.message === 'ai timeout' ? 'ai_timeout'
-          : 'internal';
-      process.stderr.write(`[grader] ai-failed code=${code}\n`);
-      return { reason: AI_FAILED };
-    }
-  }
-
-  /**
-   * Read an answer for names: our own reader, plus (when on) Gemini Decisions as
-   * a second check. Only a very sure Gemini reply changes our reader's result;
-   * any failure keeps our reader's result unchanged.
-   */
-  async function readAnswer(text, input, isMock) {
-    const own = analyzeAnswer(text, input);
-    if (!nameChecker || isMock) return own;
-    const all = listedNames(text);
-    // Names our own reader already matched to the business are never sent or dropped.
-    const ours = n => isNamed(n, input, { allowGeneric: true });
     let verdict = null;
     try {
-      verdict = await nameChecker.check({ answer: text, business: input, names: all.filter(n => !ours(n)) });
+      verdict = await nameChecker.check({
+        answer, business: { name: input.name, city: input.city, state: input.state }, names,
+      });
     } catch {
       verdict = null;
     }
-    if (!verdict) return own;
-    const keep = n => ours(n) || (verdict.isBusiness?.get(n) ?? 1) >= DROP_BELOW;
-    const checked = analyzeAnswer(text, input, { keep });
-    const dropped = own.total - checked.total;
-    let addedNamed = false;
-    if (!checked.named) {
-      const kept = all.filter(keep);
-      // Gemini's yes counts only for a name that starts like the business's own (a typo apart).
-      const i = kept.findIndex(n => !ours(n) && looksLikeSameName(n, input) && (verdict.sameAs?.get(n) ?? 0) >= NAMED_ABOVE);
-      if (i !== -1) {
-        addedNamed = true;
-        checked.named = true;
-        checked.position = i + 1;
-        checked.competitors = checked.competitors.filter(c => c !== kept[i]);
+    // Asked once: a failed or unreadable reply is not asked for again every time the answer is carried over.
+    if (!verdict || !verdict.isBusiness || !verdict.sameAs) return { ...plain, tried: true };
+
+    const dropped = new Set();
+    for (const name of names) {
+      const p = verdict.isBusiness.get(name);
+      if (typeof p === 'number' && p < DROP_BELOW) dropped.add(name);
+    }
+    let added = null;
+    if (!base.named) {
+      for (const name of names) {
+        if (dropped.has(name)) continue;
+        const s = verdict.sameAs.get(name);
+        if (typeof s === 'number' && s >= NAMED_ABOVE && looksLikeSameName(name, business)) {
+          added = name;
+          break;
+        }
       }
     }
-    checked.nameCheck = { by: 'gemini-decisions', dropped, addedNamed };
-    return checked;
+    const kept = list.filter(e => !dropped.has(e.name));
+    const at = kept.findIndex(e => e.own || e.name === added);
+    return {
+      named: base.named || added !== null,
+      position: at === -1 ? null : at + 1,
+      total: kept.length,
+      competitors: kept.filter(e => !e.own && e.name !== added).map(e => e.name).slice(0, MAX_COMPETITORS),
+      nameCheck: { by: nameChecker.name || 'gemini-decisions', dropped: dropped.size, addedNamed: added !== null },
+      tried: true,
+    };
   }
 
-  const freePrompt = freePromptFor;
+  async function buildEntry({ assistant, second, prompt, input, result, ms }) {
+    const full = result.answer.trim();
+    const { text, cut: wasCut } = cut(full, MAX_ANSWER_CODE_POINTS);
+    const provider = typeof result.provider === 'string' && result.provider !== '' ? result.provider : assistant.name;
+    const read = await readAnswer(full, input, provider);
+    const entry = {
+      prompt,
+      provider,
+      model: typeof result.model === 'string' ? result.model : '',
+      webSearch: result.webSearch === true,
+      answer: text,
+      named: read.named,
+      position: read.position,
+      total: read.total,
+      competitors: read.competitors,
+      ms,
+      at: nowIso(),
+    };
+    if (wasCut) entry.answerCut = true;
+    if (second) entry.second = true;
+    if (read.nameCheck) entry.nameCheck = read.nameCheck;
+    if (read.tried) entry.nameCheckTried = true;
+    const sources = safeSources(result.sources);
+    if (sources.length > 0) entry.sources = sources;
+    return entry;
+  }
+
+  // ---- second opinions that keep failing ---------------------------------------------------
+
+  const isPaused = name => (secondOpinion.get(name)?.until ?? 0) > clock.now();
+
+  function noteSecond(name, ok) {
+    if (ok) {
+      secondOpinion.set(name, { fails: 0, until: 0 });
+      return;
+    }
+    const state = secondOpinion.get(name) ?? { fails: 0, until: 0 };
+    state.fails += 1;
+    if (state.fails >= SECOND_OPINION_FAILS) {
+      state.fails = 0;
+      state.until = clock.now() + SECOND_OPINION_PAUSE_MS;
+    }
+    secondOpinion.set(name, state);
+  }
 
   /**
-   * Answers carried over from a check earlier this week were read before the name
-   * check existed: read them again (no new AI question is asked, only the check).
+   * Ask one question of the main assistant and of each second opinion that may be asked.
+   * `existing` holds answers already on the Grade (carried over or asked earlier).
+   * @returns {Promise<{ entries: object[], mainState: 'ok'|'limit'|'failed'|'not_connected'|'off' }>}
    */
-  async function rereadCarried(input, entries) {
-    if (!nameChecker || assistantProvider?.name === 'mock') return entries;
-    return Promise.all(entries.map(async (a) => {
-      if (!a?.reusedFrom || a.nameCheck || a.provider === 'mock' || typeof a.answer !== 'string' || !a.answer) return a;
-      // The stored answer is cut short; the first read saw more. A cut answer is never re-read.
-      if (Array.from(a.answer).length >= MAX_ANSWER_CODE_POINTS) return a;
-      const analysis = await readAnswer(a.answer, input, false);
-      if (!analysis.nameCheck) return a;
-      // A re-read never takes away a mention the earlier read found.
-      if (a.named && !analysis.named) return a;
-      return { ...a, named: analysis.named, position: analysis.position, total: analysis.total, competitors: analysis.competitors, nameCheck: analysis.nameCheck };
-    }));
-  }
+  async function askQuestion({ input, prompt, existing = [], onSecond, gradeId, asks = 1 }) {
+    const main = assistantProvider;
+    const mainName = main?.name ?? 'unknown';
+    const isMock = mainName === 'mock';
+    const category = mapCategory(input.service, store.getCategories()) || '';
+    // An entry that is not an object (a hand-edited grades.json) is skipped, so it can never stop a check (V165).
+    const have = name => (Array.isArray(existing) ? existing : []).some(a => isEntry(a) && a.prompt === prompt && a.provider === name);
+    // Every counted call is followed by a look at the day's use (the heads-up emails); it never waits or throws.
+    const consume = () => {
+      const counted = aiBudget.consume({ kind: 'grade' }).allowed === true;
+      if (counted) watchGuard();
+      return counted;
+    };
+    // More than 12 of the Grader's calls left: the reserve that keeps the day's last calls for other owners.
+    const aboveReserve = () => aiBudget.peek({ kind: 'grade' }).remaining > SECOND_OPINION_RESERVE;
 
-  async function aiPart(id, grade) {
-    const name = stepNames(grade.input)[3];
-    const prompt = freePrompt(grade.input);
-    const kept = await rereadCarried(grade.input, Array.isArray(grade.ai) ? grade.ai : []);
-    const toAsk = missingFor(kept, prompt);
-    if (toAsk.length === 0) {
-      await addStep(id, { name, state: 'done', ms: 0, finding: 'Used the answer AI gave us for this same question earlier this week.' });
-      return { ai: kept, reason: undefined };
-    }
-    let reason;
-    let ai = kept;
-    await timed(id, name, async () => {
-      // The main assistant and any second opinions are asked at the same time.
-      const results = await Promise.all(toAsk.map(p => (p === assistantProvider
-        ? askAi(grade.input, prompt)
-        : askExtra(grade.input, prompt, p))));
-      const fresh = results.map(r => r.entry).filter(Boolean);
-      // This question's answers first (main assistant first), then anything else carried over.
-      const mine = [...kept.filter(a => a.prompt === prompt), ...fresh];
-      const order = [assistantProvider, ...extras].map(p => p?.name);
-      const rank = a => { const i = order.indexOf(a.provider); return i < 0 ? order.length : i; };
-      mine.sort((a, b) => rank(a) - rank(b));
-      ai = [...mine, ...kept.filter(a => a.prompt !== prompt)];
-      const counted = mine.filter(a => !SECOND_OPINIONS.has(a.provider));
-      if (counted.length > 0) {
-        const who = mainWho(counted[0].provider);
-        if (counted.some(a => a.named)) return { finding: `${who} named your business.` };
-        const n = Math.max(...counted.map(a => a.competitors.length));
-        if (n === 0) return { finding: `${who} did not name your business.` };
-        return { finding: `${who} named ${n} other ${n === 1 ? 'business' : 'businesses'}, not yours.` };
+    // How many times the main assistant is asked this question (Feature E). The demo assistant gives the same
+    // answer to the same prompt, so it is asked once.
+    const wanted = Number.isInteger(asks) && asks >= 1 ? Math.min(asks, 3) : 1;
+    const planned = isMock ? 1 : wanted;
+
+    let mainState = 'ok';
+    const plans = [];
+    if (!main) mainState = 'off';
+    else if (have(mainName)) mainState = 'ok';
+    else if (isMock && config.production === true) mainState = 'not_connected';
+    else if (!isMock && !consume()) mainState = 'limit';
+    else {
+      // Ask 1 as today; asks 2 and up only while more than 12 calls remain, each charged when it is planned.
+      plans.push({ assistant: main, second: false, ask: 1 });
+      for (let k = 2; k <= planned; k += 1) {
+        if (!aboveReserve() || !consume()) break;
+        plans.push({ assistant: main, second: false, ask: k });
       }
-      reason = results[0]?.reason;
-      if (mine.length > 0) return { finding: `${mainWho(assistantProvider?.name)} did not answer this time, so there is no AI score.` };
-      return { finding: reason, state: 'failed' };
+    }
+    const asked = plans.length;
+
+    // Second opinions: never behind the demo assistant, never on the day's last calls,
+    // and not at all for a while after three failures in a row.
+    if (main && !isMock) {
+      for (const extra of extras) {
+        if (have(extra.name) || isPaused(extra.name)) continue;
+        if (aiBudget.peek({ kind: 'grade' }).remaining <= SECOND_OPINION_RESERVE) continue;
+        if (!consume()) continue;
+        plans.push({ assistant: extra, second: true });
+      }
+    }
+
+    // One retry after a 429 (rate limited) or 529 (overloaded): wait what the provider asks (at most 20
+    // seconds, 5 when it says nothing), inside the same deadline. The retry is not charged again.
+    const askWithRetry = async (plan, signal) => {
+      const { assistant, second } = plan;
+      // A resend inside an ask (the reply paused mid-search) is one more paid call. Ask 1 keeps today's rule;
+      // asks 2 and up resend only while more than 12 calls remain, and when the resend is refused the ask is
+      // marked so its paused preamble is dropped rather than scored as "not named".
+      const consumeExtra = (plan.ask ?? 1) <= 1
+        ? consume
+        : () => {
+          if (aboveReserve() && consume()) return true;
+          plan.resendRefused = true;
+          return false;
+        };
+      const ask = () => assistant.ask({
+        prompt,
+        signal,
+        category,
+        businessName: input.name,
+        ...(second ? {} : { consumeExtra }),
+      });
+      try {
+        return await ask();
+      } catch (err) {
+        if (!isBusy(err)) throw err;
+        const seconds = Number.isFinite(err.retryAfterSeconds) ? err.retryAfterSeconds : RETRY_DEFAULT_SECONDS;
+        log(`ai-retry provider=${assistant.name} status=${err.status}`);
+        // Claude may be asked to wait up to 20 seconds; a second opinion never waits more than 5.
+        const top = second ? SECOND_RETRY_MAX_SECONDS : RETRY_MAX_SECONDS;
+        await sleep(Math.min(Math.max(seconds, 0), top) * 1000, signal);
+        return ask();
+      }
+    };
+
+    const run = async plan => {
+      const { assistant, second } = plan;
+      const started = clock.now();
+      try {
+        const raw = await withDeadline(
+          signal => askWithRetry(plan, signal),
+          second ? secondOpinionTimeoutMs : aiTimeoutMs,
+        );
+        // An ask (2 and up) whose resend was refused counts as not run: nothing is kept from it.
+        if (!second && plan.resendRefused) {
+          log('ai-ask-dropped reason=resend-refused');
+          return { entry: null, second, name: assistant.name, dropped: true };
+        }
+        const result = typeof raw === 'string' ? { answer: raw } : raw;
+        if (!result || typeof result.answer !== 'string' || result.answer.trim() === '') throw coded('unparseable');
+        const entry = await buildEntry({
+          assistant, second, prompt, input, result, ms: Math.max(0, clock.now() - started),
+        });
+        // Which ask this was, only when more than one was planned (one ask stays exactly as before).
+        if (!second && planned > 1) entry.ask = plan.ask;
+        if (second) noteSecond(assistant.name, true);
+        return { entry, second, name: assistant.name };
+      } catch (err) {
+        // A call that ended in 429 or 529 was never served: give it back to the daily allowance.
+        const busy = isBusy(err);
+        if (busy && typeof aiBudget.refund === 'function') aiBudget.refund({ kind: 'grade' });
+        log(second
+          ? `second-ai-failed provider=${assistant.name} code=${codeOf(err)}${busy ? ' busy' : ''}`
+          : `ai-failed code=${codeOf(err)}${busy ? ' busy' : ''}`);
+        if (second) noteSecond(assistant.name, false);
+        return { entry: null, second, name: assistant.name, timedOut: err?.code === 'timeout' };
+      }
+    };
+
+    // Second opinions run at the same time as the main answer, but nothing waits for them: each one is
+    // handed to `onSecond` when it ends (or when its 45 seconds are up). Without `onSecond` they are awaited.
+    const mainPlans = plans.filter(p => !p.second);
+    // Remember which second opinions are still answering, so an open report can say so and refresh.
+    for (const plan of plans) if (plan.second && gradeId) trackSecond(gradeId, plan.assistant.name, true);
+    const secondRuns = plans.filter(p => p.second).map(async plan => {
+      const outcome = await run(plan);
+      if (typeof onSecond === 'function') {
+        try {
+          await onSecond({ entry: outcome.entry, name: outcome.name, timedOut: outcome.timedOut === true, prompt });
+        } catch {
+          log(`second-save-failed provider=${plan.assistant.name}`);
+        }
+      }
+      if (gradeId) trackSecond(gradeId, plan.assistant.name, false); // after it is saved
+      return outcome;
     });
-    return { ai, reason };
+    secondRuns.forEach(p => p.catch(() => {}));
+
+    // All planned asks start together, each with its own deadline and its own retry.
+    const mainOutcomes = await Promise.all(mainPlans.map(plan => run(plan)));
+    const entries = mainOutcomes.filter(o => o.entry).map(o => o.entry);
+    if (mainPlans.length > 0 && entries.length === 0) mainState = 'failed';
+    if (typeof onSecond !== 'function') {
+      for (const o of await Promise.all(secondRuns)) if (o.entry) entries.push(o.entry);
+    }
+    return { entries, mainState, planned, asked };
   }
 
-  // ---- run -----------------------------------------------------------------
+  // Grade_Id -> (assistant name -> how many of its answers are still coming). Counted per answer, so a
+  // provider stays listed until every one of its pending answers has arrived or run out of time.
+  const pendingSeconds = new Map();
 
-  async function doRun(id) {
-    const list = await grades().read();
-    const grade = Array.isArray(list) ? list.find(g => g && g.id === id) : undefined;
+  function trackSecond(id, name, on) {
+    const counts = pendingSeconds.get(id) ?? new Map();
+    const next = (counts.get(name) ?? 0) + (on ? 1 : -1);
+    if (next > 0) counts.set(name, next);
+    else counts.delete(name);
+    if (counts.size > 0) pendingSeconds.set(id, counts);
+    else pendingSeconds.delete(id);
+  }
+
+  /** Assistant names (such as 'chatgpt') of second opinions for this Grade that have not all answered yet. */
+  const secondPending = id => [...(pendingSeconds.get(id)?.keys() ?? [])];
+
+  /** Add a second opinion that arrived after the report was written (or note that it ran out of time). */
+  async function saveLateSecond(id, { entry, name, timedOut, prompt }) {
+    if (!entry && !timedOut) return;
+    await grades().update(list => {
+      const g = list.find(x => x && x.id === id);
+      if (!g) return;
+      if (entry) {
+        const stored = Array.isArray(g.ai) ? g.ai : [];
+        if (!stored.some(a => isEntry(a) && a.prompt === entry.prompt && a.provider === entry.provider)) g.ai = [...stored, entry];
+      } else {
+        const missed = Array.isArray(g.secondMissed) ? g.secondMissed : [];
+        if (!missed.some(m => m.prompt === prompt && m.provider === name)) g.secondMissed = [...missed, { provider: name, prompt }];
+      }
+    });
+  }
+
+  // ---- the website steps ----------------------------------------------------------------------------
+
+  /**
+   * Fetch and read the home page, robots.txt and llms.txt, then run the website Checks.
+   * `step(index, state, finding, ms)` is told about each step as it ends.
+   */
+  async function readWebsite(input, step) {
+    const budget = startBudget(websiteBudgetMs);
+    try {
+      return await readWebsiteWithin(input, step, budget);
+    } finally {
+      budget.stop();
+    }
+  }
+
+  /**
+   * The website steps share one deadline (30 seconds). A fetch still running at the limit is
+   * given up on and its step is recorded as failed; later steps are skipped. Nothing here
+   * writes a step after the limit except the flow itself, in order, so a late fetch that
+   * finishes on its own is ignored.
+   */
+  async function readWebsiteWithin(input, step, budget) {
+    const nothing = { facts: null, found: foundFromFacts(null, input), results: null, homeOk: false };
+    if (!input.website) {
+      await step(0, 'skipped', 'No website given', 0);
+      await step(1, 'skipped', 'No website given', 0);
+      await step(2, 'skipped', 'No website given', 0);
+      return { ...nothing, results: runWebsiteChecks({ facts: null, robots: null, llms: null, input }) };
+    }
+
+    let home = null;
+    let failure;
+    let t = clock.now();
+    // "Website is reachable" (high-tech-look 12.1), from this same request: no extra call.
+    let alive = { reached: false, https: /^https:/i.test(String(input.website ?? '')) };
+    try {
+      const res = await within(budget, safeFetcher.fetchText(input.website, { strictSize: true }));
+      alive = {
+        reached: true,
+        https: /^https:/i.test(String(res.finalUrl ?? input.website ?? '')),
+        certValidTo: typeof res.certValidTo === 'string' ? res.certValidTo : null,
+      };
+      if (res.status < 200 || res.status >= 300 || !looksLikeHtml(res)) failure = HOME_UNREADABLE;
+      else home = res;
+    } catch (err) {
+      failure = failureFor(err);
+      if (err?.dns === 'not_found') alive.dnsNotFound = true;
+      if (err?.dns === 'www_only') alive.wwwOnly = true;
+      if (err?.tls === 'expired') alive.certExpired = true;
+    }
+    await step(0, home ? 'done' : 'failed', home ? 'Reached your website' : (failure ?? WEBSITE_UNREACHED), clock.now() - t);
+
+    let facts = null;
+    t = clock.now();
+    if (home) {
+      try {
+        facts = readPageFacts(home.text);
+        const n = facts.h1s.length;
+        await step(1, 'done', `Found ${n} main headline${n === 1 ? '' : 's'}`, clock.now() - t);
+      } catch {
+        failure = HOME_UNREADABLE;
+        await step(1, 'failed', HOME_UNREADABLE, clock.now() - t);
+      }
+    } else {
+      await step(1, 'skipped', 'Nothing to read', 0);
+    }
+
+    // robots.txt and llms.txt are read even when the home page could not be (a bot challenge on
+    // the home page says nothing about whether AI assistants are let in).
+    let robots = null;
+    let llms = null;
+    let sitemap = null;
+    let tooSlow = false;
+    t = clock.now();
+    if (budget.expired) {
+      tooSlow = true;
+    } else {
+      const base = home?.finalUrl || input.website;
+      const fetchOne = async path => {
+        const res = await safeFetcher.fetchText(new URL(path, base).href);
+        return { status: res.status, text: res.text, contentType: res.contentType };
+      };
+      try {
+        [robots, llms] = await within(budget, Promise.all([
+          fetchOne('/robots.txt').catch(() => ({ status: 0 })),
+          fetchOne('/llms.txt').catch(() => null),
+        ]));
+      } catch {
+        tooSlow = true; // the shared deadline passed; both files count as not checked
+        robots = null;
+        llms = null;
+      }
+      // The sitemap (Requirement 3.9): the first Sitemap: line of the robots.txt just read, else /sitemap.xml, asked for
+      // once, through the same safe fetcher with the same size limit, timeout and shared deadline as llms.txt. The
+      // answer is only saved for the health map; it does not change the Checks or the score.
+      if (!tooSlow) {
+        const target = sitemapAddress(robots?.text, base);
+        if (target) {
+          try {
+            const res = await within(budget, safeFetcher.fetchText(target));
+            sitemap = { status: res.status, text: res.text, contentType: res.contentType, url: target };
+          } catch {
+            sitemap = { error: true, url: target };
+          }
+        }
+      }
+    }
+    if (tooSlow && failure === undefined) failure = TOO_SLOW;
+    const results = runWebsiteChecks({ facts, robots, llms, input, failure });
+    const bots = results.find(r => r.id === 'ai-bots-allowed');
+    if (tooSlow) {
+      await step(2, 'failed', TOO_SLOW, clock.now() - t);
+    } else if (bots && bots.result !== 'not_checked') {
+      const blocked = bots.blocked ?? [];
+      await step(2, 'done', blocked.length
+        ? `${blocked.length} AI assistant${blocked.length === 1 ? ' is' : 's are'} turned away`
+        : 'No AI assistants are turned away', clock.now() - t);
+    } else {
+      await step(2, 'failed', bots?.detail ?? "We couldn't read your robots.txt file.", clock.now() - t);
+    }
+
+    return { facts, found: foundFromFacts(facts, input), results, robots, sitemap, alive, homeOk: Boolean(home && facts) };
+  }
+
+  // ---- the health map's signals (high-tech-look Requirements 3 and 7) -------------------------------------------------
+
+  /**
+   * The one Google lookup and the one Bing search of a check. Each counts as one paid call toward the daily limit, and
+   * is skipped without its key. A lookup that fails or times out gives a result that says so; it never stops the check.
+   */
+  async function lookupProfiles(input) {
+    const query = { name: input.name, city: input.city, state: input.state, website: input.website || undefined };
+    const one = async (client, counter) => {
+      if (!client) return { status: 'off' };
+      // Like a second opinion, a lookup never uses the day's last calls: they stay for the AI question of a new check.
+      if (aiBudget.peek({ kind: 'grade' }).remaining <= SECOND_OPINION_RESERVE) return { status: 'limit', reason: LOOKUP_RESERVE_REASON };
+      if (aiBudget.consume({ kind: 'grade' }).allowed !== true) return { status: 'limit', reason: LOOKUP_LIMIT_REASON };
+      watchGuard();
+      let result;
+      try {
+        result = await client.lookup(query);
+      } catch {
+        // Reader review R13: say which one, with the lookups' own sentences.
+        result = { status: 'error', reason: counter === 'places' ? PLACES_ERROR_REASON : BING_ERROR_REASON };
+      }
+      // A daily ok / error count per lookup for the admin page (no key, no body, no typed input), so a day when
+      // every lookup fails shows up instead of every check quietly reading "Not checked".
+      noteLookup(counter, result);
+      return result;
+    };
+    const [places, bing] = await Promise.all([one(placesLookup, 'places'), one(bingLookup, 'bing')]);
+    return { places, bing };
+  }
+
+  /** Count one lookup's outcome: an answer (found, not found or unsure) is ok; a failure or timeout is an error. */
+  function noteLookup(counter, result) {
+    try {
+      const status = result?.status;
+      if (['found', 'not_found', 'unsure'].includes(status)) aiBudget.note?.(`${counter}Ok`);
+      else if (status === 'error' || !status) aiBudget.note?.(`${counter}Error`);
+    } catch { /* a count that fails never stops the check */ }
+  }
+
+  // ---- lookup results kept in memory only (review S5) ----------------------------------------------------------------
+
+  const recentLookups = new Map(); // Grade id -> { looked, at (ms) }
+
+  function keepLookups(id, looked) {
+    recentLookups.delete(id);
+    // Drop the ones older than 30 days (review U4). The map is in time order (each entry is deleted and set again),
+    // so the scan stops at the first one that is still fresh.
+    for (const [key, v] of recentLookups) {
+      if (clock.now() - v.at > LOOKUP_KEEP_MS) recentLookups.delete(key);
+      else break;
+    }
+    recentLookups.set(id, { looked, at: clock.now() });
+    while (recentLookups.size > LOOKUP_KEEP_MAX) recentLookups.delete(recentLookups.keys().next().value);
+  }
+
+  /**
+   * The lookups a recheck may compare with: the ones kept in memory when they are no older than LOOKUP_KEEP_MS.
+   * Otherwise no new lookup is made; the Google and Bing signals say why they were not checked.
+   */
+  function lookupsForRecheck(g) {
+    const kept = recentLookups.get(g.id);
+    if (kept && clock.now() - kept.at <= LOOKUP_KEEP_MS) return kept.looked;
+    if (kept) recentLookups.delete(g.id);
+    // A lookup that is off here (no key) would not look on a new check either, so it says it is off (review T6).
+    // Otherwise: a Grade from before these lookups existed has no lookup time; one made since then has one.
+    const old = !g.profilesAt && !g.profiles;
+    const offOr = (client, reason) => (client ? { status: 'off', reason } : { status: 'off' });
+    return {
+      places: offOr(placesLookup, old ? OLD_REPORT_REASON : STALE_GOOGLE_REASON),
+      bing: offOr(bingLookup, old ? OLD_REPORT_REASON : STALE_BING_REASON),
+    };
+  }
+
+  /**
+   * Grades saved by the first build of the health map kept the raw lookup results (`profiles`). They are removed,
+   * once per process, the first time a check starts or a recheck runs. Only the derived signals stay.
+   */
+  let profilesPurged = null;
+  function purgeStoredProfiles() {
+    if (!profilesPurged) {
+      profilesPurged = (async () => {
+        // Also the Google and Bing values that signals saved before review T3 still hold.
+        const hasGoogleValues = s => Boolean(s) && JSON.stringify(withoutGoogleValues(s)) !== JSON.stringify(s);
+        const stale = g => g && typeof g === 'object' && ('profiles' in g || hasGoogleValues(g.signals));
+        const list = await grades().read();
+        if (!Array.isArray(list) || !list.some(stale)) return;
+        await grades().update(all => {
+          for (const g of all) {
+            if (!stale(g)) continue;
+            if ('profiles' in g) {
+              if (!g.profilesAt) g.profilesAt = g.finishedAt ?? null;
+              delete g.profiles;
+            }
+            if (g.signals) g.signals = withoutGoogleValues(g.signals);
+          }
+        });
+      })().catch(() => { log('profiles-purge-failed'); profilesPurged = null; });
+    }
+    return profilesPurged;
+  }
+
+  /** The published listing for this business, if one clearly is it (same name and city, same state when both have one). */
+  function listingInfoFor(input) {
+    const info = { state: 'none', listing: null, verified: false, founder: null, foundersOpen: false };
+    try {
+      if (typeof store.getFoundersStatus === 'function') info.foundersOpen = store.getFoundersStatus()?.open === true;
+      const all = typeof store.searchListings === 'function' ? store.searchListings({ city: input.city }) : [];
+      const state = String(input.state ?? '').toUpperCase();
+      let matches = (Array.isArray(all) ? all : []).filter(l => l && typeof l === 'object'
+        && (!state || !l.state || String(l.state).toUpperCase() === state)
+        && ['match', 'close'].includes(compareNames(l.name, input.name)));
+      if (matches.length > 1) {
+        // A shared host (a Facebook page, a wixsite.com site) never picks the listing (review T1).
+        const byDomain = matches.filter(l => sameSite(input.website, l.website));
+        if (byDomain.length === 1) matches = byDomain;
+        else {
+          const exact = matches.filter(l => compareNames(l.name, input.name) === 'match');
+          matches = exact.length === 1 ? exact : matches;
+        }
+      }
+      if (matches.length > 1) return { ...info, state: 'unsure' };
+      if (matches.length === 1) {
+        const l = matches[0];
+        const trust = typeof store.getTrustStatus === 'function' ? store.getTrustStatus(l) : undefined;
+        const founder = typeof store.getFounder === 'function' ? store.getFounder(l.id) : undefined;
+        return {
+          ...info,
+          state: 'listed',
+          listing: { id: l.id, name: l.name, phone: l.phone ?? '', address: l.address ?? '', website: l.website ?? '' },
+          verified: trust?.verified === true,
+          founder: founder ? { number: founder.number } : null,
+        };
+      }
+    } catch { /* a listing that cannot be read is "not listed" here, never a crash */ }
+    return info;
+  }
+
+  /**
+   * The health map's saved signals for one Grade, or null if they could not be worked out. Never throws. No value read
+   * from Google or Bing is in them (review T3); those stay only in the lookups kept in memory for at most 30 days.
+   */
+  function signalsFor(input, web, looked) {
+    try {
+      return withoutGoogleValues(buildSignals({
+        input,
+        facts: web?.facts ?? null,
+        found: web?.found ?? {},
+        robots: web?.robots ?? null,
+        sitemap: web?.sitemap ?? null,
+        alive: web?.alive ?? null,
+        places: looked?.places ?? null,
+        bing: looked?.bing ?? null,
+        listingInfo: listingInfoFor(input),
+        websiteHours: hoursToObject(web?.found?.hours),
+        now: clock.now(),
+      }));
+    } catch {
+      return null;
+    }
+  }
+
+  // ---- steps on the stored Grade ------------------------------------------------------------------------
+
+  async function recordStep(id, input, index, state, finding, ms) {
+    const name = stepNames(input)[index];
+    const step = { name, state, ms: Math.max(0, Math.round(ms)), finding };
+    const order = new Map(stepNames(input).map((n, i) => [n, i]));
+    const merge = steps => [...steps.filter(s => s.name !== name), step]
+      .sort((a, b) => (order.get(a.name) ?? 9) - (order.get(b.name) ?? 9));
+    const snapshot = live.get(id);
+    if (snapshot) snapshot.steps = merge(snapshot.steps);
+    await grades().update(list => {
+      const g = list.find(x => x && x.id === id);
+      if (g) g.steps = merge(Array.isArray(g.steps) ? g.steps : []);
+    });
+  }
+
+  // ---- running a Grade --------------------------------------------------------------------------------------
+
+  async function run(id) {
+    const grade = await get(id);
     if (!grade || grade.status !== 'running') return;
     const { input } = grade;
-    live.set(id, { status: 'running', steps: [] });
+    await purgeStoredProfiles();
+    // The stale clock starts here, when the check really begins (it may have waited in line before this).
+    const startedAt = nowIso();
+    live.set(id, { ...structuredClone(grade), startedAt });
+    await grades().update(list => {
+      const g = list.find(x => x && x.id === id);
+      if (g) g.startedAt = startedAt;
+    });
+    const step = (index, state, finding, ms) => recordStep(id, input, index, state, finding, ms);
 
-    const [site, ai] = await Promise.all([
-      withTimeout(websitePart(id, input), WEBSITE_BUDGET_MS, 'website budget')
-        .catch(() => ({ facts: null, robots: null, llms: null, failure: FETCH_FAILURES.timeout })),
-      aiPart(id, grade),
-    ]);
-
-    const results = [
-      ...runWebsiteChecks({ facts: site.facts, robots: site.robots, llms: site.llms, input, failure: site.failure }),
-      aiNamedResult(ai.ai, ai.reason),
-    ];
-    // (The ai-bots-allowed result carries `blocked`, the crawler names the Fix_Kit needs.)
-    let facts = null;
-    await timed(id, stepNames(input)[4], async () => {
-      facts = summarizeFacts(site.facts, input);
-      return { finding: facts ? 'Drafted your free listing from what we found.' : 'Drafted your free listing from what you typed.' };
+    const website = readWebsite(input, step).catch(() => {
+      log(`website-failed id=${id}`);
+      return { facts: null, found: foundFromFacts(null, input), results: runWebsiteChecks({ facts: null, robots: null, llms: null, input, failure: undefined }), homeOk: false };
     });
 
-    const score = scoreGrade(results);
-    await updateGrade(id, g => {
+    // Carried answers are read again by Gemini here, in the background and all at once, so
+    // POST /grade never waits on it.
+    // The one Google lookup and the one Bing search, in parallel with the rest, each cut off after 5 seconds.
+    const profiles = lookupProfiles(input).catch(() => ({
+      places: { status: 'error', reason: "We couldn't reach Google this time." },
+      bing: { status: 'error', reason: "We couldn't reach Bing this time." },
+    }));
+    const carried = rereadCarried(grade.ai, input).catch(() => grade.ai);
+
+    // Second opinions never hold the report up: the ones that end before the report is written go in
+    // with it; the rest are added to the stored Grade when they arrive (or noted as out of time).
+    const late = { done: false, entries: [], missed: [] };
+    const onSecond = async ({ entry, name, timedOut, prompt }) => {
+      if (late.done) {
+        await saveLateSecond(id, { entry, name, timedOut, prompt });
+      } else if (entry) {
+        late.entries.push(entry);
+      } else if (timedOut) {
+        late.missed.push({ provider: name, prompt });
+      }
+    };
+
+    const aiBranch = (async () => {
+      const t = clock.now();
+      const prompt = freeQuestion(input);
+      let outcome;
+      try {
+        // The free question is asked GRADE_MAIN_ASKS times (1 to 3; a missing value counts as 3).
+        outcome = await askQuestion({ input, prompt, existing: grade.ai, onSecond, gradeId: id, asks: mainAsks() });
+      } catch {
+        log(`ai-step-failed id=${id}`);
+        outcome = { entries: [], mainState: 'failed', planned: 1, asked: 0 };
+      }
+      const ai = [...(await carried), ...outcome.entries].filter(isEntry);
+      const main = ai.filter(a => !isSecondOpinion(a) && a.prompt === prompt);
+      const reused = outcome.entries.length === 0 && main.length > 0;
+      let state = 'done';
+      let finding;
+      let cut = null;
+      if (outcome.mainState === 'limit' || outcome.mainState === 'not_connected' || outcome.mainState === 'off') {
+        state = 'skipped';
+        finding = outcome.mainState === 'limit' ? AI_LIMIT_REACHED : AI_NOT_CONNECTED;
+      } else if (outcome.mainState === 'failed') {
+        state = 'failed';
+        finding = "AI didn't answer this time";
+      } else if (reused) {
+        // One carried answer keeps today's sentence; more than one says so (V103).
+        finding = main.length > 1
+          ? `Used ${providerLabel(main[0].provider)}'s answers from earlier this week.`
+          : 'Used an answer from earlier this week';
+      } else if (outcome.planned > 1) {
+        // More than one ask planned: say how many were asked and how many answered, and when the allowance cut it short.
+        const label = providerLabel(assistantProvider?.name);
+        const answered = outcome.entries.filter(e => !isSecondOpinion(e)).length;
+        const times = n => `${n} ${n === 1 ? 'time' : 'times'}`;
+        const answers = n => `${n} ${n === 1 ? 'answer' : 'answers'}`;
+        finding = outcome.asked < outcome.planned
+          ? `Asked ${label} ${times(outcome.asked)}, not ${outcome.planned}, because we reached today's limit. Got ${answers(answered)}.`
+          : `Asked ${label} ${times(outcome.asked)} and got ${answers(answered)}.`;
+        // The report's hint says how many were planned and how many the limit allowed (V107).
+        if (outcome.asked < outcome.planned) cut = { planned: outcome.planned, asked: outcome.asked };
+      } else {
+        const first = main[0];
+        finding = first && first.total > 0
+          ? `${providerLabel(first.provider)} listed ${first.total} business${first.total === 1 ? '' : 'es'}`
+          : 'Read the AI answer';
+      }
+      await step(3, state, finding, clock.now() - t);
+      return { ai, mainState: outcome.mainState, cut };
+    })();
+
+    const [web, aiOut, looked] = await Promise.all([website, aiBranch, profiles]);
+    const lookedAt = nowIso();
+    keepLookups(id, looked);
+    const signals = signalsFor(input, web, looked);
+
+    const t = clock.now();
+    await step(4, 'done', 'Your free listing is ready to claim', clock.now() - t);
+
+    const aiMain = {
+      provider: assistantProvider?.name ?? 'unknown',
+      label: providerLabel(assistantProvider?.name),
+      state: aiOut.mainState,
+      // Only when today's limit cut the asks short; every other Grade is stored as before.
+      ...(aiOut.cut ? { asks: aiOut.cut } : {}),
+    };
+    const results = assemble(web.results, aiOut.ai, aiMain);
+    const score = scoreOf(results);
+    await grades().update(list => {
+      // From here on a second opinion that arrives is saved on its own (see onSecond).
+      late.done = true;
+      const g = list.find(x => x && x.id === id);
+      if (!g) return;
       g.status = 'done';
       g.finishedAt = nowIso();
-      g.facts = facts;
+      g.facts = storedFacts(web.facts, web.found);
+      g.found = web.found;
+      // Only the health map's signals worked out from the Google and Bing lookups are saved, with the time of the
+      // lookups. The lookup results themselves are never saved (review S5); they stay in memory for at most 30 days so
+      // a recheck can compare again. Neither changes the score.
+      delete g.profiles;
+      g.profilesAt = lookedAt;
+      g.signals = signals;
+      const has = new Set(aiOut.ai.map(a => `${a.prompt}|${a.provider}`));
+      g.ai = [...aiOut.ai, ...late.entries.filter(a => !has.has(`${a.prompt}|${a.provider}`))];
+      if (late.missed.length > 0) g.secondMissed = late.missed;
+      g.aiMain = aiMain;
       g.results = results;
-      g.ai = ai.ai;
       g.score = score;
     });
-    logId(id, `done checks=${score.counted} failed=${score.failed}`);
+    live.delete(id);
   }
 
-  /** Runs the Grade once; a second call for the same id gets the same promise. */
-  function run(id) {
-    if (runs.has(id)) return runs.get(id);
-    const p = doRun(id)
+  function startRun(id) {
+    if (active.has(id)) return;
+    const p = run(id)
       .catch(async () => {
-        logId(id, 'run failed');
-        try {
-          await updateGrade(id, g => { if (g.status === 'running') { g.status = 'failed'; g.finishedAt = nowIso(); } });
-        } catch {
-          // nothing more to do
-        }
+        log(`run-failed id=${id}`);
+        live.delete(id);
+        await grades().update(list => {
+          const g = list.find(x => x && x.id === id);
+          if (g && g.status === 'running') g.status = 'failed';
+        }).catch(() => {});
       })
       .finally(() => {
-        runs.delete(id);
-        live.delete(id);
+        active.delete(id);
+        ours.delete(id);
+        startWaiting(); // a place is free: the next check in line starts
       });
-    runs.set(id, p);
-    return p;
+    active.set(id, p);
   }
 
-  // ---- public API ------------------------------------------------------------
+  /** Start checks from the line, first in first out, while fewer than `maxRunning` are running. */
+  function startWaiting() {
+    while (waiting.length > 0 && active.size < maxRunning) startRun(waiting.shift());
+  }
 
-  /** An earlier `done` Grade (last 7 days, same key) whose AI answers can be copied. */
-  async function findReusableAi(key) {
+  /**
+   * A new Grade starts now, or waits in line when `maxRunning` checks are already running. A waiting
+   * Grade is shown as "in line" from memory only (like a running one), so a restart clears the line
+   * the same way it clears running checks.
+   */
+  function enqueue(id, grade) {
+    if (active.has(id) || waiting.includes(id)) return;
+    if (active.size < maxRunning && waiting.length === 0) {
+      startRun(id);
+      return;
+    }
+    waiting.push(id);
+    startWaiting();
+    if (grade && waiting.includes(id)) live.set(id, { ...structuredClone(grade), queued: true });
+  }
+
+  // ---- starting a Grade -----------------------------------------------------------------------------------------
+
+  /** Answers from a Grade of the same business in the last 7 days, for assistants that are still switched on. */
+  async function reusableAnswers(key, input) {
     const list = await grades().read();
     if (!Array.isArray(list)) return [];
-    const cutoff = nowMs() - REUSE_WINDOW_MS;
-    const match = list
+    const names = new Set([assistantProvider?.name, ...extras.map(e => e.name)]);
+    // Only answers to this Grade's own questions, word for word: an answer to a differently worded question
+    // would be counted beside the new asks and stop Claude being asked again.
+    const prompts = input ? new Set([freeQuestion(input), ...extraQuestions(input)]) : null;
+    const cutoff = clock.now() - REUSE_WINDOW_MS;
+    const earlier = list
       .filter(g => g && g.status === 'done' && g.key === key && Array.isArray(g.ai) && g.ai.length > 0
         && Date.parse(g.createdAt) >= cutoff)
       .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0];
-    // Copy only the AI entries: never the unlock state, Lead or Draft.
-    return match ? match.ai.map(a => ({ ...structuredClone(a), reusedFrom: a.at })) : [];
+    if (!earlier) return [];
+    const copies = [];
+    for (const a of earlier.ai) {
+      if (!isEntry(a)) continue;
+      if (!names.has(a.provider)) continue;
+      if (prompts && !prompts.has(a.prompt)) continue;
+      copies.push({ ...structuredClone(a), reusedFrom: a.reusedFrom || a.at });
+    }
+    return copies;
   }
 
   /**
-   * Store a new Grade and schedule its run. Returns the Grade_Id.
-   * @param {{ name: string, city: string, state: string, service: string, website: string|null }} rawInput
+   * Carried answers are read again, all at once, when Gemini's name check is on now and has not
+   * been asked about them before. An answer that was cut short is never read again (a late
+   * mention could be lost), and one that was already asked about is not asked about again, even
+   * when that check failed.
    */
-  async function start(rawInput) {
-    const input = {
-      name: String(rawInput.name).trim(),
-      city: String(rawInput.city).trim(),
-      state: String(rawInput.state).trim().toUpperCase(),
-      service: String(rawInput.service).trim(),
-      website: rawInput.website ? String(rawInput.website) : null,
-    };
-    const id = newId();
+  function rereadCarried(rawEntries, input) {
+    // Only real entries are read again; anything else in a stored list is left out (V165).
+    const entries = (Array.isArray(rawEntries) ? rawEntries : []).filter(isEntry);
+    if (!nameChecker) return Promise.resolve(entries);
+    return Promise.all(entries.map(async a => {
+      // An answer stored at the 4,000-character cap was cut even if an older Grade did not say so.
+      const cutShort = a.answerCut || Array.from(String(a.answer ?? '')).length >= MAX_ANSWER_CODE_POINTS;
+      if (cutShort || a.nameCheck || a.nameCheckTried || a.provider === 'mock') return a;
+      const read = await readAnswer(a.answer, input, a.provider);
+      const next = { ...a };
+      // A re-read may add a mention, never take one away: if the earlier read found the business and this
+      // one did not, keep the earlier result.
+      if (!(a.named && !read.named)) {
+        Object.assign(next, {
+          named: read.named, position: read.position, total: read.total, competitors: read.competitors,
+        });
+      }
+      if (read.nameCheck) next.nameCheck = read.nameCheck;
+      if (read.tried) next.nameCheckTried = true;
+      return next;
+    }));
+  }
+
+  /**
+   * Start a Grade. `rawInput` is the posted form; it is cleaned again here.
+   * @returns {Promise<string>} the Grade_Id
+   */
+  /**
+   * Fair use (high-tech-look Requirement 11): the newest check with AI of the same business in the last
+   * GRADE_AI_REPEAT_DAYS days (default 7; 0 turns the rule off), or null when a new one may run. A check still
+   * running counts. A Verified listing's own business is never limited (11.4). The admin is let through by the route.
+   * @returns {Promise<{ gradeId: string, checkedAt: string, againAt: string } | null>}
+   */
+  async function repeatCheck(rawInput) {
+    const days = Number.isInteger(config.gradeAiRepeatDays) ? config.gradeAiRepeatDays : 7;
+    if (days <= 0) return null;
+    const checked = normalizeGradeInput(rawInput);
+    if (!checked.ok) return null;
+    const { input } = checked;
+    // 11.4, batch 3 X3: only the Verified listing's own business: the same name exactly, and the same website (a shared
+    // host never counts), or no website on either.
+    const info = listingInfoFor(input);
+    if (info.state === 'listed' && info.verified === true && compareNames(info.listing.name, input.name) === 'match') {
+      const own = info.listing.website ? sameSite(input.website, info.listing.website) : !input.website;
+      if (own) return null;
+    }
+    const list = await grades().read();
+    if (!Array.isArray(list)) return null;
+    const windowMs = days * 24 * 60 * 60 * 1000;
+    const cutoff = clock.now() - windowMs;
+    // X4: a check cut off by a restart (stale) asked nothing. One this process is still running always counts, so a
+    // slow check is never mistaken for a stopped one. X6: the admin's own checks never limit anyone.
+    const askedAi = g => (g.status === 'running' && (ours.has(g.id) || active.has(g.id) || !isStale(g, clock.now())))
+      || freeAnswersOf(Array.isArray(g.ai) ? g.ai : []).some(a => !a.reusedFrom);
+    const earlier = list
+      .filter(g => g && typeof g === 'object' && ['running', 'done'].includes(g.status) && g.byAdmin !== true
+        && Date.parse(g.createdAt) >= cutoff && sameBusinessInput(g.input, input) && askedAi(g))
+      .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0];
+    if (!earlier) return null;
+    const at = Date.parse(earlier.createdAt);
+    return { gradeId: earlier.id, checkedAt: new Date(at).toISOString(), againAt: new Date(at + windowMs).toISOString() };
+  }
+
+  async function start(rawInput, { byAdmin = false } = {}) {
+    const checked = normalizeGradeInput(rawInput);
+    if (!checked.ok) throw new TypeError('Invalid grade input');
+    const { input } = checked;
     const key = reuseKey(input);
-    const ai = await findReusableAi(key);
-    const grade = {
+    const copies = await reusableAnswers(key, input);
+    const id = newId();
+    const created = {
       id,
-      mainProvider: String(assistantProvider?.name ?? ''),
       status: 'running',
       input,
       key,
@@ -590,256 +1933,311 @@ export function createGrader({
       finishedAt: null,
       steps: [],
       facts: null,
+      found: null,
       results: [],
-      ai,
+      ai: copies,
+      aiMain: null,
       score: null,
       previousScore: null,
       draftId: null,
+      draftIds: [],
       recheckedAt: null,
+      recheckRunning: false,
+      recheckFailedAt: null,
+      extraAiStartedAt: null,
+      // X6: a check the admin ran is marked, so it never limits the real owner (fair use, Requirement 11).
+      ...(byAdmin === true ? { byAdmin: true } : {}),
     };
-    await grades().append(grade);
-    live.set(id, { status: 'running', steps: [] });
+    ours.add(id);
+    await grades().append(created);
     if (typeof store.pruneExpired === 'function') {
-      store.pruneExpired({ quotes: false, drafts: false, grades: true, leads: true })
-        .catch(() => logId(id, 'prune failed'));
+      await store.pruneExpired({ quotes: false, drafts: false, grades: true, leads: true })
+        .catch(() => log(`prune-failed id=${id}`));
     }
-    queueMicrotask(() => { run(id).catch(() => logId(id, 'run failed')); });
+    queueMicrotask(() => enqueue(id, created));
     return id;
   }
 
-  /** True when a Grade has been `running` for more than 4 minutes. */
-  function isStale(grade, now = nowMs()) {
-    if (!grade || grade.status !== 'running') return false;
-    const created = Date.parse(grade.createdAt);
-    return Number.isNaN(created) ? false : now - created > STALE_AFTER_MS;
-  }
-
-  /** A stored Grade, with a stale `running` Grade read as `failed`. Undefined when unknown. */
-  async function get(id) {
-    const list = await grades().read();
-    const grade = Array.isArray(list) ? list.find(g => g && g.id === id) : undefined;
-    if (!grade) return undefined;
-    return isStale(grade) ? { ...grade, status: 'failed' } : grade;
-  }
-
-  /** { status, steps, done } for status.json; running Grades are answered from memory. */
-  async function statusOf(id) {
-    const mem = live.get(id);
-    if (mem) return { status: 'running', steps: mem.steps.map(s => ({ ...s })), done: false };
-    const grade = await get(id);
-    if (!grade) return undefined;
-    return { status: grade.status, steps: grade.steps, done: grade.status !== 'running' };
-  }
-
-  // ---- extra AI questions, unlock, claim, recheck --------------------------------
-
-  /** Replace the ai-named result from the stored AI answers and recompute the Score. */
-  function applyAiResults(g) {
-    const i = g.results.findIndex(r => r.id === 'ai-named');
-    const prev = i >= 0 ? g.results[i] : undefined;
-    const next = aiNamedResult(g.ai, prev?.result === 'not_checked' ? prev.detail : undefined);
-    if (i >= 0) g.results[i] = next;
-    else g.results.push(next);
-    g.score = scoreGrade(g.results);
-  }
-
-  const extraPrompts = input => [
-    `I need ${input.service} in ${input.city}, ${input.state}. Which companies would you recommend?`,
-    `Which ${input.service} in ${input.city}, ${input.state} do people say are the most reliable?`,
-  ];
+  // ---- the extra AI questions ------------------------------------------------------------------------------------------
 
   async function runExtraQuestions(id) {
-    // Mark first, so repeated views can never start the questions twice.
-    let claimed = false;
-    await updateGrade(id, g => {
-      if (g.status === 'done' && !g.extraAiStartedAt) {
-        g.extraAiStartedAt = nowIso();
-        claimed = true;
-      }
-    });
-    if (!claimed) return;
-    const grade = await get(id);
-    for (const prompt of extraPrompts(grade.input)) {
-      const current = await get(id);
-      const toAsk = missingFor(current?.ai, prompt);
-      if (toAsk.length === 0) continue;
-      const results = await Promise.all(toAsk.map(p => (p === assistantProvider
-        ? askAi(grade.input, prompt)
-        : askExtra(grade.input, prompt, p))));
-      const entries = results.map(r => r.entry).filter(Boolean);
-      if (entries.length > 0) {
-        await updateGrade(id, g => {
-          g.ai.push(...entries);
-          applyAiResults(g);
+    try {
+      for (const prompt of extraQuestions((await get(id)).input)) {
+        const grade = await get(id);
+        if (!grade) return;
+        // Second opinions are saved as they arrive; only the main answer is waited for.
+        const { entries, mainState } = await askQuestion({
+          input: grade.input, prompt, existing: grade.ai, onSecond: details => saveLateSecond(id, details), gradeId: id,
         });
+        if (entries.length > 0) {
+          await grades().update(list => {
+            const g = list.find(x => x && x.id === id);
+            if (!g) return;
+            // Flagged, so nothing ever mistakes an extra-question answer for the free question's (Requirement 26).
+            // They are shown in the full report and never counted, so the score is the same before and after.
+            g.ai = [...(Array.isArray(g.ai) ? g.ai : []), ...entries.map(e => ({ ...e, extra: true }))];
+            g.results = assemble(g.results, g.ai, g.aiMain);
+            g.score = scoreOf(g.results);
+          });
+        }
+        // The main assistant failed: do not spend more paid calls on the next question.
+        if (mainState === 'failed') break;
       }
-      // Budget used up or the main assistant failed: keep what we have.
-      if (toAsk[0] === assistantProvider && !results[0].entry) break;
+    } finally {
+      // The run is over, whether it asked everything or stopped early: the report stops saying "still being
+      // answered" and, if fewer questions were answered than asked, says so (V243).
+      await grades().update(list => {
+        const g = list.find(x => x && x.id === id);
+        if (g) g.extraAiDoneAt = nowIso();
+      });
     }
   }
 
-  /** Start the two extra AI questions in the background (once per Grade). */
-  function startExtraQuestions(id) {
-    runExtraQuestions(id).catch(() => logId(id, 'extra questions failed'));
+  /**
+   * Start the two extra questions once for a Grade. Reading first means a repeat call
+   * writes nothing.
+   * @returns {Promise<boolean>} true when this call started them
+   */
+  async function startExtraQuestions(id) {
+    const grade = await get(id);
+    // The extra questions run even when the free question failed. They are not asked when the free question hit the
+    // daily limit (they can no longer count toward the score, so they would only spend paid calls; V162), nor when
+    // the assistant is not connected. A repeat call writes nothing, so a report viewed again asks nothing either.
+    const state = grade?.aiMain?.state;
+    if (!grade || grade.status !== 'done' || grade.extraAiStartedAt || state === 'not_connected' || state === 'off' || state === 'limit') return false;
+    let started = false;
+    await grades().update(list => {
+      const g = list.find(x => x && x.id === id);
+      if (g && !g.extraAiStartedAt) {
+        g.extraAiStartedAt = nowIso();
+        started = true;
+      }
+    });
+    if (started) background(id, 'extra-ai', () => runExtraQuestions(id));
+    return started;
   }
 
+  // ---- leads ---------------------------------------------------------------------------------------------------------------
+
   /**
-   * Store a Lead, start the extra questions and tell the site owner.
-   * @param {{ name: string, email: string, phone: string, okToContact: boolean }} lead
+   * Store a Lead, tell the site owner, and start the two extra AI questions.
+   * @param {string} id the Grade_Id
+   * @param {{ name: string, email: string, phone: string, okToContact: boolean }} lead already checked
+   * @returns {Promise<object|null>} the stored Lead, or null when the Grade does not exist
    */
   async function unlock(id, lead) {
     const grade = await get(id);
-    if (!grade || grade.status !== 'done') return { status: 409 };
-    await store.collection('leads').append({
-      id: randomUUID(),
+    if (!grade) return null;
+    const stored = {
+      id: randomBytes(12).toString('base64url'),
       gradeId: id,
       business: grade.input.name,
       name: lead.name,
       email: lead.email,
       phone: lead.phone,
       okToContact: lead.okToContact === true,
-      score: grade.score?.score ?? null,
+      // The score the report shows: worked out from the stored results with the current points, so an old
+      // Grade's lead (and the lead email) agree with its report. With no results, the stored number stays.
+      score: shownScore(grade),
       createdAt: nowIso(),
-    });
-    startExtraQuestions(id);
+    };
+    await leads().append(stored);
+
+    // The owner is answered at once; the email goes out in the background, under the same time limit.
+    // Nothing about the lead is logged.
     if (typeof notifier?.notifyLead === 'function') {
-      try {
-        withTimeout(Promise.resolve(notifier.notifyLead({
-          business: grade.input.name,
-          score: grade.score?.score ?? null,
-          reportUrl: `${config.baseUrl ?? ''}/grade/${id}`,
-          lead: { name: lead.name, email: lead.email, phone: lead.phone, okToContact: lead.okToContact === true },
-        })), 10000, 'notice timeout').catch(() => logId(id, 'lead notice failed'));
-      } catch {
-        logId(id, 'lead notice failed');
-      }
-    }
-    return { status: 200 };
-  }
-
-  /** Create a Draft from what the scan found. It is not published: the owner and an admin still review it. */
-  async function claim(id) {
-    const grade = await get(id);
-    if (!grade || grade.status !== 'done') return { status: 404 };
-    const found = foundFromGrade(grade);
-    const categories = store.getCategories();
-    const checked = validateFields({
-      name: found.name,
-      category: mapCategory(found.service, categories) || 'other',
-      phone: found.phone,
-      services: [found.service],
-      serviceArea: found.city,
-      city: found.city,
-      state: found.state,
-      address: found.address,
-      hours: hoursToObject(found.hours),
-    }, categories);
-    const created = await draftStore.create({
-      fields: checked.fields, missingFields: checked.missingFields, provider: 'grader',
-    });
-    await updateGrade(id, g => { if (!g.draftId) g.draftId = created.draft.id; });
-    return { status: 201, draft: created.draft };
-  }
-
-  /** True when a Draft still exists (so a returning browser can be sent back to it). */
-  async function draftExists(draftId) {
-    const found = await draftStore.get(draftId);
-    return found.status === 200;
-  }
-
-  const isRechecking = g => g?.recheckRunning === true
-    && nowMs() - Date.parse(g.recheckStartedAt) <= STALE_AFTER_MS;
-
-  async function runRecheck(id) {
-    try {
-      const grade = await get(id);
-      const site = await withTimeout(websitePart(id, grade.input, false), WEBSITE_BUDGET_MS, 'website budget')
-        .catch(() => ({ facts: null, robots: null, llms: null, failure: FETCH_FAILURES.timeout }));
-      const websiteResults = runWebsiteChecks({
-        facts: site.facts, robots: site.robots, llms: site.llms, input: grade.input, failure: site.failure,
+      const notice = {
+        business: grade.input.name,
+        score: stored.score,
+        reportUrl: `${config.baseUrl ?? ''}/grade/${id}`,
+        lead: { name: stored.name, email: stored.email, phone: stored.phone, okToContact: stored.okToContact },
+      };
+      background(id, 'lead-notice', async () => {
+        let timer;
+        try {
+          await Promise.race([
+            notifier.notifyLead(notice),
+            new Promise((_, reject) => { timer = setTimeout(() => reject(coded('timeout')), NOTIFY_TIMEOUT_MS); }),
+          ]);
+        } catch {
+          log(`lead-notice-failed id=${id}`);
+        } finally {
+          clearTimeout(timer);
+        }
       });
-      // The site could not be read this time: keep the earlier results instead of wiping them.
-      if (grade.input.website && !site.facts) {
-        await updateGrade(id, g => {
-          g.recheckFailedAt = nowIso();
-          g.recheckRunning = false;
-        });
-        return;
-      }
-      const facts = summarizeFacts(site.facts, grade.input);
-      await updateGrade(id, g => {
-        delete g.recheckFailedAt;
-        const ai = g.results.find(r => r.id === 'ai-named');
-        g.previousScore = g.score?.score ?? null;
-        g.results = [...websiteResults, ...(ai ? [ai] : [])];
-        g.facts = facts ?? g.facts;
-        g.score = scoreGrade(g.results);
-        g.recheckedAt = nowIso();
-        g.recheckRunning = false;
-      });
-    } catch {
-      await updateGrade(id, g => { g.recheckRunning = false; }).catch(() => {});
-      throw new Error('recheck failed');
     }
+    await startExtraQuestions(id).catch(() => log(`extra-ai-failed id=${id}`));
+    return stored;
   }
+
+  // ---- claim the free page -----------------------------------------------------------------------------------------------------
 
   /**
-   * Run the website checks again (no AI question). It never sets the Grade back to
-   * `running`; it uses its own recheckRunning flag. Returns false when one is already running.
+   * Create a Draft from what the scan found, or return the one this browser already claimed.
+   * Nothing is published. `claimedDraftId` is the Draft id from a correctly signed claim cookie.
+   * @returns {Promise<{ status: number, draftId?: string, created?: boolean }>}
+   */
+  function claim(id, { claimedDraftId } = {}) {
+    return store.withLock(`grade-claim:${id}`, async () => {
+      const grade = await get(id);
+      if (!grade) return { status: 404 };
+      // The browser that claimed gets its own Draft back, whatever has happened to it since (even
+      // after it was sent for review). Grades made before `draftIds` existed have only `draftId`.
+      const mine = new Set([...(Array.isArray(grade.draftIds) ? grade.draftIds : []), grade.draftId].filter(Boolean));
+      if (claimedDraftId && mine.has(claimedDraftId)) {
+        const existing = await draftStore.get(claimedDraftId);
+        if (existing.status === 200) return { status: 303, draftId: claimedDraftId, created: false };
+      }
+      const { input } = grade;
+      const found = foundOf(grade);
+      const categories = store.getCategories();
+      const checked = validateFields({
+        name: input.name,
+        category: mapCategory(input.service, categories) || 'other',
+        phone: found.phone,
+        hours: formStyleHoursObject(hoursToObject(found.hours)),
+        // Left blank on purpose: the owner lists the services, and confirm waits until they do.
+        services: [],
+        // A business that goes to its customers lists its area and no street address, even when the page shows one.
+        serviceArea: input.noStorefront === true ? `${input.city} and nearby areas` : input.city,
+        city: input.city,
+        state: input.state,
+        address: input.noStorefront === true ? '' : found.address,
+        // The best review link read from the home page (never from an AI answer); validateFields checks it again
+        // and leaves it out when it is not a valid reviews link.
+        reviewsLink: typeof found.reviewsLink === 'string' ? found.reviewsLink : '',
+        // The website the owner typed on the check, as a clean https address (validateFields checks it once more);
+        // empty when none was given or it cannot be a listing website. Nothing is fetched.
+        website: normalizeWebsite(claimWebsite(input.website)),
+      }, categories);
+      const created = await draftStore.create({
+        fields: checked.fields, missingFields: checked.missingFields, provider: 'grader',
+      });
+      const draftId = created.draft.id;
+      await grades().update(list => {
+        const g = list.find(x => x && x.id === id);
+        if (!g) return;
+        if (!g.draftId) g.draftId = draftId;
+        g.draftIds = [...(Array.isArray(g.draftIds) ? g.draftIds : []), draftId];
+      });
+      return { status: 303, draftId, created: true };
+    });
+  }
+
+  // ---- check again ----------------------------------------------------------------------------------------------------------------------
+
+  /**
+   * Re-run the website Checks only. The AI answers are kept. A recheck never sets the
+   * Grade back to running. If the site cannot be read, the earlier results stay.
+   * @returns {Promise<{ started: boolean }>}
    */
   async function recheck(id) {
+    const grade = await get(id);
+    if (!grade || grade.status !== 'done' || !grade.input.website) return { started: false };
     let started = false;
-    await updateGrade(id, g => {
-      if (g.status === 'done' && !isRechecking(g)) {
+    await grades().update(list => {
+      const g = list.find(x => x && x.id === id);
+      // A recheck cut off by a restart stops counting after 4 minutes, so a new one can start.
+      if (g && !recheckIsRunning(g, clock.now())) {
         g.recheckRunning = true;
         g.recheckStartedAt = nowIso();
         started = true;
       }
     });
-    if (!started) return false;
-    runRecheck(id).catch(() => logId(id, 'recheck failed'));
-    return true;
+    if (!started) return { started: false };
+
+    background(id, 'recheck', async () => {
+      try {
+        await purgeStoredProfiles();
+        const web = await readWebsite(grade.input, async () => {});
+        await grades().update(list => {
+          const g = list.find(x => x && x.id === id);
+          if (!g) return;
+          g.recheckRunning = false;
+          g.recheckStartedAt = null;
+          if (!web.homeOk) {
+            g.recheckFailedAt = nowIso();
+            return;
+          }
+          // A partial score (no AI answer) is never put beside a full one, and neither is a score from before
+          // the reviews-visible Check existed: the points changed then, so the two would not compare.
+          const hadReviewsCheck = Array.isArray(g.results) && g.results.some(r => r && r.id === 'reviews-visible');
+          // The "before" number is the one the report showed, worked out by the same rule (Requirement 26).
+          g.previousScore = isPartialScore({ ...g, results: scoredResults(g) }) || !hadReviewsCheck ? null : shownScore(g);
+          g.facts = storedFacts(web.facts, web.found);
+          g.found = web.found;
+          // The website signals are read again. A recheck makes no new paid lookup: the Google and Bing results kept in
+          // memory are reused when they are 30 days old or less; otherwise those signals say to run a new check.
+          g.signals = signalsFor(g.input, web, lookupsForRecheck(g)) ?? g.signals ?? null;
+          delete g.profiles;
+          g.results = assemble(web.results, g.ai, g.aiMain);
+          g.score = scoreOf(g.results);
+          g.recheckedAt = nowIso();
+          g.recheckFailedAt = null;
+        });
+      } catch (err) {
+        await grades().update(list => {
+          const g = list.find(x => x && x.id === id);
+          if (g) {
+            g.recheckRunning = false;
+            g.recheckStartedAt = null;
+            g.recheckFailedAt = nowIso();
+          }
+        }).catch(() => {});
+        throw err;
+      }
+    });
+    return { started: true };
+  }
+
+  // ---- removing a Grade ----------------------------------------------------------------------------------------------------------------------
+
+  /** Delete a Grade and its Leads. @returns {Promise<boolean>} false when there was no such Grade */
+  async function remove(id) {
+    let found = false;
+    await grades().update(list => {
+      const i = list.findIndex(g => g && g.id === id);
+      if (i === -1) return;
+      list.splice(i, 1);
+      found = true;
+    });
+    if (found) await leads().update(list => list.filter(l => l && l.gradeId !== id));
+    const inLine = waiting.indexOf(id);
+    if (inLine !== -1) waiting.splice(inLine, 1);
+    live.delete(id);
+    return found;
+  }
+
+  /**
+   * 13.5: the optional "Prepared by" name, stored with the report only (text, 60 characters at most; '' clears it).
+   * @returns {Promise<boolean>} false when there is no such finished Grade
+   */
+  async function setPreparedBy(id, value) {
+    const text = cleanPreparedBy(value);
+    let found = false;
+    await grades().update(list => {
+      const g = list.find(x => x && x.id === id && x.status === 'done');
+      if (!g) return;
+      found = true;
+      if (text) g.preparedBy = text;
+      else delete g.preparedBy;
+    });
+    return found;
   }
 
   return {
-    start, run, get, statusOf, isStale, findReusableAi, askAi, updateGrade, grades, notifier,
-    startExtraQuestions, unlock, claim, draftExists, recheck, isRechecking,
+    start,
+    repeatCheck,
+    setPreparedBy,
+    run: id => { startRun(id); return active.get(id) ?? Promise.resolve(); },
+    get,
+    peek: id => (live.has(id) ? structuredClone(live.get(id)) : undefined),
+    secondPending,
+    isStale,
+    recheck,
+    unlock,
+    claim,
+    startExtraQuestions,
+    remove,
   };
-}
-
-const DAY_NAMES = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
-
-/** "mo" / "mon" / "monday" to "monday"; anything else to undefined. */
-function dayName(word) {
-  const w = word.trim().toLowerCase();
-  if (w.length < 2) return undefined;
-  return DAY_NAMES.find(n => n.startsWith(w));
-}
-
-/**
- * Found hours strings ("Mo-Fr 08:00-17:00", "Monday, Tuesday 07:00-18:00") to
- * { monday: '08:00-17:00', ... }. Strings it cannot read are left out.
- * @param {string[]} hours
- * @returns {Record<string, string>}
- */
-export function hoursToObject(hours) {
-  const out = {};
-  for (const raw of Array.isArray(hours) ? hours : []) {
-    const text = String(raw).slice(0, 200);
-    const m = /^\s*([A-Za-z][A-Za-z ,-]*?)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?\s*-\s*\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\s*$/i.exec(text);
-    if (!m) continue;
-    const days = [];
-    for (const token of m[1].split(',')) {
-      const [a, b] = token.split('-').map(dayName);
-      if (a && b) {
-        const from = DAY_NAMES.indexOf(a);
-        const to = DAY_NAMES.indexOf(b);
-        for (let i = from; i <= to; i += 1) days.push(DAY_NAMES[i]);
-      } else if (a && token.split('-').length === 1) {
-        days.push(a);
-      }
-    }
-    for (const day of days) if (!Object.hasOwn(out, day)) out[day] = m[2].trim();
-  }
-  return out;
 }

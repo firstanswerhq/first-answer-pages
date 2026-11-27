@@ -26,8 +26,10 @@ export const RULES = Object.freeze({
   'verify-id': Object.freeze({ limit: 6, windowMs: 60 * 60 * 1000 }),
   // AI Visibility Grader
   grade: Object.freeze({ limit: 5, windowMs: 60 * 60 * 1000 }),
-  // 6 a day per visitor: each check can use 3 AI calls and the whole site shares 60 a day.
+  // 6 a day per visitor: each check can use several AI calls (the README counts them) and the whole site shares 60 a day.
   'grade-day': Object.freeze({ limit: 6, windowMs: 24 * 60 * 60 * 1000 }),
+  // New checks per network (IPv4 /24 or IPv6 /64) per day; GRADE_NETWORK_PER_DAY can change the limit.
+  'grade-network': Object.freeze({ limit: 20, windowMs: 24 * 60 * 60 * 1000 }),
   'grade-unlock': Object.freeze({ limit: 5, windowMs: 60 * 60 * 1000 }),
   'grade-recheck': Object.freeze({ limit: 10, windowMs: 60 * 60 * 1000 }),
   'grade-recheck-grade': Object.freeze({ limit: 1, windowMs: 2 * 60 * 1000 }),

@@ -4,6 +4,8 @@
  * Converts a Listing into a schema.org LocalBusiness JSON-LD object.
  */
 
+import { reviewsLinkHost, normalizeWebsite } from './listing-fields.js';
+
 const REQUIRED_FIELDS = ['name', 'phone', 'description', 'city', 'state', 'services'];
 
 /**
@@ -79,6 +81,14 @@ export function buildSchema(listing, verification, options = {}) {
       address.streetAddress = stripAddressTail(listing.address, listing.city, listing.state);
     }
   }
+  // The business's own pages elsewhere, added only when there is one: its reviews page (checked again here,
+  // in case the stored data was edited by hand). `url` stays the listing page.
+  // The website first, then the reviews link, each checked again and only when present.
+  const sameAs = [];
+  const website = normalizeWebsite(listing.website);
+  if (website !== '') sameAs.push(website);
+  if (reviewsLinkHost(listing.reviewsLink) !== '') sameAs.push(listing.reviewsLink.trim());
+  if (sameAs.length > 0) schema.sameAs = sameAs;
   return schema;
 }
 
@@ -130,14 +140,52 @@ function to24(hour, minute, meridiem) {
   return `${String(base).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
-/** Parses "7:00 AM - 5:00 PM" to { opens: '07:00', closes: '17:00' }, or null. */
+const TIME_24 = '(\\d{1,2}):(\\d{2})';
+const RANGE_24 = new RegExp(`^\\s*${TIME_24}\\s*(?:-|\\u2013|\\u2014|to)\\s*${TIME_24}\\s*$`, 'i');
+
+function from24(hour, minute) {
+  const h = Number(hour);
+  const m = Number(minute);
+  if (h > 23 || m > 59) return null;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+/** Opens and closes at the same time (either form). 00:00 to 00:00 is open all day (V178, V184); any other equal pair means nothing. */
+function settle(range) {
+  if (range.opens !== range.closes) return range;
+  return range.opens === '00:00' ? { opens: '00:00', closes: '23:59' } : null;
+}
+
+/**
+ * Reads "07:00-18:00" as a 24-hour range, but only when it cannot mean anything else: an hour has a leading zero
+ * ("07") or is 0 or 13 or more. "8:00-5:00" or "12:00-1:00" could be 12-hour times without am or pm, so they are
+ * not read (V177). "24:00" is accepted only as a closing time and means 23:59 (V179).
+ * @returns {{ opens: string, closes: string } | null} 'HH:MM' times
+ */
+export function parseTwentyFourHourRange(text) {
+  if (typeof text !== 'string') return null;
+  const m = RANGE_24.exec(text);
+  if (!m) return null;
+  const sure = [m[1], m[3]].some(h => (h.length === 2 && h[0] === '0') || Number(h) === 0 || Number(h) >= 13);
+  if (!sure) return null;
+  const opens = from24(m[1], m[2]);
+  const closes = Number(m[3]) === 24 && Number(m[4]) === 0 ? '23:59' : from24(m[3], m[4]);
+  return opens && closes ? settle({ opens, closes }) : null;
+}
+
+/**
+ * Parses "7:00 AM - 5:00 PM" or "07:00-18:00" to { opens: '07:00', closes: '17:00' }, or null.
+ * The 12-hour form is tried first; when it matches but a time is invalid, the answer is null.
+ */
 export function parseHoursRange(text) {
   if (typeof text !== 'string') return null;
   const m = RANGE.exec(text);
-  if (!m) return null;
-  const opens = to24(m[1], m[2], m[3]);
-  const closes = to24(m[4], m[5], m[6]);
-  return opens && closes ? { opens, closes } : null;
+  if (m) {
+    const opens = to24(m[1], m[2], m[3]);
+    const closes = to24(m[4], m[5], m[6]);
+    return opens && closes ? settle({ opens, closes }) : null;
+  }
+  return parseTwentyFourHourRange(text);
 }
 
 function buildOpeningHours(hours) {

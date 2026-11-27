@@ -70,6 +70,9 @@ export function verifyPage({ draftId, listing, status, price, fees, note, testMo
   let payStep;
   if (status.removed) {
     payStep = `<p>Verification for this listing has been turned off. Please ${contact}.</p>`;
+  } else if (status.waived) {
+    // The admin waived the fee: nothing was paid, so the page never says "Fee paid" (S15, reader review R27).
+    payStep = `<p>${done}. There is no fee for this listing.</p>`;
   } else if (status.paid && !status.canRenew) {
     payStep = status.plan === 'yearly'
       ? `<p>${done} Fee paid. Paid through ${escapeHtml(formatDay(status.paidThrough))}. It will not renew by itself. Come back to this page to pay for another year.</p>`
@@ -144,7 +147,8 @@ export function verifyPage({ draftId, listing, status, price, fees, note, testMo
     headline = '<p class="notice verify-note" role="status">Practice run complete. All three steps work. No stamp is shown because this was test mode.</p>';
   }
 
-  const prices = fees
+  // No price hint when there is no fee for this listing (R27).
+  const prices = fees && !status.waived
     ? `<p class="hint">${formatFee(fees.founderCents)} once for Founding Members. ${formatFee(fees.yearlyCents)} a year for everyone else, with no automatic renewal. Your listing stays free either way.</p>`
     : '';
 
@@ -157,7 +161,7 @@ export function verifyPage({ draftId, listing, status, price, fees, note, testMo
   ${prices}
   <h2>Three steps</h2>
   <ol class="verify-steps">
-    <li><h3>Pay the fee</h3>
+    <li><h3>${status.waived ? 'The fee' : 'Pay the fee'}</h3>
     ${payStep}</li>
     <li><h3>Confirm your business phone</h3>
     ${phoneStep}</li>
@@ -167,7 +171,7 @@ export function verifyPage({ draftId, listing, status, price, fees, note, testMo
   <p><a href="/listings/${encodeURIComponent(listing.id)}">See your listing</a></p>
   <p class="hint">Save this page now: bookmark it, or text the link to yourself. It is the only way back to get or renew the Verified stamp.</p>
 </section>`;
-  return layout({ title: `Get the Verified stamp: ${DEFAULT_SITE_NAME}`, body });
+  return layout({ title: `Get the Verified stamp | ${DEFAULT_SITE_NAME}`, body });
 }
 
 /** Public page linked from the stamp. */

@@ -1,243 +1,298 @@
-/**
- * safe-fetch.js — fetches a public web page without letting the visitor reach
- * private networks.
- *
- * Rules (never loosen them, not even for tests; tests inject fakes):
- *  - http/https only, ports 80 and 443 only, no user name or password.
- *  - Every host name is resolved here, and every resolved address must pass
- *    isPublicAddress. The socket can only open to a checked address because
- *    the request gets a pinned `lookup` that never resolves again.
- *  - Redirects are followed by hand (at most 5); each target is checked from
- *    the top.
- *  - Only User-Agent, Accept and Accept-Encoding are sent. No cookies, no
- *    visitor headers.
- *  - One timer per fetch (connect, redirects and body); the decompressed body
- *    is capped at maxBytes.
- *
- * `request` is injectable: { http: fn, https: fn } with the same shape as
- * node:http request(url, options, callback). `lookup` has the dns.lookup shape.
- */
-
+// Safe fetcher: fetches a business website without ever reaching a private or
+// internal address. Every address is checked first, then the connection is
+// pinned to the checked list. Only three request headers are ever sent.
+import net from 'node:net';
+import dns from 'node:dns';
 import http from 'node:http';
 import https from 'node:https';
-import dns from 'node:dns';
-import net from 'node:net';
 import zlib from 'node:zlib';
 import { isPublicAddress } from './ip-guard.js';
 
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+
 export class SafeFetchError extends Error {
-  /** @param {'bad_url'|'blocked_address'|'timeout'|'too_large'|'too_many_redirects'|'connect_failed'} code */
+  /**
+   * @param {'bad_url'|'blocked_address'|'timeout'|'too_large'|'too_many_redirects'|'connect_failed'} code
+   * @param {string} [message]
+   */
   constructor(code, message) {
-    super(message ?? code);
+    super(message || code);
     this.name = 'SafeFetchError';
     this.code = code;
   }
 }
 
-const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
-const DEFAULT_USER_AGENT = 'FirstAnswerPagesBot/1.0 (+/grade/about)';
-const DEFAULT_ACCEPT = 'text/html,text/plain;q=0.9,*/*;q=0.5';
+const stripBrackets = host => host.replace(/^\[|\]$/g, '');
 
-/** Parse and check a URL string. Returns { url, host, literal } or throws. */
-function checkUrl(input) {
+/** Parse and validate a URL. Throws bad_url or blocked_address (IP literals). */
+function checkUrl(raw) {
   let url;
   try {
-    url = new URL(input);
+    url = new URL(raw);
   } catch {
-    throw new SafeFetchError('bad_url', 'not a valid address');
+    throw new SafeFetchError('bad_url', 'The address is not a valid web address.');
   }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-    throw new SafeFetchError('bad_url', 'only http and https are allowed');
-  }
-  if (url.username !== '' || url.password !== '') {
-    throw new SafeFetchError('bad_url', 'addresses with credentials are not allowed');
+    throw new SafeFetchError('bad_url', 'Only http and https addresses are allowed.');
   }
   if (url.port !== '' && url.port !== '80' && url.port !== '443') {
-    throw new SafeFetchError('bad_url', 'only ports 80 and 443 are allowed');
+    throw new SafeFetchError('bad_url', 'Only ports 80 and 443 are allowed.');
   }
-  // WHATWG URL has already turned decimal, hex and octal IPv4 into dotted form.
-  const host = url.hostname.replace(/^\[/, '').replace(/\]$/, '');
-  if (host === '') throw new SafeFetchError('bad_url', 'missing host');
-  const family = net.isIP(host);
-  if (family !== 0) {
-    if (!isPublicAddress(host)) throw new SafeFetchError('blocked_address', 'address is not public');
-    return { url, host, literal: [{ address: host, family }] };
+  if (url.username || url.password) {
+    throw new SafeFetchError('bad_url', 'Addresses with a user name or password are not allowed.');
   }
-  return { url, host, literal: null };
+  const host = stripBrackets(url.hostname);
+  if (!host) throw new SafeFetchError('bad_url', 'The address has no host name.');
+  if (net.isIP(host) && !isPublicAddress(host)) {
+    throw new SafeFetchError('blocked_address', 'That address is not a public address.');
+  }
+  return { url, host };
 }
 
-function resolveAll(lookup, host) {
-  return new Promise((resolve, reject) => {
+/** The charset named in a Content-Type header, or in a meta tag in the first 2 KiB of the page. */
+function charsetOf(buffer, contentType) {
+  const fromHeader = /charset\s*=\s*["']?([A-Za-z0-9_.:-]+)/i.exec(String(contentType ?? ''));
+  if (fromHeader) return fromHeader[1];
+  const head = buffer.subarray(0, 2048).toString('latin1');
+  const fromMeta = /<meta[^>]{0,300}?charset\s*=\s*["']?([A-Za-z0-9_.:-]+)/i.exec(head);
+  return fromMeta ? fromMeta[1] : '';
+}
+
+/** Decode a body with its declared charset (UTF-8 when none is named or the name is not known). */
+function decodeBody(buffer, contentType) {
+  const label = charsetOf(buffer, contentType).trim().toLowerCase();
+  if (label && label !== 'utf-8' && label !== 'utf8') {
     try {
-      lookup(host, { all: true }, (err, result) => {
-        if (err) return reject(new SafeFetchError('connect_failed', 'could not resolve the host'));
-        const list = Array.isArray(result) ? result : [{ address: result }];
-        resolve(list);
-      });
+      return new TextDecoder(label).decode(buffer);
     } catch {
-      reject(new SafeFetchError('connect_failed', 'could not resolve the host'));
+      // An unknown charset name: fall back to UTF-8 below.
     }
-  });
-}
-
-/** Returns the checked list as [{ address, family }]. Throws blocked_address. */
-async function resolveChecked(lookup, host) {
-  const raw = await resolveAll(lookup, host);
-  const list = [];
-  for (const entry of raw) {
-    const address = typeof entry === 'string' ? entry : entry?.address;
-    if (typeof address !== 'string' || !isPublicAddress(address)) {
-      throw new SafeFetchError('blocked_address', 'host resolves to a non-public address');
-    }
-    list.push({ address, family: net.isIP(address) });
   }
-  if (list.length === 0) throw new SafeFetchError('blocked_address', 'host did not resolve');
-  return list;
-}
-
-/** A lookup that never resolves again: it answers with the checked list. */
-function pinnedLookupFor(list) {
-  return (hostname, opts, cb) => {
-    if (typeof opts === 'function') { cb = opts; opts = {}; }
-    if (opts && opts.all) return cb(null, list.map(a => ({ address: a.address, family: a.family })));
-    return cb(null, list[0].address, list[0].family);
-  };
-}
-
-function charsetOf(contentType) {
-  const m = /charset\s*=\s*"?([\w.:-]+)"?/i.exec(contentType ?? '');
-  return m ? m[1] : 'utf-8';
-}
-
-function decodeText(buffer, contentType) {
-  try {
-    return new TextDecoder(charsetOf(contentType)).decode(buffer);
-  } catch {
-    return new TextDecoder('utf-8').decode(buffer);
-  }
-}
-
-function decoderFor(encoding) {
-  switch (String(encoding ?? '').trim().toLowerCase()) {
-    case 'gzip': case 'x-gzip': return zlib.createGunzip();
-    case 'deflate': return zlib.createInflate();
-    case 'br': return zlib.createBrotliDecompress();
-    default: return null;
-  }
+  return buffer.toString('utf8');
 }
 
 /**
- * @param {{
- *   request?: { http: Function, https: Function },
- *   lookup?: Function,
- *   timeoutMs?: number, maxBytes?: number, maxRedirects?: number, userAgent?: string,
- * }} [options]
+ * @param {object} [options]
+ * @param {{http: Function, https: Function}} [options.request]
+ * @param {Function} [options.lookup] dns.lookup-style: (host, {all:true}, cb)
+ * @param {number} [options.timeoutMs]
+ * @param {number} [options.maxBytes]
+ * @param {number} [options.maxRedirects]
+ * @param {string} [options.userAgent]
  */
 export function createSafeFetcher({
-  request = { http: http.request, https: https.request },
+  request,
   lookup = dns.lookup,
   timeoutMs = 10000,
   maxBytes = 2 * 1024 * 1024,
   maxRedirects = 5,
-  userAgent = DEFAULT_USER_AGENT,
+  userAgent = 'FirstAnswerGrader/1.0 (+https://firstanswerhq.com)',
+  dnsRetryDelayMs = 1000,
 } = {}) {
-  function sendRequest(url, list, accept, signal) {
-    return new Promise((resolve, reject) => {
-      const lib = url.protocol === 'https:' ? request.https : request.http;
-      const headers = {
-        'User-Agent': userAgent,
-        Accept: accept,
-        'Accept-Encoding': 'gzip, deflate, br',
-      };
-      let req;
-      try {
-        req = lib(url, { method: 'GET', headers, agent: false, lookup: pinnedLookupFor(list), signal }, resolve);
-      } catch {
-        return reject(new SafeFetchError('connect_failed', 'could not connect'));
-      }
-      req.on('error', () => reject(new SafeFetchError('connect_failed', 'could not connect')));
-      req.end();
-    });
-  }
+  const transport = {
+    http: request?.http ?? ((...a) => http.request(...a)),
+    https: request?.https ?? ((...a) => https.request(...a)),
+  };
 
-  async function readBody(response) {
-    const decoder = decoderFor(response.headers?.['content-encoding']);
-    let source = response;
-    response.on('error', err => { if (decoder) decoder.destroy(err); });
-    if (decoder) source = response.pipe(decoder);
-    const chunks = [];
-    let total = 0;
-    let truncated = false;
+  const resolveOnce = host => new Promise((resolve, reject) => {
     try {
-      for await (const chunk of source) {
-        const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-        if (total + buf.length > maxBytes) {
-          const keep = maxBytes - total;
-          if (keep > 0) chunks.push(buf.subarray(0, keep));
-          total = maxBytes;
-          truncated = true;
-          break;
+      lookup(host, { all: true }, (err, list) => {
+        if (err) {
+          const failed = new SafeFetchError('connect_failed', 'The host name could not be found.');
+          // Kept only as a fact for the health map (high-tech-look 12.1b): the name does not exist (NXDOMAIN).
+          if (err.code === 'ENOTFOUND') failed.dns = 'not_found';
+          return reject(failed);
         }
-        chunks.push(buf);
-        total += buf.length;
-      }
+        resolve(Array.isArray(list) ? list : []);
+      });
     } catch {
-      throw new SafeFetchError('connect_failed', 'could not read the response');
-    } finally {
-      response.destroy();
-      if (decoder) decoder.destroy();
+      // A lookup that throws on the spot is a failed lookup, never a bare Error.
+      reject(new SafeFetchError('connect_failed', 'The host name could not be found.'));
     }
-    return { buffer: Buffer.concat(chunks), truncated };
-  }
-
-  async function run(startUrl, accept, strictSize, signal) {
-    let current = startUrl;
-    for (let hop = 0; ; hop += 1) {
-      const { url, host, literal } = checkUrl(current);
-      const list = literal ?? await resolveChecked(lookup, host);
-      const response = await sendRequest(url, list, accept, signal);
-      const status = response.statusCode;
-      const location = response.headers?.location;
-      if (REDIRECT_STATUSES.has(status) && typeof location === 'string' && location !== '') {
-        response.resume();
-        response.destroy();
-        if (hop >= maxRedirects) throw new SafeFetchError('too_many_redirects', 'too many redirects');
-        try {
-          current = new URL(location, url).href;
-        } catch {
-          throw new SafeFetchError('bad_url', 'bad redirect address');
-        }
-        continue;
-      }
-      const { buffer, truncated } = await readBody(response);
-      if (truncated && strictSize) throw new SafeFetchError('too_large', 'page is too large');
-      const contentType = String(response.headers?.['content-type'] ?? '');
-      return {
-        status,
-        finalUrl: url.href,
-        contentType,
-        text: decodeText(buffer, contentType),
-        truncated,
-      };
-    }
-  }
+  });
 
   /**
-   * @param {string} url
-   * @param {{ accept?: string, strictSize?: boolean }} [opts]
-   * @returns {Promise<{ status: number, finalUrl: string, contentType: string, text: string, truncated: boolean }>}
+   * Resolve a host name. A name that does not exist is asked once more before it counts as not found (12.1b: "on two
+   * tries"), so one bad answer from a resolver is never reported as a dead address. Nothing else is retried.
    */
-  function fetchText(url, { accept = DEFAULT_ACCEPT, strictSize = false } = {}) {
-    const controller = new AbortController();
-    return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        reject(new SafeFetchError('timeout', 'timed out'));
-        controller.abort();
+  const resolveAll = async host => {
+    try {
+      return await resolveOnce(host);
+    } catch (err) {
+      if (err?.dns !== 'not_found') throw err;
+      // Batch 3 X10: wait a moment, so the second try is not just the resolver's cached answer.
+      if (dnsRetryDelayMs > 0) await new Promise(r => setTimeout(r, dnsRetryDelayMs));
+      try {
+        return await resolveOnce(host);
+      } catch (again) {
+        if (again?.dns !== 'not_found' || /^www\./i.test(host) || net.isIP(host)) throw again;
+        // The name may exist with only "www." set up (Node says "not found" for a name with no address too). Then
+        // the address is not called dead: nothing is fetched from www, it is only looked up.
+        try {
+          await resolveOnce(`www.${host}`);
+          again.dns = 'www_only';
+        } catch { /* www does not resolve either: still not found */ }
+        throw again;
+      }
+    }
+  };
+
+  /** Resolve and check every address for one URL. Returns the checked list. */
+  async function checkedAddresses(url, host) {
+    if (net.isIP(host)) return [{ address: host, family: net.isIP(host) }];
+    const list = await resolveAll(host);
+    if (list.length === 0) throw new SafeFetchError('connect_failed', 'The host name has no address.');
+    for (const entry of list) {
+      if (!isPublicAddress(entry.address)) {
+        throw new SafeFetchError('blocked_address', 'That host points to a non-public address.');
+      }
+    }
+    return list;
+  }
+
+  async function fetchText(rawUrl, opts = {}) {
+    const strictSize = Boolean(opts.strictSize);
+    let timer;
+    let current = null; // { req, res } of the in-flight hop
+    let finished = false;
+
+    const destroyCurrent = () => {
+      try { current?.res?.destroy?.(); } catch { /* ignore */ }
+      try { current?.req?.destroy?.(); } catch { /* ignore */ }
+    };
+
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        reject(new SafeFetchError('timeout', 'The website took too long to answer.'));
       }, timeoutMs);
-      run(String(url), accept, strictSize, controller.signal).then(resolve, err => {
-        reject(err instanceof SafeFetchError ? err : new SafeFetchError('connect_failed', 'could not connect'));
-      }).finally(() => clearTimeout(timer));
     });
+
+    const run = async () => {
+      let target = rawUrl;
+      for (let hop = 0; ; hop += 1) {
+        const { url, host } = checkUrl(target);
+        const list = await checkedAddresses(url, host);
+        if (finished) throw new SafeFetchError('timeout');
+
+        const pinnedLookup = (hostname, lookupOpts, cb) => {
+          const done = typeof lookupOpts === 'function' ? lookupOpts : cb;
+          const all = typeof lookupOpts === 'object' && lookupOpts && lookupOpts.all;
+          if (all) return done(null, list.map(a => ({ address: a.address, family: a.family })));
+          return done(null, list[0].address, list[0].family);
+        };
+
+        const send = url.protocol === 'https:' ? transport.https : transport.http;
+        const res = await new Promise((resolve, reject) => {
+          let req;
+          try {
+            req = send(url.href, {
+              method: 'GET',
+              agent: false,
+              lookup: pinnedLookup,
+              headers: {
+                'User-Agent': userAgent,
+                Accept: 'text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.1',
+                'Accept-Encoding': 'gzip, deflate, br',
+              },
+            }, resolve);
+          } catch {
+            return reject(new SafeFetchError('connect_failed', 'Could not connect to the website.'));
+          }
+          current = { req, res: null };
+          req.on('error', err => {
+            if (err instanceof SafeFetchError) return reject(err);
+            const failed = new SafeFetchError('connect_failed', 'Could not connect to the website.');
+            // An expired certificate is still refused (nothing is loosened); it is only noted for the health map (12.1a).
+            if (err?.code === 'CERT_HAS_EXPIRED') failed.tls = 'expired';
+            return reject(failed);
+          });
+          req.end();
+        });
+        current.res = res;
+        // The certificate's end date, read from this same connection (12.1a: no extra request). Only for https.
+        let certValidTo = null;
+        if (url.protocol === 'https:') {
+          try {
+            const ms = Date.parse(res.socket?.getPeerCertificate?.()?.valid_to ?? '');
+            if (Number.isFinite(ms)) certValidTo = new Date(ms).toISOString();
+          } catch { /* not readable: left out */ }
+        }
+
+        const status = res.statusCode;
+        const headers = res.headers || {};
+
+        if (REDIRECT_STATUSES.has(status) && headers.location) {
+          res.resume?.();
+          res.destroy?.();
+          if (hop >= maxRedirects) {
+            throw new SafeFetchError('too_many_redirects', 'The website redirected too many times.');
+          }
+          try {
+            target = new URL(String(headers.location), url).href;
+          } catch {
+            throw new SafeFetchError('bad_url', 'The website sent a bad redirect.');
+          }
+          continue;
+        }
+
+        const encoding = String(headers['content-encoding'] || '').trim().toLowerCase();
+        let stream = res;
+        if (encoding === 'gzip' || encoding === 'x-gzip') stream = zlib.createGunzip();
+        else if (encoding === 'deflate') stream = zlib.createInflate();
+        else if (encoding === 'br') stream = zlib.createBrotliDecompress();
+        if (stream !== res) {
+          res.on('error', err => stream.destroy(err));
+          res.pipe(stream);
+        }
+
+        const chunks = [];
+        let total = 0;
+        let truncated = false;
+        try {
+          for await (const chunk of stream) {
+            const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+            if (total + buf.length > maxBytes) {
+              chunks.push(buf.subarray(0, maxBytes - total));
+              total = maxBytes;
+              truncated = true;
+              break;
+            }
+            chunks.push(buf);
+            total += buf.length;
+          }
+        } catch (err) {
+          if (err instanceof SafeFetchError) throw err;
+          throw new SafeFetchError('connect_failed', 'The website sent a broken answer.');
+        }
+        if (truncated) {
+          stream.destroy?.();
+          res.destroy?.();
+          if (strictSize) throw new SafeFetchError('too_large', 'The page is too large.');
+        }
+
+        const contentType = Array.isArray(headers['content-type'])
+          ? headers['content-type'][0]
+          : String(headers['content-type'] || '');
+        return {
+          status,
+          finalUrl: url.href,
+          contentType,
+          text: decodeBody(Buffer.concat(chunks), contentType),
+          truncated,
+          ...(certValidTo ? { certValidTo } : {}),
+        };
+      }
+    };
+
+    const work = run();
+    work.catch(() => {}); // avoid unhandled rejection if the timer wins
+    try {
+      return await Promise.race([work, timeout]);
+    } finally {
+      finished = true;
+      clearTimeout(timer);
+      destroyCurrent();
+    }
   }
 
   return { fetchText };

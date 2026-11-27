@@ -1,130 +1,170 @@
+// Fix kit: copy-and-paste text built only from typed or found facts.
+// All lengths count code points, not UTF-16 units.
+
+import { stripAddressTail } from './schema.js';
+import { usAddressStyle } from './address-style.js';
+
+const TITLE_MAX = 60;
+const SUMMARY_MAX = 160;
+/** What the business label holds for the phone when none was found on the page (V137). */
+export const PHONE_PLACEHOLDER = 'ADD YOUR PHONE NUMBER';
+
+const cp = s => Array.from(s);
+const len = s => cp(s).length;
+const tidy = v => String(v ?? '').replace(/\s+/g, ' ').trim();
+
+/** Cut to at most `max` code points at a word boundary (hard cut for one long word). */
+function cutAtWord(s, max) {
+  const chars = cp(s);
+  if (chars.length <= max) return s;
+  const head = chars.slice(0, max).join('');
+  if (chars[max] === ' ') return head.trim();
+  const i = head.lastIndexOf(' ');
+  return (i > 0 ? head.slice(0, i) : head).trim();
+}
+
+function clean(found = {}) {
+  return {
+    name: tidy(found.name),
+    service: tidy(found.service),
+    city: tidy(found.city),
+    state: tidy(found.state).toUpperCase(),
+    phone: tidy(found.phone),
+    website: tidy(found.website),
+    address: tidy(found.address),
+    hours: normalizeHours(found.hours),
+  };
+}
+
+function normalizeHours(hours) {
+  if (!hours) return [];
+  if (typeof hours === 'string') return tidy(hours) ? [tidy(hours)] : [];
+  if (Array.isArray(hours)) return hours.map(tidy).filter(Boolean);
+  if (typeof hours === 'object') {
+    return Object.entries(hours)
+      .map(([day, v]) => (tidy(v) ? `${tidy(day)} ${tidy(v)}` : ''))
+      .filter(Boolean);
+  }
+  return [];
+}
+
+function capitalizeFirst(s) {
+  const chars = cp(s);
+  if (!chars.length) return s;
+  return chars[0].toUpperCase() + chars.slice(1).join('');
+}
+
+/** Lower-case a service for use in a sentence; words of 2+ letters in all caps stay as typed. */
+function serviceInSentence(service) {
+  return tidy(service)
+    .split(' ')
+    .map(w => (len(w) >= 2 && w === w.toUpperCase() && w !== w.toLowerCase() ? w : w.toLowerCase()))
+    .join(' ');
+}
+
+function place(city, state) {
+  if (city && state) return `${city}, ${state}`;
+  return city || state;
+}
+
+export function suggestedTitle(found) {
+  const f = clean(found);
+  const tries = [];
+  // The service is shown whole or not at all, and the state stays while the city is shown (V118): a shorter
+  // try leaves the service out rather than cutting it mid-phrase ("… | Window cleaning and pressure in …").
+  if (f.service) {
+    const svc = capitalizeFirst(f.service);
+    tries.push(`${f.name} | ${svc}${f.city ? ` in ${place(f.city, f.state)}` : ''}`);
+  }
+  if (f.city && f.state) tries.push(`${f.name} | ${f.city}, ${f.state}`);
+  tries.push(f.city ? `${f.name} | ${f.city}` : f.name);
+  for (const t of tries) if (len(t) <= TITLE_MAX) return t;
+  return cutAtWord(f.name, TITLE_MAX);
+}
+
+export function suggestedSummary(found) {
+  const f = clean(found);
+  const where = place(f.city, f.state);
+  let s = f.name;
+  if (f.service) s += `: ${serviceInSentence(f.service)}`;
+  if (where) s += `${f.service ? ' in' : ':'} ${where}`;
+  s += '.';
+  if (f.phone) s += ` Call ${f.phone} today.`;
+  if (f.city) {
+    const extra = ` Serving ${f.city} and nearby areas.`;
+    if (len(s + extra) <= SUMMARY_MAX) s += extra;
+  }
+  return cutAtWord(s, SUMMARY_MAX);
+}
+
+/** Placeholders the report's kit puts in for a street or ZIP it couldn't read (batch 5 K13). */
+export const STREET_PLACEHOLDER = 'ADD YOUR STREET ADDRESS';
+export const ZIP_PLACEHOLDER = 'ADD YOUR ZIP CODE';
+/** The line shown above a block that holds a placeholder (K13). */
+export const REPLACE_CAPITALS = 'Replace the CAPITAL WORDS before pasting.';
+
+/** True when a built block still holds a placeholder the owner must replace. */
+export const hasPlaceholder = text => [PHONE_PLACEHOLDER, STREET_PLACEHOLDER, ZIP_PLACEHOLDER].some(p => String(text).includes(p));
+
 /**
- * fix-kit.js — copy-and-paste fixes for the business's own website.
- *
- * Every function uses only facts the visitor typed or the scan found. Lengths
- * count code points. Output is plain text: pages escape it when they show it.
+ * The business label (schema.org LocalBusiness markup). `options.placeholders` (the report's kit, K13) puts plain
+ * placeholders in for a street and ZIP that couldn't be read, never an invented value. `found.sameAs` is a list of the
+ * business's own profile addresses that the check found linked from its website.
  */
-
-const clean = value => (typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '');
-const len = text => Array.from(text).length;
-const titleCase = text => text.split(' ').map(w => (w ? w[0].toUpperCase() + w.slice(1) : w)).join(' ');
-
-/** Cut to at most `max` code points at a word boundary; hard-cut a single long word. */
-function cutAtWord(text, max) {
-  const chars = Array.from(text);
-  if (chars.length <= max) return text;
-  const head = chars.slice(0, max);
-  // Cut only at a word boundary when the next character starts a new word.
-  if (chars[max] === ' ') return head.join('').trim();
-  const lastSpace = head.lastIndexOf(' ');
-  if (lastSpace > 0) return head.slice(0, lastSpace).join('').trim();
-  return head.join('');
-}
-
-const stateCode = state => clean(state).toUpperCase().slice(0, 2);
-
-/**
- * Lower-case a service for use inside a sentence ("Roofers" to "roofers"), but keep
- * all-caps words as typed ("HVAC" stays "HVAC", "Heating and AC" gives "heating and AC").
- */
-function sentenceCase(service) {
-  return service.split(' ').map(word => {
-    const letters = word.replace(/[^\p{L}]/gu, '');
-    const allCaps = Array.from(letters).length >= 2 && letters === letters.toUpperCase() && letters !== letters.toLowerCase();
-    return allCaps ? word : word.toLowerCase();
-  }).join(' ');
-}
-
-/**
- * `<name> | <Service> in <City>, <ST>`, shortened to 60 characters without
- * cutting a word in half (unless a single word is longer than 60).
- */
-export function suggestedTitle({ name, service, city, state }) {
-  const n = clean(name);
-  const s = titleCase(clean(service));
-  const c = clean(city);
-  const st = stateCode(state);
-  const fits = text => len(text) <= 60;
-
-  if (s && c && st) {
-    const full = `${n} | ${s} in ${c}, ${st}`;
-    if (fits(full)) return full;
+export function jsonLdBlock(found, options = {}) {
+  const f = clean(found);
+  const data = { '@context': 'https://schema.org', '@type': 'LocalBusiness', name: f.name };
+  // No phone found: a plain placeholder the owner must replace (never an invented number) (V137).
+  data.telephone = f.phone || PHONE_PLACEHOLDER;
+  if (f.website) data.url = f.website;
+  // A business that goes to its customers ("no storefront") names its area and no address at all.
+  const noStorefront = found?.noStorefront === true;
+  if (!noStorefront && (f.address || f.city || f.state || options.placeholders)) {
+    const addr = { '@type': 'PostalAddress' };
+    // Only the street goes in streetAddress; the city, state and ZIP each have their own field (V144).
+    const whole = usAddressStyle(f.address);
+    const street = stripAddressTail(whole, f.city, f.state);
+    const zip = street !== whole ? /\b(\d{5}(?:-\d{4})?)\s*$/.exec(whole)?.[1] : undefined;
+    if (street) addr.streetAddress = street;
+    else if (options.placeholders) addr.streetAddress = STREET_PLACEHOLDER;
+    if (f.city) addr.addressLocality = f.city;
+    if (f.state) addr.addressRegion = f.state;
+    if (zip) addr.postalCode = zip;
+    else if (options.placeholders) addr.postalCode = ZIP_PLACEHOLDER;
+    data.address = addr;
   }
-  if (s && c) {
-    const noState = `${n} | ${s} in ${c}`;
-    if (fits(noState)) return noState;
-    const words = s.split(' ');
-    for (let k = words.length - 1; k >= 1; k -= 1) {
-      const trimmed = `${n} | ${words.slice(0, k).join(' ')} in ${c}`;
-      if (fits(trimmed)) return trimmed;
-    }
+  if (f.hours.length) data.openingHours = f.hours;
+  if (noStorefront) {
+    if (f.city) data.areaServed = place(f.city, f.state);
+  } else if (f.city) {
+    data.areaServed = f.city;
   }
-  if (c) {
-    const cityOnly = `${n} | ${c}`;
-    if (fits(cityOnly)) return cityOnly;
-  }
-  return cutAtWord(n, 60);
-}
-
-/** Up to 160 characters, built from the name, service, city and (when found) the phone. */
-export function suggestedSummary({ name, service, city, state, phone }) {
-  const n = clean(name);
-  const s = sentenceCase(clean(service));
-  const c = clean(city);
-  const st = stateCode(state);
-  const place = c && st ? `${c}, ${st}` : c;
-  let text = n;
-  if (s && place) text += `: ${s} in ${place}.`;
-  else if (place) text += `: ${place}.`;
-  else text += '.';
-  const p = clean(phone);
-  if (p) text += ` Call ${p} today.`;
-  if (c) {
-    const extra = ` Serving ${c} and nearby areas.`;
-    if (len(text + extra) <= 160) text += extra;
-  }
-  return cutAtWord(text, 160);
-}
-
-/** A LocalBusiness JSON-LD script block. `<` is escaped so the page can't be broken out of. */
-export function jsonLdBlock(found) {
-  const data = { '@context': 'https://schema.org', '@type': 'LocalBusiness', name: clean(found.name) };
-  if (clean(found.phone)) data.telephone = clean(found.phone);
-  if (clean(found.website)) data.url = clean(found.website);
-  const address = { '@type': 'PostalAddress' };
-  if (clean(found.address)) address.streetAddress = clean(found.address);
-  if (clean(found.city)) address.addressLocality = clean(found.city);
-  if (stateCode(found.state)) address.addressRegion = stateCode(found.state);
-  if (Object.keys(address).length > 1) data.address = address;
-  const hours = (Array.isArray(found.hours) ? found.hours : []).map(clean).filter(Boolean);
-  if (hours.length > 0) data.openingHours = hours;
-  if (clean(found.city)) data.areaServed = clean(found.city);
+  const sameAs = [...new Set((Array.isArray(found?.sameAs) ? found.sameAs : [])
+    .map(u => String(u ?? '').trim()).filter(u => /^https:\/\/[^\s"<>]+$/i.test(u)))];
+  if (sameAs.length > 0) data.sameAs = sameAs;
+  // Built only from what the owner typed and the page showed: never a rating or a review.
   const json = JSON.stringify(data, null, 2).replace(/</g, '\\u003c');
   return `<script type="application/ld+json">\n${json}\n</script>`;
 }
 
-/** A plain-text llms.txt draft in Markdown. */
 export function llmsDraft(found) {
-  const name = clean(found.name);
-  const service = clean(found.service);
-  const city = clean(found.city);
-  const st = stateCode(found.state);
-  const place = city && st ? `${city}, ${st}` : city;
-  const lines = [`# ${name}`, ''];
-  // "Acme Roofing: roofers in Nashville, TN." reads right for any service word, plural or not.
-  if (service && place) lines.push(`> ${name}: ${sentenceCase(service)} in ${place}.`, '');
-  if (service) lines.push(`- Service: ${service}`);
-  if (place) lines.push(`- Area: ${place}`);
-  if (clean(found.phone)) lines.push(`- Phone: ${clean(found.phone)}`);
-  if (clean(found.website)) lines.push(`- Website: ${clean(found.website)}`);
-  const hours = (Array.isArray(found.hours) ? found.hours : []).map(clean).filter(Boolean);
-  if (hours.length > 0) lines.push(`- Hours: ${hours.join('; ')}`);
-  return `${lines.join('\n')}\n`;
+  const f = clean(found);
+  const where = place(f.city, f.state);
+  const lines = [`# ${f.name}`, ''];
+  let summary = f.name;
+  if (f.service) summary += `: ${serviceInSentence(f.service)}`;
+  if (where) summary += `${f.service ? ' in' : ':'} ${where}`;
+  lines.push(`> ${summary}.`, '');
+  if (f.service) lines.push(`- Service: ${f.service}`);
+  if (where) lines.push(`- Area: ${where}`);
+  if (f.phone) lines.push(`- Phone: ${f.phone}`);
+  if (f.website) lines.push(`- Website: ${f.website}`);
+  if (f.hours.length) lines.push(`- Hours: ${f.hours.join('; ')}`);
+  return lines.join('\n') + '\n';
 }
 
-/** robots.txt lines that let each blocked AI crawler in. */
 export function robotsLines(blockedAgents) {
-  const agents = (Array.isArray(blockedAgents) ? blockedAgents : [])
-    .filter(a => typeof a === 'string' && /^[A-Za-z0-9._-]{1,40}$/.test(a));
+  const agents = [...new Set((blockedAgents || []).map(a => String(a)))]
+    .filter(a => /^[A-Za-z0-9._-]+$/.test(a));
   return agents.map(a => `User-agent: ${a}\nAllow: /`).join('\n\n');
 }

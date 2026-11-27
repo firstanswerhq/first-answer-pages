@@ -24,16 +24,38 @@
 import express, { Router } from 'express';
 import {
   requireAdmin, plainTokenMatches, setAdminCookie, clearAdminCookie, throttled, sameOrigin, cookieMatches,
+  GRADE_ADMIN_COOKIE, gradeAdminCookieValue, ADMIN_COOKIE_MAX_AGE,
 } from '../lib/admin-auth.js';
 import { layout, escapeHtml } from '../lib/html.js';
 import { mountGradeAdmin } from './grade-admin.js';
 import { draftProvider } from '../lib/drafts.js';
 import { formatRunTime } from '../lib/seance-html.js';
 import { indexNowNote } from '../lib/indexnow.js';
-import { DAYS } from '../lib/listing-fields.js';
+import { DAYS, normalizeWebsite, reviewsLinkHost } from '../lib/listing-fields.js';
 import { markQuoteHandled } from '../lib/quotes.js';
 import { runSeanceForListing } from './seance.js';
 import { DEFAULT_SITE_NAME } from '../lib/config.js';
+import { sameSite } from '../lib/name-match.js';
+
+/**
+ * Listings whose website looked down on the newest check of the same business (high-tech-look 12.3): an expired
+ * security certificate, or an address that no longer loads. Admin only, never shown publicly. Never says closed.
+ * @returns {Map<string, string>} listing id -> note
+ */
+export function websiteDownNotes(listings, grades) {
+  const out = new Map();
+  const list = Array.isArray(grades) ? grades.filter(g => g && typeof g === 'object' && g.signals?.website) : [];
+  for (const l of Array.isArray(listings) ? listings : []) {
+    const mine = list.filter(g => g.signals?.listing?.listed?.listingId === l.id
+      || (l.website && g.input?.website && sameSite(l.website, g.input.website)));
+    const newest = mine.sort((a, b) => Date.parse(b.finishedAt ?? b.createdAt ?? 0) - Date.parse(a.finishedAt ?? a.createdAt ?? 0))[0];
+    const w = newest?.signals?.website;
+    if (!w) continue;
+    if (w.addressWorks?.status === 'missing') out.set(l.id, "Website may be down: the last check found its address doesn't load. Look before trusting this listing.");
+    else if (w.certificate?.status === 'missing') out.set(l.id, 'Website may be down: the last check found an expired security certificate. Look before trusting this listing.');
+  }
+  return out;
+}
 
 /** Fixed notes for /admin/pending?note=...; never echo the query value. */
 const NOTES = Object.freeze({
@@ -42,6 +64,8 @@ const NOTES = Object.freeze({
   unpublished: 'Unpublished.',
   unverified: 'Verified stamp removed.',
   reverified: 'Verification turned back on for that listing, with fresh photo ID tries.',
+  waived: 'The verification fee is waived for that listing. The phone code and photo ID steps still apply.',
+  notwaivable: 'That listing is already paid for, verified or switched off, so there is no fee to waive.',
   notfound: 'That entry was not found.',
   notpending: 'That entry is not waiting for review.',
   invalid: 'That listing is missing required fields, so it was not approved.',
@@ -63,7 +87,7 @@ const QUOTE_NOTES = Object.freeze({
 function providerText(name) {
   if (name === 'mock') return 'Demo photo reader';
   if (name === 'manual') return 'Typed in by the owner';
-  if (name === 'grader') return 'Filled in from the Grader scan';
+  if (name === 'grader') return 'Filled in from the AI Visibility Check scan';
   if (name === 'anthropic') return 'Read from a photo by Claude';
   if (name === 'openai') return 'Read from a photo by AI';
   return 'Unknown source';
@@ -213,10 +237,22 @@ export function createAdminRouter(ctx) {
       return res.status(403).json({ error: 'Forbidden' });
     }
     clearAdminCookie(ctx, req, res);
+    // Batch 3 X16: signing out also ends the short /grade cookie (high-tech-look 11.3).
+    res.append('Set-Cookie', `${GRADE_ADMIN_COOKIE}=; Path=/grade; Max-Age=0; HttpOnly; SameSite=Lax${ctx.config.production ? '; Secure' : ''}`);
     res.redirect(303, '/admin/login');
   });
 
   router.use('/admin', requireAdmin(ctx, { cookie: true }));
+
+  // A signed-in admin's browser page view also gets the short /grade cookie, so the owner's own new checks are never
+  // held to the 7-day fair-use rule (high-tech-look 11.3). Only page views by a signed-in admin reach this line.
+  router.use('/admin', (req, res, next) => {
+    if (req.method === 'GET' && wantsHtml(req) && ctx.config.adminToken) {
+      const value = gradeAdminCookieValue(ctx.config.adminToken, ctx.clock?.now?.() ?? Date.now());
+      res.append('Set-Cookie', `${GRADE_ADMIN_COOKIE}=${value}; Path=/grade; HttpOnly; SameSite=Lax; Max-Age=${ADMIN_COOKIE_MAX_AGE}${ctx.config.production ? '; Secure' : ''}`);
+    }
+    next();
+  });
 
   // Grader pages (grades, leads, delete) sit behind the same gate.
   mountGradeAdmin(router, ctx, { adminNav, wantsHtml, form });
@@ -252,6 +288,8 @@ export function createAdminRouter(ctx) {
       const byId = new Map((Array.isArray(drafts) ? drafts : []).map(d => [d.id, d]));
       // Owner listings that are live now (the store's snapshot; sample listings are never unpublishable).
       const published = ctx.store.getListings().filter(l => l && typeof l.id === 'string' && !ctx.store.isSeed(l.id));
+      // "Website may be down" (high-tech-look 12.3, admin only): from the newest check of each listing's business.
+      const downNotes = websiteDownNotes(published, await ctx.store.collection('grades').read().catch(() => []));
 
       const categories = ctx.store.getCategories();
       const categoryLabel = slug => categories.find(c => c.slug === slug)?.label ?? String(slug ?? '');
@@ -287,7 +325,9 @@ export function createAdminRouter(ctx) {
           row('Hours', hoursHtml(f.hours)),
           row('Service area', f.serviceArea ? escapeHtml(f.serviceArea) : 'None given'),
           ...(f.address ? [row('Address', escapeHtml(f.address))] : []),
-          ...(f.website ? [row('Website', escapeHtml(f.website))] : []),
+          // Both links are checked again and shown as text, never as links: the admin checks them before approving.
+          ...(normalizeWebsite(f.website) !== '' ? [row('Website', escapeHtml(f.website.trim()))] : []),
+          ...(reviewsLinkHost(f.reviewsLink) !== '' ? [row('Reviews link', escapeHtml(f.reviewsLink.trim()))] : []),
           ...(f.ownerEmail ? [row('Owner email (private)', escapeHtml(f.ownerEmail))] : []),
         ].join('\n');
         return `<li class="pending-item" id="pending-${escapeHtml(e.id)}">
@@ -311,8 +351,15 @@ ${preview}
         const yesNo = v => (v ? 'yes' : 'no');
         const trustLine = !started ? '' : t.removed
           ? '\n  <p class="hint">Verified stamp: turned off by admin.</p>'
-          : `\n  <p class="hint">Verified stamp: ${t.verified ? 'showing' : 'not yet'} &middot; fee paid: ${yesNo(t.paid)} &middot; phone: ${yesNo(t.phoneOk)} &middot; photo ID: ${yesNo(t.idOk)}</p>`;
+          // A waived fee is not a paid one (reader review R26).
+          : `\n  <p class="hint">Verified stamp: ${t.verified ? 'showing' : 'not yet'} &middot; ${t.waived ? 'fee: waived' : `fee paid: ${yesNo(t.paid)}`} &middot; phone: ${yesNo(t.phoneOk)} &middot; photo ID: ${yesNo(t.idOk)}</p>`;
         const founderLine = founder ? `\n  <p class="hint">Founding Member No. ${founder.number}</p>` : '';
+        // Admin only: the owner's own listings need no fee. Only the payment is skipped (Requirement 6).
+        const waivedLine = (t?.waived ? '\n  <p class="hint">Fee waived by admin.</p>' : '')
+          + (downNotes.has(l.id) ? `\n  <p class="admin-warning notice" role="note">${escapeHtml(downNotes.get(l.id))}</p>` : '');
+        const waive = t && !t.verified && !t.paid && !t.removed
+          ? `\n  <form method="POST" action="/admin/listings/${lid}/waive-fee"><button type="submit" class="admin-button admin-button-secondary">Waive the verification fee</button></form>`
+          : '';
         let unverify = '';
         if (started && !t.removed) {
           unverify = `\n  <form method="POST" action="/admin/listings/${lid}/unverify"><button type="submit" class="admin-button admin-button-secondary">Remove Verified stamp</button></form>`;
@@ -322,10 +369,10 @@ ${preview}
         }
         return `<li class="pending-item">
   <h2>${escapeHtml(l.name ?? l.id)}</h2>
-  <p>${escapeHtml(categoryLabel(l.category))} &middot; ${escapeHtml(l.city ?? '')}, ${escapeHtml(l.state ?? '')} &middot; ${escapeHtml(l.phone ?? '')}</p>${founderLine}${trustLine}
+  <p>${escapeHtml(categoryLabel(l.category))} &middot; ${escapeHtml(l.city ?? '')}, ${escapeHtml(l.state ?? '')} &middot; ${escapeHtml(l.phone ?? '')}</p>${founderLine}${trustLine}${waivedLine}
   <p><a href="/listings/${lid}">View listing</a></p>
   <form method="POST" action="/admin/listings/${lid}/seance"><button type="submit" class="admin-button">Run AI check (Séance)</button></form>
-  <form method="POST" action="/admin/listings/${lid}/unpublish"><button type="submit" class="admin-button admin-button-secondary">Unpublish</button></form>${unverify}
+  <form method="POST" action="/admin/listings/${lid}/unpublish"><button type="submit" class="admin-button admin-button-secondary">Unpublish</button></form>${unverify}${waive}
 </li>`;
       }).join('\n');
 
@@ -625,6 +672,26 @@ ${preview}
       }
       await ctx.store.updateTrustRecord(live.id, r => { delete r.removedAt; r.idAttempts = 0; delete r.idFailed; });
       reply(req, res, { json: { ok: true }, note: 'reverified', id: live.id });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Waive the verification fee for one of the owner's own listings (Requirement 6). Only the payment is skipped: the
+  // phone code and the photo ID check still have to pass. Who and when are saved; nothing shows to the public.
+  router.post('/admin/listings/:id/waive-fee', form, async (req, res, next) => {
+    try {
+      const live = ctx.store.findById(req.params.id);
+      if (!live || ctx.store.isSeed(live.id) || typeof ctx.store.updateTrustRecord !== 'function') {
+        return reply(req, res, { status: 404, json: { error: 'Listing not found' }, note: 'notfound' });
+      }
+      const status = ctx.store.getTrustStatus(live);
+      if (status.verified || status.paid || status.removed) {
+        return reply(req, res, { status: 409, json: { error: 'Nothing to waive: the listing is paid, verified or switched off' }, note: 'notwaivable', id: live.id });
+      }
+      const at = new Date(ctx.clock ? ctx.clock.now() : Date.now()).toISOString();
+      await ctx.store.updateTrustRecord(live.id, r => { r.waivedAt = at; r.waivedBy = 'admin'; });
+      reply(req, res, { json: { ok: true }, note: 'waived', id: live.id });
     } catch (err) {
       next(err);
     }

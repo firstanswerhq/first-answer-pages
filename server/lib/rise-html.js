@@ -5,7 +5,7 @@
  */
 
 import { layout, escapeHtml, foundersInvite } from './html.js';
-import { DAYS, STATE_HINT, STATE_ERROR } from './listing-fields.js';
+import { DAYS, STATE_HINT, STATE_ERROR, normalizeWebsite, reviewsLinkHost } from './listing-fields.js';
 
 const DAY_LABELS = Object.freeze(
   Object.fromEntries(DAYS.map(d => [d, d[0].toUpperCase() + d.slice(1)])),
@@ -22,7 +22,35 @@ const FIELD_LABELS = Object.freeze({
   state: 'State',
   address: 'Street address',
   ownerEmail: 'Your email',
+  reviewsLink: 'Reviews link (optional)',
+  website: 'Website (optional)',
 });
+
+/** The /rise summary for search results, with and without the photo reader. */
+export const RISE_DESCRIPTION = 'List your local business free on First Answer Pages. Send a photo of your card or sign, or type it in. We review every listing.';
+export const RISE_DESCRIPTION_NO_PHOTO = 'List your local business free on First Answer Pages. Type in your details. We review every listing.';
+
+/** Help text under the website box. */
+export const WEBSITE_HINT = 'The address of your own website, like example.com';
+
+/** Shown when the owner typed a website that was left out. Plain words, like the reviews link note. */
+export const WEBSITE_LEFT_OUT = 'We left that website out. It must be the address of your own website, like example.com.';
+
+/** Help text under the reviews link box. */
+export const REVIEWS_LINK_HINT = 'A link to your reviews on Google, Yelp, Facebook or Nextdoor.';
+
+/** Shown when the owner typed a reviews link that was left out. */
+export const REVIEWS_LINK_LEFT_OUT = 'We left that link out. It must start with https:// and go to your reviews on Google, Yelp, Facebook or Nextdoor.';
+
+/** The top line after a save that left the reviews link out. */
+export const SAVED_LINK_LEFT_OUT = 'Saved, but we left out your reviews link. See below.';
+
+/** The top line after a save that left the website out, and after one that left out both. */
+export const SAVED_WEBSITE_LEFT_OUT = 'Saved, but we left out your website. See below.';
+export const SAVED_BOTH_LEFT_OUT = 'Saved, but we left out your website and your reviews link. See below.';
+
+/** Hint under the street address box. */
+export const ADDRESS_HINT = 'Optional. Leave it blank if you go to your customers.';
 
 /** Help text under the owner email box. */
 export const OWNER_EMAIL_HINT = 'Optional. Never shown publicly. We use it only to contact you about your listing and the quote requests customers send you.';
@@ -31,7 +59,10 @@ export const OWNER_EMAIL_HINT = 'Optional. Never shown publicly. We use it only 
 export const HOURS_PLACEHOLDER = '7am-5pm, or Closed';
 
 /** Hint under the hours boxes. */
-export const HOURS_HINT = "Leave a day blank if it varies. Type Closed if you're closed.";
+export const HOURS_HINT = "Type Closed for days you're closed. Leave a day blank only if your hours that day vary from week to week.";
+export const DESCRIPTION_PLACEHOLDER = 'One or two sentences about your business, like who you are and what you do.';
+export const SERVICES_PLACEHOLDER = 'List what you offer, like: repairs, new installs';
+export const CATEGORY_GUESSED_OTHER = 'We picked Other. Choose a better fit if there is one.';
 
 /** True when a draft's fields hold nothing the owner has typed yet. */
 function isEmptyFields(fields) {
@@ -62,7 +93,12 @@ export const DEMO_BANNER_TEXT = 'Demo: no photo reader is connected, so this is 
  * Page for the upload form: GET /rise.
  * @param {{ photoEnabled?: boolean, discarded?: boolean }} [opts]
  */
-export function uploadPage({ photoEnabled = true, discarded = false, founders, fees } = {}) {
+export function uploadPage({ photoEnabled = true, discarded = false, founders, fees, canonical = '' } = {}) {
+  // For search results (V94). The photo sentence is said only while the photo reader is open.
+  const search = {
+    description: photoEnabled ? RISE_DESCRIPTION : RISE_DESCRIPTION_NO_PHOTO,
+    ...(canonical ? { canonical } : {}),
+  };
   const inviteHtml = foundersInvite(founders, { fees });
   const invite = inviteHtml ? `\n  ${inviteHtml}` : '';
   const discardedNote = discarded ? '\n  <p class="notice" role="status">Draft discarded.</p>' : '';
@@ -78,7 +114,7 @@ export function uploadPage({ photoEnabled = true, discarded = false, founders, f
     <button type="submit">Type it in</button>
   </form>
 </section>`;
-    return layout({ title: 'List your business free: First Answer Pages', body: manualBody });
+    return layout({ title: 'List your business free | First Answer Pages', body: manualBody, ...search });
   }
   const body = `<section class="rise">
   <h1>List your business free</h1>${discardedNote}
@@ -95,7 +131,7 @@ export function uploadPage({ photoEnabled = true, discarded = false, founders, f
   </noscript>
   ${typeItIn}
 </section>`;
-  return layout({ title: 'List your business free: First Answer Pages', body, scripts: ['/js/rise.js'] });
+  return layout({ title: 'List your business free | First Answer Pages', body, scripts: ['/js/rise.js'], ...search });
 }
 
 /**
@@ -171,7 +207,19 @@ export function reviewPage(draft, categories, opts = {}) {
     : '';
 
   // At the top of the page so a phone shows it without scrolling after the reload.
-  const savedNote = opts.saved === true ? '<p class="notice saved-note" role="status">Saved.</p>' : '';
+  // When the reviews link was left out, the top line says so too (the note by the box is far down the page).
+  const reviewsOut = opts.reviewsLeftOut === true;
+  const websiteOut = opts.websiteLeftOut === true;
+  const savedText = reviewsOut && websiteOut ? SAVED_BOTH_LEFT_OUT
+    : reviewsOut ? SAVED_LINK_LEFT_OUT
+      : websiteOut ? SAVED_WEBSITE_LEFT_OUT
+        : 'Saved.';
+  // A clean save is the green "Saved."; when something was left out the line is a plain notice, not good news (V91).
+  const anyLeftOut = reviewsOut || websiteOut;
+  const savedNote = opts.saved !== true ? ''
+    : anyLeftOut
+      ? `<p class="notice" role="status">${escapeHtml(savedText)}</p>`
+      : `<p class="notice saved-note" role="status">${escapeHtml(savedText)}</p>`;
   const heading = fresh ? 'Type in your listing' : 'Check your listing';
   const tagline = fresh
     ? 'Fill in your business details, then press Confirm. Nobody can see it until we review it.'
@@ -190,18 +238,29 @@ export function reviewPage(draft, categories, opts = {}) {
   ${summary}
   <form class="rise-form" method="POST" action="${base}">
 ${row('name', input('name', f.name), missing, fresh)}
-${row('category', `<select id="f-category" name="category">${categoryOptions}</select>`, missing, fresh)}
+${row('category', `<select id="f-category" name="category">${categoryOptions}</select>${draft.provider === 'grader' && f.category === 'other'
+    ? `\n      <span class="hint">${escapeHtml(CATEGORY_GUESSED_OTHER)}</span>`
+    : ''}`, missing, fresh)}
 ${row('phone', input('phone', f.phone, 'tel').replace('maxlength="500"', 'maxlength="500" autocomplete="tel"'), missing, fresh)}
-${row('services', `<textarea id="f-services" name="services" rows="5">${escapeHtml(services)}</textarea>
+${row('services', `<textarea id="f-services" name="services" rows="5" placeholder="${escapeHtml(SERVICES_PLACEHOLDER)}">${escapeHtml(services)}</textarea>
       <span class="hint">One per line, or separate with commas.</span>`, missing, fresh)}
 ${row('serviceArea', input('serviceArea', f.serviceArea), missing, fresh)}
-${row('description', `<textarea id="f-description" name="description" rows="4" maxlength="500">${escapeHtml(f.description ?? '')}</textarea>`, missing, fresh)}
+${row('description', `<textarea id="f-description" name="description" rows="4" maxlength="500" placeholder="${escapeHtml(DESCRIPTION_PLACEHOLDER)}">${escapeHtml(f.description ?? '')}</textarea>`, missing, fresh)}
 ${row('city', input('city', f.city), missing, fresh)}
 ${row('state', `<input type="text" id="f-state" name="state" value="${escapeHtml(f.state ?? '')}" maxlength="40" size="6" autocomplete="address-level1" aria-describedby="f-state-hint">
       <span class="hint" id="f-state-hint">${escapeHtml(STATE_HINT)}</span>`, missing, fresh)}
-${row('address', input('address', f.address), missing, fresh)}
+${row('address', `${input('address', f.address).replace('maxlength="500"', 'maxlength="500" aria-describedby="f-address-hint"')}
+      <span class="hint" id="f-address-hint">${escapeHtml(ADDRESS_HINT)}</span>`, missing, fresh)}
 ${row('ownerEmail', `<input type="email" id="f-ownerEmail" name="ownerEmail" value="${escapeHtml(f.ownerEmail ?? '')}" maxlength="254" autocomplete="email" aria-describedby="f-ownerEmail-hint">
       <span class="hint" id="f-ownerEmail-hint">${escapeHtml(OWNER_EMAIL_HINT)}</span>`, missing, fresh)}
+${row('website', `<input type="text" id="f-website" name="website" value="${escapeHtml(normalizeWebsite(f.website) !== '' ? f.website.trim() : '')}" maxlength="600" inputmode="url" autocapitalize="none" autocomplete="url" aria-describedby="f-website-hint">
+      <span class="hint" id="f-website-hint">${escapeHtml(WEBSITE_HINT)}</span>${websiteOut
+    ? `\n      <span class="missing-note" role="alert">${escapeHtml(WEBSITE_LEFT_OUT)}</span>`
+    : ''}`, missing, fresh)}
+${row('reviewsLink', `<input type="text" id="f-reviewsLink" name="reviewsLink" value="${escapeHtml(reviewsLinkHost(f.reviewsLink) !== '' ? f.reviewsLink.trim() : '')}" maxlength="1000" inputmode="url" autocapitalize="none" autocomplete="url" aria-describedby="f-reviewsLink-hint">
+      <span class="hint" id="f-reviewsLink-hint">${escapeHtml(REVIEWS_LINK_HINT)}</span>${opts.reviewsLeftOut === true
+    ? `\n      <span class="missing-note" role="alert">${escapeHtml(REVIEWS_LINK_LEFT_OUT)}</span>`
+    : ''}`, missing, fresh)}
     <fieldset class="hours-edit">
       <legend>Hours</legend>
       <p class="hint" id="hours-hint">${escapeHtml(HOURS_HINT)}</p>
@@ -223,5 +282,5 @@ ${hoursRows}
     </form>
   </details>
 </section>`;
-  return layout({ title: `${heading}: First Answer Pages`, body });
+  return layout({ title: `${heading} | First Answer Pages`, body });
 }

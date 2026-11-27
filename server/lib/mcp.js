@@ -17,22 +17,31 @@ import { publicListing } from './public-listing.js';
 import { DEFAULT_SITE_NAME } from './config.js';
 import { normalizeCategory, normalizeCity, categoryForQuery } from './search-match.js';
 import { filledHours } from './html.js';
+import { reviewsLinkHost, normalizeWebsite } from './listing-fields.js';
 
 export const SUPPORTED_PROTOCOL_VERSIONS = Object.freeze(['2025-06-18', '2025-03-26', '2024-11-05']);
 export const SERVER_INFO = Object.freeze({ name: 'first-answer-pages', version: '0.1.0' });
 export const SEARCH_LIMIT = 25;
 
+/** Said up front in the lookup tools' descriptions (high-tech-look 9). */
+export const FREE_NOTE = 'Free: there is no charge for this lookup.';
+/** Who confirmed a field (high-tech-look 9.1). */
+export const CONFIRMED_BY_BUSINESS = 'business';
+export const CONFIRMED_BY_CHECK = 'First Answer phone and ID check';
+/** The fields that carry a receipt, in this order. `area` is the listing's service area. */
+export const RECEIPT_FIELDS = Object.freeze(['phone', 'hours', 'services', 'area', 'website']);
+
 export const TOOLS = Object.freeze([
   {
     name: 'search_listings',
     description:
-      'Search the local business directory. Optional filters: category, city, and a text query matched against name, description, services, and the category (so "plumber" finds every plumber). Returns up to 25 listings.',
+      `${FREE_NOTE} Search the local business directory. Optional filters: category, city, and a text query matched against name, description, services, and the category (so "plumber" finds every plumber). Returns up to 25 listings. Each listing has receipts: for its phone, hours, services, area and website, the date it was last confirmed and by whom, or null when unknown. Every answer has fetchedAt, the time it was built.`,
     inputSchema: SEARCH_LISTINGS_SCHEMA,
   },
   {
     name: 'get_listing',
     description:
-      'Get one business listing by id, with its "details confirmed by the business" status, date, and hash when available.',
+      `${FREE_NOTE} Get one business listing by id, with its "details confirmed by the business" status, date, and hash when available, receipts for its phone, hours, services, area and website (the date last confirmed and by whom, or null when unknown), the Verified check with who checked and when (or null), and fetchedAt.`,
     inputSchema: GET_LISTING_SCHEMA,
   },
   {
@@ -119,8 +128,86 @@ function listingUrl(ctx, id) {
   return `${base}/listings/${encodeURIComponent(id)}`;
 }
 
-function summarize(ctx, listing) {
+/** The time an answer was built, from the app's clock (high-tech-look 9.2). */
+function fetchedAt(ctx) {
+  const raw = ctx?.clock?.now?.() ?? Date.now();
+  const d = new Date(raw instanceof Date ? raw.getTime() : raw);
+  return Number.isFinite(d.getTime()) ? d.toISOString() : new Date().toISOString();
+}
+
+/** A stored date or time as given, or null. Nothing is made up: an unreadable value is null. */
+function storedDate(value) {
+  return typeof value === 'string' && value.trim() !== '' && Number.isFinite(Date.parse(value)) ? value : null;
+}
+
+/**
+ * The Verified stamp (trust.js), only with who checked and when, else null (high-tech-look 9.3). The phone code and
+ * the photo ID check both passed; `checkedAt` is the later of the two, as stored.
+ */
+export function verifiedCheckFor(store, listing, now) {
+  let status = null;
+  try {
+    status = typeof store?.getTrustStatus === 'function' ? store.getTrustStatus(listing, now) : null;
+  } catch {
+    status = null;
+  }
+  const at = storedDate(status?.verifiedAt);
+  if (status?.verified !== true || !at) return null;
+  return { checkedBy: CONFIRMED_BY_CHECK, checkedAt: at };
+}
+
+/** True when the listing really has a value for a receipt field. */
+function hasField(l, field) {
+  if (field === 'phone') return typeof l.phone === 'string' && l.phone.trim() !== '';
+  if (field === 'hours') return Boolean(l.hours && typeof l.hours === 'object' && filledHours(l.hours).length > 0);
+  if (field === 'services') return Array.isArray(l.services) && l.services.some(s => typeof s === 'string' && s.trim() !== '');
+  if (field === 'area') return typeof l.serviceArea === 'string' && l.serviceArea.trim() !== '';
+  if (field === 'website') return normalizeWebsite(l.website) !== '';
+  return false;
+}
+
+/**
+ * For each field returned (phone, hours, services, area, website): when it was last confirmed and by whom, or null for
+ * both when unknown (high-tech-look 9.1). The business confirms every field when it confirms its details (the stored
+ * date). The Verified check confirms the phone only: its code went to that number. Never an invented date.
+ * @returns {Record<string, { lastConfirmed: string|null, confirmedBy: string|null }>}
+ */
+export function receiptsFor(store, listing, now) {
+  const l = publicListing(listing) ?? {};
+  const owner = ownerConfirmation(store, listing);
+  const ownerAt = storedDate(owner?.verifiedAt) ?? storedDate(owner?.verifiedDate);
+  const check = verifiedCheckFor(store, listing, now);
+  const unknown = () => ({ lastConfirmed: null, confirmedBy: null });
+  const out = {};
+  for (const field of RECEIPT_FIELDS) {
+    if (!hasField(l, field)) out[field] = unknown();
+    else if (field === 'phone' && check) out[field] = { lastConfirmed: check.checkedAt, confirmedBy: CONFIRMED_BY_CHECK };
+    else if (ownerAt) out[field] = { lastConfirmed: ownerAt, confirmedBy: CONFIRMED_BY_BUSINESS };
+    else out[field] = unknown();
+  }
+  return out;
+}
+
+/** Hours as the filled-in days only, the same as the page, the JSON-LD and get_listing. */
+function filledHoursObject(hours) {
+  if (!hours || typeof hours !== 'object') return {};
+  return Object.fromEntries(filledHours(hours).map(([day, text]) => [day.toLowerCase(), text]));
+}
+
+/** "Details confirmed by the business", only with a readable stored date (batch 5 Z5), else null. */
+function ownerConfirmation(store, listing) {
+  let v = null;
+  try {
+    v = verificationFor(store, listing);
+  } catch {
+    v = null;
+  }
+  return v && storedDate(v.verifiedDate) ? v : null;
+}
+
+function summarize(ctx, listing, now) {
   const l = publicListing(listing);
+  const hours = filledHoursObject(l.hours);
   return {
     id: l.id,
     name: l.name,
@@ -131,7 +218,14 @@ function summarize(ctx, listing) {
     serviceArea: l.serviceArea,
     description: l.description,
     services: l.services,
+    // Batch 5 Z3: the hours are returned too, so the hours receipt is about a field that is in the answer.
+    ...(Object.keys(hours).length > 0 ? { hours } : {}),
     url: listingUrl(ctx, l.id),
+    // The link to the business's reviews, only when it has a valid one; never a rating, count or review text.
+    // The business's own website (publicListing has already checked it again), only when it has one.
+    ...(normalizeWebsite(l.website) !== '' ? { website: normalizeWebsite(l.website) } : {}),
+    ...(reviewsLinkHost(l.reviewsLink) !== '' ? { reviews: l.reviewsLink.trim() } : {}),
+    receipts: receiptsFor(ctx.store, listing, now),
   };
 }
 
@@ -163,23 +257,39 @@ function searchListings(ctx, args) {
   } else {
     matches = ctx.store.searchListings({ category, city, query, limit: SEARCH_LIMIT });
   }
-  const listings = matches.map(l => summarize(ctx, l));
-  return toolSuccess({ listings, count: listings.length });
+  const at = fetchedAt(ctx);
+  const listings = matches.map(l => summarize(ctx, l, at));
+  return toolSuccess({ listings, count: listings.length, fetchedAt: at });
 }
 
 function getListing(ctx, args) {
+  const at = fetchedAt(ctx);
   const listing = ctx.store.findById(args.id);
-  if (!listing) return toolFailure('Listing not found');
-  const v = verificationFor(ctx.store, listing);
+  // Batch 5 Z4: the "not found" answer is a lookup answer too, so it says when it was built.
+  if (!listing) {
+    return { ...toolFailure('Listing not found'), structuredContent: { error: 'Listing not found', fetchedAt: at } };
+  }
+  // Z5: an unreadable stored date is never "verified: true".
+  const v = ownerConfirmation(ctx.store, listing);
+  // "Details confirmed by the business" (the tamper-check hash): the identifiers keep their old names, and a confirmed
+  // listing also says who confirmed it and keeps the owner's wording (high-tech-look 9.3).
   const verification = v
-    ? { verified: true, verifiedDate: v.verifiedDate, hash: v.hash }
+    ? {
+      verified: true, verifiedDate: v.verifiedDate, hash: v.hash,
+      confirmedBy: CONFIRMED_BY_BUSINESS, label: 'Details confirmed by the business',
+    }
     : { verified: false, verifiedDate: null, hash: null };
   // Hours: only the days the owner filled in, the same as the page and JSON-LD.
   const out = publicListing(listing);
-  if (out && out.hours && typeof out.hours === 'object') {
-    out.hours = Object.fromEntries(filledHours(out.hours).map(([day, text]) => [day.toLowerCase(), text]));
-  }
-  return toolSuccess({ listing: out, verification });
+  if (out && out.hours && typeof out.hours === 'object') out.hours = filledHoursObject(out.hours);
+  return toolSuccess({
+    listing: out,
+    verification,
+    // The Verified stamp: only with who checked and when, else null.
+    verifiedCheck: verifiedCheckFor(ctx.store, listing, at),
+    receipts: receiptsFor(ctx.store, listing, at),
+    fetchedAt: at,
+  });
 }
 
 async function requestQuote(ctx, args, clientIp, id) {

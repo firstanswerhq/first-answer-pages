@@ -1,70 +1,171 @@
 /**
- * grade-stamp.js — signed values for the Grader: the form-start timer and the
- * per-Grade cookies. Everything is an HMAC of a fixed label plus the value,
- * keyed with GRADER_SECRET (or the per-process key), and compared in constant time.
+ * grade-stamp.js — signed values for the Grader: the form timer and the
+ * per-report cookies. Everything is signed with GRADER_SECRET (HMAC-SHA-256,
+ * hex) and checked with timingSafeEqual. Nothing here logs a value or the secret.
+ *
+ * Form timer ("stamp"): `<ms>.<hmac(secret, 'form:' + ms)>`. It is accepted when
+ * the signature matches, the form is at least 3 seconds old and at most 2 hours old.
+ *
+ * Cookies, each named `<prefix>_<gradeId>`, valued `hmac(secret, '<purpose>:' + gradeId)`:
+ *   unlock  g_<id>   opens the full report (set after the lead form)
+ *   ran     gr_<id>  marks the browser that ran the check (Google's live answer)
+ *   claim   gc_<id>  carries the Draft id, signed (see claimCookieValue), so only the
+ *                    browser that claimed gets its own Draft back
+ * All are HttpOnly, SameSite=Lax, Secure in production, Path=/grade/<id>, 90 days.
  */
 
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
-export const MIN_FORM_AGE_MS = 3000;
-export const MAX_FORM_AGE_MS = 2 * 60 * 60 * 1000;
+export const STAMP_MIN_AGE_MS = 3 * 1000;
+export const STAMP_MAX_AGE_MS = 2 * 60 * 60 * 1000;
+export const COOKIE_MAX_AGE_SECONDS = 90 * 24 * 60 * 60;
 
-const sign = (secret, text) => createHmac('sha256', secret).update(text).digest('hex');
+const COOKIES = Object.freeze({
+  unlock: { prefix: 'g', purpose: 'unlock' },
+  // `legacy` is the label the first build signed with; people who already ran a check keep working.
+  ran: { prefix: 'gr', purpose: 'ran', legacy: 'requester' },
+  claim: { prefix: 'gc', purpose: 'claim' },
+});
 
-function same(a, b) {
-  const x = Buffer.from(String(a));
-  const y = Buffer.from(String(b));
-  return x.length === y.length && timingSafeEqual(x, y);
+const ID_PATTERN = /^[A-Za-z0-9_-]+$/;
+const DRAFT_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+const HEX_64 = /^[0-9a-f]{64}$/;
+
+const sign = (secret, message) => createHmac('sha256', String(secret)).update(message).digest('hex');
+
+/** Constant-time comparison of two hex signatures; false for anything that is not 64 hex characters. */
+function sameSignature(expected, given) {
+  if (typeof given !== 'string' || !HEX_64.test(given) || !HEX_64.test(expected)) return false;
+  return timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(given, 'hex'));
 }
 
-/** The hidden form field: "<ms>.<hmac>". */
-export function makeStamp(secret, nowMs) {
+/**
+ * The hidden timer value for a new form.
+ * @param {string} secret
+ * @param {number} nowMs
+ * @returns {string}
+ */
+export function signFormStamp(secret, nowMs) {
   const ms = String(Math.trunc(nowMs));
   return `${ms}.${sign(secret, `form:${ms}`)}`;
 }
 
-/** True when the stamp is ours and the form was served 3 seconds to 2 hours ago. */
-export function checkStamp(secret, value, nowMs) {
-  if (typeof value !== 'string') return false;
-  const m = /^(\d{1,15})\.([0-9a-f]{64})$/.exec(value);
-  if (!m) return false;
-  if (!same(m[2], sign(secret, `form:${m[1]}`))) return false;
-  const age = nowMs - Number(m[1]);
-  return age >= MIN_FORM_AGE_MS && age <= MAX_FORM_AGE_MS;
+/**
+ * Check a submitted timer value.
+ * @returns {{ ok: true } | { ok: false, reason: 'bad' | 'too_fast' | 'too_old' }}
+ */
+export function checkFormStamp(secret, value, nowMs) {
+  if (typeof value !== 'string') return { ok: false, reason: 'bad' };
+  const match = /^(\d{1,16})\.([0-9a-f]{64})$/.exec(value);
+  if (!match) return { ok: false, reason: 'bad' };
+  const [, ms, signature] = match;
+  if (!sameSignature(sign(secret, `form:${ms}`), signature)) return { ok: false, reason: 'bad' };
+  const age = nowMs - Number(ms);
+  if (age < STAMP_MIN_AGE_MS) return { ok: false, reason: 'too_fast' };
+  if (age > STAMP_MAX_AGE_MS) return { ok: false, reason: 'too_old' };
+  return { ok: true };
 }
 
-/** Cookie value that unlocks the Full_Report of one Grade. */
-export const unlockToken = (secret, gradeId) => sign(secret, `unlock:${gradeId}`);
+function kindOf(kind) {
+  const entry = Object.hasOwn(COOKIES, kind) ? COOKIES[kind] : undefined;
+  if (!entry) throw new TypeError('Unknown cookie kind');
+  return entry;
+}
 
-/** Cookie value that marks the browser that ran a Grade (the only one shown Google's live answer). */
-export const requesterToken = (secret, gradeId) => sign(secret, `requester:${gradeId}`);
+function idOf(id) {
+  if (typeof id !== 'string' || !ID_PATTERN.test(id)) throw new TypeError('Bad grade id');
+  return id;
+}
 
-/** Cookie value that shows this browser claimed one Draft of the Grade: "<draftId>.<hmac>". */
-export const claimCookieValue = (secret, gradeId, draftId) => `${draftId}.${sign(secret, `claim:${gradeId}:${draftId}`)}`;
+/** Cookie name for a kind ('unlock', 'ran' or 'claim') and a Grade id. */
+export function cookieName(kind, id) {
+  return `${kindOf(kind).prefix}_${idOf(id)}`;
+}
 
-/** Value of one cookie from a request, or ''. */
-export function readCookie(req, name) {
-  const header = req.headers?.cookie;
-  if (typeof header !== 'string') return '';
-  for (const part of header.split(';')) {
-    const i = part.indexOf('=');
-    if (i === -1) continue;
-    if (part.slice(0, i).trim() === name) return part.slice(i + 1).trim();
+/** The signed value a cookie of this kind carries for this Grade. */
+export function cookieValue(secret, kind, id) {
+  return sign(secret, `${kindOf(kind).purpose}:${idOf(id)}`);
+}
+
+/** The `Set-Cookie` header value for a kind of cookie on one Grade. */
+export function setCookieHeader(secret, kind, id, { production = false } = {}) {
+  const parts = [
+    `${cookieName(kind, id)}=${cookieValue(secret, kind, id)}`,
+    'HttpOnly',
+    'SameSite=Lax',
+    `Path=/grade/${idOf(id)}`,
+    `Max-Age=${COOKIE_MAX_AGE_SECONDS}`,
+  ];
+  if (production) parts.push('Secure');
+  return parts.join('; ');
+}
+
+/** The value of one cookie from a raw `Cookie` request header, or undefined. */
+export function readCookie(header, name) {
+  if (typeof header !== 'string' || typeof name !== 'string') return undefined;
+  for (const piece of header.split(';')) {
+    const eq = piece.indexOf('=');
+    if (eq === -1) continue;
+    if (piece.slice(0, eq).trim() === name) return piece.slice(eq + 1).trim();
   }
-  return '';
+  return undefined;
 }
 
-/** The Draft id this browser claimed for the Grade (from its signed cookie), or ''. */
-export function readClaim(req, secret, gradeId) {
-  const value = readCookie(req, `gc_${gradeId}`);
-  const dot = value.lastIndexOf('.');
-  if (dot < 1) return '';
-  const draftId = value.slice(0, dot);
-  return same(value.slice(dot + 1), sign(secret, `claim:${gradeId}:${draftId}`)) ? draftId : '';
+/**
+ * The claim cookie `gc_<gradeId>` carries the Draft id: `<draftId>.<hmac(secret,
+ * 'claim:' + gradeId + ':' + draftId)>`. Only the browser that claimed gets its own
+ * Draft back; any other visitor gets a new one.
+ */
+export function claimCookieValue(secret, id, draftId) {
+  if (typeof draftId !== 'string' || !DRAFT_ID_PATTERN.test(draftId)) throw new TypeError('Bad draft id');
+  return `${draftId}.${sign(secret, `claim:${idOf(id)}:${draftId}`)}`;
 }
 
-/** True when the request carries a valid cookie of the given kind for this Grade. */
-export function hasToken(req, name, expected) {
-  const got = readCookie(req, name);
-  return got !== '' && same(got, expected);
+/** The `Set-Cookie` header value for the claim cookie. */
+export function claimCookieHeader(secret, id, draftId, { production = false } = {}) {
+  const parts = [
+    `${cookieName('claim', id)}=${claimCookieValue(secret, id, draftId)}`,
+    'HttpOnly',
+    'SameSite=Lax',
+    `Path=/grade/${idOf(id)}`,
+    `Max-Age=${COOKIE_MAX_AGE_SECONDS}`,
+  ];
+  if (production) parts.push('Secure');
+  return parts.join('; ');
+}
+
+/**
+ * The Draft id in a correctly signed claim cookie for this Grade, or undefined for a
+ * missing, malformed or forged cookie.
+ * @param {string} secret
+ * @param {string} id the Grade id
+ * @param {string | undefined} cookieHeader the raw `Cookie` header
+ * @returns {string | undefined}
+ */
+export function readClaimedDraftId(secret, id, cookieHeader) {
+  if (typeof id !== 'string' || !ID_PATTERN.test(id)) return undefined;
+  const given = readCookie(cookieHeader, cookieName('claim', id));
+  if (typeof given !== 'string') return undefined;
+  const dot = given.lastIndexOf('.');
+  if (dot < 1) return undefined;
+  const draftId = given.slice(0, dot);
+  if (!DRAFT_ID_PATTERN.test(draftId)) return undefined;
+  const expected = sign(secret, `claim:${id}:${draftId}`);
+  return sameSignature(expected, given.slice(dot + 1)) ? draftId : undefined;
+}
+
+/**
+ * True when the request's `Cookie` header carries a correctly signed cookie of this
+ * kind for this Grade. A missing, malformed or forged value is false.
+ * @param {string} secret
+ * @param {'unlock' | 'ran' | 'claim'} kind
+ * @param {string} id the Grade id
+ * @param {string | undefined} cookieHeader the raw `Cookie` header
+ */
+export function hasValidCookie(secret, kind, id, cookieHeader) {
+  if (typeof id !== 'string' || !ID_PATTERN.test(id)) return false;
+  const given = readCookie(cookieHeader, cookieName(kind, id));
+  if (sameSignature(cookieValue(secret, kind, id), given)) return true;
+  const { legacy } = kindOf(kind);
+  return Boolean(legacy) && sameSignature(sign(secret, `${legacy}:${id}`), given);
 }

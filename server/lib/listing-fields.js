@@ -5,6 +5,8 @@
  * No I/O. Everything here is a total function: it never throws on odd input.
  */
 
+import net from 'node:net';
+
 export const DAYS = Object.freeze([
   'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
 ]);
@@ -164,6 +166,137 @@ export function tidyCity(text) {
     .trim();
 }
 
+// ---- the business's own website ---------------------------------------------------------------
+
+/** Longest text looked at, before parsing. */
+const MAX_WEBSITE_INPUT = 600;
+/** Longest website kept, after it is rebuilt as scheme, host and path. */
+export const MAX_WEBSITE = 300;
+
+/**
+ * The business's own website as a clean public https address ("https://<host><path>"), or '' when it is not
+ * one. Works on the trimmed text, which must start with "https://". Refused: more than 600 characters before
+ * parsing, any other scheme, a user name or password, a port (a default ":443" is dropped by the parser), any
+ * IP address (IPv4 or IPv6, public or not), "localhost" and names ending in ".localhost", and a name with no
+ * dot. One trailing dot on the host is removed first. The query string and the "#" part are dropped, so no login
+ * or tracking parameters are kept; the result is refused when it is longer than 300 characters. Never throws and
+ * never looks anything up on the network.
+ * @param {unknown} value
+ * @returns {string}
+ */
+export function normalizeWebsite(value) {
+  try {
+    if (typeof value !== 'string') return '';
+    const text = value.trim();
+    if (text === '' || text.length > MAX_WEBSITE_INPUT || /[\s\p{Cc}]/u.test(text)) return '';
+    // Written out in full: "https:example.com" parses, but in a page's href it points at our own site.
+    if (!/^https:\/\//i.test(text)) return '';
+    let url;
+    try {
+      url = new URL(text);
+    } catch {
+      return '';
+    }
+    if (url.protocol !== 'https:' || url.username !== '' || url.password !== '' || url.port !== '') return '';
+    let host = url.hostname.toLowerCase();
+    if (host.endsWith('.')) host = host.slice(0, -1);
+    const bare = host.startsWith('[') && host.endsWith(']') ? host.slice(1, -1) : host;
+    if (bare === '' || net.isIP(bare) !== 0) return '';
+    if (host === 'localhost' || host.endsWith('.localhost')) return '';
+    if (!host.includes('.') || host.startsWith('.') || host.endsWith('.') || host.includes('..')) return '';
+    // Letters, digits, dots and hyphens only (V98): the URL parser keeps some punctuation in a host
+    // ('"', "'", '`', '{', '&', ';'). International names arrive as "xn--…", so they still pass.
+    if (!/^[a-z0-9.-]+$/.test(host)) return '';
+    const clean = `https://${host}${url.pathname || '/'}`;
+    return clean.length <= MAX_WEBSITE ? clean : '';
+  } catch {
+    return '';
+  }
+}
+
+// ---- review links --------------------------------------------------------------------------
+
+/** Longest review link kept, query string and `#` part included (real Google links often pass 300). */
+export const MAX_REVIEWS_LINK = 1000;
+
+/** The URL, or null: https only, no user name, password or port, at most 1,000 characters, one line. */
+function parseReviewsUrl(value) {
+  if (typeof value !== 'string') return null;
+  const text = value.trim();
+  if (text === '' || text.length > MAX_REVIEWS_LINK || /[\s\p{Cc}]/u.test(text)) return null;
+  // Written out in full: "https:google.com/maps" parses, but in a page's href it points at our own site.
+  if (!/^https:\/\//i.test(text)) return null;
+  let url;
+  try {
+    url = new URL(text);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== 'https:' || url.username !== '' || url.password !== '' || url.port !== '') return null;
+  return url;
+}
+
+/** The host without a leading "www." or "m.". */
+const bareHost = url => url.hostname.toLowerCase().replace(/^(?:www\.|m\.)/, '');
+
+/**
+ * Which review site an owner-typed link points to: 'google', 'yelp', 'facebook', 'nextdoor', or '' when it
+ * is not an https link to one of them. Never throws and fetches nothing.
+ * @param {unknown} value
+ * @returns {'google' | 'yelp' | 'facebook' | 'nextdoor' | ''}
+ */
+export function reviewsLinkHost(value) {
+  const url = parseReviewsUrl(value);
+  if (!url) return '';
+  const host = bareHost(url);
+  const p = url.pathname;
+  // Redirect addresses ("/url?q=…", "/biz_redir", "/l.php") are refused: the label would vouch for a link
+  // that can lead anywhere.
+  switch (host) {
+    case 'google.com':
+      if (p === '/maps' || p.startsWith('/maps/')) return 'google';
+      // A Google search address is a business's reviews only when it names the business's own panel.
+      if (p === '/search' && (url.hash.includes('lrd=') || url.search.includes('ludocid='))) return 'google';
+      return '';
+    case 'maps.google.com':
+      return p === '/url' || p.startsWith('/url/') ? '' : 'google';
+    case 'g.page':
+    case 'maps.app.goo.gl':
+      return 'google';
+    case 'g.co':
+      return p.startsWith('/kgs/') ? 'google' : '';
+    case 'search.google.com':
+      return p.startsWith('/local') ? 'google' : '';
+    case 'yelp.com':
+      return p.startsWith('/biz/') ? 'yelp' : '';
+    case 'facebook.com':
+      return p === '/l.php' || p.startsWith('/l.php/') || p.startsWith('/flx/') ? '' : 'facebook';
+    case 'nextdoor.com':
+      return 'nextdoor';
+    default:
+      return '';
+  }
+}
+
+/**
+ * The same, for links read from a home page, which is stricter: a Facebook link counts only when its path
+ * has "/reviews", a Nextdoor link only under "/pages/", and Google's "write a review" form never counts
+ * (a footer link to a Facebook page is not a page of reviews).
+ * @param {unknown} value
+ * @returns {'google' | 'yelp' | 'facebook' | 'nextdoor' | ''}
+ */
+export function reviewsLinkOnPage(value) {
+  const site = reviewsLinkHost(value);
+  if (site === '') return '';
+  const url = parseReviewsUrl(value);
+  const host = bareHost(url);
+  const p = url.pathname;
+  if (site === 'facebook') return p.endsWith('/reviews') || p.includes('/reviews/') ? site : '';
+  if (site === 'nextdoor') return p.startsWith('/pages/') ? site : '';
+  if (host === 'search.google.com' && p.startsWith('/local/writereview')) return '';
+  return site;
+}
+
 function normalizeHours(raw) {
   const out = {};
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return out;
@@ -208,6 +341,13 @@ export function normalizeFields(raw, categories) {
   out.hours = normalizeHours(get('hours'));
   out.services = normalizeServices(get('services'));
   out.ownerEmail = normalizeEmail(get('ownerEmail')); // private, optional
+  // Optional link to the business's reviews: the key is added only when it has a value, so a listing
+  // without one has exactly the fields it had before.
+  const reviews = get('reviewsLink');
+  if (typeof reviews === 'string' && reviewsLinkHost(reviews) !== '') out.reviewsLink = reviews.trim();
+  // Optional link to the business's own website, the same way: the key only when it has a value.
+  const website = normalizeWebsite(get('website'));
+  if (website !== '') out.website = website;
   return out;
 }
 

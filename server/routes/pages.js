@@ -62,12 +62,16 @@ export function createPagesRouter(ctx) {
   });
 
   router.get('/about', (req, res) => {
+    // A pointer to the free check, only while the grader is on (V95).
+    const checkPara = config.graderEnabled !== false
+      ? '\n<p>Want to know if AI can find your business? <a href="/grade">Run the free AI Visibility Check.</a></p>'
+      : '';
     const body = `<section class="message">
 <h1>About ${DEFAULT_SITE_NAME}</h1>
 <p>Remember the phone book? Every business in town in one place, with a number you could call. Then it stopped arriving, and finding a local business got harder for anyone without a big ad budget. Now people ask AI who to call. ${DEFAULT_SITE_NAME} brings the phone book back for that world: one plain listing for every local business, written so AI assistants can read it.</p>
 <p>${DEFAULT_SITE_NAME} is a free local business directory, built so AI assistants like ChatGPT and Claude can read it and point people to real local businesses. Each listing has the business's phone number, services, service area and hours, written so both people and AI can understand it.</p>
 <p>Business owners can list themselves free: snap a photo of a business card, flyer or sign, or type it in. We review every listing before it goes live. Visitors can call a business or send a quote request right from its page.</p>
-<p><a href="/rise">List your business free &rarr;</a> &middot; <a href="/">Browse the directory</a></p>${contactPara}
+<p><a href="/rise">List your business free &rarr;</a> &middot; <a href="/">Browse the directory</a></p>${checkPara}${contactPara}
 </section>`;
     res.status(200).type('html').send(layout({
       title: `About | ${DEFAULT_SITE_NAME}`,
@@ -84,6 +88,12 @@ export function createPagesRouter(ctx) {
 <p>The fee is paid on Stripe; we never see your card number. Twilio sends a code to the phone number on the listing. Stripe checks a photo ID and a selfie and holds those photos under its own privacy policy. We store only the results: paid or not, phone confirmed, ID passed, the dates, and Stripe's reference numbers.</p>
 `
       : '';
+    // Shown only when the human check on the AI visibility check form is switched on.
+    const humanCheckPrivacy = ctx.turnstile
+      ? `<h2>Human check</h2>
+<p>The form that starts an AI Visibility Check uses Cloudflare Turnstile to confirm you are a person; Cloudflare receives your address and browser details under its own privacy terms.</p>
+`
+      : '';
     const body = `<section class="message">
 <h1>Privacy</h1>
 <p>This page explains, in plain words, what ${DEFAULT_SITE_NAME} collects and what we do with it.</p>
@@ -92,14 +102,14 @@ export function createPagesRouter(ctx) {
 <li><strong>Business listings:</strong> the details an owner gives us, like the business name, phone, address, services, service area and hours. These are public once we approve the listing.</li>
 <li><strong>An owner's email (optional):</strong> kept private and never shown on the site. We use it only to reach the owner about their listing and quote requests.</li>
 <li><strong>Quote requests:</strong> the name, phone or email, and job details a visitor sends to a business. They are not shown on the site.</li>
-<li><strong>AI visibility check:</strong> the business details a visitor types, what we read on that business's public website, and the AI answers we get. The questions we ask AI name the kind of business and the city, never the business name. They go to Claude and, when we can, to ChatGPT, Gemini, Grok (from xAI) and Perplexity too; each company handles them under its own privacy terms. To read the answers, we also send each answer, with the business name, city and state, to Google's Gemini, which helps us check whether the business is named. If the person who ran a check asks for Google's live answer, we send the same question to Google's Gemini with Google Search, show it only to them, and never save it. Google handles that question under its own privacy terms. If a visitor opens the full report, we also keep the name, email and phone they give us. Reports are not listed in search engines.</li>
+<li><strong>AI Visibility Check:</strong> the business details a visitor types, what we read on that business's public website, and the AI answers we get. The questions we ask AI name the kind of business and the city, never the business name. They go to Claude and, when we can, to ChatGPT, Gemini, Grok (from xAI) and Perplexity too; each company handles them under its own privacy terms. To read the answers, we also send each answer, with the business name, city and state, to Google's Gemini, which helps us check whether the business is named. If the person who ran a check asks for Google's live answer, we send the same question to Google's Gemini with Google Search, show it only to them, and never save it. Google handles that question under its own privacy terms. If a visitor opens the full report, we also keep the name, email and phone they give us. Reports are not listed in search engines.</li>
 </ul>
-${verifiedPrivacy}<h2>Photos</h2>
+${verifiedPrivacy}${humanCheckPrivacy}<h2>Photos</h2>
 <p>If an owner lists their business with a photo, the photo is read by Anthropic's Claude to fill in the listing. We never save the photo.</p>
 <h2>How long we keep it</h2>
 <ul>
 <li>Quote requests are deleted after 180 days.</li>
-<li>AI visibility check reports, and the contact details people give to open them, are deleted after 90 days.</li>
+<li>AI Visibility Check reports, and the contact details people give to open them, are deleted after 90 days.</li>
 <li>Listing drafts that were never sent for review are deleted after 30 days.</li>
 <li>Approved listings stay until the owner asks us to take them down.</li>
 </ul>

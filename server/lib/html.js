@@ -6,6 +6,35 @@ import { getCategories } from '../data.js';
 import { DEFAULT_SITE_NAME } from './config.js';
 import { formatFoundersDeadline } from './founders.js';
 import { formatFee } from './trust.js';
+import { reviewsLinkHost, normalizeWebsite } from './listing-fields.js';
+
+/**
+ * The listing's "Website" row: a link to the business's own site, with its host (no "www.") as the text. The
+ * stored value is checked again (the same check as the JSON API), and nothing is shown when it fails.
+ * @param {unknown} website
+ * @returns {string}
+ */
+export function websiteRow(website) {
+  const clean = normalizeWebsite(website);
+  if (clean === '') return '';
+  const host = new URL(clean).hostname.replace(/^www\./, '');
+  return `\n    <dt>Website</dt>\n    <dd><a href="${escapeHtml(clean)}" rel="noopener noreferrer">${escapeHtml(host)}</a></dd>`;
+}
+
+/** How each review site is named in "See our reviews on …". */
+const REVIEW_SITE_NAMES = Object.freeze({ google: 'Google', yelp: 'Yelp', facebook: 'Facebook', nextdoor: 'Nextdoor' });
+
+/**
+ * The listing's "Reviews" row: a link only, with no rating, count or review text. Empty when the stored link
+ * does not pass the reviews-link check again (defense against hand-edited data).
+ * @param {unknown} link
+ * @returns {string}
+ */
+export function reviewsRow(link) {
+  const site = reviewsLinkHost(link);
+  if (site === '') return '';
+  return `\n    <dt>Reviews</dt>\n    <dd><a href="${escapeHtml(link.trim())}" rel="noopener noreferrer">See our reviews on ${REVIEW_SITE_NAMES[site]}</a></dd>`;
+}
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -97,6 +126,21 @@ export function applySiteName(html, siteName) {
   return html.split(DEFAULT_SITE_NAME).join(escapeHtml(siteName));
 }
 
+/**
+ * One style for every tab title: "<page> | First Answer Pages" (V143). A page whose title already holds the
+ * site name (the home page "First Answer Pages: Local Business Directory", "Plumbers in Nashville | First Answer
+ * Pages") is left as it is; any other gets " | <site name>" added. Only the first <title> (the page's own) is read.
+ * The default site name is used here and swapped for SITE_NAME later by applySiteName.
+ * @param {string} html
+ * @returns {string}
+ */
+export function applyTitleSuffix(html) {
+  if (typeof html !== 'string') return html;
+  return html.replace(/<title>([^<]*)<\/title>/, (whole, text) => (
+    text.includes(DEFAULT_SITE_NAME) ? whole : `<title>${text} | ${DEFAULT_SITE_NAME}</title>`
+  ));
+}
+
 export const DEMO_FOOTER_TEXT = 'Sample listings for demonstration';
 const DEMO_META = '<meta name="robots" content="noindex">';
 const DEMO_FOOTER_LINE = `<p class="demo-note">${DEMO_FOOTER_TEXT}</p>`;
@@ -135,13 +179,15 @@ export function markDemo(html) {
  * @returns {string}
  */
 export function layout({
-  title, body, jsonLd, scripts, demo = false, siteName = DEFAULT_SITE_NAME, canonical, description, head = '',
+  title, body, jsonLd, scripts, demo = false, siteName = DEFAULT_SITE_NAME, canonical, description, head = '', navCta = true,
 }) {
-  const page = renderLayout({ title, body, jsonLd, scripts, siteName, canonical, description, head });
+  const page = renderLayout({ title, body, jsonLd, scripts, siteName, canonical, description, head, navCta });
   return demo ? markDemo(page) : page;
 }
 
-function renderLayout({ title, body, jsonLd, scripts, siteName, canonical, description, head }) {
+// `navCta: false` leaves out the header's "List your business free" button (an agency's report, high-tech-look batch 6
+// fix B). Every other page keeps it, so public pages are unchanged.
+function renderLayout({ title, body, jsonLd, scripts, siteName, canonical, description, head, navCta = true }) {
   const name = escapeHtml(siteName);
   const descTag = typeof description === 'string' && description.trim() !== ''
     ? `\n  <meta name="description" content="${escapeHtml(description.replace(/\s+/g, ' ').trim())}">`
@@ -170,8 +216,7 @@ function renderLayout({ title, body, jsonLd, scripts, siteName, canonical, descr
 <body>
   <nav class="site-nav">
     <a class="brand" href="/">${name}</a>
-    <a class="nav-cta" href="/rise">List your business free</a>
-  </nav>
+${navCta === false ? '' : '    <a class="nav-cta" href="/rise">List your business free</a>\n'}  </nav>
   <main>
 ${body}
   </main>
@@ -240,11 +285,35 @@ export function foundersInvite(status, opts) {
  */
 export function listingCard(listing, categories, opts) {
   const badge = [verifiedBadge(opts?.trust), founderBadge(opts?.founder)].filter(Boolean).join('\n  ');
-  return `<article class="listing-card">
+  const fields = readableFields(listing);
+  // high-tech-look Step 1C (Requirement 1.4): a Verified listing's card glows more (class only; the label is the
+  // existing Verified stamp), and every card says which of its details AI can read, from its real fields only.
+  const verified = opts?.trust?.verified === true;
+  return `<article class="listing-card${verified ? ' is-verified' : ''}">
   <h3><strong><a href="/listings/${encodeURIComponent(listing.id)}">${escapeHtml(listing.name)}</a></strong> <span class="phone">${telLink(listing.phone)}</span></h3>
-  <p>${escapeHtml(listing.city)}, ${escapeHtml(listing.state)} &middot; ${escapeHtml(categoryLabel(listing.category, categories))}</p>${badge ? `\n  ${badge}` : ''}
+  <p>${escapeHtml(listing.city)}, ${escapeHtml(listing.state)} &middot; ${escapeHtml(categoryLabel(listing.category, categories))}</p>${badge ? `\n  ${badge}` : ''}${fields.length > 0 ? `\n  <p class="listing-ai">Details AI can read: ${fields.join(', ')}</p>` : ''}
   <p><a href="/listings/${encodeURIComponent(listing.id)}">View details →</a></p>
 </article>`;
+}
+
+/**
+ * high-tech-look Step 1C (Requirement 1.4): the details a listing really has, in plain words, in a fixed order: phone,
+ * hours, services, area, address, website. Only fields with a real value count (hours: at least one filled-in day).
+ * Never a field the listing doesn't have.
+ * @param {object} listing
+ * @returns {string[]}
+ */
+export function readableFields(listing) {
+  const l = listing && typeof listing === 'object' ? listing : {};
+  const text = v => typeof v === 'string' && v.trim() !== '';
+  const out = [];
+  if (text(l.phone)) out.push('phone');
+  if (l.hours && typeof l.hours === 'object' && filledHours(l.hours).length > 0) out.push('hours');
+  if (Array.isArray(l.services) && l.services.some(text)) out.push('services');
+  if (text(l.serviceArea)) out.push('area');
+  if (text(l.address)) out.push('address');
+  if (text(l.website)) out.push('website');
+  return out;
 }
 
 /**
@@ -387,7 +456,7 @@ ${days.map(([day, text]) => `      <tr><th scope="row">${day}</th><td>${escapeHt
     <dt>Phone</dt>
     <dd>${telLink(listing.phone)}</dd>${addressRow}
     <dt>Service area</dt>
-    <dd>${escapeHtml(listing.serviceArea)}</dd>
+    <dd>${escapeHtml(listing.serviceArea)}</dd>${websiteRow(listing.website)}${reviewsRow(listing.reviewsLink)}
     <dt>Services</dt>
     <dd>
     <ul>

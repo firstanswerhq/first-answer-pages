@@ -1,112 +1,138 @@
 /**
- * name-check.js — a second check on how the Grader reads an AI answer, using
- * Google's Gemini Decisions API (yes/no questions answered as probabilities).
+ * name-check.js — a second check on reading AI answers for business names.
  *
- * Our own reader (name-match.js) pulls business names out of an answer and
- * decides whether the checked business was named. It sometimes counts a
- * heading or a tip ("Before booking") as a business, and it can miss a
- * business named a little differently. This check asks Gemini, for the same
- * answer: is the checked business named, and is each pulled-out name really a
- * business? The Grader uses the replies only when Gemini is very sure, and
- * falls back to its own reader on any failure.
+ * The Grader's own reader (name-match.js) finds the business and pulls out
+ * competitor names. This module asks Google's Gemini Decisions API two yes/no
+ * questions about each pulled-out name: is it a specific business, and is it the
+ * same business as the one being graded. It returns the probabilities and does
+ * nothing else; the Grader applies the limits below.
  *
- * The answer text is sent to Google; nothing typed by a visitor is sent except
- * the business name, city and state. The key goes only in the x-goog-api-key
- * header and is never logged.
+ * Every failure (refused call, bad reply, network error, a reply slower than
+ * the deadline) gives null, never an exception, so the Grader's own reading
+ * stands. The key goes only in a request header. Nothing here logs an answer,
+ * a name, a city or the key.
  */
 
 const DECISIONS_URL = 'https://generativelanguage.googleapis.com/v1beta/decisions';
-export const DEFAULT_DECISION_MODEL = 'gemini-decision-1';
-const MAX_NAMES = 30;
-const MAX_ANSWER_CHARS = 40_000;
+const DEFAULT_MODEL = 'gemini-decision-1';
 const DEFAULT_TIMEOUT_MS = 8000;
+const USER_AGENT = 'FirstAnswerPages/1.0 (+https://firstanswerhq.com)';
 
-/** Plain, short, quote-free text for use inside a question. */
-const clean = (s, max = 120) => String(s ?? '').replace(/[^\p{L}\p{N} &'.,-]+/gu, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
+/** A name is dropped from the competitors only when Gemini's "is a business" probability is below this. */
+export const DROP_BELOW = 0.15;
+/** The business counts as named under a different spelling only at or above this "same business" probability. */
+export const NAMED_ABOVE = 0.95;
 
-/** A probability from 0 to 1, or null. */
-const prob = a => (a && typeof a.noul === 'number' && Number.isFinite(a.noul) && a.noul >= 0 && a.noul <= 1 ? a.noul : null);
+const MAX_NAMES = 30;
+const MAX_BUSINESS_WORDS = 8;
+const MAX_NAME_CODE_POINTS = 80;
+const MAX_ANSWER_CODE_POINTS = 8000;
+
+/** Letters, numbers, spaces and a few plain marks; everything else (quotes, brackets, newlines) goes. */
+const plain = text => String(text ?? '')
+  .replace(/[^\p{L}\p{N} '.,&-]/gu, '')
+  .replace(/\s+/g, ' ')
+  .trim();
+
+const cut = (text, max) => Array.from(text).slice(0, max).join('').trim();
+
+/** The business name as it goes into a question: at most 8 words of plain characters. */
+const businessLabel = name => plain(String(name ?? '').trim().split(/\s+/).slice(0, MAX_BUSINESS_WORDS).join(' '));
+
+/** A name pulled out of an AI answer, cleaned the same way so it cannot carry instructions. */
+const nameLabel = name => cut(plain(name), MAX_NAME_CODE_POINTS);
+
+const isProbability = v => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1;
 
 /**
  * @param {{ apiKey: string, model?: string, timeoutMs?: number }} opts
- * Asks two yes/no questions about each name our reader pulled out of the answer
- * (the caller leaves out names it already matched to the business): is it a
- * specific business, and is it the same business as the one being checked?
- * Gemini only ever confirms a name that is really in the answer.
- * @returns {{ name: string, check: (args: { answer: string, business: { name: string, city?: string, state?: string }, names: string[], signal?: AbortSignal }) => Promise<{ isBusiness: Map<string, number>, sameAs: Map<string, number> } | null> }}
+ * @returns {{ name: string, check: Function }}
+ *   check({ answer, business: { name, city, state }, names }) resolves
+ *   { isBusiness: Map<string, number>, sameAs: Map<string, number> } or null.
  */
-export function createNameChecker({ apiKey, model = DEFAULT_DECISION_MODEL, timeoutMs = DEFAULT_TIMEOUT_MS }) {
-  const safeModel = String(model).replace(/[^A-Za-z0-9._-]/g, '');
+export function createNameChecker({ apiKey, model, timeoutMs } = {}) {
+  const useModel = model || DEFAULT_MODEL;
+  const deadlineMs = Number.isInteger(timeoutMs) && timeoutMs > 0 ? timeoutMs : DEFAULT_TIMEOUT_MS;
+
   return {
     name: 'gemini-decisions',
-    async check({ answer, business, names = [], signal } = {}) {
-      // A business name is short: at most 8 words, so the name cannot carry extra instructions.
-      const bizName = clean(business?.name, 80).split(' ').slice(0, 8).join(' ');
-      const text = String(answer ?? '').slice(0, MAX_ANSWER_CHARS);
-      if (!bizName || !text.trim()) return null;
-      const list = [...new Set((Array.isArray(names) ? names : []).map(n => String(n ?? '')).filter(n => clean(n)))].slice(0, MAX_NAMES);
-      if (list.length === 0) return null;
-      const place = [clean(business?.city, 60), clean(business?.state, 30)].filter(Boolean).join(', ');
-      const questions = {};
-      list.forEach((n, i) => {
-        questions[`n${i}`] = {
-          type: 'noul',
-          instructions: `In this answer, is "${clean(n)}" the name of a specific business someone could hire or visit? Answer no for headings, labels, tips, steps, review or directory websites (like Yelp, Google, Angi or the BBB), and general phrases.`,
-          criteria: { true_description: 'It is the name of a specific business.', false_description: 'It is not the name of a business.' },
-        };
-        questions[`s${i}`] = {
-          type: 'noul',
-          instructions: `In this answer, is "${clean(n)}" the same business as "${bizName}"${place ? ` in ${place}` : ''}, just written a little differently (a typo, a shortened name, or a missing "The", "Inc" or "LLC")? Answer no if it is a different business that only shares a word or a trade with it.`,
-          criteria: { true_description: 'It is the same business.', false_description: 'It is a different business, or not a business.' },
-        };
-      });
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-      timer.unref?.();
-      const onOuter = () => ctrl.abort();
-      signal?.addEventListener?.('abort', onOuter, { once: true });
+    async check({ answer, business, names } = {}) {
       try {
-        const res = await fetch(DECISIONS_URL, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
-          body: JSON.stringify({ model: safeModel, input: [{ type: 'text', text }], questions }),
-          signal: ctrl.signal,
+        const list = (Array.isArray(names) ? names : [])
+          .filter(n => typeof n === 'string' && n.trim() !== '')
+          .slice(0, MAX_NAMES);
+        if (list.length === 0 || typeof answer !== 'string' || answer.trim() === '') return null;
+
+        const target = businessLabel(business?.name);
+        if (target === '') return null;
+        const city = plain(business?.city);
+        const state = plain(business?.state);
+        const place = [city, state].filter(Boolean).join(', ');
+        const where = place ? ` in ${place}` : '';
+
+        const questions = {};
+        list.forEach((name, i) => {
+          const label = nameLabel(name);
+          questions[`n${i}`] = {
+            type: 'noul',
+            instructions: `Is "${label}" the name of one specific business, rather than a heading, a general phrase or advice?`,
+          };
+          questions[`s${i}`] = {
+            type: 'noul',
+            instructions: `Is "${label}" the same business as "${target}"${where}? Answer yes only if they are clearly one business, allowing for spelling or word-order differences.`,
+          };
         });
-        if (!res.ok) {
-          process.stderr.write(`[name-check] status=${Number(res.status) || 0}\n`);
-          return null;
+
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), deadlineMs);
+        let data;
+        try {
+          const res = await fetch(DECISIONS_URL, {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              'x-goog-api-key': apiKey,
+              'user-agent': USER_AGENT,
+            },
+            body: JSON.stringify({
+              model: useModel,
+              input: [{ type: 'text', text: cut(answer, MAX_ANSWER_CODE_POINTS) }],
+              questions,
+            }),
+            signal: ctrl.signal,
+          });
+          if (!res.ok) return null;
+          data = JSON.parse(await res.text());
+        } finally {
+          clearTimeout(timer);
         }
-        const data = await res.json().catch(() => null);
+
         const answers = data?.answers;
-        if (!answers || typeof answers !== 'object') return null;
+        if (answers === null || typeof answers !== 'object') return null;
         const isBusiness = new Map();
         const sameAs = new Map();
-        list.forEach((n, i) => {
-          const p = prob(answers[`n${i}`]);
-          if (p !== null) isBusiness.set(n, p);
-          const q = prob(answers[`s${i}`]);
-          if (q !== null) sameAs.set(n, q);
+        list.forEach((name, i) => {
+          const n = answers[`n${i}`];
+          const s = answers[`s${i}`];
+          if (isProbability(n?.noul)) isBusiness.set(name, n.noul);
+          if (isProbability(s?.noul)) sameAs.set(name, s.noul);
         });
-        process.stderr.write(`[name-check] ok names=${list.length} read=${isBusiness.size}\n`);
+        if (isBusiness.size === 0 && sameAs.size === 0) return null;
         return { isBusiness, sameAs };
       } catch {
-        process.stderr.write('[name-check] failed\n');
         return null;
-      } finally {
-        clearTimeout(timer);
-        signal?.removeEventListener?.('abort', onOuter);
       }
     },
   };
 }
 
-/** The name checker, or null when it is off (no Gemini key, switched off, or a test run). */
+/**
+ * The name checker, or null without GEMINI_API_KEY, when GEMINI_NAME_CHECK is off,
+ * or in a test run.
+ * @param {object} config resolved config from configFromEnv()
+ */
 export function createNameCheck(config) {
-  const g = config?.gemini;
-  if (!g?.apiKey || config?.geminiNameCheck === false || config?.testRun === true) return null;
-  return createNameChecker({ apiKey: g.apiKey, model: config?.decisionModel || DEFAULT_DECISION_MODEL });
+  const key = config?.gemini?.apiKey;
+  if (!key || config?.geminiNameCheck === false || config?.testRun) return null;
+  return createNameChecker({ apiKey: key, model: config.decisionModel, timeoutMs: DEFAULT_TIMEOUT_MS });
 }
-
-/** Only a very sure "not a business" removes a name; only a very sure "same business" counts as named. */
-export const DROP_BELOW = 0.15;
-export const NAMED_ABOVE = 0.95;

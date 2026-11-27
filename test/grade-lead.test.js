@@ -104,7 +104,7 @@ async function startEnv({ assistantProvider, extraAssistants, googleLive, nameCh
     safeFetcher: fixtureFetcher(),
     newGradeId: () => `grade${String(++n).padStart(17, '0')}`,
     config: {
-      baseUrl: 'http://example.test', graderLeadGate: true, graderSecret: 'test-secret', adminToken: ADMIN, ...config,
+      baseUrl: 'http://example.test', graderLeadGate: true, graderSecret: 'test-secret', adminToken: ADMIN, gradeMainAsks: 1, ...config,
     },
   });
   const server = app.listen(0, '127.0.0.1');
@@ -256,7 +256,7 @@ test('gate on: the report shows the Lead_Form; a valid form stores one Lead, set
   const open = await (await get(env, `/grade/${id}`, { cookie })).text();
   assert.ok(open.includes('Your fix kit'));
   assert.equal(open.includes('Check again'), false, 'nothing to read again without a website');
-  assert.ok(open.includes('You did not give a website'));
+  assert.ok(open.includes("You didn't give a website"));
   const stillLocked = await (await get(env, `/grade/${id}`)).text();
   assert.equal(stillLocked.includes('Your fix kit'), false, 'another visitor still sees the form');
 
@@ -265,16 +265,16 @@ test('gate on: the report shows the Lead_Form; a valid form stores one Lead, set
   assert.equal(again.status, 303);
   assert.equal((await readJson(env, 'leads.json', [])).length, 1);
 
-  // The two extra AI questions run in the background and the Score uses all three answers.
+  // The two extra AI questions run in the background and the Score uses the free question's answer only.
   const grade = await until(async () => {
     const g = (await readJson(env, 'grades.json', [])).find(x => x.id === id);
     return g.ai.length === 3 ? g : null;
   }, 'the extra AI answers');
   assert.equal(assistant.calls, 3);
   assert.ok(grade.extraAiStartedAt);
-  assert.match(grade.results.find(r => r.id === 'ai-named').detail, /Claude did not name your business in any of 3 answers/);
+  assert.match(grade.results.find(r => r.id === 'ai-named').detail, /^No\. Claude didn't name your business\.$/);
   const after = await (await get(env, `/grade/${id}`, { cookie })).text();
-  assert.ok(after.includes('Named in 0 of 3 answers.'));
+  assert.ok(after.includes("On the 2 other questions, Claude didn't name you."));
 });
 
 test('a forged unlock cookie does not open the report', async () => {
@@ -317,7 +317,8 @@ test('claim: one Draft per browser, filled from the scan, not published, other v
   assert.equal(draft.fields.name, 'Ridgeline Roofing LLC');
   assert.equal(draft.fields.phone, '(615) 555-0142');
   assert.equal(draft.fields.category, 'roofers');
-  assert.deepEqual(draft.fields.services, ['roofers']);
+  assert.deepEqual(draft.fields.services, []);
+  assert.ok(draft.missingFields.includes('services'));
   assert.equal(draft.fields.city, 'Nashville');
   assert.equal(draft.fields.state, 'TN');
   assert.equal(draft.fields.ownerEmail, '', 'no email is filled in');
@@ -352,9 +353,9 @@ test('claim fills address, phone and hours from a business label', async () => {
   const [draft] = await readJson(env, 'drafts.json', []);
   assert.equal(draft.fields.category, 'hvac');
   assert.equal(draft.fields.phone, '(615) 555-0188');
-  assert.equal(draft.fields.address, '400 Church Street, Franklin, TN, 37064');
-  assert.equal(draft.fields.hours.monday, '07:00-18:00');
-  assert.equal(draft.fields.hours.friday, '07:00-18:00');
+  assert.equal(draft.fields.address, '400 Church Street, Franklin, TN 37064');
+  assert.equal(draft.fields.hours.monday, '7am-6pm');
+  assert.equal(draft.fields.hours.friday, '7am-6pm');
   assert.equal(draft.fields.hours.saturday, undefined);
   assert.equal(draft.missingFields.includes('phone'), false);
 });
@@ -535,10 +536,10 @@ test('ChatGPT is asked the same questions as Claude, and both show in the report
   assert.equal(chatgpt.calls, 3);
   assert.equal(grade.ai.filter(a => a.provider === 'chatgpt').length, 3);
   const after = await (await get(env, `/grade/${id}`, { cookie })).text();
-  assert.ok(after.includes('Claude named your business in 0 of its 3 answers.'));
-  assert.ok(after.includes("We asked Claude and ChatGPT the same 3 questions. Only Claude's answers count toward your score, so your score stays steady from check to check. ChatGPT's answers are below so you can compare."));
+  assert.ok(after.includes("On the 2 other questions, Claude didn't name you."));
+  assert.ok(after.includes("We asked Claude 3 questions. Only its answer to the first question counts toward your score. Claude didn't name you. On the 2 other questions, Claude didn't name you. ChatGPT's answers are here to compare."));
   // Only Claude's answers are scored, so ChatGPT naming the business does not change the score.
-  assert.equal(grade.results.find(r => r.id === 'ai-named').detail, 'No. Claude did not name your business in any of 3 answers.');
+  assert.equal(grade.results.find(r => r.id === 'ai-named').detail, "No. Claude didn't name your business.");
 });
 
 test('turning ChatGPT on later: a repeat check keeps Claude\'s stored answer and asks only ChatGPT', async () => {
@@ -569,7 +570,7 @@ test('when Claude fails and ChatGPT answers, the report says there is no AI scor
   const grade = (await readJson(env, 'grades.json', [])).find(x => x.id === id);
   assert.equal(grade.results.find(r => r.id === 'ai-named').result, 'not_checked');
   const page = await (await get(env, `/grade/${id}`)).text();
-  assert.match(page, /Claude did not answer this time, so this check has no AI score\./);
+  assert.match(page, /Claude didn't answer this time, so this check has no AI score\./);
   assert.match(page, /for comparison only \(not scored\)/);
   assert.doesNotMatch(page, /AI named your business\./);
 });
@@ -592,7 +593,9 @@ test('with ChatGPT and Gemini on, all three answer; only Claude is scored', asyn
   }, 'three assistants on three questions');
   const page = await (await get(env, `/grade/${id}`, { cookie })).text();
   assert.match(page, /Gemini, asked the same question:/);
-  assert.ok(page.includes("We asked Claude, ChatGPT and Gemini the same 3 questions. Only Claude's answers count toward your score, so your score stays steady from check to check. The other assistants' answers are below so you can compare."));
+  // The whole paragraph, in order (V254). The stub never names the business (the score check above is "fail"), so
+  // the one sentence it gives is pinned (S17).
+  assert.match(page, /<p>We asked Claude 3 questions\. Only its answer to the first question counts toward your score\. Claude didn't name you\. On the 2 other questions, Claude didn't name you\. The other assistants' answers are here to compare\.<\/p>/);
   assert.match(page, /Gemini answered without a live web search\./);
   assert.match(page, /for comparison only \(not scored\)/);
 });
@@ -606,10 +609,10 @@ test('when Claude fails, every second opinion is shown and none is scored', asyn
   const page = await (await get(env, `/grade/${id}`)).text();
   assert.match(page, /We just asked ChatGPT\./);
   assert.match(page, /We just asked Gemini\./);
-  assert.match(page, /Claude did not answer this time/);
+  assert.match(page, /Claude didn't answer this time/);
   const ok = await post(env, `/grade/${id}/unlock`, LEAD);
   const full = await (await get(env, `/grade/${id}`, { cookie: cookieOf(ok) })).text();
-  assert.ok(full.includes("Claude did not answer, so this check has no AI score. The answers from ChatGPT and Gemini are here so you can compare."));
+  assert.ok(full.includes("Claude didn't answer, so this check has no AI score. The answers from ChatGPT and Gemini are here so you can compare."));
 });
 
 test('with the demo assistant in charge, ChatGPT is never asked', async () => {

@@ -1,369 +1,1021 @@
-/**
- * name-match.js — does an AI answer name the business, and who else did it name?
- *
- * Matching is done on normalized text padded with spaces, so "ace plumbing"
- * does not match "space plumbing". Answer text is untrusted data: nothing here
- * follows links or runs anything found in it.
- */
+// Name matching for the AI visibility grader: is the business named in an AI
+// answer, where does it sit in the answer's list, and who else is listed.
+// Pure functions. Nothing here logs or stores answer text.
 
-import { normalizeForMatch } from './seance.js';
+import { normalizeForMatch as baseNormalize } from './seance.js';
 
-const LEGAL_WORDS = new Set([
-  'llc', 'inc', 'incorporated', 'co', 'company', 'corp', 'corporation', 'ltd', 'pllc', 'pc', 'lp',
-]);
-
-/** Words that describe the trade, not the business, so they can't identify it alone. */
-const GENERIC_WORDS = new Set([
-  'the', 'and', 'of', 'a', 'an', 'services', 'service', 'solutions', 'group', 'pros', 'pro',
-  'roofing', 'roofer', 'roofers', 'plumbing', 'plumber', 'plumbers', 'electric', 'electrical',
-  'electrician', 'electricians', 'hvac', 'heating', 'cooling', 'air', 'repair', 'repairs',
-  'cleaning', 'landscaping', 'lawn', 'construction', 'contractor', 'contractors', 'auto',
-  'restaurant', 'salon', 'home', 'house', 'general', 'local', 'best', 'quality',
-]);
-
-const SECOND_LEVEL = new Set(['co', 'com', 'org', 'net', 'gov', 'edu', 'ac']);
-
-/**
- * @param {string} name
- * @param {{ service?: string, city?: string, state?: string }} [context]
- * @returns {string|null} the name without a leading "the" and legal endings, or null when too weak to match on
- */
-export function shortName(name, { service = '', city = '', state = '' } = {}) {
-  let words = normalizeForMatch(name).split(' ').filter(Boolean);
-  if (words[0] === 'the') words = words.slice(1);
-  for (;;) {
-    const n = words.length;
-    if (n >= 3 && words.slice(-3).join(' ') === 'l l c') { words = words.slice(0, -3); continue; }
-    if (n >= 1 && LEGAL_WORDS.has(words[n - 1])) { words = words.slice(0, -1); continue; }
-    break;
-  }
-  if (words.length === 0) return null;
-  const text = words.join(' ');
-  if (words.length < 2 && text.length < 6) return null;
-  const context = new Set(
-    [service, city, state].flatMap(v => normalizeForMatch(v).split(' ')).filter(Boolean),
-  );
-  if (words.every(w => GENERIC_WORDS.has(w) || context.has(w))) return null;
-  return text;
+/** The shared normalizer, with "&" read as the word "and" so "Window & Pressure" and "Window and Pressure" match. */
+function normalizeForMatch(s) {
+  return baseNormalize(String(s ?? '').replace(/&/g, ' and '));
 }
 
+const LEGAL = new Set([
+  'llc', 'inc', 'incorporated', 'co', 'company', 'corp', 'corporation', 'ltd', 'pllc', 'pc', 'lp', 'llp',
+]);
+
+// Words that name a trade or service. A name made only of these is not distinctive.
+const TRADE = new Set([
+  'plumbing', 'plumber', 'plumbers', 'roofing', 'roofer', 'roofers', 'roof', 'roofs',
+  'electric', 'electrical', 'electrician', 'electricians', 'hvac', 'heating', 'cooling', 'air',
+  'conditioning', 'ac', 'drain', 'drains', 'sewer', 'repair', 'repairs', 'restoration', 'remodeling',
+  'construction', 'contractor', 'contractors', 'landscaping', 'landscape', 'landscapers', 'lawn',
+  'cleaning', 'cleaners', 'cleaner', 'pressure', 'washing', 'paving', 'concrete', 'pool', 'pools',
+  'painting', 'painters', 'painter', 'auto', 'automotive', 'salon', 'salons', 'barber', 'lawyer',
+  'lawyers', 'attorney', 'attorneys', 'restaurant', 'restaurants', 'accounting', 'accountants',
+  'accountant', 'tax', 'taxes', 'handyman', 'carpentry', 'flooring', 'tile', 'masonry', 'fencing',
+]);
+
+// Plain filler words that do not make a name distinctive.
+const GENERIC = new Set([
+  'the', 'and', 'of', 'best', 'top', 'good', 'great', 'quality', 'affordable', 'local', 'pro',
+  'pros', 'professional', 'professionals', 'service', 'services', 'company', 'solutions', 'group',
+  'team', 'expert', 'experts', 'city', 'county', 'area', 'metro', 'inc', 'llc',
+]);
+
+// Small words allowed to stay lowercase inside a business name.
+const CONNECTORS = new Set(['of', 'the', 'and', 'an', 'a', 'for', 'in', 'on', 'to', 'by', 'at', 'is', 'or', 'de', 'la', 'el', 'y', 'n']);
+
+// Words that mark a heading or a tip, never a business.
+const HEADING_WORDS = new Set([
+  'caveat', 'caveats', 'tip', 'tips', 'note', 'notes', 'summary', 'conclusion', 'disclaimer',
+  'disclaimers', 'overview', 'recommendation', 'recommendations', 'consideration', 'considerations',
+  'mentions', 'takeaway', 'takeaways', 'thoughts', 'faq', 'faqs', 'verdict',
+  'introduction', 'warning', 'warnings', 'reminder', 'reminders', 'checklist', 'questions',
+  'resources', 'sources', 'references',
+]);
+
+// "Pros" and "Cons" are headings only when they stand alone; "Plumbing Pros of Nashville" is a business.
+const HEADING_PHRASES = new Set([
+  'pro', 'pros', 'con', 'cons', 'pros and cons', 'pros cons', 'pros vs cons',
+  'bottom line', 'the bottom line', 'final thoughts', 'key takeaways', 'quick tips', 'in summary', 'final verdict',
+  'things to consider', 'how to choose', 'how to hire', 'heads up', 'pro tip', 'pro tips', 'good to know',
+]);
+
+// One-word section words are never names ("Overview", "Important", "Recap").
+const SINGLE_STOP = new Set([
+  'overview', 'summary', 'conclusion', 'tips', 'tip', 'notes', 'note', 'important', 'disclaimer', 'bottom',
+  'verdict', 'recap', 'introduction', 'contents', 'faq', 'faqs', 'update', 'warning', 'caution', 'reminder',
+  'free', 'estimate', 'estimates', 'quote', 'quotes', 'offer', 'offers',
+]);
+
+// Narrow list of verbs that start a numbered or bold advice line ("Ask For Quotes", "Check Reviews").
+const ADVICE_NAME_VERBS = new Set([
+  'ask', 'check', 'get', 'call', 'compare', 'read', 'look', 'confirm', 'make', 'choose', 'find', 'avoid', 'book', 'verify',
+]);
+
+const startsWithAdviceVerb = text =>
+  ADVICE_NAME_VERBS.has(String(text).trim().split(/\s+/)[0].toLowerCase().replace(/[^a-z]/g, ''));
+
+// Other business endings ("Ask Andy Plumbing Services", "Find Your Glow Spa") that let an advice-verb line stay a name.
+const BUSINESS_ENDINGS = new Set([
+  'services', 'service', 'solutions', 'group', 'spa', 'garage', 'auto', 'movers', 'moving', 'builders', 'pest',
+  'control', 'locksmith', 'pros', 'studio',
+]);
+
+// Small words that mark a line as advice when it ends in one of the BUSINESS_ENDINGS ("Ask About Warranty Services").
+const ADVICE_SMALL_WORDS = new Set(['for', 'about', 'from', 'on', 'with', 'to', 'the', 'a', 'an', 'in', 'at']);
+
 /**
- * The distinctive words before the trade words: "Hiller Plumbing, Heating, Cooling &
- * Electrical" -> "hiller", "Benjamin Franklin Plumbing" -> "benjamin franklin".
- * Only used when it is at least 2 words or 6 letters, so short words never match.
+ * A line that starts with an advice verb is a name when its last word is a trade or legal word, or a business
+ * ending with at least one word between the verb and the ending and none of the small advice words.
  */
-export function coreName(name, context = new Set()) {
-  let words = normalizeForMatch(name).split(' ').filter(Boolean);
-  if (words[0] === 'the') words = words.slice(1);
-  const core = [];
-  for (const w of words) {
-    if (GENERIC_WORDS.has(w) || LEGAL_WORDS.has(w) || context.has(w)) break;
-    core.push(w);
-  }
-  if (core.length === 0 || core.length === words.length) return '';
-  const text = core.join(' ');
-  if (core.length < 2 && text.length < 6) return '';
-  return text;
+function adviceNameOk(text) {
+  const list = words(text);
+  const last = list[list.length - 1];
+  if (!last) return false;
+  // Small advice words ("Get Quotes From Three Plumbers") make it advice, before the trade-word check.
+  if (list.some(w => ADVICE_SMALL_WORDS.has(w))) return false;
+  if (TRADE.has(last) || LEGAL.has(last)) return true;
+  return BUSINESS_ENDINGS.has(last) && list.length >= 3;
 }
 
-/** Edit distance between two short words (insert, delete, change one letter). */
-function editDistance(a, b) {
-  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
-  for (let i = 1; i <= a.length; i++) {
-    const cur = [i];
-    for (let j = 1; j <= b.length; j++) {
-      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+// Verbs that follow a business name in a sentence ("Get It Done Window Washing has a 5.0 rating").
+const SENTENCE_VERBS = new Set([
+  'has', 'have', 'had', 'is', 'are', 'was', 'were', 'offers', 'provides', 'does', 'serves', 'specializes',
+  'handles', 'says', 'gets', 'runs', 'works', 'appears', 'leads', 'lists', 'comes', 'also', 'shows', 'boasts',
+  'charges', 'earns', 'holds', 'claims', 'operates', 'focuses', 'covers', 'includes', 'ranks', 'features',
+  'sells', 'makes', 'cooks', 'delivers', 'carries',
+]);
+
+// A sentence that starts with one of these is never a name ("It is also worth calling two shops").
+const PRONOUN_STARTS = new Set(['it', 'this', 'that', 'these', 'those', 'they', 'we', 'you', 'he', 'she', 'there', 'here', 'i']);
+
+// A one-word name before a verb ("Husk serves Southern food") must not be a section, detail or filler word.
+const SENTENCE_NOT_NAMES = new Set([
+  'parking', 'pricing', 'price', 'prices', 'cost', 'menu', 'reservations', 'delivery', 'availability', 'payment',
+  'warranty', 'financing', 'location', 'ratings', 'rating', 'reviews', 'review', 'everything', 'nothing', 'most',
+  'many', 'some', 'all', 'each', 'both', 'another', 'others', 'other', 'also', 'however', 'overall', 'finally',
+  'first', 'second', 'third', 'next', 'today', 'tomorrow', 'yes', 'no', 'note', 'tip', 'tips', 'important',
+]);
+
+// Words that start a clause after a name and a comma ("Volunteer Roofing, a smaller crew", "Husk, which serves ...").
+const CLAUSE_STARTS = new Set(['which', 'who', 'a', 'an', 'the']);
+
+// Labels that point at a pick ("**Top pick:** Hiller Plumbing"): the name is the text after the colon.
+const PICK_LABELS = new Set([
+  'top pick', 'best overall', 'best value', 'budget pick', 'runner up', 'also great', 'honorable mention',
+  'best budget', 'best choice', 'our pick', 'top choice', 'editors choice', 'great option',
+]);
+
+const isPickLabel = text => PICK_LABELS.has(normalizeForMatch(text));
+
+/** The name in the text after a pick label ("Hiller Plumbing - big jobs" gives "Hiller Plumbing"), or ''. */
+function nameAfterLabel(after) {
+  const t = trimName(cutAtSeparator(stripMarkdown(String(after)).trim()));
+  return validName(t, 1) ? t : '';
+}
+
+/** A name that starts with an acronym and has lowercase words ("ABC plumbing"); only read inside list items. */
+function acronymName(text) {
+  const tokens = String(text).split(/\s+/);
+  if (tokens.length > 5 || text.length > 60) return false;
+  return /^[A-Z]{2,4}$/.test(tokens[0]) && notAHeading(text) && !startsWithAdviceVerb(text);
+}
+
+// Lines that are only an offer, never a business name. Matched as a whole line (normalized), so a
+// real name that merely contains these words ("Family Owned Roofing & Repair", "The Local") stays.
+const OFFER_LINES = new Set([
+  'free estimate', 'free estimates', 'free quote', 'free quotes', 'free consultation', 'free inspection',
+  'same day service', 'same day service available', 'same day repair', 'same day repairs',
+  '24 7 service', '24 7 emergency service', '24 7 emergency services', 'emergency service', 'emergency services',
+  'licensed and insured', 'licensed insured and bonded', 'licensed bonded and insured', 'fully insured',
+  'family owned', 'family owned and operated', 'locally owned', 'locally owned and operated',
+  'satisfaction guaranteed', 'free estimates available',
+]);
+
+/** True when the whole line is a standard offer line. */
+const offerOnly = text => OFFER_LINES.has(words(text).join(' '));
+
+// Plural people and category words ("Plumbers", "Restaurants") name a group, not one business.
+const GROUP_NOUNS = new Set([
+  'plumber', 'plumbers', 'roofer', 'roofers', 'electrician', 'electricians', 'landscapers', 'cleaners',
+  'cleaner', 'painters', 'painter', 'lawyer', 'lawyers', 'attorney', 'attorneys', 'restaurant', 'restaurants',
+  'accountants', 'accountant', 'contractor', 'contractors', 'salons', 'pools', 'barber',
+]);
+
+/**
+ * Does this heading read like ONE business? It has a legal word (LLC, Inc, Co), a possessive, or a
+ * trade word that names work rather than people (Plumbing, Roofing, Heating). A group, a category or a
+ * place ("Emergency Plumbers", "Budget Picks", "Fine Dining", "Germantown") does not.
+ */
+function looksLikeOneBusiness(text) {
+  if (/['\u2019]s\b/.test(text)) return true;
+  const list = words(text);
+  return list.some(w => LEGAL.has(w) || (TRADE.has(w) && !GROUP_NOUNS.has(w)));
+}
+
+// Labels that start a "Label: value" detail line. Anything else before a colon or a dash is a name.
+const DETAIL_LABELS = new Set([
+  'known for', 'best for', 'must try', 'price', 'price range', 'pricing', 'cost', 'phone', 'address', 'hours',
+  'why', 'rating', 'ratings', 'specialty', 'specialties', 'notes', 'note', 'tip', 'tips', 'services', 'service',
+  'location', 'locations', 'contact', 'website', 'email', 'review', 'reviews', 'details', 'highlights', 'features',
+  'pros', 'cons', 'area', 'neighborhood', 'neighbourhood', 'cuisine', 'vibe', 'style', 'focus', 'best', 'known',
+]);
+
+/** Plural group words in a heading ("Emergency Plumbers", "Budget Picks"): a group, not one business. */
+const PLURAL_GROUP_WORDS = new Set([
+  'plumbers', 'roofers', 'electricians', 'landscapers', 'cleaners', 'painters', 'lawyers', 'attorneys',
+  'restaurants', 'accountants', 'contractors', 'salons', 'picks', 'options', 'spots', 'places', 'choices',
+  'companies', 'businesses', 'shops', 'favorites', 'recommendations',
+]);
+
+// First words of advice lines ("Check recent reviews", "Ask for a written estimate").
+const ADVICE_VERBS = new Set([
+  'check', 'ask', 'get', 'read', 'call', 'confirm', 'compare', 'look', 'verify', 'make', 'choose', 'find', 'see',
+  'try', 'use', 'avoid', 'expect', 'request', 'hire', 'contact', 'review', 'consider', 'remember', 'keep', 'be',
+  'do', 'beware', 'watch', 'schedule', 'book', 'research', 'search', 'visit',
+]);
+
+// Words that mark a tips or advice section ("Tips before you hire:", "Things to consider"): the lines under
+// it are advice, never businesses.
+const ADVICE_WORDS = new Set([
+  'tips', 'tip', 'advice', 'consider', 'considerations', 'hire', 'hiring', 'choose', 'choosing', 'checklist',
+  'questions', 'before', 'caveats', 'notes', 'warnings', 'reminders', 'things', 'how',
+]);
+
+const isAdviceHeading = text => words(text).some(w => ADVICE_WORDS.has(w));
+
+const hasGroupWord = text => words(text).some(w => PLURAL_GROUP_WORDS.has(w));
+
+const isDetailLabel = text => DETAIL_LABELS.has(words(text).join(' '));
+
+/** Splits "Name: description", "Name - description" or "[Name](link): description" at the first separator. */
+function splitLead(content) {
+  const text = stripMarkdown(content).trim();
+  const m = /\s[-\u2013\u2014]\s|[\u2013\u2014]|:|\s\|\s|\(/.exec(text);
+  if (!m) return { lead: trimName(text), rest: '', sep: '' };
+  const sep = m[0] === ':' ? 'colon' : /[-\u2013\u2014]/.test(m[0]) ? 'dash' : 'other';
+  return { lead: trimName(text.slice(0, m.index)), rest: text.slice(m.index + m[0].length).trim(), sep };
+}
+
+/** True when the text starts with bold marks ("**Name**" or "__Name__"). */
+const startsWithBold = text => /^\s*(\*\*|__)/.test(String(text));
+
+/** The Title Case name a plain sentence starts with ("Music City Roofing, which handles storm repairs."), or ''. */
+function sentenceLead(content) {
+  const tokens = stripMarkdown(content).trim().split(/\s+/);
+  // A sentence that starts with a verb is advice ("Confirm a Tennessee license"), not a business. The one
+  // exception: a name that starts with a narrow advice verb and passes the advice-name rule, followed by a
+  // verb ("Get It Done Window Washing has a 5.0 rating").
+  const firstWord = (tokens[0] ?? '').toLowerCase().replace(/[^a-z]/g, '');
+  const adviceFirst = ADVICE_VERBS.has(firstWord);
+  if (adviceFirst && !ADVICE_NAME_VERBS.has(firstWord)) return '';
+  // "This is a great pick" and "We recommend calling ahead" are sentences; "This Is It BBQ" and "We Taco Bout It" are names.
+  if (PRONOUN_STARTS.has(firstWord) && startsLower(tokens[1])) return '';
+  const out = [];
+  let lastCap = -1;
+  let capped = 0;
+  for (const raw of tokens) {
+    const bare = raw.replace(/[,.;:!?)]+$/, '');
+    const first = Array.from(bare.replace(/^[^\p{L}\p{N}&]+/u, ''))[0] ?? '';
+    const upper = /\p{Lu}/u.test(first);
+    const cap = upper || /\p{N}/u.test(first) || bare === '&';
+    const joiner = CONNECTORS.has(bare.toLowerCase());
+    if (!cap && !joiner) break;
+    out.push(bare);
+    if (cap) {
+      lastCap = out.length - 1;
+      if (upper) capped += 1;
     }
-    prev = cur;
+    if (/[,;:.!?]$/.test(raw) || raw.includes('(')) break; // punctuation ends the name
   }
-  return prev[b.length];
+  if (lastCap < 0) return '';
+  const next = (tokens[lastCap + 1] ?? '').toLowerCase().replace(/[^a-z]/g, '');
+  if (capped < 2) {
+    // A one-word name before a verb or a comma clause ("Husk serves Southern food", "Parlour, a salon").
+    if (adviceFirst || capped !== 1 || lastCap !== 0) return '';
+    const word = out[0];
+    const clause = /,$/.test(tokens[0]) && CLAUSE_STARTS.has(next);
+    if (!SENTENCE_VERBS.has(next) && !clause) return '';
+    if (!validName(word, 1) || isDetailLabel(word) || SENTENCE_NOT_NAMES.has(word.toLowerCase())) return '';
+    return word;
+  }
+  const name = out.slice(0, lastCap + 1).join(' ');
+  if (!validName(name, 2)) return '';
+  if (adviceFirst && (!adviceNameOk(name) || !SENTENCE_VERBS.has(next))) return '';
+  return name;
 }
 
-/** The first word that identifies the business (not "the", a trade word, a legal ending or the city). */
-function firstDistinctive(name, context) {
-  return normalizeForMatch(name).split(' ').filter(Boolean)
-    .find(w => !GENERIC_WORDS.has(w) && !LEGAL_WORDS.has(w) && !context.has(w) && w.length >= 2) ?? '';
+/** A one-word or short name that is the business itself, read from the text before a separator. */
+function ownLead(text, own) {
+  if (!own) return '';
+  const lead = trimName(cutAtSeparator(stripMarkdown(String(text))));
+  return lead && lead.split(/\s+/).length <= 5 && own(lead) ? lead : '';
+}
+
+/** A one-word name ("Husk") read before a separator, in places where a name is expected; '' when it is not one. */
+function oneWordName(text) {
+  const { lead } = splitLead(String(text));
+  if (!lead || lead.split(/\s+/).length !== 1) return '';
+  if (!validName(lead, 1) || isDetailLabel(lead) || startsWithAdviceVerb(lead)) return '';
+  return lead;
 }
 
 /**
- * A sanity limit for "same business" answers from outside: the two names must start with
- * the same identifying word, give or take a typo ("Acee Acounting" and "Ace Accounting").
+ * The names a bullet gives. "Label: value" lines (Known For, Best For, Phone, ...) are details and give
+ * none. "Name: description", "Name - description" and "[Name](link): description" give the name before the
+ * separator, even a single word. A plain sentence that starts with a business name gives that name.
  */
-export function looksLikeSameName(candidate, business) {
-  const context = new Set([business?.city, business?.state].flatMap(v => normalizeForMatch(v ?? '').split(' ')).filter(Boolean));
-  const a = firstDistinctive(candidate, context);
-  const b = firstDistinctive(business?.name ?? '', context);
-  if (!a || !b) return false;
-  if (a === b) return true;
-  const longest = Math.max(a.length, b.length);
-  if (longest > 40) return false;
-  return editDistance(a, b) <= (longest >= 7 ? 2 : 1);
-}
-
-/** Host without "www.", cut to the registered domain ("example.co.uk" stays three labels). */
-export function registeredDomain(website) {
-  if (typeof website !== 'string' || website.trim() === '') return '';
-  let host;
-  try {
-    host = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(website.trim()) ? website.trim() : `https://${website.trim()}`).hostname;
-  } catch {
-    return '';
+function namesFromBullet(content, own) {
+  const c = String(content).trim();
+  const { lead, rest, sep } = splitLead(c);
+  if (rest && isPickLabel(lead)) {
+    const n = nameAfterLabel(rest);
+    return n ? [n] : [];
   }
-  host = host.toLowerCase().replace(/^www\./, '');
-  const labels = host.split('.').filter(Boolean);
-  if (labels.length < 2) return '';
-  const take = labels.length >= 3 && labels[labels.length - 1].length === 2 && SECOND_LEVEL.has(labels[labels.length - 2]) ? 3 : 2;
-  return labels.slice(-take).join('.');
+  if (rest && isDetailLabel(lead)) return [];
+  const names = fromListContent(c, false);
+  if (names.length > 0) return names;
+  if ((sep === 'colon' || sep === 'dash') && rest && lead && !isDetailLabel(lead) && validName(lead, 1)) return [lead];
+  const sentence = startsWithBold(c) ? '' : sentenceLead(c);
+  if (sentence) return [sentence];
+  const mine = ownLead(c, own);
+  return mine ? [mine] : [];
 }
 
-/**
- * @param {string} answer
- * @param {{ name: string, website?: string|null, service?: string, city?: string, state?: string }} business
- * @returns {boolean}
- */
-export function isNamed(answer, business, { allowGeneric = false } = {}) {
-  const haystack = ` ${normalizeForMatch(answer)} `;
-  // A name made only of trade words ("Best Roofers") also turns up in the AI's own
-  // sentences, so in running text it does not count. In a list line it does.
-  const full = normalizeForMatch(business?.name);
-  const context = new Set(
-    [business?.service, business?.city, business?.state].flatMap(v => normalizeForMatch(v ?? '').split(' ')).filter(Boolean),
-  );
-  const fullWords = full.split(' ').filter(Boolean);
-  const fullIsGeneric = fullWords.length > 0 && fullWords.every(w => GENERIC_WORDS.has(w) || context.has(w));
-  const candidates = [
-    fullIsGeneric && !allowGeneric ? '' : full,
-    shortName(business?.name, business ?? {}) ?? '',
-    normalizeForMatch(registeredDomain(business?.website)),
-  ];
-  if (candidates.some(c => c !== '' && haystack.includes(` ${c} `))) return true;
-  // The core name ("Hiller") only counts against a single listed name, never running
-  // text, and only when the listed name starts with it and every other word comes
-  // from the business's own name ("Hiller Plumbing" yes, "Johnson Controls" no).
-  if (!allowGeneric) return false;
-  const core = coreName(business?.name, context);
-  if (core === '') return false;
-  const listed = normalizeForMatch(answer);
-  if (listed !== core && !listed.startsWith(`${core} `)) return false;
-  const own = new Set([...fullWords, ...context, 'of', 'the', 'and']);
-  return listed.slice(core.length).split(' ').filter(Boolean).every(w => own.has(w) || LEGAL_WORDS.has(w));
-}
-
-// ---- Reading the answer's list ------------------------------------------------
-
-const LIST_LINE = /^\s*(?:\d{1,3}[.)]|[-*\u2022])\s+(.*)$/;
-const LABEL_WORDS = new Set([
-  'phone', 'address', 'website', 'hours', 'rating', 'reviews', 'review', 'services', 'why', 'note', 'tip',
-  'pros', 'cons', 'location', 'contact', 'email', 'specialty', 'specialties', 'known for', 'summary',
-  'tips', 'notes', 'what to look for', 'service area', 'years in business',
-  // Section headings AI answers use (never business names).
-  'caveats', 'caveat', 'also worth a look', 'also worth considering', 'worth considering', 'also consider',
-  'honorable mentions', 'honorable mention', 'other options', 'other good options', 'top picks', 'my top picks',
-  'top recommendations', 'recommendations', 'bottom line', 'final thoughts', 'how to choose', 'before you hire',
-  'things to consider', 'quick tips', 'sources', 'disclaimer', 'a few caveats', 'good to know', 'keep in mind',
-  'top 5', 'top five', 'the list', 'my picks', 'best overall', 'how i picked these', 'methodology',
-  'company', 'business', 'name', 'provider', 'plumber', 'contractor',
-  'best for', 'good for', 'ideal for', 'price range', 'price', 'cost', 'pricing', 'availability',
-  'why we like it', 'why it stands out', 'feature', 'category', 'criteria',
-  // Review sites and big-box stores are sources, not competitors.
-  'google', 'google reviews', 'google maps', 'yelp', 'bbb', 'better business bureau', 'angi', 'angie s list',
-  'nextdoor', 'thumbtack', 'homeadvisor', 'home advisor', 'home depot', 'lowe s', 'facebook', 'consumeraffairs',
-  'consumer affairs', 'expertise com', 'reddit', 'yahoo', 'cityvetted', 'threebestrated', 'three best rated',
-]);
-
-
-// A nested list line with any of these is a detail about a business, not a name.
-const DETAIL_PATTERN = /\b(?:licensed|insured|bonded|family[- ]owned|locally[- ]owned|veteran[- ]owned|woman[- ]owned|years?|since|reviews?|rated|rating|stars?|estimates?|24\/7|available|same[- ]day|warranty|guarantee[ds]?|financing|phone|hours|serves?|serving|known|specializ\w*|offers?|prices?|pricing|experienced)\b|\$|\d{3}/i;
-
-// A name ending in one of these is a business ("5 Star Plumbing", "24/7 Plumbing Pros").
-const BUSINESS_END = /\b(?:plumbing|plumbers?|roofing|roofers?|electric(?:al)?|electricians?|hvac|heating|cooling|air|drains?|rooter|sewer|pros?|services?|solutions|company|co|inc|llc|ltd|corp|group|contractors?|construction|cleaning|cleaners|landscaping|lawn|repairs?|restoration|remodeling|builders|painting|pest|control|movers|moving|salon|spa|auto|garage)\.?$/i;
-
-const STRONG_TRADE = /\b(?:plumbing|plumbers?|roofing|roofers?|electric(?:al)?|electricians?|hvac|heating|cooling|conditioning|air|drains?|rooter|sewer|locksmiths?|handyman|garage|windows?|doors?|landscaping|lawn|pest|painting|remodeling|restoration|construction|contractors?|cleaning|cleaners|movers|moving|salon|auto)\b/i;
-const SMALL_WORDS = new Set(['of', 'and', 'the', 'a', 'an', 'in', 'on', 'at', 'for', 'to', '&']);
-
-/** Every word of 3+ letters starts with a capital or a digit ("Same Day Plumbing", "24/7 Locksmith"). */
-function isTitleCase(name) {
-  return name.split(/\s+/).every(w => SMALL_WORDS.has(w.toLowerCase()) || !/^\p{L}{3}/u.test(w) || /^\p{Lu}/u.test(w));
-}
-
-/**
- * True when a nested list line reads like a detail ("Licensed and insured"),
- * not a business name. Only the name part (before " - ", ":" or "(") is judged;
- * a line that starts with a bold name or a link is always a name.
- */
-function looksLikeDetail(raw) {
-  const trimmed = String(raw).trim();
-  if (/^\*\*[^*]+\*\*/.test(trimmed) || /^\[[^\]]+\]\(/.test(trimmed)) return false;
-  const name = beforeSeparator(stripMarkdown(trimmed));
-  if (name === '') return true;
-  // A Title Case name with a trade word anywhere is a business ("Same Day Plumbing",
-  // "One Hour Heating & Air Conditioning of Nashville", "24/7 Locksmith Nashville").
-  if (STRONG_TRADE.test(name) && isTitleCase(name)) return false;
-  // Phrases that open a detail even when they end in "service" ("Same-day service").
-  if (/^(?:same[- ]day|free|licensed|insured|bonded|over|family|locally|veteran|woman|fully|offers?|serves?|serving|available|specializ\w*)\b/i.test(name)) return true;
-  if (BUSINESS_END.test(name)) return false;
-  if (/^\p{Ll}/u.test(name)) return true;
-  if (name.split(/\s+/).length > 6) return true;
-  return DETAIL_PATTERN.test(name);
-}
-
-function stripMarkdown(text) {
-  return text
-    .replace(/\[([^\]]{0,200})\]\([^)]{0,500}\)/g, '$1')
-    .replace(/[*_`#>]+/g, '')
-    .trim();
-}
-
-function beforeSeparator(text, { words = false } = {}) {
-  let cut = text.length;
-  // " is ", " has " ... end a name only in plain text ("Honest Plumbing is a good pick");
-  // inside a bold span or link the whole span is the name ("**Time is Money Plumbing**").
-  const seps = [' - ', ' \u2013 ', ' \u2014 ', ':', '(', ' | '];
-  if (words) seps.push(' is ', ' has ', ' was ', ' offers ');
-  for (const sep of seps) {
-    const i = text.indexOf(sep);
-    if (i !== -1 && i < cut) cut = i;
-  }
-  return text.slice(0, cut).trim();
-}
-
-function acceptable(candidate) {
-  const chars = Array.from(candidate);
-  if (chars.length < 2 || chars.length > 60) return false;
-  if (!/^[\p{L}\p{N}]/u.test(candidate)) return false;
-  if (candidate.split(/\s+/).length > 8) return false;
-  return !LABEL_WORDS.has(normalizeForMatch(candidate));
-}
-
-/** The name part of a list item: its leading bold span or link text when it has one. */
-function leadingName(raw) {
-  const text = String(raw).trim();
-  const bold = /^\*{2,3}([^*\n]{1,120})\*{2,3}(.*)$/.exec(text);
-  // "**Acme Plumbing** - desc" -> the bold span; "**Acme** Plumbing & Drain" -> the whole line.
-  if (bold && /^(?:$|\s*[-\u2013\u2014:,(.|]|\s+(?:is|has|was|offers|are)\b)/.test(bold[2])) return bold[1];
-  const link = /^\[([^\]]{1,120})\]\(/.exec(text);
-  if (link) return link[1];
-  return text;
-}
-
-// Advice lines that open with a verb ("Check licensing", "Get multiple quotes") are tips, not businesses.
-const TIP_START = /^(?:check|ask|get|read|call|compare|look|verify|make|avoid|confirm|request|choose|consider|search|find|don't|never|always|watch|beware|expect|schedule)\b/i;
-function isTip(candidate) {
-  return TIP_START.test(candidate) && !BUSINESS_END.test(candidate) && !STRONG_TRADE.test(candidate.split(/\s+/).slice(-1)[0] ?? '');
-}
-
-const TABLE_ROW = /^\s*\|.*\|\s*$/;
-const TABLE_RULE = /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/;
-const NAME_HEADER = /\b(?:name|company|companies|business(?:es)?|plumbers?|roofers?|electricians?|contractors?|providers?|pick|shop)\b/i;
-
-/** Business names from a markdown table: the column headed like a name, else the first non-number column. */
-function tableNames(rows) {
-  const cells = r => r.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim());
-  let body = rows;
-  let header = null;
-  if (rows.length >= 2 && TABLE_RULE.test(rows[1])) {
-    header = cells(rows[0]);
-    body = rows.slice(2);
-  }
-  body = body.filter(r => !TABLE_RULE.test(r)).map(cells);
-  if (body.length === 0) return [];
-  const width = Math.max(...body.map(r => r.length));
-  let col = header ? header.findIndex(h => NAME_HEADER.test(stripMarkdown(h))) : -1;
-  // A headed table with no name column is a cost or comparison table ("| Service | Typical cost |").
-  if (col === -1 && header) return [];
-  if (col === -1) {
-    const isNumberish = c => /^[#\d.)\s$%/*:-]*$/.test(stripMarkdown(c));
-    for (let k = 0; k < width && col === -1; k += 1) {
-      if (body.filter(r => r[k] !== undefined && !isNumberish(r[k])).length >= Math.ceil(body.length / 2)) col = k;
+/** Does another bullet in the same list (same indent) give a name? Used to accept a bare one-word bullet ("- Husk"). */
+function siblingHasNames(lines, i, own) {
+  const indent = lines[i].match(LIST_RE)[1];
+  const scan = step => {
+    for (let k = i + step, n = 0; k >= 0 && k < lines.length && n < 40; k += step, n += 1) {
+      const line = lines[k];
+      if (line.trim() === '') continue;
+      const li = line.match(LIST_RE);
+      if (!li || !/^[-*\u2022]/.test(li[2])) return false;
+      if (li[1] !== indent) continue;
+      if (namesFromBullet(li[3], own).length > 0) return true;
     }
-  }
-  if (col === -1) return [];
-  return body.map(r => r[col]).filter(c => c !== undefined && c !== '');
-}
-
-/** Every name in the answer's list lines and bold spans, in order, without duplicates. */
-export function listedNames(answer) {
-  const names = [];
-  const seen = new Set();
-  const add = raw => {
-    const lead = leadingName(raw);
-    const marked = lead !== String(raw).trim();
-    const candidate = beforeSeparator(stripMarkdown(lead), { words: !marked && !/^\*|^\[/.test(String(raw).trim()) })
-      .replace(/^\d{1,3}[.)]\s+/, '');
-    if (isTip(candidate)) return;
-    if (!acceptable(candidate)) return;
-    const key = normalizeForMatch(candidate);
-    if (key === '' || seen.has(key)) return;
-    seen.add(key);
-    names.push(candidate);
+    return false;
   };
-  // Indent of the first list line in the current list. A deeper line that reads
-  // like a detail ("   - Licensed and insured") is skipped; a deeper line that
-  // reads like a name (businesses grouped under "Best value:" or a neighborhood)
-  // still counts.
-  let baseIndent = null;
-  const indentOf = line => /^[ \t]*/.exec(line)[0].replace(/\t/g, '    ').length;
-  const lines = String(answer ?? '').split(/\r?\n/);
-  for (let i = 0; i < lines.length; i += 1) {
-    const line = lines[i];
-    // Markdown table: read the whole block and take names from its name column.
-    if (TABLE_ROW.test(line)) {
-      let j = i;
-      while (j < lines.length && TABLE_ROW.test(lines[j])) j += 1;
-      for (const name of tableNames(lines.slice(i, j))) add(name);
-      i = j - 1;
-      baseIndent = null;
-      continue;
-    }
-    // "### 1. Frog Heating, Air & Plumbing": a numbered markdown heading is a list item.
-    const heading = /^\s*#{1,6}\s+(\d{1,3}[.)]\s+.*)$/.exec(line);
-    const list = LIST_LINE.exec(heading ? heading[1] : line);
-    if (list) {
-      const indent = indentOf(line);
-      if (baseIndent === null || indent < baseIndent) baseIndent = indent;
-      if (indent > baseIndent && looksLikeDetail(list[1])) continue;
-      add(list[1]);
-      continue;
-    }
-    // Prose indented under a list item stays part of that item.
-    if (line.trim() !== '' && (baseIndent === null || indentOf(line) <= baseIndent)) baseIndent = null;
-    // Bold spans: one that opens the line can be a name; one inside a sentence counts
-    // only when it is written like a name ("I'd start with **Acme Plumbing**"), not
-    // when it is ordinary words ("my **top five Nashville plumbers**").
-    const spans = line.slice(0, 2000).match(/\*\*[^*\n]{1,120}\*\*/g) ?? [];
-    spans.forEach((span, k) => {
-      const inner = span.replace(/\*/g, '').trim();
-      const opens = k === 0 && /^\s*(?:#{1,6}\s+)?\*{2,3}/.test(line);
-      const nameLike = /^[\p{Lu}\d]/u.test(inner) && isTitleCase(inner)
-        && (STRONG_TRADE.test(inner) || BUSINESS_END.test(inner.replace(/[.,]+$/, '')));
-      if (opens || nameLike) add(span);
-    });
+  return scan(-1) || scan(1);
+}
+
+/** The names on the bullet lines right after line `i` (a heading), through blank lines. */
+function bulletNamesAfter(lines, i, own) {
+  const names = [];
+  for (let k = i + 1; k < lines.length && k <= i + 40; k += 1) {
+    const line = lines[k];
+    if (line.trim() === '') continue;
+    const li = line.match(LIST_RE);
+    if (!li || !/^[-*\u2022]/.test(li[2])) break;
+    names.push(...namesFromBullet(li[3], own).filter(n => !offerOnly(n)));
   }
   return names;
 }
 
+/** The names a numbered heading ("### 2. Joes Plumbing" or "**2. Joes Plumbing**") gives, or null when the line is not one. */
+function numberedHeadingNames(line, own) {
+  const h = line.match(HEADING_RE);
+  if (h) {
+    const numbered = h[1].trim().match(/^\d+[.)]\s+(.*)$/);
+    if (!numbered) return null;
+    const names = fromListContent(numbered[1]);
+    if (names.length > 0) return names;
+    const mine = ownLead(numbered[1], own);
+    if (mine) return [mine];
+    const one = oneWordName(numbered[1]);
+    return one ? [one] : [];
+  }
+  if (/^\s*\|/.test(line) || LIST_RE.test(line)) return null;
+  const sb = line.match(STANDALONE_BOLD_RE);
+  if (!sb || !/^\s*\d+[.)]/.test(sb[1])) return null;
+  const names = fromStandaloneBold(sb[1]);
+  if (names.length > 0) return names;
+  const mine = ownLead(sb[1].replace(/^\s*\d+[.)]\s*/, ''), own);
+  return mine ? [mine] : [];
+}
+
+// Review sites and directories that show up in bold but are not the businesses.
+const BLOCK_WORDS = new Set([
+  'google', 'yelp', 'bbb', 'bureau', 'review', 'reviews', 'angi', 'angie', 'homeadvisor',
+  'thumbtack', 'facebook', 'nextdoor', 'reddit', 'bing', 'yahoo',
+]);
+
+/** Shared hosts: many businesses live on one of these domains, so the domain alone never says which one. */
+export const SKIP_DOMAINS = new Set([
+  'facebook.com', 'instagram.com', 'yelp.com', 'linkedin.com', 'google.com', 'twitter.com', 'x.com',
+  'youtube.com', 'tiktok.com', 'nextdoor.com', 'angi.com', 'homeadvisor.com', 'thumbtack.com',
+  'bbb.org', 'wixsite.com', 'weebly.com', 'squarespace.com', 'wordpress.com', 'godaddysites.com',
+]);
+
 /**
- * Names the answer lists other than the business: at most 5, in answer order.
- * @returns {string[]}
+ * SKIP_DOMAINS plus more site builders and link pages, for the health map only (review T1). Kept apart from
+ * SKIP_DOMAINS so the AI answer reading, and so the score, does not change. Registered domains: "my.canva.site" is
+ * "canva.site" and "sites.google.com" is "google.com".
  */
-export function extractCompetitors(answer, business) {
-  return listedNames(answer).filter(n => !isNamed(n, business, { allowGeneric: true })).slice(0, 5);
+export const SHARED_DOMAINS = new Set([
+  ...SKIP_DOMAINS,
+  'business.site', 'square.site', 'linktr.ee', 'carrd.co', 'canva.site', 'my.canva.site', 'sites.google.com',
+  'fb.com', 'fb.me', 'wix.com', 'editorx.io', 'webflow.io', 'squareup.com', 'godaddy.com', 'site123.me',
+  // Review U1.
+  'myshopify.com', 'blogspot.com', 'netlify.app', 'vercel.app', 'github.io', 'mystrikingly.com', 'wixstudio.io',
+  'g.page', 'jimdosite.com', 'yolasite.com', 'webnode.com',
+]);
+
+/**
+ * The page an address points at, as one string: the host without "www." and "m.", the whole path in lower case without
+ * a trailing "/", and for Facebook's profile.php its `id` ("facebook.com/joeplumbing", "joe.wixsite.com/site").
+ * '' when it is not an address.
+ */
+export function pageKey(address) {
+  if (typeof address !== 'string' || address.trim() === '') return '';
+  let s = address.trim();
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(s)) s = `https://${s}`;
+  try {
+    const url = new URL(s);
+    const host = url.hostname.toLowerCase().replace(/\.$/, '').replace(/^(?:www\.|m\.)/, '');
+    const path = url.pathname.toLowerCase().replace(/\/+$/, '');
+    const id = /\/profile\.php$/.test(path) ? `?id=${url.searchParams.get('id') ?? ''}` : '';
+    return `${host}${path}${id}`;
+  } catch {
+    return '';
+  }
 }
 
 /**
- * @returns {{ named: boolean, position: number|null, total: number, competitors: string[] }}
- *   position is the business's 1-based place in the answer's list, or null
+ * True when two website addresses are the same site: the same registered domain, and that domain is not a shared host
+ * (a Facebook page, a wixsite.com site, a business.site page...). A shared host is never proof of a match.
  */
-export function analyzeAnswer(answer, business, { keep } = {}) {
-  // keep: an optional second opinion on which pulled-out names are really businesses.
-  const all = listedNames(answer);
-  const listed = typeof keep === 'function' ? all.filter(n => keep(n)) : all;
-  const inList = n => isNamed(n, business, { allowGeneric: true });
-  const index = listed.findIndex(inList);
-  return {
-    named: index !== -1 || isNamed(answer, business),
-    position: index === -1 ? null : index + 1,
-    total: listed.length,
-    competitors: listed.filter(n => !inList(n)).slice(0, 5),
+export function sameSite(a, b) {
+  const da = registeredDomain(a);
+  if (!da || SHARED_DOMAINS.has(da)) return false;
+  return registeredDomain(b) === da;
+}
+
+const TWO_PART_SUFFIXES = new Set([
+  'co.uk', 'org.uk', 'ac.uk', 'gov.uk', 'com.au', 'net.au', 'org.au', 'co.nz', 'co.za', 'com.br',
+  'co.jp', 'co.in', 'com.mx',
+]);
+
+const MAX_COMPETITORS = 5;
+
+// Words in a lead-in line that start a separate later list ("Other names to check:", "Also worth a call:").
+const ALSO_LEAD = /\b(also|other|others|additional|further|honorable|mention|mentions|runner|runners|extra|bonus|else|beyond|besides|worth)\b/;
+
+// ---- small helpers --------------------------------------------------------------
+
+function words(s) {
+  const n = normalizeForMatch(s);
+  return n === '' ? [] : n.split(' ');
+}
+
+function stripLegal(list) {
+  const w = list.slice();
+  while (w.length) {
+    const n = w.length;
+    if (n >= 3 && w[n - 3] === 'l' && w[n - 2] === 'l' && w[n - 1] === 'c') { w.length = n - 3; continue; }
+    if (n >= 2 && w[n - 2] === 'p' && w[n - 1] === 'c') { w.length = n - 2; continue; }
+    if (n >= 2 && w[n - 2] === 'l' && w[n - 1] === 'p') { w.length = n - 2; continue; }
+    if (LEGAL.has(w[n - 1])) { w.pop(); continue; }
+    break;
+  }
+  return w;
+}
+
+/** Normalized words with a leading "the" and trailing legal words removed. */
+function baseWords(name) {
+  let w = words(name);
+  if (w.length > 1 && w[0] === 'the') w = w.slice(1);
+  const stripped = stripLegal(w);
+  return stripped.length ? stripped : w;
+}
+
+function singular(w) {
+  return w.length > 3 && w.endsWith('s') ? w.slice(0, -1) : w;
+}
+
+/** Context words that are never distinctive: the business's service, city and state. */
+function contextSets(ctx) {
+  const c = ctx && typeof ctx === 'object' ? ctx : {};
+  const service = new Set();
+  for (const w of words(c.service)) { service.add(w); service.add(singular(w)); }
+  const place = new Set([...words(c.city), ...words(c.state)]);
+  return { service, place };
+}
+
+function isTradeWord(w, sets) {
+  return TRADE.has(w) || sets.service.has(w);
+}
+
+function allGeneric(list, sets) {
+  return list.length > 0 && list.every(w => GENERIC.has(w) || isTradeWord(w, sets) || sets.place.has(w));
+}
+
+function levenshtein(a, b) {
+  const x = Array.from(a);
+  const y = Array.from(b);
+  let prev = Array.from({ length: y.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= x.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= y.length; j++) {
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (x[i - 1] === y[j - 1] ? 0 : 1));
+    }
+    prev = cur;
+  }
+  return prev[y.length];
+}
+
+// ---- exported name helpers ------------------------------------------------------
+
+/**
+ * The name without "the" and legal words, normalized. Null when it is too short
+ * (under 2 words and under 6 characters) or every word is a service, city,
+ * state or generic word.
+ */
+export function shortName(name, ctx = {}) {
+  const w = baseWords(name);
+  if (!w.length) return null;
+  if (allGeneric(w, contextSets(ctx))) return null;
+  const s = w.join(' ');
+  return w.length >= 2 || s.length >= 6 ? s : null;
+}
+
+/**
+ * The distinctive words before the first trade word ("hiller" for "Hiller
+ * Plumbing, Heating ..."). Empty when there are none, when all are generic, or
+ * when they are too short to trust.
+ */
+export function coreName(name, ctx = {}) {
+  const sets = contextSets(ctx);
+  const core = [];
+  for (const w of baseWords(name)) {
+    if (isTradeWord(w, sets)) break;
+    core.push(w);
+  }
+  if (!core.length || allGeneric(core, sets)) return '';
+  const s = core.join(' ');
+  return core.length >= 2 || s.length >= 6 ? s : '';
+}
+
+/** The registered domain of a website ("example.co.uk"), or null. */
+export function registeredDomain(website) {
+  if (typeof website !== 'string') return null;
+  let s = website.trim();
+  if (!s) return null;
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(s)) s = `https://${s}`;
+  let host;
+  try {
+    host = new URL(s).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+  host = host.replace(/\.$/, '').replace(/^www\./, '');
+  if (/^\d+(\.\d+){3}$/.test(host)) return null;
+  const labels = host.split('.').filter(Boolean);
+  if (labels.length < 2) return null;
+  const last2 = labels.slice(-2).join('.');
+  if (labels.length >= 3 && TWO_PART_SUFFIXES.has(last2)) return labels.slice(-3).join('.');
+  return last2;
+}
+
+// ---- reading a list out of an answer --------------------------------------------
+
+const LIST_RE = /^(\s*)(\d+[.)]|[-*•])\s+(.*)$/;
+const HEADING_RE = /^\s*#{1,6}\s+(.*)$/;
+const STANDALONE_BOLD_RE = /^\s*\*\*([^*]+)\*\*\s*:?\s*$/;
+
+function stripMarkdown(s) {
+  return String(s).replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/`/g, '').replace(/\*+/g, '');
+}
+
+function cutAtSeparator(s) {
+  const at = s.search(/\s[-–—]\s|[–—]|\s\|\s|:|\(/);
+  return (at === -1 ? s : s.slice(0, at)).trim();
+}
+
+function trimName(s) {
+  return String(s).trim().replace(/[\s.,;:!?]+$/, '').trim();
+}
+
+/** No heading word, review-site word, or lone "Pros" / "Cons". */
+function notAHeading(text) {
+  const list = words(text);
+  const joined = list.join(' ');
+  if (HEADING_PHRASES.has(joined)) return false;
+  // Section headings such as "Things To Consider", "How To Choose", "Bottom Line".
+  if (/^(how to|things to|what to|questions to|tips for|tips on|ways to|steps to|why choose|when to) /.test(joined)) return false;
+  return !list.some(w => HEADING_WORDS.has(w) || BLOCK_WORDS.has(w));
+}
+
+/** Does this text read like a business name? Title case, no heading or review-site words. */
+function validName(text, minWords) {
+  if (text.length < 2 || text.length > 60) return false;
+  if (!/^[\p{L}\p{N}]/u.test(text)) return false;
+  const tokens = text.split(/\s+/);
+  const count = tokens.filter(t => /[\p{L}\p{N}]/u.test(t)).length;
+  if (count < minWords) return false;
+  if (tokens.length === 1 && SINGLE_STOP.has(text.toLowerCase().replace(/[^\p{L}]/gu, ''))) return false;
+  for (const tok of tokens) {
+    const bare = tok.replace(/^[^\p{L}\p{N}]+/u, '');
+    if (!bare) continue;
+    const first = Array.from(bare)[0];
+    if (/\p{N}/u.test(first) || /\p{Lu}/u.test(first)) continue;
+    if (CONNECTORS.has(bare.toLowerCase().replace(/[^\p{L}]/gu, ''))) continue;
+    return false;
+  }
+  return notAHeading(text);
+}
+
+// Business words that count as a cue in bold text that is not title case ("the Hair Bar", "Fox and Jane salon").
+const BOLD_BUSINESS_WORDS = new Set([
+  ...BUSINESS_ENDINGS, 'salon', 'salons', 'bar', 'shop', 'barbershop',
+  // restaurants and food shops
+  'kitchen', 'grill', 'pizza', 'cafe', 'caf\u00e9', 'diner', 'bbq', 'bistro', 'tacos', 'bakery', 'deli', 'eatery', 'tavern',
+]);
+
+// True when a word starts with a lowercase letter ("is", "top"); a missing word counts as lowercase.
+const startsLower = token => token === undefined || /^[^\p{L}\p{N}]*\p{Ll}/u.test(token);
+
+// Bold text starting with one of these reads as a sentence or a heading, never a name ("Our top picks for you").
+// Only when the second word is lowercase: "Our Town Diner" and "Your Pie pizza" can be names.
+const BOLD_NOT_FIRST = new Set(['a', 'an', 'our', 'your', 'my', 'we', 'you', 'it', 'this', 'that', 'these', 'those', 'there', 'here']);
+
+/**
+ * Bold text that is not plain title case is a whole name in two cases (2 to 6 words, never a heading, a
+ * detail label, a group word, advice or sentence-like text): it starts and ends with a capital ("Mike's
+ * mobile Plumbing", "Sparkle drain Pros"), or it has a cue: brand styling ("iFix Hair"), a legal word, or a
+ * trade or business word with a possessive or two capitalized words ("Mike's plumbing", "the Hair Bar").
+ * "Water heater specialists" and "If you need it done today" have neither, so they stay group labels.
+ * With `cueOnly`, the start-and-end-with-a-capital arm is not used (standalone bold lines).
+ */
+function looseBoldName(text, { cueOnly = false } = {}) {
+  if (text.length < 4 || text.length > 60 || !/^[\p{L}\p{N}]/u.test(text)) return false;
+  const tokens = text.split(/\s+/);
+  if (tokens.length < 2 || tokens.length > 6) return false;
+  const lower = tokens.map(t => t.toLowerCase().replace(/[^\p{L}]/gu, ''));
+  // Text that starts like a sentence, and advice, heading, group and label text, is never a name.
+  if (BOLD_NOT_FIRST.has(lower[0]) && startsLower(tokens[1])) return false;
+  if (!notAHeading(text) || isDetailLabel(text) || isAdviceHeading(text) || hasGroupWord(text)) return false;
+  if (startsWithAdviceVerb(text) && !adviceNameOk(text)) return false;
+
+  const startsUpper = t => /^[^\p{L}\p{N}]*[\p{Lu}\p{N}]/u.test(t);
+  // Starts and ends with a capital ("Mike's mobile Plumbing"): the whole bold text is the name.
+  if (!cueOnly && startsUpper(tokens[0]) && startsUpper(tokens[tokens.length - 1])) return true;
+
+  // Otherwise the name needs a cue: brand styling ("iFix Hair"), a legal word, or a trade or business word
+  // together with a possessive or two capitalized words ("Mike's plumbing", "the Hair Bar", "Fox and Jane salon").
+  if (/^[a-z][A-Z]/.test(tokens[0])) return true;
+  const proper = tokens.filter(startsUpper).length;
+  if (lower.some(w => LEGAL.has(w))) return proper >= 1;
+  const cue = lower.some(w => TRADE.has(w) || BOLD_BUSINESS_WORDS.has(w));
+  const possessive = tokens.some(t => /['\u2019]s$/i.test(t));
+  return cue && (possessive || proper >= 2);
+}
+
+/** Bold spans inside a line of running text. */
+function boldSpans(line) {
+  const out = [];
+  for (const m of line.matchAll(/\*\*([^*]+?)\*\*/g)) {
+    const after = line.slice(m.index + m[0].length);
+    let t = trimName(stripMarkdown(m[1]));
+    // "**1. Husk** - cooking": the number is not part of the name, and a one-word name is fine.
+    const numbered = /^\d+[.)]\s+/.test(t);
+    if (numbered) t = t.replace(/^\d+[.)]\s+/, '');
+    // "**Name:** text" is a name unless it is a detail label; even a one-word name counts here.
+    // "**Top pick:** Hiller Plumbing" points at a name: the name is the text after the colon.
+    if (/:\s*$/.test(m[1]) && /^\s*\S/.test(after)) {
+      if (isPickLabel(t)) {
+        const picked = nameAfterLabel(after);
+        if (picked) out.push(picked);
+      } else if (!isDetailLabel(t) && validName(t, 1)) {
+        out.push(t);
+      }
+      continue;
+    }
+    if (validName(t, numbered ? 1 : 2)) out.push(t);
+  }
+  return out;
+}
+
+/**
+ * A plain line of a top-level numbered list that does not read as title case,
+ * such as "Before booking". The AI chose to list it, so it is read as a name; a
+ * second look (Gemini) may still drop it. Never used for bullets or nested lines.
+ */
+function looseName(text) {
+  if (text.length < 4 || text.length > 40) return false;
+  if (!/^[\p{L}\p{N}]/u.test(text)) return false;
+  const tokens = text.split(/\s+/);
+  if (tokens.length < 2 || tokens.length > 4) return false;
+  if (!/[\p{Lu}\p{N}]/u.test(Array.from(tokens[0])[0])) return false;
+  return notAHeading(text);
+}
+
+/** Names from the text after a list marker. `loose` is true for an unindented numbered line. */
+function fromListContent(content, loose = false) {
+  const c = content.trim();
+  // "**Name:** description": the bold text before the colon is the name, unless it is a detail label
+  // ("**Best for:** emergencies", "**Price:** $$").
+  const labeled = /^\*\*([^*]*?):\*\*\s*\S/.exec(c);
+  if (labeled) {
+    const t = trimName(stripMarkdown(labeled[1]));
+    if (isPickLabel(t)) {
+      const picked = nameAfterLabel(c.slice(labeled[0].length - 1));
+      return picked ? [picked] : [];
+    }
+    return !isDetailLabel(t) && validName(t, 1) ? [t] : [];
+  }
+  const b = c.match(/^\*\*([^*]+)\*\*/);
+  if (b) {
+    const bold = trimName(stripMarkdown(b[1]));
+    const whole = trimName(cutAtSeparator(stripMarkdown(c)));
+    if (whole.length > bold.length && whole.startsWith(bold) && validName(whole, 1)) return [whole];
+    if (validName(bold, 1) || acronymName(bold)) return [bold];
+    // Text in bold at the start of a list item is the whole name, even with a lowercase word inside it
+    // ("**Mike's mobile Plumbing**"); it is never cut at a lowercase word.
+    if (looseBoldName(bold)) return [bold];
+    return boldSpans(c);
+  }
+  const plain = trimName(cutAtSeparator(stripMarkdown(c)));
+  if (validName(plain, 2) || acronymName(plain)) return [plain];
+  if (loose && looseName(plain)) return [plain];
+  return boldSpans(c);
+}
+
+function fromStandaloneBold(inner) {
+  const t = trimName(stripMarkdown(inner).replace(/^\s*\d+[.)]\s*/, ''));
+  // A standalone bold line is a name when it reads like one, or when it has a business cue ("**Mike's plumbing**").
+  return validName(t, 1) || looseBoldName(t, { cueOnly: true }) ? [t] : [];
+}
+
+function isTableSeparator(line) {
+  return typeof line === 'string' && /^[\s|:-]+$/.test(line) && line.includes('-');
+}
+
+function fromTableRow(line, next, oneWordOk = false) {
+  if (isTableSeparator(line) || isTableSeparator(next)) return [];
+  const cells = line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim());
+  const cell = cells.find(c => /\p{L}/u.test(c));
+  if (!cell) return [];
+  const t = trimName(cutAtSeparator(stripMarkdown(cell)));
+  return validName(t, oneWordOk ? 1 : 2) ? [t] : [];
+}
+
+// Table columns that hold business names ("| Restaurant | Why go |"): a one-word cell there is a name.
+const NAME_COLUMNS = new Set([
+  'company', 'companies', 'business', 'businesses', 'name', 'restaurant', 'restaurants', 'salon', 'salons',
+  'shop', 'shops', 'plumber', 'plumbers', 'roofer', 'roofers', 'contractor', 'contractors', 'provider',
+  'providers', 'firm', 'spot', 'place', 'listing',
+]);
+
+/** True when the table that row `i` belongs to has a name column (read from its header row). */
+function tableNamesMayBeOneWord(lines, i) {
+  let k = i;
+  while (k > 0 && /^\s*\|/.test(lines[k - 1])) k -= 1;
+  // `k` is the header row when the next row is the separator.
+  if (!isTableSeparator(lines[k + 1])) return false;
+  const cells = lines[k].trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim());
+  const first = cells.find(c => /\p{L}/u.test(c));
+  return Boolean(first) && NAME_COLUMNS.has(words(stripMarkdown(first)).join(' '));
+}
+
+/**
+ * Every name listed in an answer, in answer order. `prep` (the business being looked for) makes sure the
+ * business itself is never dropped by a filter.
+ */
+function extractEntries(answer, prep, groupsOut) {
+  const lines = String(answer ?? '').split(/\r?\n/);
+  const entries = [];
+  const seen = new Set();
+  const own = text => Boolean(prep) && entryMatches(text, prep);
+  // A lead-in line such as "Other names to check:" or "Honorable mentions:" after some names starts a
+  // separate, later list. `groupsOut` (when given) gets the list number of every entry, in entry order.
+  let groupNo = 0;
+  const noteBoundary = label => {
+    if (entries.length > 0 && ALSO_LEAD.test(words(label).join(' '))) groupNo += 1;
   };
+  const push = list => {
+    for (const text of list) {
+      // A line that is only a standard offer ("Free Estimates", "24/7 Emergency Service") is not a business name.
+      if (offerOnly(text) && !own(text)) continue;
+      // A line that starts with an advice verb ("Ask For Quotes") is advice unless it is the business itself.
+      if (startsWithAdviceVerb(text) && !own(text) && !adviceNameOk(text)) continue;
+      const key = normalizeForMatch(text);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      entries.push(text);
+      if (groupsOut) groupsOut.push(groupNo);
+    }
+  };
+
+  // Numbered headings ("### 2. Joes Plumbing", "**2. Joes Plumbing**") are read once for the whole answer.
+  const heads = [];
+  lines.forEach((line, i) => {
+    const names = numberedHeadingNames(line, own);
+    if (names) heads.push({ i, names, bullets: bulletNamesAfter(lines, i, own) });
+  });
+  // If the business is one of the headings, the headings are businesses and their bullets are details.
+  // If it is one of the bullets, the headings are groups (categories, places, price bands) and the
+  // bullets are the businesses. If it is not in the answer, each heading is judged by what it says.
+  let mode = 'auto';
+  if (prep) {
+    if (heads.some(hd => hd.names.some(own))) mode = 'heading';
+    else if (heads.some(hd => hd.bullets.some(own))) mode = 'bullet';
+  }
+  const headAt = new Map(heads.map(hd => [hd.i, hd]));
+
+  let underBusiness = false; // bullets right after a business heading are its details
+  let nestedDetails = false; // indented bullets right after a numbered name are its details
+  let adviceSection = false; // bullets under a tips or advice heading are advice, never names
+
+  const heading = hd => {
+    underBusiness = false;
+    nestedDetails = false;
+    adviceSection = false;
+    if (hd.names.length === 0) return;
+    let group;
+    if (mode === 'heading') group = false;
+    else if (mode === 'bullet') group = true;
+    else group = hd.bullets.length > 0 && (hd.names.some(hasGroupWord) || hd.names.every(n => !looksLikeOneBusiness(n)));
+    if (group) return; // a group heading is not a name; its bullets are
+    push(hd.names);
+    underBusiness = true;
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (/^\s*\|/.test(line)) {
+      underBusiness = false;
+      nestedDetails = false;
+      adviceSection = false;
+      push(fromTableRow(line, lines[i + 1], tableNamesMayBeOneWord(lines, i)));
+      continue;
+    }
+    const hd = headAt.get(i);
+    if (hd) {
+      heading(hd);
+      continue;
+    }
+    const h = line.match(HEADING_RE);
+    if (h) {
+      // An unnumbered heading ("## Best Overall", "### Tips") is never a name; a bold one ("### **Bob Plumbing:**") can be.
+      underBusiness = false;
+      nestedDetails = false;
+      noteBoundary(h[1]);
+      adviceSection = isAdviceHeading(h[1]);
+      const bold = h[1].trim().match(STANDALONE_BOLD_RE);
+      if (bold) push(fromStandaloneBold(bold[1]));
+      continue;
+    }
+    const li = line.match(LIST_RE);
+    if (li) {
+      const bullet = /^[-*\u2022]/.test(li[2]);
+      const indented = li[1] !== '';
+      if (bullet) {
+        const names = namesFromBullet(li[3], own);
+        // A bare one-word bullet ("- Husk") is a name when the other bullets in its list give names.
+        if (names.length === 0 && !underBusiness && !adviceSection && !(nestedDetails && indented)) {
+          const one = oneWordName(li[3]);
+          if (one && siblingHasNames(lines, i, own)) names.push(one);
+        }
+        if (underBusiness || adviceSection || (nestedDetails && indented)) {
+          push(names.filter(own)); // a detail of the name above; only the business itself can still count
+          continue;
+        }
+        if (!indented) nestedDetails = false;
+        push(names);
+        continue;
+      }
+      underBusiness = false;
+      // A numbered line written as a sentence ("Hiller Plumbing is the biggest shop in town.") gives the Title Case
+      // name before the verb, never the whole sentence.
+      // The sentence rule never applies inside bold text: a bold name is the whole name.
+      const sentence = startsWithBold(li[3]) ? '' : sentenceLead(li[3]);
+      let names = fromListContent(li[3], !indented && !sentence);
+      if (names.length === 0 && sentence) names = [sentence];
+      if (names.length === 0) {
+        const mine = ownLead(li[3], own);
+        if (mine) names = [mine];
+      }
+      if (names.length === 0 && !adviceSection) {
+        const one = oneWordName(li[3]);
+        if (one) names = [one];
+      }
+      // Items under a "Tips" line or heading are advice, never names (only the business itself can still count).
+      if (adviceSection) {
+        nestedDetails = false;
+        push(names.filter(own));
+        continue;
+      }
+      // Indented bullets are details only under a numbered NAME. A numbered group label ("1. Best overall:",
+      // "2. Best value", "3. **Emergency Plumbers**") is not a name, so the bullets under it are the names.
+      const strictNames = fromListContent(li[3], false);
+      const groupLabel = /:\s*$/.test(li[3].trim()) || (strictNames.length === 0 && !sentence) || strictNames.some(hasGroupWord);
+      if (!indented) nestedDetails = names.length > 0 && !groupLabel;
+      push(names);
+      continue;
+    }
+    const sb = line.match(STANDALONE_BOLD_RE);
+    if (sb) {
+      underBusiness = false;
+      nestedDetails = false;
+      noteBoundary(sb[1]);
+      adviceSection = isAdviceHeading(sb[1]);
+      push(fromStandaloneBold(sb[1]));
+      continue;
+    }
+    // A plain label line ("Tips:", "How to choose:") starts or ends an advice section.
+    const label = line.match(/^\s*([^:*#|]{1,60}):\s*$/);
+    if (label) {
+      noteBoundary(label[1]);
+      adviceSection = isAdviceHeading(label[1]);
+      continue;
+    }
+    if (line.includes('**')) push(boldSpans(line));
+  }
+  return entries;
+}
+
+// ---- matching the business ------------------------------------------------------
+
+function prepBusiness(business) {
+  const b = business && typeof business === 'object' ? business : {};
+  const name = typeof b.name === 'string' ? b.name : '';
+  const ctx = { city: b.city, state: b.state, service: b.service };
+  const sets = contextSets(ctx);
+  const base = baseWords(name);
+  const fullNorm = normalizeForMatch(name);
+  const generic = base.length === 0 || allGeneric(base, sets);
+
+  const candidates = [];
+  if (fullNorm && !generic) candidates.push(fullNorm);
+  const sn = shortName(name, ctx);
+  if (sn) candidates.push(sn);
+  const dom = registeredDomain(b.website);
+  if (dom && !SKIP_DOMAINS.has(dom)) candidates.push(normalizeForMatch(dom));
+
+  const own = new Set([...words(name), ...sets.service]);
+  return { ctx, generic, hasName: base.length > 0, baseKey: base.join(' '), candidates, own, core: coreName(name, ctx) };
+}
+
+function textMatches(answer, prep) {
+  const padded = ` ${normalizeForMatch(answer)} `;
+  return prep.candidates.some(c => c && padded.includes(` ${c} `));
+}
+
+function entryMatches(entry, prep) {
+  const key = normalizeForMatch(entry);
+  if (!key) return false;
+  if (textMatches(entry, prep)) return true;
+  if (prep.generic && prep.hasName && baseWords(entry).join(' ') === prep.baseKey) return true;
+  if (prep.core) {
+    const coreWords = prep.core.split(' ');
+    let ew = words(entry);
+    if (ew.length > 1 && ew[0] === 'the') ew = ew.slice(1);
+    if (
+      ew.length >= coreWords.length
+      && coreWords.every((w, i) => ew[i] === w)
+      && ew.slice(coreWords.length).every(w => prep.own.has(w) || LEGAL.has(w))
+    ) return true;
+  }
+  return false;
+}
+
+/**
+ * Read an AI answer for one business.
+ * @returns {{ named: boolean, position: number|null, total: number, competitors: string[] }}
+ *   position is the business's 1-based place in the list read from the answer,
+ *   or null. total counts every name in that list.
+ */
+export function analyzeAnswer(answer, business) {
+  const prep = prepBusiness(business);
+  const entries = extractEntries(answer, prep);
+  let position = null;
+  const competitors = [];
+  entries.forEach((entry, i) => {
+    if (entryMatches(entry, prep)) {
+      if (position === null) position = i + 1;
+    } else {
+      competitors.push(entry);
+    }
+  });
+  const named = position !== null || textMatches(answer, prep);
+  return { named, position, total: entries.length, competitors: competitors.slice(0, MAX_COMPETITORS) };
+}
+
+/** True when the answer names the business (by name, short name or website). */
+export function isNamed(answer, business) {
+  return analyzeAnswer(answer, business).named;
+}
+
+/** The other businesses an answer lists, in answer order, at most 5. */
+export function extractCompetitors(answer, business) {
+  return analyzeAnswer(answer, business).competitors;
+}
+
+/**
+ * Every name listed in an answer, in answer order, each marked with whether the
+ * Name_Matcher matches it to the business. Used to ask Gemini about the names we
+ * did not match, and to work out the business's place in the list afterwards.
+ * @returns {{ name: string, own: boolean }[]}
+ */
+export function listedNames(answer, business) {
+  const prep = prepBusiness(business);
+  return extractEntries(answer, prep).map(name => ({ name, own: entryMatches(name, prep) }));
+}
+
+/**
+ * The main ranked list of an answer and the names from separate later lists, for display. The main list
+ * is the one that holds the business (or, when it is not named, the first list); names after a lead-in line
+ * such as "Other names to check:" belong to a later list. Nothing here changes `analyzeAnswer`.
+ * @returns {{ main: { name: string, own: boolean }[], also: string[] }} `also` has at most 5 names
+ */
+export function splitLists(answer, business) {
+  const prep = prepBusiness(business);
+  const groups = [];
+  const entries = extractEntries(answer, prep, groups);
+  const mine = entries.findIndex(e => entryMatches(e, prep));
+  const mainGroup = mine === -1 ? (groups[0] ?? 0) : groups[mine];
+  const main = [];
+  const also = [];
+  entries.forEach((name, i) => {
+    const own = entryMatches(name, prep);
+    if (groups[i] === mainGroup) main.push({ name, own });
+    else if (!own) also.push(name);
+  });
+  return { main, also: also.slice(0, MAX_COMPETITORS) };
+}
+
+function firstIdentifyingWord(name, ctx) {
+  const sets = contextSets(ctx);
+  for (const w of baseWords(name)) {
+    if (GENERIC.has(w) || isTradeWord(w, sets) || sets.place.has(w)) continue;
+    return w.length >= 3 ? w : '';
+  }
+  return '';
+}
+
+/**
+ * True when a name starts with the same identifying word as the business,
+ * give or take a typo. Used to spot a business named under a close spelling.
+ */
+export function looksLikeSameName(text, business) {
+  const b = business && typeof business === 'object' ? business : {};
+  const ctx = { city: b.city, state: b.state, service: b.service };
+  const a = firstIdentifyingWord(b.name, ctx);
+  const t = firstIdentifyingWord(text, ctx);
+  if (!a || !t) return false;
+  if (Array.from(a)[0] !== Array.from(t)[0]) return false;
+  const limit = Math.min(a.length, t.length) >= 8 ? 2 : 1;
+  return levenshtein(a, t) <= limit;
 }

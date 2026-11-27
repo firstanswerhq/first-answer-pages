@@ -1,413 +1,696 @@
-/**
- * page-facts.js — reads one home page into Page_Facts with built-ins only.
- *
- * Elements and comments are removed by indexOf scanning (an unclosed tag cuts
- * to the end of the page), because lazy patterns go quadratic on unclosed
- * tags. Attribute and text patterns run only on short, bounded pieces. Page
- * scripts are never run.
- */
+// Reads the facts the Grader needs from a home page's HTML.
+// Hand-written and bounded: elements and comments are removed by indexOf
+// scanning (an unclosed tag cuts to the end), never by lazy patterns, and no
+// page script is ever run.
 
-export const MAX_HTML_BYTES = 2 * 1024 * 1024;
-const MAX_TAG_LENGTH = 4000; // an open tag longer than this is treated as junk
-const MAX_INNER = 2000; // longest piece of link/button text we look at
+import { reviewsLinkOnPage } from './listing-fields.js';
+import { normalizeForMatch } from './seance.js';
+import { LOCAL_BUSINESS_TYPES, ORGANIZATION_TYPES } from './schema-types.js';
+
+const MAX_HTML = 2 * 1024 * 1024;
+const MAX_TAG = 4000; // longest tag text read for attributes
+const MAX_CONTENT = 2000; // longest element text read for labels and headlines
 const MAX_LABELS = 200;
-const MAX_LABEL_READS = 2000; // links and buttons whose text we read; keeps hostile pages fast
+const MAX_TEL = 100;
+const MAX_H1 = 50;
+const MAX_HEADINGS = 40;
+const MAX_HEADING_TEXT = 120;
+const MAX_REVIEW_LINKS = 5;
+const MAX_AREA_TEXT = 120;
+const MAX_LINKS_FOR_REVIEWS = 2000;
 
-export const BUSINESS_TYPES = new Set([
-  'LocalBusiness', 'Restaurant', 'FoodEstablishment', 'CafeOrCoffeeShop', 'BarOrPub', 'Bakery',
-  'HomeAndConstructionBusiness', 'RoofingContractor', 'HVACBusiness', 'Plumber', 'Electrician',
-  'GeneralContractor', 'HousePainter', 'Locksmith', 'MovingCompany', 'AutomotiveBusiness', 'AutoRepair',
-  'HealthAndBeautyBusiness', 'HairSalon', 'BeautySalon', 'DaySpa', 'LegalService', 'Attorney',
-  'ProfessionalService', 'FinancialService', 'InsuranceAgency', 'RealEstateAgent', 'Dentist',
-  'MedicalBusiness', 'Store', 'CleaningService',
-]);
+/** How much of the page text the service-area, rating and quoted-comment tests read. */
+export const MAX_PATTERN_TEXT = 200000;
 
-// ---- Patterns used by the Checks (all case-insensitive, all bounded) -------
+/** The start of the page text that those tests read (normalizing all of a 1 MB page is too slow). */
+export function textForPatterns(text) {
+  return typeof text === 'string' ? text.slice(0, MAX_PATTERN_TEXT) : '';
+}
 
-const DAY = '(?:mon(?:day)?|tue(?:s|sday)?|wed(?:nesday)?|thu(?:r|rs|rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)';
-const TIME = '\\d{1,2}(?::\\d{2})?\\s?(?:[ap]\\.m\\.|[ap]m\\b)';
+/** The page text as the service-area test reads it: the first 200,000 characters, normalized. */
+export function serviceAreaText(facts) {
+  return normalizeForMatch(textForPatterns(facts?.text));
+}
+
+/** Hours: a day word near a time, a time range, or round-the-clock wording. */
+const TIME = String.raw`\d{1,2}(?::\d{2})?\s?(?:(?:am|pm)(?![a-z])|a\.m\.|p\.m\.)`;
+const DAY = String.raw`\b(?:mon(?:day)?|tue(?:s(?:day)?)?|wed(?:nesday)?|thu(?:r(?:s(?:day)?)?)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)\b`;
+// A 24-hour time ("07:00", "18:30") counts only in a range after a day word ("Mon-Fri 07:00-18:00"), so a lone
+// "10:30" or a phone number is never taken for hours (V219).
+const TIME24 = String.raw`(?:[01]?\d|2[0-3]):[0-5]\d`;
 export const HOURS_PATTERN = new RegExp(
-  `\\b${DAY}\\b[\\s\\S]{0,40}?${TIME}`
-  + `|${TIME}[\\s\\S]{0,40}?\\b${DAY}\\b`
-  + `|${TIME}\\s?(?:-|\u2013|\u2014|to)\\s?${TIME}`
-  + '|\\b24/7\\b|\\bopen 24 hours\\b',
+  `${DAY}[\\s\\S]{0,40}?${TIME}|${TIME}\\s?(?:-|\u2013|\u2014|to)\\s?${TIME}|${DAY}[\\s\\S]{0,40}?${TIME24}\\s?(?:-|\u2013|\u2014|to)\\s?${TIME24}|24/7|open 24 hours`,
   'i',
 );
 
-export const STREET_PATTERN = /\b\d{1,6}\s+(?:[A-Za-z0-9.'-]+\s){0,4}(?:St|Street|Ave|Avenue|Rd|Road|Blvd|Boulevard|Dr|Drive|Ln|Lane|Way|Ct|Court|Pkwy|Parkway|Pike|Hwy|Highway|Cir|Circle|Pl|Place|Ter|Terrace)\b/i;
+/** A street address such as "12 Main Street". */
+export const STREET_PATTERN =
+  /\b\d{1,6}\s+(?:[A-Za-z0-9.'-]+\s){0,4}(?:St|Street|Ave|Avenue|Rd|Road|Blvd|Boulevard|Dr|Drive|Ln|Lane|Way|Ct|Court|Pkwy|Parkway|Pike|Hwy|Highway|Cir|Circle|Pl|Place|Ter|Terrace)\b/i;
 
-export const CTA_PATTERN = /\b(?:call|book|schedule|quote|estimate|order|reserve|reservation|appointment|get started)\b/i;
+/** Call-to-action words, whole words only. */
+export const CTA_PATTERN =
+  /\b(?:call|book|schedule|quote|estimate|order|reserve|reservation|appointment|get started)\b/i;
 
-// ---- Small string helpers (all linear) --------------------------------------
+// ---------- service area (no-storefront mode) ----------
 
-/** Lower-case ASCII letters only, so the result has exactly the same length. */
-const asciiLower = text => text.replace(/[A-Z]+/g, m => m.toLowerCase());
+/** Words that, near "serving" or "we serve", say an area is meant rather than food or a product. */
+const AREA_WORDS = 'areas?|county|counties|surrounding|nearby|communities';
+// Letters and digits on either side mark a whole word; \b is not enough when a city ends in "+".
+const WORD_START = '(?<![\\p{L}\\p{N}])';
+const WORD_END = '(?![\\p{L}\\p{N}])';
+const NEVER = /(?!)/u;
 
-const isBoundary = ch => ch === 32 || ch === 9 || ch === 10 || ch === 13 || ch === 12 || ch === 62 || ch === 47;
+/** Longest stretch between "serving" (or "we serve") and the city or area word, inside one sentence. */
+const SERVE_WINDOW = 120;
+const SERVE_VERB = `${WORD_START}(?:we\\s(?:proudly\\s)?serve|proudly\\sserve|serving)${WORD_END}`;
+const SPACE = '[\\s\\p{P}]{1,3}';
 
 /**
- * indexOf with a cache, for queries whose `from` never goes backwards.
- * Keeps scans linear even when the needle is missing.
+ * The service-area test for one Grade, matched against the page text before punctuation is taken out
+ * (`serviceAreaSource(facts)`: the first 200,000 characters). It also works on normalized text.
+ *
+ * The city is normalized (lower case, punctuation gone), each of its words is escaped, and the words may be
+ * joined in the page by spaces or punctuation, so "St. Louis" matches "st louis". An empty city adds no city
+ * alternative (never an empty one, which would match everywhere).
+ *
+ * After "serving", "we serve" or "proudly serve" the city or an area word must come in the same sentence: the
+ * window stops at a period, "!", "?" or a line break, and runs at most 120 characters. To stay fast, the window
+ * is checked backward from a city or area word (a lookbehind), so a page full of "serving" with no city costs
+ * nothing. No open-ended or lazy matching. Never throws.
+ * @param {unknown} city
+ * @returns {RegExp}
  */
-function finder(text, needle) {
-  let cached = -2;
-  return from => {
-    if (cached === -1) return -1;
-    if (cached < from) cached = text.indexOf(needle, from);
-    return cached;
-  };
-}
-
-function eachOpen(lower, name, visit) {
-  const needle = `<${name}`;
-  let pos = 0;
-  for (;;) {
-    const i = lower.indexOf(needle, pos);
-    if (i === -1) return;
-    if (!isBoundary(lower.charCodeAt(i + needle.length))) { pos = i + 1; continue; }
-    const next = visit(i);
-    if (next === false) return;
-    pos = typeof next === 'number' && next > i ? next : i + 1;
+export function serviceAreaPattern(city) {
+  try {
+    const words = normalizeForMatch(typeof city === 'string' ? city : '').slice(0, 120).split(' ').filter(Boolean);
+    // Only the characters that may be escaped under the `u` flag (a "\-" would be a syntax error there).
+    const escaped = words.map(w => w.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')).join(SPACE);
+    const target = escaped ? `${AREA_WORDS}|${escaped}` : AREA_WORDS;
+    const word = t => `${WORD_START}(?:${t})${WORD_END}`;
+    const parts = [
+      word(`service${SPACE}areas?`),
+      word(`areas?${SPACE}we${SPACE}serve`),
+      // The city or area word, then (looking back) the verb earlier in the same sentence.
+      `${word(target)}(?<=${SERVE_VERB}[^.!?\\n]{0,${SERVE_WINDOW}}(?:${target}))`,
+    ];
+    if (escaped) {
+      parts.push(word(`${escaped}${SPACE}and\\s(?:the\\s)?(?:surrounding|nearby|neighboring)\\s(?:areas?|communities|towns|cities|counties)`));
+    }
+    return new RegExp(parts.join('|'), 'iu');
+  } catch {
+    return NEVER;
   }
 }
 
-/** Remove <!-- ... --> comments. An unclosed comment cuts to the end. */
-function removeComments(text) {
-  const out = [];
-  let pos = 0;
-  for (;;) {
-    const i = text.indexOf('<!--', pos);
-    if (i === -1) { out.push(text.slice(pos)); break; }
-    out.push(text.slice(pos, i), ' ');
-    const end = text.indexOf('-->', i + 4);
-    if (end === -1) break;
-    pos = end + 3;
-  }
-  return out.join('');
+/**
+ * The page text as the service-area test reads it: the first 200,000 characters, punctuation kept, and a line
+ * break wherever a block (a paragraph, heading, list item, table cell, div or line break) ends, so text split
+ * across two blocks with no period between them is never read as one sentence. Hand-built facts with only
+ * `text` are read as they are.
+ */
+export function serviceAreaSource(facts) {
+  return typeof facts?.areaText === 'string' ? textForPatterns(facts.areaText) : textForPatterns(facts?.text);
 }
 
-/** Remove <tag ...> ... </tag> elements. An unclosed element cuts to the end. */
-function stripElements(text, tag) {
-  const lower = asciiLower(text);
-  const close = `</${tag}`;
-  const out = [];
-  let pos = 0;
-  let cut = false;
-  eachOpen(lower, tag, i => {
-    out.push(text.slice(pos, i), ' ');
-    const c = lower.indexOf(close, i + tag.length + 1);
-    if (c === -1) { cut = true; return false; }
-    const gt = lower.indexOf('>', c);
-    if (gt === -1) { cut = true; return false; }
-    pos = gt + 1;
-    return pos;
-  });
-  if (!cut) out.push(text.slice(pos));
-  return out.join('');
+/** How much of the page's HTML is read for `areaText` (the test reads at most 200,000 characters of it). */
+const MAX_AREA_HTML = 1000000;
+/** Where a block ends. Bounded: no open-ended or lazy matching. */
+const BLOCK_END = /<\/(?:p|div|li|h[1-6]|td)\s{0,20}>|<br(?:\s[^<>]{0,200})?\s{0,5}\/?>/gi;
+const BREAK_MARK = '\u0001';
+
+/** The page text with a line break at each block end (see serviceAreaSource). */
+function readAreaText(html) {
+  const marked = html.slice(0, MAX_AREA_HTML).replace(/\u0001/g, ' ').replace(BLOCK_END, BREAK_MARK);
+  const text = collapse(decode(stripTags(marked)));
+  return textForPatterns(text.replace(/ ?\u0001[ \u0001]*/g, '\n').trim());
+}
+
+// ---------- reviews ----------
+
+/**
+ * Tested against each entry of `facts.headings` (never the page text, so a "Reviews" menu link does not count).
+ */
+export const REVIEW_HEADING_PATTERN =
+  /\b(?:reviews|testimonials)\b|\bwhat (?:our |my )?(?:customers|clients|neighbors) (?:say|are saying)\b/i;
+
+/**
+ * A rating written out: "5.0 stars", "4.9 out of 5", a decimal before the slash ("4.8/5"; "Closed 1/5" and
+ * "Open 9/5" never count), or three or more star symbols in a row.
+ */
+export const RATING_PATTERN =
+  /\b[1-5](?:\.\d)?\s{0,3}stars?\b|\b[1-5](?:\.\d)?\s{0,3}out of\s{1,3}5\b|\b[1-5]\.\d\s?\/\s?5\b|[\u2605\u2B50]{3,}/iu;
+
+/** A quoted comment of 20 to 400 characters, then within 40 characters a dash and a capitalized name. */
+export const QUOTED_REVIEW_PATTERN =
+  /["\u201C][^"\u201C\u201D\n]{20,400}["\u201D][\s,.]{0,40}[-\u2013\u2014~]\s{0,3}\p{Lu}\p{Ll}{0,30}/u;
+
+/**
+ * True when the page facts hold a review signal: a review heading, a rating or a quoted comment with a name
+ * in the text, a link to reviews on a review site, or review data in the business label.
+ * @param {object} facts Page_Facts from readPageFacts
+ * @returns {boolean}
+ */
+export function hasReviewSignal(facts) {
+  if (!facts || typeof facts !== 'object') return false;
+  const headings = Array.isArray(facts.headings) ? facts.headings : [];
+  if (headings.some(h => typeof h === 'string' && REVIEW_HEADING_PATTERN.test(h))) return true;
+  const text = textForPatterns(facts.text);
+  if (RATING_PATTERN.test(text) || QUOTED_REVIEW_PATTERN.test(text)) return true;
+  if (Array.isArray(facts.reviewLinks) && facts.reviewLinks.length > 0) return true;
+  return facts.jsonLd?.business?.hasReviewData === true;
+}
+
+// Every schema.org local-business type (see schema-types.js) plus two deliberate extras, neither a schema.org
+// local-business type: `CleaningService` (kept from before) and `VeterinaryCare` (a vet is local; in schema.org it
+// sits under MedicalOrganization, which is not a local business).
+// `OnlineBusiness`, `OnlineStore` and `OnlineMarketplace` are not here and not in ORGANIZATION_TYPES: they never
+// count as local (V156).
+const BUSINESS_TYPES = new Set([...LOCAL_BUSINESS_TYPES, 'CleaningService', 'VeterinaryCare']);
+
+/** "https://schema.org/AutoWash", "http://schema.org/AutoWash" and "schema:AutoWash" are all "AutoWash" (V156). */
+const SCHEMA_PREFIX = /^\s*(?:https?:\/\/schema\.org\/|schema:)/i;
+export function bareSchemaType(type) {
+  return typeof type === 'string' ? type.replace(SCHEMA_PREFIX, '').trim() : '';
 }
 
 const NAMED = {
   amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', ndash: '\u2013', mdash: '\u2014',
-  rsquo: '\u2019', lsquo: '\u2018', ldquo: '\u201c', rdquo: '\u201d', hellip: '\u2026', copy: '\u00a9', reg: '\u00ae',
+  rsquo: '\u2019', lsquo: '\u2018', ldquo: '\u201C', rdquo: '\u201D', hellip: '\u2026', copy: '\u00A9', reg: '\u00AE',
 };
 
-export function decodeEntities(text) {
-  return text.replace(/&(#x[0-9a-f]{1,6}|#\d{1,7}|[a-z]{2,8});/gi, (whole, body) => {
-    if (body[0] === '#') {
-      const code = body[1].toLowerCase() === 'x' ? parseInt(body.slice(2), 16) : parseInt(body.slice(1), 10);
-      if (!Number.isInteger(code) || code <= 0 || code > 0x10ffff || (code >= 0xd800 && code <= 0xdfff)) return ' ';
-      return String.fromCodePoint(code);
+const MAX_LINKS_KEPT = 400;
+const MAX_LINK_HREF = 500;
+const FAQ_HEADING = /\b(?:faqs?|frequently asked questions|questions? (?:and|&) answers?|common questions|questions? we get asked)\b/i;
+
+/** How many times `needle` (already lowercase) appears in `lower`, counting at most 50. */
+function countOf(lower, needle) {
+  let n = 0;
+  let at = lower.indexOf(needle);
+  while (at !== -1 && n < 50) {
+    n += 1;
+    at = lower.indexOf(needle, at + needle.length);
+  }
+  return n;
+}
+
+/**
+ * True when the page has a questions-and-answers section (Requirement 3.11): a heading that says FAQ or common
+ * questions, two or more details/summary pairs, FAQPage markup, or two or more headings ending in a question mark.
+ */
+function hasQuestionsSection(facts, lowerHtml) {
+  const headings = Array.isArray(facts.headings) ? facts.headings : [];
+  if (headings.some(h => FAQ_HEADING.test(h))) return true;
+  if (headings.filter(h => /\?\s*$/.test(h)).length >= 2) return true;
+  if (countOf(lowerHtml, '<details') >= 2 && countOf(lowerHtml, '<summary') >= 2) return true;
+  const types = Array.isArray(facts.jsonLd?.types) ? facts.jsonLd.types : [];
+  return types.includes('FAQPage');
+}
+
+function emptyFacts() {
+  return {
+    title: '',
+    metaDescription: '',
+    ogTitle: '',
+    ogImage: '',
+    hasViewport: false,
+    h1s: [],
+    headings: [],
+    reviewLinks: [],
+    areaText: '',
+    imgCount: 0,
+    imgMissingAlt: 0,
+    telLinks: [],
+    ctaLabels: [],
+    text: '',
+    scriptBuilt: false,
+    // Every link with an address, in page order: { href, text } (at most 400). Read only; never fetched.
+    links: [],
+    // True when the page has a questions-and-answers section (Requirement 3.11).
+    faq: false,
+    jsonLd: { blockCount: 0, unreadableCount: 0, blocks: [], types: [], business: null },
+  };
+}
+
+// ---------- small helpers ----------
+
+/** ASCII-only lowercase; keeps the string length, so indexes line up. */
+function toLower(s) {
+  return s.replace(/[A-Z]/g, c => String.fromCharCode(c.charCodeAt(0) + 32));
+}
+
+function isBoundary(code) {
+  // end of string, whitespace, '>' or '/'
+  return Number.isNaN(code) || code === 62 || code === 47 || code === 32 || (code >= 9 && code <= 13);
+}
+
+function isLetter(code) {
+  return (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
+}
+
+/**
+ * Finds `needle` from an index, remembering the last answer. Calls must use
+ * non-decreasing `from` values, so a failed search is never repeated.
+ */
+function finder(str, needle, ok) {
+  let cache = -2;
+  return from => {
+    if (cache === -1) return -1;
+    if (cache >= from) return cache;
+    let i = from;
+    for (;;) {
+      i = str.indexOf(needle, i);
+      if (i === -1) { cache = -1; return -1; }
+      if (!ok || ok(str.charCodeAt(i + needle.length))) { cache = i; return i; }
+      i += 1;
     }
-    const hit = NAMED[body.toLowerCase()];
-    return hit === undefined ? whole : hit;
+  };
+}
+
+function decode(str) {
+  if (str.indexOf('&') === -1) return str;
+  return str.replace(/&(?:#(\d{1,7})|#[xX]([0-9a-fA-F]{1,6})|([a-zA-Z]{2,8}));/g, (m, dec, hex, name) => {
+    if (name !== undefined) {
+      const v = NAMED[name.toLowerCase()];
+      return v === undefined ? m : v;
+    }
+    const cp = dec !== undefined ? parseInt(dec, 10) : parseInt(hex, 16);
+    if (cp === 0 || cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF)) return ' ';
+    return String.fromCodePoint(cp);
   });
 }
 
-const collapse = text => text.replace(/\s+/g, ' ').trim();
+function collapse(s) {
+  return s.replace(/\s+/g, ' ').trim();
+}
 
-/** Replace tags with spaces. A "<" not followed by a tag-like character stays. */
-function stripTags(text) {
-  const out = [];
-  const gt = finder(text, '>');
+/** Removes every <!-- ... --> comment. An unclosed comment cuts to the end. */
+function removeComments(s) {
+  let i = s.indexOf('<!--');
+  if (i === -1) return s;
+  const parts = [];
   let pos = 0;
-  for (;;) {
-    const i = text.indexOf('<', pos);
-    if (i === -1) break;
-    const c = text.charCodeAt(i + 1);
-    const tagLike = (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c === 47 || c === 33 || c === 63;
-    if (!tagLike) { out.push(text.slice(pos, i + 1)); pos = i + 1; continue; }
-    out.push(text.slice(pos, i), ' ');
-    const end = gt(i);
-    if (end === -1) { pos = text.length; break; }
-    pos = end + 1;
+  while (i !== -1) {
+    parts.push(s.slice(pos, i));
+    const end = s.indexOf('-->', i + 4);
+    if (end === -1) { pos = s.length; break; }
+    pos = end + 3;
+    i = s.indexOf('<!--', pos);
   }
-  out.push(text.slice(pos));
+  parts.push(s.slice(pos));
+  return parts.join('');
+}
+
+/** Removes every <name ...>...</name> element. An unclosed element cuts to the end. */
+function removeElements(s, name) {
+  let lower = toLower(s);
+  const open = `<${name}`;
+  const close = `</${name}`;
+  if (lower.indexOf(open) === -1) return s;
+  const parts = [];
+  let pos = 0;
+  let from = 0;
+  for (;;) {
+    const i = lower.indexOf(open, from);
+    if (i === -1) break;
+    if (!isBoundary(lower.charCodeAt(i + open.length))) { from = i + 1; continue; }
+    let c = i + open.length;
+    for (;;) {
+      c = lower.indexOf(close, c);
+      if (c === -1 || isBoundary(lower.charCodeAt(c + close.length))) break;
+      c += 1;
+    }
+    parts.push(s.slice(pos, i));
+    if (c === -1) { pos = s.length; break; }
+    const gt = lower.indexOf('>', c);
+    pos = gt === -1 ? s.length : gt + 1;
+    parts.push(' ');
+    from = pos;
+    if (pos >= s.length) break;
+  }
+  parts.push(s.slice(pos));
+  lower = '';
+  return parts.join('');
+}
+
+/** Replaces tags with spaces. A '<' that does not start a tag stays as text. */
+function stripTags(s) {
+  if (s.indexOf('<') === -1) return s;
+  const gt = finder(s, '>');
+  const lt = finder(s, '<');
+  const out = [];
+  let pos = 0;
+  let i = 0;
+  for (;;) {
+    i = lt(i);
+    if (i === -1) break;
+    const c = s.charCodeAt(i + 1);
+    if (!(isLetter(c) || c === 47 || c === 33 || c === 63)) { i += 1; continue; }
+    const g = gt(i);
+    const l = lt(i + 1);
+    out.push(s.slice(pos, i), ' ');
+    if (g === -1 && l === -1) { pos = s.length; break; }
+    pos = l !== -1 && (g === -1 || l < g) ? l : g + 1;
+    i = pos;
+  }
+  out.push(s.slice(pos));
   return out.join('');
 }
 
-const plainText = html => collapse(decodeEntities(stripTags(html)));
+function cleanText(s) {
+  return collapse(decode(stripTags(s)));
+}
 
-/** Attributes of one short open tag, names lower-cased, values entity-decoded. */
-function parseAttrs(tagText) {
+/** Reads attributes of one (bounded) tag into a Map keyed by lowercase name. */
+function readAttrs(tag, name) {
   const attrs = new Map();
-  const re = /([a-zA-Z_:][-a-zA-Z0-9_:.]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/g;
+  const re = /([^\s"'<>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'<>]+)))?/g;
+  const body = tag.slice(1 + name.length);
   let m;
-  while ((m = re.exec(tagText)) !== null) {
-    const name = m[1].toLowerCase();
-    if (!attrs.has(name)) attrs.set(name, decodeEntities(m[2] ?? m[3] ?? m[4] ?? ''));
+  while ((m = re.exec(body)) !== null) {
+    const key = m[1].toLowerCase();
+    if (attrs.has(key)) continue;
+    const raw = m[2] ?? m[3] ?? m[4];
+    attrs.set(key, raw === undefined ? '' : decode(raw));
   }
   return attrs;
 }
 
-const cap = (text, n) => Array.from(text).slice(0, n).join('');
-
-// ---- JSON-LD ---------------------------------------------------------------
-
-function typeNames(node) {
-  const raw = node && typeof node === 'object' ? node['@type'] : undefined;
-  const list = Array.isArray(raw) ? raw : [raw];
-  return list.filter(t => typeof t === 'string').map(t => t.slice(t.lastIndexOf('/') + 1));
+/**
+ * Visits every <name ...> tag. `cb(tag, contentStart, contentEnd)` gets the
+ * bounded tag text and, when `withContent` is set, the range of its content.
+ * Content ends at the nearest of the closing tag, the next tag of the same
+ * name, or `maxContent` characters, so nested or unclosed tags stay linear.
+ */
+function scan(s, lower, name, withContent, maxContent, cb) {
+  const open = `<${name}`;
+  const close = `</${name}`;
+  const findOpen = finder(lower, open, isBoundary);
+  const findClose = finder(lower, close, isBoundary);
+  const gt = finder(s, '>');
+  const lt = finder(s, '<');
+  let from = 0;
+  for (;;) {
+    const i = findOpen(from);
+    if (i === -1) break;
+    const g = gt(i);
+    const l = lt(i + 1);
+    const stop = l !== -1 && (g === -1 || l < g) ? l : g;
+    if (stop === -1) {
+      cb(s.slice(i, i + MAX_TAG), s.length, s.length);
+      break;
+    }
+    const tag = s.slice(i, Math.min(stop, i + MAX_TAG));
+    const contentStart = stop === g ? g + 1 : l;
+    if (!withContent) {
+      cb(tag, contentStart, contentStart);
+      from = contentStart;
+      continue;
+    }
+    const nextOpen = findOpen(contentStart);
+    const c = findClose(contentStart);
+    let end = Math.min(s.length, contentStart + maxContent);
+    if (c !== -1 && c < end) end = c;
+    if (nextOpen !== -1 && nextOpen < end) end = nextOpen;
+    cb(tag, contentStart, end);
+    from = end;
+  }
 }
 
-function nodesOf(parsed) {
+// ---------- JSON-LD ----------
+
+function asArray(v) {
+  return Array.isArray(v) ? v : v === undefined || v === null ? [] : [v];
+}
+
+function str(v) {
+  if (typeof v === 'string') return v.trim();
+  if (typeof v === 'number') return String(v);
+  return '';
+}
+
+function nodeTypes(node) {
+  return asArray(node['@type']).filter(t => typeof t === 'string').map(bareSchemaType).filter(Boolean);
+}
+
+/** Top object, each item of a top-level array, and each item of any @graph. */
+function collectNodes(value) {
   const nodes = [];
-  const add = value => {
-    if (value && typeof value === 'object' && !Array.isArray(value)) nodes.push(value);
+  const visit = (item, depth) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return;
+    nodes.push(item);
+    if (depth === 0 && Array.isArray(item['@graph'])) {
+      for (const g of item['@graph']) visit(g, 1);
+    }
   };
-  const top = Array.isArray(parsed) ? parsed : [parsed];
-  for (const item of top) {
-    add(item);
-    if (item && typeof item === 'object' && Array.isArray(item['@graph'])) item['@graph'].forEach(add);
-  }
+  if (Array.isArray(value)) for (const item of value) visit(item, 0);
+  else visit(value, 0);
   return nodes;
 }
 
-const str = v => (typeof v === 'string' && v.trim() !== '' ? v.trim() : undefined);
+function isBusinessNode(node) {
+  const types = nodeTypes(node);
+  if (types.some(t => BUSINESS_TYPES.has(t))) return true;
+  // Organization and its subtypes that are not local businesses (Corporation, NGO, ...) count only with a
+  // telephone and an address.
+  return types.some(t => ORGANIZATION_TYPES.has(t)) && Boolean(str(node.telephone)) && Boolean(node.address);
+}
 
-function readAddress(value) {
-  if (typeof value === 'string') return str(value) ? { text: value.trim() } : undefined;
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
-  const address = {
-    street: str(value.streetAddress),
-    city: str(value.addressLocality),
-    state: str(value.addressRegion),
-    postalCode: str(value.postalCode),
-  };
-  const text = [address.street, address.city, address.state, address.postalCode].filter(Boolean).join(', ');
-  return text ? { ...address, text } : undefined;
+function readAddress(a) {
+  if (typeof a === 'string') {
+    const text = a.trim();
+    return text ? { street: text, city: '', region: '', postalCode: '', text } : null;
+  }
+  if (a && typeof a === 'object' && !Array.isArray(a)) {
+    const street = str(a.streetAddress);
+    const city = str(a.addressLocality);
+    const region = str(a.addressRegion);
+    const postalCode = str(a.postalCode);
+    // US style: "400 Church Street, Franklin, TN 37064", with no comma before the ZIP (V144).
+    const text = [street, city, [region, postalCode].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+    return text ? { street, city, region, postalCode, text } : null;
+  }
+  return null;
 }
 
 function readHours(node) {
   const out = [];
-  const raw = node.openingHours;
-  for (const h of Array.isArray(raw) ? raw : [raw]) if (str(h)) out.push(h.trim());
-  const spec = node.openingHoursSpecification;
-  for (const s of Array.isArray(spec) ? spec : [spec]) {
-    if (!s || typeof s !== 'object') continue;
-    const days = [].concat(s.dayOfWeek ?? []).filter(d => typeof d === 'string').map(d => d.slice(d.lastIndexOf('/') + 1));
-    if (days.length && str(s.opens) && str(s.closes)) out.push(`${days.join(', ')} ${s.opens}-${s.closes}`);
+  for (const h of asArray(node.openingHours)) {
+    const t = str(h);
+    if (t) out.push(t);
+  }
+  for (const spec of asArray(node.openingHoursSpecification)) {
+    if (!spec || typeof spec !== 'object') continue;
+    const days = asArray(spec.dayOfWeek).map(d => str(d).replace(/^.*[/#]/, '')).filter(Boolean).join(', ');
+    const opens = str(spec.opens);
+    const closes = str(spec.closes);
+    const t = [days, opens && closes ? `${opens}-${closes}` : opens || closes].filter(Boolean).join(' ');
+    if (t) out.push(t);
   }
   return out;
 }
 
-function readJsonLd(blocks) {
-  const result = { blockCount: blocks.length, unreadableCount: 0, types: [], business: null };
-  for (const body of blocks) {
-    let parsed;
+function readBusiness(node) {
+  return {
+    type: nodeTypes(node).find(t => BUSINESS_TYPES.has(t)) || 'Organization',
+    name: str(node.name),
+    telephone: str(node.telephone),
+    address: readAddress(node.address),
+    hours: readHours(node),
+    url: str(node.url),
+    areaServed: readAreaServed(node.areaServed),
+    hasReviewData: hasValue(node.aggregateRating) || hasValue(node.review),
+  };
+}
+
+/** `areaServed` as text: a string, an object with `name`, or an array of those, joined with ", ". */
+function readAreaServed(value) {
+  const parts = [];
+  for (const item of asArray(value)) {
+    const text = typeof item === 'string'
+      ? item.trim()
+      : item && typeof item === 'object' && !Array.isArray(item) ? str(item.name) : '';
+    if (text) parts.push(text);
+    if (parts.length >= 20) break;
+  }
+  return parts.join(', ').slice(0, MAX_AREA_TEXT).trim();
+}
+
+/** A value that holds something: a non-empty string, a number, a non-empty array or object. */
+function hasValue(v) {
+  if (typeof v === 'string') return v.trim() !== '';
+  if (typeof v === 'number') return Number.isFinite(v);
+  if (Array.isArray(v)) return v.some(hasValue);
+  if (v && typeof v === 'object') return Object.keys(v).length > 0;
+  return false;
+}
+
+function readJsonLd(bodies) {
+  const result = { blockCount: bodies.length, unreadableCount: 0, blocks: [], types: [], business: null };
+  const seen = new Set();
+  let local = null;
+  let fallback = null;
+  let stub = null;
+  for (const body of bodies) {
+    let value;
     try {
-      parsed = JSON.parse(body.trim());
+      value = JSON.parse(body);
     } catch {
+      value = undefined;
+    }
+    if (value === undefined || value === null || typeof value !== 'object') {
       result.unreadableCount += 1;
+      result.blocks.push({ unreadable: true });
       continue;
     }
-    for (const node of nodesOf(parsed)) {
-      const types = typeNames(node);
-      for (const t of types) if (!result.types.includes(t)) result.types.push(t);
-      if (result.business) continue;
-      const hasPhoneAndAddress = str(node.telephone) && node.address;
-      const isBusiness = types.some(t => BUSINESS_TYPES.has(t) || (t === 'Organization' && hasPhoneAndAddress));
-      if (!isBusiness) continue;
-      result.business = {
-        name: str(node.name),
-        telephone: str(node.telephone),
-        address: readAddress(node.address),
-        hours: readHours(node),
-        url: str(node.url),
-      };
+    result.blocks.push({ unreadable: false });
+    for (const node of collectNodes(value)) {
+      for (const t of nodeTypes(node)) {
+        if (!seen.has(t)) { seen.add(t); result.types.push(t); }
+      }
+      // The first node of a local-business type, from all blocks, is the business (V197); only when there is none,
+      // the first Organization-rule node (an Organization or a non-local subtype with a telephone and an address).
+      // A bare local node (no name and no telephone, such as {"@type":"Plumber","@id":"#joe"}) is kept only as a
+      // last local choice, so it cannot beat a full organization (V201).
+      if (nodeTypes(node).some(t => BUSINESS_TYPES.has(t))) {
+        if (!local && (str(node.name) || str(node.telephone))) local = node;
+        else if (!stub) stub = node;
+      } else if (!fallback && isBusinessNode(node)) {
+        fallback = node;
+      }
     }
   }
+  const chosen = local ?? fallback ?? stub;
+  if (chosen) result.business = readBusiness(chosen);
   return result;
 }
 
-// ---- Main ------------------------------------------------------------------
+// ---------- headings ----------
+
+/**
+ * The text of every <h1>, <h2> and <h3>, in page order (each cut to 120 characters, at most 40). Heading text
+ * inside an <a>, or a heading inside a <nav>, is left out, so a "Reviews" menu link is never a heading.
+ * Same indexOf scanning as the rest of the file.
+ */
+function readHeadings(s) {
+  let t = removeElements(s, 'nav');
+  t = removeElements(t, 'a');
+  if (t.indexOf('<') === -1) return [];
+  const lower = toLower(t);
+  const found = [];
+  for (const name of ['h1', 'h2', 'h3']) {
+    let count = 0;
+    scan(t, lower, name, true, MAX_CONTENT, (tag, start, end) => {
+      if (count >= MAX_HEADINGS) return;
+      const text = cleanText(t.slice(start, end)).slice(0, MAX_HEADING_TEXT).trim();
+      if (!text) return;
+      count += 1;
+      found.push({ at: start, text });
+    });
+  }
+  // The first 40 of each kind always hold the first 40 overall.
+  return found.sort((a, b) => a.at - b.at).slice(0, MAX_HEADINGS).map(h => h.text);
+}
+
+// ---------- main ----------
 
 /**
  * @param {string} html
  * @returns {object} Page_Facts
  */
 export function readPageFacts(html) {
-  let s = typeof html === 'string' ? html.slice(0, MAX_HTML_BYTES) : '';
+  const facts = emptyFacts();
+  if (typeof html !== 'string' || html === '') return facts;
+
+  let s = html.length > MAX_HTML ? html.slice(0, MAX_HTML) : html;
   s = removeComments(s);
 
-  // Count scripts and collect JSON-LD before scripts are removed.
-  let lower = asciiLower(s);
-  const ldBlocks = [];
+  // JSON-LD first, while the script elements are still there.
+  const ldBodies = [];
   let scriptCount = 0;
-  {
-    const gt = finder(lower, '>');
-    const closeScript = finder(lower, '</script');
-    eachOpen(lower, 'script', i => {
+  if (s.indexOf('<') !== -1) {
+    const lower = toLower(s);
+    scan(s, lower, 'script', true, Infinity, (tag, start, end) => {
       scriptCount += 1;
-      const end = gt(i);
-      if (end === -1) return false;
-      const close = closeScript(end + 1);
-      if (end - i <= MAX_TAG_LENGTH) {
-        const type = parseAttrs(s.slice(i, end)).get('type');
-        if (type && type.trim().toLowerCase().startsWith('application/ld+json')) {
-          ldBlocks.push(close === -1 ? s.slice(end + 1) : s.slice(end + 1, close));
-        }
+      const type = (readAttrs(tag, 'script').get('type') || '').trim().toLowerCase();
+      if (type.startsWith('application/ld+json')) ldBodies.push(s.slice(start, end));
+    });
+  }
+  facts.jsonLd = readJsonLd(ldBodies);
+
+  for (const name of ['script', 'style', 'noscript', 'template', 'svg']) s = removeElements(s, name);
+
+  if (s.indexOf('<') !== -1) {
+    const lower = toLower(s);
+
+    let gotTitle = false;
+    scan(s, lower, 'title', true, MAX_CONTENT, (tag, start, end) => {
+      if (gotTitle) return;
+      gotTitle = true;
+      facts.title = cleanText(s.slice(start, end));
+    });
+
+    scan(s, lower, 'meta', false, 0, tag => {
+      const a = readAttrs(tag, 'meta');
+      const key = (a.get('name') || a.get('property') || '').trim().toLowerCase();
+      const content = (a.get('content') || '').trim();
+      if (key === 'description' && !facts.metaDescription) facts.metaDescription = content;
+      else if (key === 'og:title' && !facts.ogTitle) facts.ogTitle = content;
+      else if (key === 'og:image' && !facts.ogImage) facts.ogImage = content;
+      else if (key === 'viewport') facts.hasViewport = true;
+    });
+
+    scan(s, lower, 'h1', true, MAX_CONTENT, (tag, start, end) => {
+      if (facts.h1s.length >= MAX_H1) return;
+      const t = cleanText(s.slice(start, end));
+      if (t) facts.h1s.push(t);
+    });
+
+    scan(s, lower, 'img', false, 0, tag => {
+      facts.imgCount += 1;
+      if (!(readAttrs(tag, 'img').get('alt') || '').trim()) facts.imgMissingAlt += 1;
+    });
+
+    let linksSeen = 0;
+    const addLabel = text => {
+      const label = text.slice(0, 60).trim();
+      if (label && facts.ctaLabels.length < MAX_LABELS) facts.ctaLabels.push(label);
+    };
+
+    scan(s, lower, 'a', true, MAX_CONTENT, (tag, start, end) => {
+      const href = (readAttrs(tag, 'a').get('href') || '').trim();
+      if (/^tel:/i.test(href) && facts.telLinks.length < MAX_TEL) facts.telLinks.push(href);
+      // Links to the business's reviews on a review site, in page order (https only, the stricter page rules).
+      // Only the first 2,000 links are looked at, and only full https addresses reach the validator, so a page
+      // made of a huge number of links stays fast.
+      linksSeen += 1;
+      if (
+        facts.reviewLinks.length < MAX_REVIEW_LINKS && linksSeen <= MAX_LINKS_FOR_REVIEWS
+        && /^https:\/\//i.test(href) && reviewsLinkOnPage(href) !== ''
+      ) facts.reviewLinks.push(href);
+      const labelText = cleanText(s.slice(start, end));
+      // Every link with an address, in page order, for the health map's profile and service-page signals (never fetched).
+      if (href !== '' && facts.links.length < MAX_LINKS_KEPT && !/^(?:#|javascript:|mailto:|tel:)/i.test(href)) {
+        facts.links.push({ href: href.slice(0, MAX_LINK_HREF), text: labelText.slice(0, 100) });
       }
-      return close === -1 ? false : close;
+      addLabel(labelText);
+    });
+
+    scan(s, lower, 'button', true, MAX_CONTENT, (tag, start, end) => {
+      addLabel(cleanText(s.slice(start, end)));
+    });
+
+    scan(s, lower, 'input', false, 0, tag => {
+      const a = readAttrs(tag, 'input');
+      const type = (a.get('type') || '').trim().toLowerCase();
+      if (type === 'submit' || type === 'button') addLabel(collapse(a.get('value') || ''));
     });
   }
 
-  for (const tag of ['script', 'style', 'noscript', 'template', 'svg']) s = stripElements(s, tag);
-  lower = asciiLower(s);
-  // Each scan pass restarts at the top of the page, so each pass needs its own
-  // finder (a finder is only valid for queries that never go backwards).
-  const openTagAttrs = (gt, i) => {
-    const end = gt(i);
-    if (end === -1 || end - i > MAX_TAG_LENGTH) return null;
-    return { attrs: parseAttrs(s.slice(i, end)), end };
-  };
-
-  // title
-  let title = '';
-  {
-    const closeTitle = finder(lower, '</title');
-    const gt = finder(lower, '>');
-    eachOpen(lower, 'title', i => {
-      const end = gt(i);
-      if (end === -1) return false;
-      const close = closeTitle(end + 1);
-      if (close !== -1) title = cap(plainText(s.slice(end + 1, close)), 300);
-      return false;
-    });
-  }
-
-  // meta tags
-  const meta = {};
-  let hasViewport = false;
-  const gtMeta = finder(lower, '>');
-  eachOpen(lower, 'meta', i => {
-    const tag = openTagAttrs(gtMeta, i);
-    if (!tag) return undefined;
-    const key = (tag.attrs.get('name') ?? tag.attrs.get('property') ?? '').trim().toLowerCase();
-    const content = tag.attrs.get('content');
-    if (key === 'viewport') hasViewport = true;
-    if (['description', 'og:title', 'og:image'].includes(key) && content !== undefined && !(key in meta)) {
-      meta[key] = collapse(content);
-    }
-    return tag.end + 1;
-  });
-
-  // h1s
-  const h1s = [];
-  {
-    const closeH1 = finder(lower, '</h1');
-    const gt = finder(lower, '>');
-    eachOpen(lower, 'h1', i => {
-      const end = gt(i);
-      if (end === -1) return false;
-      const close = closeH1(end + 1);
-      if (close === -1) return false;
-      h1s.push(cap(plainText(s.slice(end + 1, close)), 300));
-      return close;
-    });
-  }
-
-  // images
-  let imgCount = 0;
-  let imgMissingAlt = 0;
-  const gtImg = finder(lower, '>');
-  eachOpen(lower, 'img', i => {
-    const end = gtImg(i);
-    if (end === -1) return false;
-    imgCount += 1;
-    const alt = end - i <= MAX_TAG_LENGTH ? parseAttrs(s.slice(i, end)).get('alt') : undefined;
-    if (alt === undefined || alt.trim() === '') imgMissingAlt += 1;
-    return end + 1;
-  });
-
-  // links (tel: and labels) and buttons
-  const telLinks = [];
-  const ctaLabels = [];
-  let labelReads = 0;
-  const canReadLabel = () => labelReads < MAX_LABEL_READS && ctaLabels.length < MAX_LABELS;
-  const addLabel = raw => {
-    if (!canReadLabel()) return;
-    labelReads += 1;
-    const label = cap(plainText(raw), 60);
-    if (label !== '') ctaLabels.push(label);
-  };
-  {
-    const closeA = finder(lower, '</a');
-    const gt = finder(lower, '>');
-    eachOpen(lower, 'a', i => {
-      const end = gt(i);
-      if (end === -1) return false;
-      if (end - i <= MAX_TAG_LENGTH) {
-        const href = parseAttrs(s.slice(i, end)).get('href');
-        if (href !== undefined && href.trim().toLowerCase().startsWith('tel:') && telLinks.length < MAX_LABELS) {
-          telLinks.push(href.trim());
-        }
-      }
-      if (canReadLabel()) {
-        const close = closeA(end + 1);
-        if (close !== -1) addLabel(s.slice(end + 1, Math.min(close, end + 1 + MAX_INNER)));
-      }
-      return end + 1;
-    });
-  }
-  {
-    const closeButton = finder(lower, '</button');
-    const gt = finder(lower, '>');
-    eachOpen(lower, 'button', i => {
-      const end = gt(i);
-      if (end === -1) return false;
-      if (!canReadLabel()) return false;
-      const close = closeButton(end + 1);
-      if (close !== -1) addLabel(s.slice(end + 1, Math.min(close, end + 1 + MAX_INNER)));
-      return end + 1;
-    });
-  }
-  const gtInput = finder(lower, '>');
-  eachOpen(lower, 'input', i => {
-    const tag = openTagAttrs(gtInput, i);
-    if (!tag) return undefined;
-    const type = (tag.attrs.get('type') ?? '').trim().toLowerCase();
-    const value = tag.attrs.get('value');
-    if ((type === 'submit' || type === 'button') && value) addLabel(value);
-    return tag.end + 1;
-  });
-
-  // visible text (the title element is not page text)
-  const text = plainText(stripElements(s, 'title'));
-
-  return {
-    title,
-    metaDescription: meta.description ?? '',
-    ogTitle: meta['og:title'] ?? '',
-    ogImage: meta['og:image'] ?? '',
-    hasViewport,
-    h1s,
-    imgCount,
-    imgMissingAlt,
-    telLinks,
-    ctaLabels,
-    text,
-    jsonLd: readJsonLd(ldBlocks),
-    scriptCount,
-    scriptBuilt: text.length < 200 && scriptCount > 0,
-  };
+  facts.headings = readHeadings(s);
+  facts.faq = hasQuestionsSection(facts, toLower(s));
+  const withoutTitle = removeElements(s, 'title');
+  facts.text = cleanText(withoutTitle);
+  facts.areaText = readAreaText(withoutTitle);
+  facts.scriptBuilt = facts.text.length < 200 && scriptCount > 0;
+  return facts;
 }

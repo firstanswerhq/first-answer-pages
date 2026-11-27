@@ -13,6 +13,17 @@ const MOCK_MAX_SENT = 50;
 const CONTROL = /[\u0000-\u0008\u000B-\u001F\u007F-\u009F]/g;
 const HTML_UNSAFE = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 
+const whole = v => (Number.isInteger(v) && v >= 0 ? v : 0);
+
+/** The numbers in a heads-up email, and nothing else: whatever else is passed in is dropped. */
+function allowanceCounts({ percent, used, left, limit, checks } = {}) {
+  return { percent: whole(percent), used: whole(used), left: whole(left), limit: whole(limit), checks: whole(checks) };
+}
+
+function humanCheckCounts({ human } = {}) {
+  return { human: whole(human) };
+}
+
 /**
  * Make a value safe to place in notification text.
  * @param {unknown} value
@@ -62,6 +73,18 @@ export function createMockNotifier({ maxSent } = {}) {
       notifier.leads.push({ business, score, reportUrl, lead });
       while (notifier.leads.length > cap) notifier.leads.shift();
     },
+    /** Heads-up emails about the day's AI calls: the five numbers, recorded in memory only. */
+    allowances: [],
+    async notifyAllowance(counts) {
+      notifier.allowances.push(allowanceCounts(counts));
+      while (notifier.allowances.length > cap) notifier.allowances.shift();
+    },
+    /** "The human check may be set up wrong" emails: the one number, recorded in memory only. */
+    humanChecks: [],
+    async notifyHumanCheck(counts) {
+      notifier.humanChecks.push(humanCheckCounts(counts));
+      while (notifier.humanChecks.length > cap) notifier.humanChecks.shift();
+    },
   };
   return notifier;
 }
@@ -80,6 +103,14 @@ export function createConsoleNotifier({ write = line => process.stdout.write(lin
     async notifyLead({ business, score, reportUrl }) {
       write(JSON.stringify({ event: 'grader-lead', business, score, reportUrl }) + '\n');
     },
+    /** One line with the five numbers. */
+    async notifyAllowance(counts) {
+      write(JSON.stringify({ event: 'grader-allowance', ...allowanceCounts(counts) }) + '\n');
+    },
+    /** One line with the one number. */
+    async notifyHumanCheck(counts) {
+      write(JSON.stringify({ event: 'grader-human-check', ...humanCheckCounts(counts) }) + '\n');
+    },
   };
 }
 
@@ -93,6 +124,12 @@ export function createNoneNotifier() {
       return { notifier: 'none', sent: false };
     },
     async notifyLead() {
+      return { notifier: 'none', sent: false };
+    },
+    async notifyAllowance() {
+      return { notifier: 'none', sent: false };
+    },
+    async notifyHumanCheck() {
       return { notifier: 'none', sent: false };
     },
   };
@@ -189,7 +226,50 @@ export function createResendNotifier({ apiKey, from, adminEmail, fetch: fetchImp
         clearTimeout(timer);
       }
     },
+    /**
+     * "<percent>% of today's AI calls used": emailed to the admin only, with counts and nothing else.
+     * Never throws and never puts the key in its result.
+     */
+    async notifyAllowance(counts) {
+      const c = allowanceCounts(counts);
+      return sendToAdmin({
+        subject: `AI Visibility Check: ${c.percent}% of today's AI calls used`,
+        text: `Used ${c.used} of ${c.limit} calls, ${c.left} left. ${c.checks} ${c.checks === 1 ? 'check' : 'checks'} run today.`,
+      });
+    },
+    /** "The human check may be set up wrong": emailed to the admin only, with counts and nothing else. */
+    async notifyHumanCheck(counts) {
+      const c = humanCheckCounts(counts);
+      return sendToAdmin({
+        subject: 'AI Visibility Check: the human check may be set up wrong',
+        text: [
+          `Today the human check turned away ${c.human} ${c.human === 1 ? 'check' : 'checks'} and passed none.`,
+          'If real owners are being turned away, check the two Turnstile keys in Render, or delete either one to turn the human check off.',
+        ].join('\n'),
+      });
+    },
   };
+
+  /** One plain-text email to the admin address. Never throws; failures give the error name only. */
+  async function sendToAdmin({ subject, text }) {
+    const fail = error => ({ notifier: 'resend', sent: false, error });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetchImpl(RESEND_URL, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from, to: [adminEmail], subject: subject.replace(/\s+/g, ' ').slice(0, 200), text }),
+        signal: controller.signal,
+      });
+      if (!res.ok) return fail(`http_${res.status}`);
+      return { notifier: 'resend', sent: true };
+    } catch (err) {
+      return fail(err?.name === 'AbortError' ? 'TimeoutError' : (err?.name ?? 'Error'));
+    } finally {
+      clearTimeout(timer);
+    }
+  }
 }
 
 /**

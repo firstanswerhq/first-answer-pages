@@ -106,7 +106,7 @@ async function startEnv({ assistantProvider, config = {}, aiBudget, safeFetcher 
     aiBudget: typeof aiBudget === 'function' ? aiBudget(clock) : aiBudget,
     safeFetcher: safeFetcher ?? fixtureFetcher(),
     newGradeId: () => `grade${String(++n).padStart(17, '0')}`,
-    config: { baseUrl: 'http://example.test', graderLeadGate: false, graderSecret: 'test-secret', ...config },
+    config: { baseUrl: 'http://example.test', graderLeadGate: false, graderSecret: 'test-secret', gradeMainAsks: 1, ...config },
   });
   const server = app.listen(0, '127.0.0.1');
   await new Promise((resolve, reject) => {
@@ -214,7 +214,7 @@ for (const [label, exp] of Object.entries(EXPECTED)) {
     assert.ok(html.includes(`<span class="num">${exp.score.score}</span>`), 'score shown');
     assert.ok(html.includes(`${exp.score.failed} of ${exp.score.counted} checks need work`));
     assert.ok(html.includes('Claim my free listing'));
-    assert.ok(html.includes('Nothing goes live until you do.'));
+    assert.ok(html.includes('Nothing goes live until you send it and we approve it.'));
     assert.ok(html.includes('days to weeks'));
     assert.ok(html.includes('Automated check'));
     assert.ok(html.includes('Demo answer (no AI connected)'), 'the mock answer is labeled');
@@ -420,7 +420,13 @@ test('every /grade page is not indexed and sends no referrer', async () => {
   const env = await startEnv();
   const id = idOf(await postGrade(env, NO_SITE));
   await waitDone(env, id);
-  for (const p of ['/grade', '/grade/about', `/grade/${id}`, `/grade/${id}/status.json`, '/grade/nope']) {
+  // Feature D (Requirement 22.2) opens exactly the plain /grade and /grade/about, which have their own test now;
+  // the form shown again with errors and a request with a query string stay closed.
+  const again = await postGrade(env, { ...NO_SITE, city: '' });
+  assert.equal(again.status, 422);
+  assert.equal(again.headers.get('x-robots-tag'), 'noindex, nofollow');
+  assert.ok((await again.text()).includes('<meta name="robots" content="noindex, nofollow">'));
+  for (const p of ['/grade?x=1', `/grade/${id}`, `/grade/${id}/status.json`, '/grade/nope']) {
     const res = await get(env, p);
     assert.equal(res.headers.get('x-robots-tag'), 'noindex, nofollow', p);
     assert.equal(res.headers.get('referrer-policy'), 'no-referrer', p);
@@ -479,7 +485,8 @@ test('a running Grade shows the steps with a refresh tag inside noscript; a stal
 
 test('/grade stays out of sitemap.xml and llms.txt; no Grader page uses the banned phone-book names', async () => {
   const env = await startEnv();
-  assert.equal((await (await get(env, '/sitemap.xml')).text()).includes('/grade'), false);
+  // Feature D (Requirements 22.1, 22.2): the sitemap may list /grade and /grade/about, but never a report address.
+  assert.equal(/\/grade\/[A-Za-z0-9_-]{22}/.test(await (await get(env, '/sitemap.xml')).text()), false);
   assert.equal((await (await get(env, '/llms.txt')).text()).includes('/grade'), false);
   const id = idOf(await postGrade(env, fieldsOf(EXPECTED.roofer.input)));
   await waitDone(env, id);

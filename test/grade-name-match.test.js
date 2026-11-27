@@ -350,3 +350,150 @@ test('looksLikeSameName: same first identifying word, give or take a typo', asyn
   assert.equal(looksLikeSameName('Benjamen Franklin Plumbing', { name: 'Benjamin Franklin Plumbing' }), true);
   assert.equal(looksLikeSameName('Acme Roofing', { name: 'Best Roofers' }), false);
 });
+
+// ---- Review round 4 (V32): group headings, offer lines, and the business itself ----------------
+
+const NOBODY = { name: 'Nobody Roofing' };
+
+test('V32: businesses listed as bullets under group headings (plumbers) are kept; the headings are not names', () => {
+  const answer = [
+    '### 1. Emergency Plumbers',
+    '- Hiller Plumbing',
+    '- Mr. Rooter Plumbing',
+    '- Plumbing Pros of Nashville',
+    '### 2. Budget Picks',
+    '- Doctor Drips Plumbing',
+  ].join('\n');
+  assert.deepEqual(
+    extractCompetitors(answer, NOBODY),
+    ['Hiller Plumbing', 'Mr. Rooter Plumbing', 'Plumbing Pros of Nashville', 'Doctor Drips Plumbing'],
+  );
+});
+
+test('V32: restaurants listed under category headings are kept', () => {
+  const answer = [
+    '### 1. Fine Dining',
+    '- **Bastion** - upscale',
+    "- Hattie B's",
+    '### 2. Hot Chicken',
+    "- **Prince's**",
+    "- Bolton's Spicy Chicken",
+  ].join('\n');
+  assert.deepEqual(
+    extractCompetitors(answer, { name: 'Nobody Diner' }),
+    ['Bastion', "Hattie B's", "Prince's", "Bolton's Spicy Chicken"],
+  );
+});
+
+test('V32: neighborhood groups in bold numbered lines are group headings', () => {
+  const answer = [
+    '**1. Germantown**',
+    '- Acme Plumbing',
+    '- Bob Drains',
+    '**2. East Nashville**',
+    '- Cedar Drains',
+  ].join('\n');
+  assert.deepEqual(extractCompetitors(answer, NOBODY), ['Acme Plumbing', 'Bob Drains', 'Cedar Drains']);
+});
+
+test('V32: the business is still found when it is listed under a group heading', () => {
+  const business = { name: 'Nashville Plumbing', city: 'Nashville', state: 'TN', service: 'plumbers' };
+  const answer = [
+    '### 1. Emergency Plumbers',
+    '- Hiller Plumbing',
+    '- Nashville Plumbing',
+    '- Mr. Rooter Plumbing',
+  ].join('\n');
+  const r = analyzeAnswer(answer, business);
+  assert.equal(r.named, true);
+  assert.equal(r.position, 2);
+  assert.equal(r.total, 3);
+  assert.deepEqual(r.competitors, ['Hiller Plumbing', 'Mr. Rooter Plumbing']);
+});
+
+test('V32: a restaurant called "The Local" listed first is still named', () => {
+  const business = { name: 'The Local', city: 'Nashville', state: 'TN', service: 'restaurants' };
+  const r = analyzeAnswer("1. The Local\n2. Bastion Grill\n3. Hattie B's Hot Chicken", business);
+  assert.equal(r.named, true);
+  assert.equal(r.position, 1);
+});
+
+test('V32: bullets under a heading that names one business are its details, not new names', () => {
+  const answer = [
+    '### 1. Joes Plumbing',
+    '- Same Day Service',
+    '- Free Estimates',
+    '- Licensed and Insured',
+    '### 2. Cedar Drains Co',
+    '- Family Owned',
+  ].join('\n');
+  assert.deepEqual(extractCompetitors(answer, NOBODY), ['Joes Plumbing', 'Cedar Drains Co']);
+});
+
+test('V32: a line that is only an offer is not a name, but a real name with offer words stays', () => {
+  const answer = [
+    '1. Free Estimates',
+    '2. Same Day Service',
+    '3. 24/7 Emergency Service',
+    '4. Acme Plumbing',
+    '5. Family Owned Roofing & Repair',
+  ].join('\n');
+  assert.deepEqual(extractCompetitors(answer, NOBODY), ['Acme Plumbing', 'Family Owned Roofing & Repair']);
+});
+
+// ---- Review round 6 (V34): a business heading with Title Case "Label: value" bullets stays a business ----
+
+test('V34: restaurant headings with "Label: value" bullets are the businesses, not the labels', () => {
+  const answer = [
+    '### 1. The Catbird Seat',
+    '- Known For: Tasting Menu',
+    '- Price Range: $$$$',
+    '- Must Try: Duck',
+    '### 2. Bastion Grill',
+    '- Known For: Tasting Menu',
+    '### 3. Rolf and Daughters',
+    '- Best For: Date Night',
+  ].join('\n');
+  assert.deepEqual(
+    extractCompetitors(answer, { name: 'Nobody Diner' }),
+    ['The Catbird Seat', 'Bastion Grill', 'Rolf and Daughters'],
+  );
+});
+
+test('V34: a bold numbered business with a "Best For:" bullet keeps its place and the next business', () => {
+  const answer = [
+    '**1. Mr. Rooter**',
+    '- Best For: Drain Clogs',
+    '**2. Hiller Plumbing**',
+    '- Known For: Fast Service',
+  ].join('\n');
+  const r = analyzeAnswer(answer, { name: 'Mr. Rooter', city: 'Nashville', state: 'TN', service: 'plumbers' });
+  assert.equal(r.named, true);
+  assert.equal(r.position, 1);
+  assert.equal(r.total, 2);
+  assert.deepEqual(r.competitors, ['Hiller Plumbing']);
+});
+
+test('V34: a heading that is the business itself is never read as a group', () => {
+  const business = { name: 'The Local', city: 'Nashville', state: 'TN', service: 'restaurants' };
+  const answer = [
+    '### 1. The Local',
+    '- Neighborhood Favorite',
+    '### 2. Bastion Grill',
+    '- Known For: Tasting Menu',
+  ].join('\n');
+  const r = analyzeAnswer(answer, business);
+  assert.equal(r.named, true);
+  assert.equal(r.position, 1);
+  assert.deepEqual(r.competitors, ['Bastion Grill']);
+});
+
+test('V34: "Label: value" bullets are not names, and real group headings still keep their businesses', () => {
+  const answer = [
+    '### 1. Emergency Plumbers',
+    '- Known For: Fast Response',
+    '- Hiller Plumbing',
+    '- Mr. Rooter Plumbing',
+  ].join('\n');
+  assert.deepEqual(extractCompetitors(answer, NOBODY), ['Hiller Plumbing', 'Mr. Rooter Plumbing']);
+});

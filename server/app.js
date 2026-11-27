@@ -23,6 +23,8 @@ import { createAssistantProvider, createExtraAssistants, createGeminiLive } from
 import { createNameCheck } from './lib/name-check.js';
 import { createIndexNow, indexNowOffReason } from './lib/indexnow.js';
 import { createSafeFetcher } from './lib/safe-fetch.js';
+import { createTurnstile } from './lib/turnstile.js';
+import { createGradeGuard } from './lib/grade-guard.js';
 import { createGrader } from './lib/grader.js';
 import { createDraftStore } from './lib/drafts.js';
 import { createHomeRouter }     from './routes/home.js';
@@ -37,7 +39,7 @@ import { createAdminRouter }   from './routes/admin.js';
 import { createGradeRouter }   from './routes/grade.js';
 import { createPagesRouter }    from './routes/pages.js';
 import { mountA2A }             from './routes/a2a.js';
-import { layout, markDemo, applySiteName } from './lib/html.js';
+import { layout, markDemo, applySiteName, applyTitleSuffix } from './lib/html.js';
 
 let warnedGraderSecret = false;
 
@@ -53,13 +55,19 @@ const systemClock = Object.freeze({ now: () => Date.now() });
  *   assistantProvider?: object,
  *   clock?: { now(): number },
  *   rateLimiter?: object,
+ *   gradeLimiter?: object,
  *   config?: object,
  *   newId?: () => string,
  *   safeFetcher?: { fetchText: Function },
+ *   turnstile?: { siteKey: string, verify: Function } | null,
+ *   gradeGuard?: object,
  *   newGradeId?: () => string,
  *   a2a?: object,
  * }} [deps]
  */
+import { createPlacesLookup } from './lib/places.js';
+import { createBingLookup } from './lib/azure-maps.js';
+
 export function createApp(deps = {}) {
   const config = { ...configFromEnv(process.env), ...(deps.config ?? {}) };
   const clock = deps.clock ?? systemClock;
@@ -97,8 +105,13 @@ export function createApp(deps = {}) {
     assistantProvider: deps.assistantProvider ?? createAssistantProvider(config),
     clock,
     rateLimiter: deps.rateLimiter ?? createRateLimiter({ clock }),
+    // Only POST /grade uses this one (grade, grade-day, grade-network), so other routes cannot evict its keys.
+    // A test that injects only deps.rateLimiter keeps its old behavior: the grade rules use that one too.
+    gradeLimiter: deps.gradeLimiter ?? deps.rateLimiter ?? createRateLimiter({ clock }),
     config,
-    // The day's count is kept in DATA_DIR/ai-budget.json (written only when a real provider call is counted).
+    // The day's counts are kept in DATA_DIR/ai-budget.json. It is written when a real provider call is
+    // counted, when a Grade starts, and when a check is turned away (also in demo mode), through at most one
+    // write running and one waiting.
     aiBudget: deps.aiBudget ?? createAiBudget({
       clock,
       limit: config.maxAiCallsPerDay ?? 200,
@@ -118,16 +131,43 @@ export function createApp(deps = {}) {
   }
   // Paid Verified stamp: on only when every provider key is set (tests pass their own).
   ctx.trust = deps.trust ?? createTrustProviders(config, { clock });
+  // One key without the other leaves the check off; say which one is missing (never a value).
+  if (deps.turnstile === undefined) {
+    const hasSite = Boolean(config.turnstileSiteKey);
+    const hasSecret = Boolean(config.turnstileSecretKey);
+    if (hasSite !== hasSecret) {
+      process.stderr.write(`[grader] The human check is off: ${hasSite ? 'TURNSTILE_SECRET_KEY' : 'TURNSTILE_SITE_KEY'} is not set.\n`);
+    }
+  }
+  // The human check on the check form: null (off) unless both Turnstile keys are set. Tests pass a fake.
+  ctx.turnstile = deps.turnstile !== undefined
+    ? deps.turnstile
+    : createTurnstile({ siteKey: config.turnstileSiteKey, secretKey: config.turnstileSecretKey });
   ctx.safeFetcher = deps.safeFetcher ?? createSafeFetcher({ userAgent: ctx.graderUserAgent });
   // Grade ids are their own: 22 characters of URL-safe base64 from 16 random bytes.
   ctx.newGradeId = deps.newGradeId ?? (() => randomBytes(16).toString('base64url'));
   // "Google's live answer" panel: null when off.
   ctx.googleLive = deps.googleLive !== undefined ? deps.googleLive : createGeminiLive(config);
+  // The day's bot-protection counts (kept in the AI budget) and the heads-up emails to the owner.
+  ctx.gradeGuard = deps.gradeGuard ?? createGradeGuard({
+    aiBudget: ctx.aiBudget,
+    notifier: ctx.notifier,
+    log: line => process.stderr.write(`[grader] ${line}\n`),
+  });
+  // The health map's one Google Places lookup and one Azure Maps (Bing) search per check. Off without their keys
+  // and in test runs; a test passes a fake client, or null.
+  const placesLookup = deps.placesLookup !== undefined ? deps.placesLookup : (config.testRun ? null : createPlacesLookup(config.places ?? {}));
+  const bingLookup = deps.bingLookup !== undefined ? deps.bingLookup : (config.testRun ? null : createBingLookup(config.azureMaps ?? {}));
+  // Only whether each lookup is on, for the admin page's daily count line (never the client or its key).
+  ctx.lookupsOn = { places: Boolean(placesLookup), bing: Boolean(bingLookup) };
   ctx.grader = createGrader({
+    guard: ctx.gradeGuard,
     store,
     assistantProvider: ctx.assistantProvider,
     extraAssistants: deps.extraAssistants ?? createExtraAssistants(config),
     nameChecker: deps.nameChecker !== undefined ? deps.nameChecker : createNameCheck(config),
+    placesLookup,
+    bingLookup,
     aiBudget: ctx.aiBudget,
     safeFetcher: ctx.safeFetcher,
     draftStore: createDraftStore({ store, clock, newId: ctx.newId }),
@@ -135,6 +175,8 @@ export function createApp(deps = {}) {
     clock,
     newId: ctx.newGradeId,
     config,
+    // Tests only: a fake pause before the retry and a short limit for second opinions.
+    ...(deps.graderTiming ?? {}),
   });
 
   // IndexNow (Bing ping): real sites only; tests send only with their own fetch.
@@ -210,6 +252,22 @@ export function createApp(deps = {}) {
       next();
     });
   }
+
+  // Tab titles in one style, "<page> | <site name>" (V143). Installed after the two wrappers above, so it runs
+  // first and SITE_NAME is swapped in afterwards. Only HTML string bodies are touched.
+  app.use((req, res, next) => {
+    const send = res.send.bind(res);
+    res.send = body => {
+      if (typeof body === 'string') {
+        const type = String(res.get('Content-Type') ?? '');
+        if (type.includes('html') || (!type && /^\s*<!doctype html/i.test(body))) {
+          body = applyTitleSuffix(body);
+        }
+      }
+      return send(body);
+    };
+    next();
+  });
 
   // Liveness probe: no data access, no rate limit.
   app.get('/healthz', (req, res) => {

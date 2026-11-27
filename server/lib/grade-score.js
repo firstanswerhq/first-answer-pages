@@ -1,47 +1,46 @@
-/**
- * grade-score.js — turns Check_Results into one Score.
- *
- * Only `pass` and `fail` results count. `ai-named` may carry partial points in
- * `earned`; every other pass earns its full points. Fewer than 40 available
- * points means "not enough to score yet" (score: null).
- */
+// Turns Check_Results into a Score. Pure function.
 
 import { CHECKS } from './grade-checks.js';
 
-export const MIN_AVAILABLE_POINTS = 40;
-
-const byId = new Map(CHECKS.map(c => [c.id, c]));
+const MIN_AVAILABLE = 40;
 
 /**
- * @param {{ id: string, result: string, earned?: number }[]} results
- * @returns {{ score: number|null, earned: number, available: number, failed: number,
- *   counted: number, byGroup: Record<string, { earned: number, available: number }> }}
+ * @param {{id:string,result:string,earned?:number}[]} results
+ * @returns {{score:number|null, earned:number, available:number, failed:number,
+ *   counted:number, byGroup:Record<string,{earned:number,available:number}>}}
  */
 export function scoreGrade(results) {
+  const byId = new Map(CHECKS.map(c => [c.id, c]));
   let earned = 0;
   let available = 0;
   let failed = 0;
   let counted = 0;
   const byGroup = {};
+
   for (const r of Array.isArray(results) ? results : []) {
     const check = byId.get(r?.id);
-    if (!check || (r.result !== 'pass' && r.result !== 'fail')) continue;
-    counted += 1;
-    available += check.points;
-    let got = 0;
+    if (!check) continue;
+    if (r.result !== 'pass' && r.result !== 'fail') continue;
+
+    let pts = 0;
     if (r.result === 'pass') {
-      got = check.points;
-      if (check.id === 'ai-named' && Number.isFinite(r.earned)) {
-        got = Math.min(check.points, Math.max(0, Math.round(r.earned)));
+      pts = check.points;
+      if (check.id === 'ai-named') {
+        const e = Number(r.earned);
+        pts = Number.isFinite(e) ? Math.max(0, Math.min(check.points, e)) : 0;
       }
     } else {
       failed += 1;
     }
-    earned += got;
-    const g = (byGroup[check.group] ??= { earned: 0, available: 0 });
-    g.earned += got;
+
+    counted += 1;
+    available += check.points;
+    earned += pts;
+    const g = byGroup[check.group] || (byGroup[check.group] = { earned: 0, available: 0 });
+    g.earned += pts;
     g.available += check.points;
   }
-  const score = available >= MIN_AVAILABLE_POINTS ? Math.round((100 * earned) / available) : null;
+
+  const score = available >= MIN_AVAILABLE ? Math.round((100 * earned) / available) : null;
   return { score, earned, available, failed, counted, byGroup };
 }

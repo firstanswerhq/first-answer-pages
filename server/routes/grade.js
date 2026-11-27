@@ -1,183 +1,292 @@
 /**
  * grade.js — the AI Visibility Grader's public routes.
  *
- *   GET  /grade                  form
- *   POST /grade                  validate, start, 303 to the report
- *   GET  /grade/about            what the Grader reads and why
- *   GET  /grade/:id              scan screen, report, or "did not finish" page
- *   GET  /grade/:id/status.json  { status, steps, done } for the optional script
- *   POST /grade/:id/unlock       the Lead_Form: opens the full report for this browser
- *   POST /grade/:id/claim        make a Draft from what the scan found
- *   POST /grade/:id/recheck      read the website again (no AI question)
- *   POST /grade/:id/google-live  Google's live answer, only for the browser that ran the check; never saved
+ *   GET  /grade                    the form
+ *   POST /grade                    check the form, start a Grade, 303 to the report
+ *   GET  /grade/about              what the Grader reads and why
+ *   GET  /grade/:id                scan screen, report, or "did not finish"
+ *   GET  /grade/:id/status.json    { status, steps, done } for the optional script
+ *   POST /grade/:id/unlock         lead form: store a Lead, open the full report
+ *   POST /grade/:id/claim          create (or return) the free listing draft
+ *   POST /grade/:id/recheck        read the website again, keep the AI answers
+ *   POST /grade/:id/google-live    Google's live answer, shown once to the browser that ran the check
  *
- * Every /grade response is not indexed and sends no referrer. With
- * GRADER_ENABLED=off every /grade path is a 404. Grade_Ids are 22-character
- * base64url strings; anything else is a 404 without a store read.
+ * Every /grade response sends no referrer and is never cached. Every /grade page is noindex except the two open
+ * pages, /grade (the plain form) and /grade/about. With GRADER_ENABLED=off every /grade path falls through to the
+ * site's 404. Logs hold only the Grade_Id.
  */
 
 import express, { Router } from 'express';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import { RULES } from '../lib/rate-limiter.js';
-import { freePromptFor } from '../lib/grader.js';
+import { tokenMatches, isGradeAdmin, readCookie } from '../lib/admin-auth.js';
+import { networkKey } from '../lib/network-key.js';
+import { canonicalUrl } from '../lib/base-url.js';
 import {
-  normalizeState, normalizeEmail, normalizePhone, STATE_ERROR, US_STATE_CODES,
-} from '../lib/listing-fields.js';
-import {
-  makeStamp, checkStamp, unlockToken, hasToken, claimCookieValue, readClaim, requesterToken,
+  signFormStamp, checkFormStamp, setCookieHeader, claimCookieHeader, readClaimedDraftId, hasValidCookie,
 } from '../lib/grade-stamp.js';
+import { normalizeGradeInput, freeQuestion, recheckIsRunning } from '../lib/grader.js';
+import { normalizeEmail, normalizePhone } from '../lib/listing-fields.js';
 import {
-  gradeFormPage, scanPage, reportPage, failedPage, aboutPage, gradeMessagePage, googleLivePage,
+  gradeFormPage, scanPage, reportPage, failedPage, aboutPage, googleLivePage, messagePage, notFoundPage, repeatCheckPage,
+  printPage, reportCsvFor,
 } from '../lib/grade-html.js';
 
 const ID_PATTERN = /^[A-Za-z0-9_-]{22}$/;
-// Same reserve the second opinions keep: the day's last Grader AI calls are for new checks.
-const GOOGLE_LIVE_RESERVE = 12;
-// Control characters, plus the invisible marks that flip text direction.
-const CONTROL = /[\p{Cc}\u2028\u2029\u202A-\u202E\u2066-\u2069\u200E\u200F]/gu;
+const SECOND_OPINION_RESERVE = 12; // the day's last AI calls stay for new checks
+const LIVE_TIMEOUT_MS = 60 * 1000;
+const LIVE_ANSWERS_MAX = 3;
+// The only two /grade pages open to search engines (Requirement 22.2).
+const OPEN_PATHS = new Set(['/grade', '/grade/about']);
+const LIVE_CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; frame-ancestors 'none'";
 
-const tidy = value => (typeof value === 'string' ? value.replace(CONTROL, ' ').replace(/\s+/g, ' ').trim() : '');
-const len = text => Array.from(text).length;
+const HUMAN_CHECK_FAILED = "Please try again: we couldn't confirm you're a person. If no box appears, turn off ad blockers or try another browser.";
 
-/**
- * A typed website as `https://<host>/` (or http), or an error.
- * @returns {{ website: string|null } | { error: string }}
- */
-export function normalizeWebsite(text) {
-  const typed = tidy(text);
-  if (typed === '') return { website: null };
-  if (len(typed) > 200) return { error: 'That website address is too long.' };
-  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(typed) ? typed : `https://${typed}`;
-  let url;
-  try {
-    url = new URL(withScheme);
-  } catch {
-    return { error: 'Type your website like example.com, or leave it blank.' };
-  }
-  if ((url.protocol !== 'http:' && url.protocol !== 'https:') || url.hostname === '' || url.username || url.password) {
-    return { error: 'Type your website like example.com, or leave it blank.' };
-  }
-  return { website: `${url.protocol}//${url.host}/` };
-}
+const cleanLine = v => String(v ?? '').replace(/\p{Cc}/gu, ' ').replace(/\s+/g, ' ').trim();
 
-/** Validate the form body. Returns { values, errors, input }. */
-export function validateGradeForm(body) {
-  const b = body !== null && typeof body === 'object' ? body : {};
-  const values = {
-    name: tidy(b.name), city: tidy(b.city), state: tidy(b.state), service: tidy(b.service), website: tidy(b.website),
-  };
-  const errors = {};
-  if (values.name === '' || len(values.name) > 120) errors.name = values.name === '' ? 'Type your business name.' : 'That business name is too long.';
-  if (values.city === '' || len(values.city) > 80) errors.city = values.city === '' ? 'Type your city.' : 'That city name is too long.';
-  const state = normalizeState(values.state);
-  // normalizeState hands back anything it does not know as typed, so check the code itself.
-  if (!US_STATE_CODES.has(state)) errors.state = STATE_ERROR;
-  if (values.service === '' || len(values.service) > 60) errors.service = values.service === '' ? 'Say what you do, like roofers.' : 'Please say what you do in fewer words.';
-  const site = normalizeWebsite(values.website);
-  if (site.error) errors.website = site.error;
-  const input = Object.keys(errors).length === 0
-    ? { name: values.name, city: values.city, state, service: values.service, website: site.website }
-    : undefined;
-  return { values, errors, input };
-}
-
-/**
- * @param {object} ctx resolved dependencies from createApp (needs ctx.grader)
- * @returns {import('express').Router}
- */
+/** @param {object} ctx resolved dependencies from createApp */
 export function createGradeRouter(ctx) {
   const router = Router();
-  const { grader, config } = ctx;
-  const secret = config.graderSecret;
-  const formParser = express.urlencoded({ extended: false, limit: '8kb', parameterLimit: 20 });
-
-  const send = (res, status, html) => res.status(status).type('html').send(html);
-  const notFound = res => send(res, 404, gradeMessagePage('Page not found', "We can't find that report. The link may be old: reports are deleted after 90 days.", { href: '/grade', text: 'Grade a business' }));
-  const newStamp = () => makeStamp(secret, ctx.clock.now());
-  const isUnlocked = (req, id) => hasToken(req, `g_${id}`, unlockToken(secret, id));
-  const isRequester = (req, id) => hasToken(req, `gr_${id}`, requesterToken(secret, id));
-  const googleLiveFor = (req, id) => (ctx.googleLive ? (isRequester(req, id) ? 'requester' : 'other') : null);
-  const tooMany = (res, seconds) => {
-    res.set('Retry-After', String(seconds));
-    return send(res, 429, gradeMessagePage('Please wait', `Please try again in ${seconds} seconds.`));
+  const form = express.urlencoded({ extended: false, limit: '8kb' });
+  const secret = () => ctx.config.graderSecret;
+  const production = () => ctx.config.production === true;
+  const leadGate = () => ctx.config.graderLeadGate !== false;
+  const now = () => ctx.clock.now();
+  const html = (res, status, body) => res.status(status).type('html').send(body);
+  const tooMany = (res, retryAfterSeconds) => {
+    res.set('Retry-After', String(retryAfterSeconds));
+    return html(res, 429, messagePage('Please slow down', 'We have had a lot of checks from your internet connection. Please try again a little later.'));
   };
-  /** A cookie only this browser sends back, and only for this Grade's pages. */
-  const setCookie = (res, name, value, id) => {
-    const secure = config.production === true || res.req.secure === true ? '; Secure' : '';
-    res.append('Set-Cookie', `${name}=${value}; HttpOnly${secure}; SameSite=Lax; Path=/grade/${id}; Max-Age=${90 * 24 * 60 * 60}`);
+  // Many unrelated people can share one mobile network, so this refusal does not say "your address".
+  const tooManyNetwork = (res, retryAfterSeconds) => {
+    res.set('Retry-After', String(retryAfterSeconds));
+    return html(res, 429, messagePage('Please slow down', 'A lot of checks have come from your internet provider today. Please try again tomorrow, or from another connection.'));
   };
-  const renderReport = (grade, unlocked, extra = {}) => reportPage(grade, {
-    unlocked,
-    leadGate: config.graderLeadGate !== false,
-    contactEmail: config.contactEmail,
-    now: Number(ctx.clock.now()),
-    rechecking: grader.isRechecking(grade),
-    ...extra,
-  });
+  const hasCookie = (kind, id, req) => hasValidCookie(secret(), kind, id, req.headers.cookie);
 
-  // Every /grade response: not indexed, no referrer, never cached.
+  // Fair use (high-tech-look 11.2): the checks this browser ran, in one signed cookie sent to every /grade path, so the
+  // "checked recently" page can link to the report only for the person who ran it. The per-report cookie goes only to
+  // /grade/<id>, so it can't be read on POST /grade.
+  const MINE_COOKIE = 'gr_mine';
+  const MINE_MAX = 20;
+  const sign = text => createHmac('sha256', String(secret())).update(`mine:${text}`).digest('base64url');
+  const mineIds = req => {
+    const value = readCookie(req.headers.cookie, MINE_COOKIE);
+    if (typeof value !== 'string') return [];
+    const [list, mac] = value.split('~');
+    if (!list || !mac) return [];
+    const want = Buffer.from(sign(list));
+    const got = Buffer.from(mac);
+    if (want.length !== got.length || !timingSafeEqual(want, got)) return [];
+    return list.split('.').filter(id => ID_PATTERN.test(id));
+  };
+  const mineCookie = ids => {
+    const list = ids.filter(id => ID_PATTERN.test(id)).slice(0, MINE_MAX).join('.');
+    return `${MINE_COOKIE}=${list}~${sign(list)}; Path=/grade; HttpOnly; SameSite=Lax; Max-Age=${90 * 24 * 60 * 60}${production() ? '; Secure' : ''}`;
+  };
+  // The owner is never limited (11.3): the admin token, or the short /grade cookie a signed-in admin's browser gets.
+  const isAdmin = req => Boolean(ctx.config.adminToken)
+    && (tokenMatches(req.headers.authorization, ctx.config.adminToken) || isGradeAdmin(req, ctx.config.adminToken, now()));
+
+  // Google's live answer: at most 3 per Grade in total (counted on the stored Grade as `liveAnswers`).
+  const liveAnswersUsed = g => (Number.isInteger(g?.liveAnswers) && g.liveAnswers > 0 ? g.liveAnswers : 0);
+  // The cap lasts for the life of the report, so "try again tomorrow" would not help: no Retry-After.
+  const liveCapReached = (res, id) => html(res, 429, messagePage(
+    'That is all for this report',
+    "You've seen Google's live answer 3 times for this report. Run a new check to see it again.",
+    { href: `/grade/${id}`, text: 'Back to the report' },
+  ));
+
+  /**
+   * True only for a GET of exactly `/grade` or `/grade/about` with no query string at all, as it was sent
+   * (`originalUrl`): a bare "?", a trailing "/", any other path and any other method (HEAD included) keep
+   * `noindex, nofollow`.
+   */
+  const isOpenPage = req => req.method === 'GET' && OPEN_PATHS.has(req.originalUrl);
+
+  /** The canonical address of an open page, from the configured base address only (never the request's Host). */
+  const canonicalFor = p => canonicalUrl(ctx.config, p);
+
+  // Off switch, then headers for every /grade response.
   router.use('/grade', (req, res, next) => {
-    res.set({
-      'X-Robots-Tag': 'noindex, nofollow',
-      'Referrer-Policy': 'no-referrer',
-      'Cache-Control': 'no-store',
-    });
-    if (config.graderEnabled === false) return notFound(res);
+    if (ctx.config.graderEnabled === false) {
+      // Off: fall through to the site's 404, which must still keep /grade out of search and out of caches.
+      res.set({ 'X-Robots-Tag': 'noindex, nofollow', 'Referrer-Policy': 'no-referrer', 'Cache-Control': 'no-store' });
+      return next('router');
+    }
+    // Every /grade response sends no referrer and is never cached. Only the two open pages (see isOpenPage) are
+    // left without `noindex, nofollow`.
+    res.set({ 'Referrer-Policy': 'no-referrer', 'Cache-Control': 'no-store' });
+    if (!isOpenPage(req)) res.set('X-Robots-Tag', 'noindex, nofollow');
     return next();
   });
 
-  router.get('/grade', (req, res) => {
-    send(res, 200, gradeFormPage({ stamp: newStamp(), categories: ctx.store.getCategories() }));
+  // ---- the form ---------------------------------------------------------------------------
+  const formPage = (res, status, { values = {}, errors = {}, indexable = false, prefilled = false } = {}) => html(res, status, gradeFormPage({
+    values, errors, prefilled, stamp: signFormStamp(secret(), now()), categories: ctx.store.getCategories(),
+    // Empty (no widget) unless both Turnstile keys are set.
+    turnstileSiteKey: ctx.turnstile?.siteKey ?? '',
+    // Only the plain first render, and only when the headers above left out noindex.
+    indexable, canonical: indexable ? canonicalFor('/grade') : '',
+  }));
+
+  /** A failure on one of the two open pages must not leave the error reply without noindex (V97). */
+  const closeOnError = (res, next, err) => {
+    if (!res.headersSent) res.set('X-Robots-Tag', 'noindex, nofollow');
+    return next(err);
+  };
+
+  router.get('/grade', async (req, res, next) => {
+    try {
+      // "Run a new check" on a partial score (V157): `/grade?from=<Grade_Id>` shows the form with that business's
+      // details filled in, the same fields the form takes. Nothing is asked or spent by opening it. It has a query
+      // string, so it is never an open page (noindex), and the details are never put in the address itself.
+      const from = typeof req.query.from === 'string' ? req.query.from : '';
+      let values = {};
+      if (ID_PATTERN.test(from)) {
+        const earlier = await ctx.grader.get(from);
+        const i = earlier?.input;
+        // Only a finished check fills the form (done, or failed): a Grade still running gives the plain form (V168).
+        if (i && typeof i === 'object' && (earlier.status === 'done' || earlier.status === 'failed')) {
+          values = {
+            name: i.name, city: i.city, state: i.state, service: i.service, website: i.website ?? '',
+            noStorefront: i.noStorefront === true,
+          };
+        }
+      }
+      // A form filled in from an earlier check says so (V214).
+      return formPage(res, 200, { values, indexable: isOpenPage(req), prefilled: Object.keys(values).length > 0 });
+    } catch (err) {
+      return closeOnError(res, next, err);
+    }
   });
 
-  router.post('/grade', formParser, async (req, res, next) => {
+  router.post('/grade', form, async (req, res, next) => {
     try {
       const body = req.body ?? {};
-      const again = (status, values, errors) => send(res, status, gradeFormPage({
-        values, errors, stamp: newStamp(), categories: ctx.store.getCategories(),
-      }));
-      const { values, errors, input } = validateGradeForm(body);
-
-      // Honeypot and form timer: start nothing.
-      if (typeof body.nickname === 'string' && body.nickname !== '') {
-        return again(422, values, { form: 'Something went wrong. Please try again.' });
+      const checked = normalizeGradeInput(body);
+      const honeypot = typeof body.nickname === 'string' && body.nickname.trim() !== '';
+      if (honeypot || !checkFormStamp(secret(), body.t, now()).ok) {
+        return formPage(res, 422, {
+          values: checked.values, errors: { form: 'That did not go through. Please check your details and send the form again.' },
+        });
       }
-      if (!checkStamp(secret, body.t, ctx.clock.now())) {
-        return again(422, values, { form: 'That was too quick, or the page is old. Please send it again.' });
-      }
-      if (!input) return again(422, values, errors);
+      if (!checked.ok) return formPage(res, 422, { values: checked.values, errors: checked.errors });
 
-      const limited = ctx.rateLimiter.consumeAll([
+      // The human check: after the form checks, before any limit count, AI call or website fetch.
+      if (ctx.turnstile) {
+        let verdict;
+        try {
+          verdict = await ctx.turnstile.verify(body['cf-turnstile-response'], req.ip);
+        } catch {
+          verdict = 'unreachable';
+        }
+        if (verdict === 'failed') {
+          ctx.gradeGuard?.turnedAway('human');
+          return formPage(res, 422, { values: checked.values, errors: { humanCheck: HUMAN_CHECK_FAILED } });
+        }
+        // Only a real "ok" counts as a pass; a check let through below does not.
+        if (verdict === 'ok') ctx.gradeGuard?.passed();
+        // A problem on Cloudflare's side or with our key must not turn real owners away; the limits still apply.
+        if (verdict === 'unreachable' || verdict === 'misconfigured') {
+          process.stderr.write(`[grader] turnstile=${verdict}\n`);
+          if (verdict === 'misconfigured') ctx.gradeGuard?.misconfigured();
+        }
+      }
+
+      const admin = isAdmin(req);
+
+      // Per address (5 an hour, 6 a day) and per network (20 a day by default). One refused rule counts none of them.
+      const addressRules = [
         { key: `grade:${req.ip}`, ...RULES.grade },
         { key: `grade-day:${req.ip}`, ...RULES['grade-day'] },
-      ]);
+      ];
+      const networkRule = {
+        key: `grade-network:${networkKey(req.ip)}`,
+        ...RULES['grade-network'],
+        limit: ctx.config.gradeNetworkPerDay ?? RULES['grade-network'].limit,
+      };
+      // These three rules use their own limiter, so busy routes such as /mcp cannot push their keys out.
+      // Looking first (peek records nothing) tells whether the network is full.
+      const networkFull = !ctx.gradeLimiter.peek(networkRule.key, networkRule).allowed;
+      const limited = ctx.gradeLimiter.consumeAll([...addressRules, networkRule]);
       if (!limited.allowed) {
-        res.set('Retry-After', String(limited.retryAfterSeconds));
-        return send(res, 429, gradeMessagePage(
-          'Please wait',
-          `You have checked a few businesses already. Please try again in ${limited.retryAfterSeconds} seconds.`,
-        ));
+        ctx.gradeGuard?.turnedAway(networkFull ? 'network' : 'limit');
+        return networkFull
+          ? tooManyNetwork(res, limited.retryAfterSeconds)
+          : tooMany(res, limited.retryAfterSeconds);
       }
 
-      const id = await grader.start(input);
-      // Marks this browser as the one that ran the check (Google's live answer is shown only here).
-      setCookie(res, `gr_${id}`, requesterToken(secret, id), id);
-      return res.redirect(303, `/grade/${encodeURIComponent(id)}`);
+      // Fair use (high-tech-look Requirement 11): one check with AI per business in GRADE_AI_REPEAT_DAYS days. Asked
+      // after the human check and the per-address and per-network limits (batch 3 X15), so nobody can ask "was this
+      // business checked" without limits. "Check again" (website only) is a different route.
+      if (!admin) {
+        const repeat = await ctx.grader.repeatCheck?.(checked.input);
+        if (repeat) {
+          const mine = mineIds(req).includes(repeat.gradeId);
+          return html(res, 200, repeatCheckPage({ ...repeat, showLink: mine }));
+        }
+      }
+
+      // X6: a check the admin ran is marked, so it never limits the business's real owner.
+      const id = await ctx.grader.start(checked.input, { byAdmin: admin });
+      ctx.gradeGuard?.started();
+      // The browser that ran the check is the only one that may ask for Google's live answer.
+      res.append('Set-Cookie', setCookieHeader(secret(), 'ran', id, { production: production() }));
+      res.append('Set-Cookie', mineCookie([id, ...mineIds(req).filter(x => x !== id)]));
+      return res.redirect(303, `/grade/${id}`);
     } catch (err) {
       return next(err);
     }
   });
 
-  // Registered before /grade/:id so "about" is never read as an id.
-  router.get('/grade/about', (req, res) => {
-    send(res, 200, aboutPage({ contactEmail: config.contactEmail, userAgent: ctx.graderUserAgent }));
+  router.get('/grade/about', (req, res, next) => {
+    try {
+      const indexable = isOpenPage(req);
+      return html(res, 200, aboutPage({
+        contactEmail: ctx.config.contactEmail ?? '', userAgent: ctx.graderUserAgent ?? '',
+        indexable, canonical: indexable ? canonicalFor('/grade/about') : '',
+      }));
+    } catch (err) {
+      return closeOnError(res, next, err);
+    }
+  });
+
+  // ---- one Grade ---------------------------------------------------------------------------
+  const notFound = res => html(res, 404, notFoundPage());
+
+  /** The stored Grade, or undefined (a malformed id never reaches the store). */
+  const load = async id => (ID_PATTERN.test(id) ? ctx.grader.get(id) : undefined);
+
+  const reportOptions = (req, grade, extra = {}) => ({
+    unlocked: hasCookie('unlock', grade.id, req),
+    leadGate: leadGate(),
+    contactEmail: ctx.config.contactEmail ?? '',
+    opened: req.query.opened === '1',
+    // The button goes away once the report's 3 live answers are used.
+    googleLive: Boolean(ctx.googleLive) && liveAnswersUsed(grade) < LIVE_ANSWERS_MAX,
+    requester: hasCookie('ran', grade.id, req),
+    rechecking: recheckIsRunning(grade, now()),
+    // Second opinions still answering: the report says so and refreshes until they arrive.
+    secondPending: ctx.grader.secondPending(grade.id),
+    now: now(),
+    ...extra,
   });
 
   router.get('/grade/:id/status.json', async (req, res, next) => {
     try {
-      if (!ID_PATTERN.test(req.params.id)) return res.status(404).json({ error: 'Not found' });
-      const status = await grader.statusOf(req.params.id);
-      if (!status) return res.status(404).json({ error: 'Not found' });
-      return res.json(status);
+      const { id } = req.params;
+      if (!ID_PATTERN.test(id)) return res.status(404).json({ error: 'Not found' });
+      const grade = ctx.grader.peek(id) ?? await ctx.grader.get(id);
+      if (!grade) return res.status(404).json({ error: 'Not found' });
+      const status = ctx.grader.isStale(grade, now()) ? 'failed' : grade.status;
+      return res.json({
+        status,
+        steps: Array.isArray(grade.steps) ? grade.steps : [],
+        done: status !== 'running',
+        // Only present while the check waits in line behind GRADE_MAX_RUNNING others.
+        ...(grade.queued === true && status === 'running' ? { queued: true } : {}),
+      });
     } catch (err) {
       return next(err);
     }
@@ -185,125 +294,127 @@ export function createGradeRouter(ctx) {
 
   router.get('/grade/:id', async (req, res, next) => {
     try {
-      if (!ID_PATTERN.test(req.params.id)) return notFound(res);
-      const grade = await grader.get(req.params.id);
+      const grade = await load(req.params.id);
       if (!grade) return notFound(res);
-      if (grade.status === 'running') return send(res, 200, scanPage(grade));
-      if (grade.status === 'failed') return send(res, 200, failedPage(grade, { stamp: newStamp() }));
-      const unlocked = isUnlocked(req, grade.id);
-      // With the gate off (or once unlocked) the extra AI questions start on the first view.
-      if ((unlocked || config.graderLeadGate === false) && !grade.extraAiStartedAt) grader.startExtraQuestions(grade.id);
-      return send(res, 200, renderReport(grade, unlocked, { justOpened: req.query.opened === '1', googleLive: googleLiveFor(req, grade.id) }));
+      if (grade.status === 'failed' || ctx.grader.isStale(grade, now())) {
+        return html(res, 200, failedPage(grade, {
+          stamp: signFormStamp(secret(), now()),
+          turnstileSiteKey: ctx.turnstile?.siteKey ?? '',
+        }));
+      }
+      // The in-memory copy knows whether this check is still waiting in line.
+      if (grade.status === 'running') return html(res, 200, scanPage(ctx.grader.peek(grade.id) ?? grade));
+
+      const opts = reportOptions(req, grade);
+      const full = !opts.leadGate || opts.unlocked;
+      // With the gate off (or an unlocked visitor whose questions never started), the first view starts the extra AI questions.
+      // Not after the daily limit: the extra questions are never asked then (V162), so there is nothing to start (V169).
+      if (full && !grade.extraAiStartedAt && grade.aiMain?.state !== 'limit') {
+        ctx.grader.startExtraQuestions(grade.id).catch(() => {
+          process.stderr.write(`[grader] extra-ai-failed id=${grade.id}\n`);
+        });
+      }
+      return html(res, 200, reportPage(grade, opts));
     } catch (err) {
       return next(err);
     }
   });
 
-  // ---- lead form and unlock ------------------------------------------------------------
-
-  router.post('/grade/:id/unlock', formParser, async (req, res, next) => {
+  // ---- unlock -----------------------------------------------------------------------------------
+  router.post('/grade/:id/unlock', form, async (req, res, next) => {
     try {
-      const id = req.params.id;
-      if (!ID_PATTERN.test(id)) return notFound(res);
-      const grade = await grader.get(id);
-      if (!grade) return notFound(res);
-      if (grade.status !== 'done' || isUnlocked(req, id)) return res.redirect(303, `/grade/${id}`);
+      const grade = await load(req.params.id);
+      if (!grade || grade.status !== 'done') return notFound(res);
+      const back = `/grade/${grade.id}?opened=1#full-report`;
+      if (hasCookie('unlock', grade.id, req)) return res.redirect(303, back);
 
       const body = req.body ?? {};
-      const values = { name: tidy(body.name), email: tidy(body.email), phone: tidy(body.phone) };
-      const lead = {
-        name: values.name,
-        email: normalizeEmail(values.email),
-        phone: normalizePhone(values.phone),
-        okToContact: body.okToContact === '1',
-      };
+      const name = cleanLine(body.name);
+      const email = normalizeEmail(body.email);
+      const phone = normalizePhone(body.phone);
+      const okToContact = typeof body.okToContact === 'string' && body.okToContact !== '';
       const errors = {};
-      if (lead.name === '' || len(lead.name) > 120) errors.name = 'Type your name.';
-      if (lead.email === '') errors.email = 'Type a real email address, like you@example.com.';
-      if (lead.phone === '') errors.phone = 'Type a 10-digit phone number, like (615) 555-0100.';
+      if (name === '' || Array.from(name).length > 100) errors.name = 'Type your name.';
+      if (email === '') errors.email = 'Type a real email address, like name@example.com.';
+      if (phone === '') errors.phone = 'Type a 10-digit phone number, like (615) 555-0100.';
       if (Object.keys(errors).length > 0) {
-        return send(res, 422, renderReport(grade, false, { leadValues: values, leadErrors: errors, googleLive: googleLiveFor(req, grade.id) }));
+        const values = { name, email: cleanLine(body.email), phone: cleanLine(body.phone), okToContact };
+        return html(res, 422, reportPage(grade, reportOptions(req, grade, {
+          unlocked: false, leadValues: values, leadErrors: errors,
+        })));
       }
 
+      // Only a form that would be accepted counts toward the limit; typos do not.
       const limited = ctx.rateLimiter.consume(`grade-unlock:${req.ip}`, RULES['grade-unlock']);
       if (!limited.allowed) return tooMany(res, limited.retryAfterSeconds);
 
-      const result = await grader.unlock(id, lead);
-      if (result.status !== 200) return res.redirect(303, `/grade/${id}`);
-      setCookie(res, `g_${id}`, unlockToken(secret, id), id);
-      return res.redirect(303, `/grade/${id}?opened=1#full-report`);
+      const stored = await ctx.grader.unlock(grade.id, { name, email, phone, okToContact });
+      if (!stored) return notFound(res);
+      res.append('Set-Cookie', setCookieHeader(secret(), 'unlock', grade.id, { production: production() }));
+      return res.redirect(303, back);
     } catch (err) {
       return next(err);
     }
   });
 
-  // ---- claim the free page ----------------------------------------------------------------
-
+  // ---- claim the free page ---------------------------------------------------------------------------
   router.post('/grade/:id/claim', async (req, res, next) => {
     try {
-      const id = req.params.id;
+      const { id } = req.params;
       if (!ID_PATTERN.test(id)) return notFound(res);
-      const grade = await grader.get(id);
-      if (!grade) return notFound(res);
-      if (grade.status !== 'done') return res.redirect(303, `/grade/${id}`);
-
-      // The same browser goes back to its own Draft; nobody is ever sent to another visitor's Draft.
-      const mine = readClaim(req, secret, id);
-      if (mine && await grader.draftExists(mine)) {
-        return res.redirect(303, `/rise/drafts/${encodeURIComponent(mine)}`);
-      }
-
       const limited = ctx.rateLimiter.consume(`rise:${req.ip}`, RULES.rise);
       if (!limited.allowed) return tooMany(res, limited.retryAfterSeconds);
 
-      const created = await grader.claim(id);
-      if (created.status !== 201) return notFound(res);
-      setCookie(res, `gc_${id}`, claimCookieValue(secret, id, created.draft.id), id);
-      return res.redirect(303, `/rise/drafts/${encodeURIComponent(created.draft.id)}`);
+      const claimedDraftId = readClaimedDraftId(secret(), id, req.headers.cookie);
+      const result = await ctx.grader.claim(id, { claimedDraftId });
+      if (result.status === 404) return notFound(res);
+      if (result.created) {
+        res.append('Set-Cookie', claimCookieHeader(secret(), id, result.draftId, { production: production() }));
+      }
+      return res.redirect(303, `/rise/drafts/${encodeURIComponent(result.draftId)}`);
     } catch (err) {
       return next(err);
     }
   });
 
-  // ---- check again ----------------------------------------------------------------------
+  // ---- check again -------------------------------------------------------------------------------------------
+  // ---- Requirement 13: download for clients, and "Prepared by" (full report only, same access rule) ----------------
 
-  // ---- Google's live answer -------------------------------------------------------------
-  // Google's grounding terms: show it only to the person who asked, with Google's
-  // Search Suggestions unchanged; never analyze, store or share it. So it is fetched
-  // fresh for the browser that ran the check, sent once, and not saved or logged.
-  router.post('/grade/:id/google-live', async (req, res, next) => {
+  const fullAccess = (req, grade) => grade?.status === 'done' && (!leadGate() || hasCookie('unlock', grade.id, req));
+
+  router.get('/grade/:id/print', async (req, res, next) => {
     try {
-      const id = req.params.id;
-      if (!ID_PATTERN.test(id) || !ctx.googleLive) return notFound(res);
-      const grade = await grader.get(id);
-      if (!grade || grade.status !== 'done') return notFound(res);
-      const back = { href: `/grade/${id}`, text: 'Back to the report' };
-      if (!isRequester(req, id)) {
-        return send(res, 403, gradeMessagePage('Private to the person who ran the check', "Google's live answer is private to the person who ran the check, so it isn't in shared reports. Run your own free check to see it.", { href: '/grade', text: 'Run your own free check' }));
-      }
-      const limited = ctx.rateLimiter.consumeAll([
-        { key: `grade-google:${req.ip}`, ...RULES['grade-google'] },
-        { key: `grade-google-grade:${id}`, ...RULES['grade-google-grade'] },
-      ]);
-      if (!limited.allowed) {
-        const s = limited.retryAfterSeconds;
-        res.set('Retry-After', String(s));
-        const wait = s > 60 ? `${Math.ceil(s / 60)} minutes` : `${s} seconds`;
-        return send(res, 429, gradeMessagePage('Please wait', `You can ask Google again in ${wait}.`, back));
-      }
-      // Never use the last calls of the day, which are kept for new checks.
-      const tomorrow = () => send(res, 429, gradeMessagePage('Try again tomorrow', "We've hit today's limit for asking Google. Please try again tomorrow.", back));
-      if (ctx.aiBudget.peek({ kind: 'grade' }).remaining <= GOOGLE_LIVE_RESERVE) return tomorrow();
-      if (!ctx.aiBudget.consume({ kind: 'grade' }).allowed) return tomorrow();
-      let result;
-      try {
-        result = await ctx.googleLive.ask({ prompt: freePromptFor(grade.input), signal: AbortSignal.timeout(120000) });
-      } catch {
-        return send(res, 502, gradeMessagePage("Google's AI didn't answer", "Google's AI didn't answer this time. Your report is unchanged. Please try again in a minute.", back));
-      }
-      // Google's HTML may carry its own styles but must not run scripts on our page.
-      res.set('Content-Security-Policy', "frame-ancestors 'none'; script-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'");
-      return send(res, 200, googleLivePage(grade, result));
+      const grade = await load(req.params.id);
+      if (!grade) return notFound(res);
+      if (!fullAccess(req, grade)) return res.redirect(303, `/grade/${grade.id}`);
+      return html(res, 200, printPage(grade, reportOptions(req, grade, { unlocked: true })));
+    } catch (err) {
+      return next(err);
+    }
+  });
+
+  router.get('/grade/:id/data.csv', async (req, res, next) => {
+    try {
+      const grade = await load(req.params.id);
+      if (!grade) return notFound(res);
+      if (!fullAccess(req, grade)) return res.redirect(303, `/grade/${grade.id}`);
+      res.set('Content-Disposition', `attachment; filename="ai-visibility-check-${grade.id}.csv"`);
+      return res.status(200).type('text/csv; charset=utf-8').send(reportCsvFor(grade));
+    } catch (err) {
+      return next(err);
+    }
+  });
+
+  router.post('/grade/:id/prepared-by', form, async (req, res, next) => {
+    try {
+      const grade = await load(req.params.id);
+      if (!grade) return notFound(res);
+      const back = `/grade/${grade.id}#full-report`;
+      if (!fullAccess(req, grade)) return res.redirect(303, `/grade/${grade.id}`);
+      const limited = ctx.rateLimiter.consume(`grade-prepared:${req.ip}`, RULES['grade-unlock']);
+      if (!limited.allowed) return tooMany(res, limited.retryAfterSeconds);
+      await ctx.grader.setPreparedBy(grade.id, req.body?.preparedBy);
+      return res.redirect(303, back);
     } catch (err) {
       return next(err);
     }
@@ -311,25 +422,105 @@ export function createGradeRouter(ctx) {
 
   router.post('/grade/:id/recheck', async (req, res, next) => {
     try {
-      const id = req.params.id;
-      if (!ID_PATTERN.test(id)) return notFound(res);
-      const grade = await grader.get(id);
+      const grade = await load(req.params.id);
       if (!grade) return notFound(res);
-      const allowed = config.graderLeadGate === false || isUnlocked(req, id);
-      if (grade.status !== 'done' || !allowed) return res.redirect(303, `/grade/${id}`);
+      const back = `/grade/${grade.id}`;
+      const full = !leadGate() || hasCookie('unlock', grade.id, req);
+      if (!full || grade.status !== 'done' || !grade.input.website) return res.redirect(303, back);
 
       const limited = ctx.rateLimiter.consumeAll([
         { key: `grade-recheck:${req.ip}`, ...RULES['grade-recheck'] },
-        { key: `grade-recheck-grade:${id}`, ...RULES['grade-recheck-grade'] },
+        { key: `grade-recheck-grade:${grade.id}`, ...RULES['grade-recheck-grade'] },
       ]);
-      if (!limited.allowed) return tooMany(res, limited.retryAfterSeconds);
+      if (!limited.allowed) {
+        // Pressed again within the 2 minutes this report allows: say that, and go back to the report (V138).
+        // The limits themselves are unchanged; only the page differs.
+        const justChecked = ctx.rateLimiter.peek(`grade-recheck-grade:${grade.id}`, RULES['grade-recheck-grade']);
+        if (!justChecked.allowed) {
+          res.set('Retry-After', String(limited.retryAfterSeconds));
+          return html(res, 429, messagePage('Please wait', 'You just checked again. Please wait two minutes.', { href: back, text: 'Back to the report' }));
+        }
+        return tooMany(res, limited.retryAfterSeconds);
+      }
 
-      await grader.recheck(id);
-      return res.redirect(303, `/grade/${id}`);
+      await ctx.grader.recheck(grade.id);
+      return res.redirect(303, back);
     } catch (err) {
       return next(err);
     }
   });
+
+  // ---- Google's live answer ---------------------------------------------------------------------------------------
+  // Shown once, only to the browser that ran the check. Never stored, logged, matched or scored.
+  router.post('/grade/:id/google-live', async (req, res, next) => {
+    try {
+      if (!ctx.googleLive) return notFound(res);
+      const grade = await load(req.params.id);
+      if (!grade || grade.status !== 'done') return notFound(res);
+      if (!hasCookie('ran', grade.id, req)) {
+        return html(res, 403, messagePage('Not available', "Google's live answer is private to the person who ran the check.", { href: `/grade/${grade.id}`, text: 'Back to the report' }));
+      }
+
+      // A quick look first: a report that has used its 3 live answers makes no call and counts nothing.
+      if (liveAnswersUsed(grade) >= LIVE_ANSWERS_MAX) return liveCapReached(res, grade.id);
+
+      const limited = ctx.rateLimiter.consumeAll([
+        { key: `grade-google:${req.ip}`, ...RULES['grade-google'] },
+        { key: `grade-google-grade:${grade.id}`, ...RULES['grade-google-grade'] },
+      ]);
+      if (!limited.allowed) return tooMany(res, limited.retryAfterSeconds);
+
+      const peek = ctx.aiBudget.peek({ kind: 'grade' });
+      if (peek.remaining <= SECOND_OPINION_RESERVE || ctx.aiBudget.consume({ kind: 'grade' }).allowed !== true) {
+        res.set('Retry-After', String(peek.retryAfterSeconds ?? 3600));
+        return html(res, 429, messagePage("That is all for today", "We are keeping the rest of today's AI checks for new reports. Please try again tomorrow.", { href: `/grade/${grade.id}`, text: 'Back to the report' }));
+      }
+
+      // The budget accepted the call. Only now is the Grade's own count checked and raised, in one stored
+      // update, so two requests at the same moment cannot both see 2 and make 4. A call the budget refused
+      // never used one of the owner's 3; a call that then fails at Google still counts (it was paid for).
+      let outcome = 'missing';
+      try {
+        await ctx.store.collection('grades').update(list => {
+          const stored = Array.isArray(list) ? list.find(x => x && x.id === grade.id) : undefined;
+          if (!stored) return;
+          const used = liveAnswersUsed(stored);
+          if (used >= LIVE_ANSWERS_MAX) {
+            outcome = 'full';
+            return;
+          }
+          stored.liveAnswers = used + 1;
+          outcome = 'counted';
+        });
+      } catch (err) {
+        ctx.aiBudget.refund?.({ kind: 'grade' });
+        throw err;
+      }
+      if (outcome !== 'counted') {
+        // Not made: give the call back to the day's allowance.
+        ctx.aiBudget.refund?.({ kind: 'grade' });
+        return outcome === 'full' ? liveCapReached(res, grade.id) : notFound(res);
+      }
+
+      ctx.gradeGuard?.watch(); // the call above was counted
+      res.set({ 'Cache-Control': 'no-store', 'Content-Security-Policy': LIVE_CSP });
+      let answer;
+      try {
+        answer = await ctx.googleLive.ask({ prompt: freeQuestion(grade.input), signal: AbortSignal.timeout(LIVE_TIMEOUT_MS) });
+      } catch {
+        process.stderr.write(`[grader] google-live-failed id=${grade.id}\n`);
+        return html(res, 502, messagePage("Google's AI didn't answer this time", 'Please try again in a little while.', { href: `/grade/${grade.id}`, text: 'Back to the report' }));
+      }
+      return html(res, 200, googleLivePage({
+        grade, text: String(answer?.text ?? ''), sources: answer?.sources, suggestionsHtml: typeof answer?.suggestionsHtml === 'string' ? answer.suggestionsHtml : '',
+      }));
+    } catch (err) {
+      return next(err);
+    }
+  });
+
+  // Anything else under /grade is a plain 404 with the same headers.
+  router.use('/grade', (req, res) => notFound(res));
 
   return router;
 }

@@ -10,9 +10,10 @@
       "ai-bots-allowed": "pass", "business-labeled": "fail", "info-sheet": "fail", "title-city-service": "pass",
       "one-headline": "fail", "summary": "pass", "image-descriptions": "fail", "share-picture": "pass",
       "tap-to-call": "pass", "hours-shown": "pass", "address-shown": "pass", "call-button": "pass",
+      "reviews-visible": "fail",
       "google-profile": "not_checked", "ai-named": "fail"
     },
-    "score": { "score": 42, "failed": 5, "counted": 13 }
+    "score": { "score": 39, "failed": 6, "counted": 14 }
   },
   "roofer": {
     "file": "roofer.html",
@@ -26,9 +27,10 @@
       "ai-bots-allowed": "fail", "business-labeled": "fail", "info-sheet": "pass", "title-city-service": "fail",
       "one-headline": "pass", "summary": "fail", "image-descriptions": "pass", "share-picture": "fail",
       "tap-to-call": "fail", "hours-shown": "pass", "address-shown": "fail", "call-button": "pass",
+      "reviews-visible": "fail",
       "google-profile": "not_checked", "ai-named": "fail"
     },
-    "score": { "score": 21, "failed": 8, "counted": 13 }
+    "score": { "score": 19, "failed": 9, "counted": 14 }
   },
   "largeCompany": {
     "file": "large-company.html",
@@ -36,13 +38,14 @@
     "robots": { "status": 200, "text": "User-agent: *\nDisallow: /admin/\n" },
     "llms": { "status": 200, "contentType": "text/plain", "text": "# Summit Heating & Air\n\nHVAC repair in Franklin, TN.\n" },
     "facts": { "h1Count": 1, "imgCount": 4, "imgMissingAlt": 0, "telLinks": 1, "jsonLdBlocks": 3, "unreadableJsonLd": 0, "scriptBuilt": false, "title": "Summit Heating & Air | HVAC Repair in Franklin, TN" },
-    "found": { "phone": "(615) 555-0188", "address": "400 Church Street, Franklin, TN, 37064" },
+    "found": { "phone": "(615) 555-0188", "address": "400 Church Street, Franklin, TN 37064" },
     "results": {
       "ai-bots-allowed": "pass", "business-labeled": "pass", "info-sheet": "pass", "title-city-service": "pass",
       "one-headline": "pass", "summary": "pass", "image-descriptions": "pass", "share-picture": "pass",
       "tap-to-call": "pass", "hours-shown": "pass", "address-shown": "pass", "call-button": "pass",
+      "reviews-visible": "pass",
       "google-profile": "not_checked", "ai-named": "fail"
     },
-    "score": { "score": 65, "failed": 1, "counted": 13 }
+    "score": { "score": 65, "failed": 1, "counted": 14 }
   }
 }

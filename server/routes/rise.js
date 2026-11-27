@@ -19,6 +19,8 @@ import { createDraftStore, draftProvider } from '../lib/drafts.js';
 import { validateFields, DAYS } from '../lib/listing-fields.js';
 import { uploadPage, reviewPage, messagePage } from '../lib/rise-html.js';
 import { formatFee } from '../lib/trust.js';
+import { claimWebsite } from '../lib/grader.js';
+import { canonicalUrl } from '../lib/base-url.js';
 
 const FORM_TYPE = 'application/x-www-form-urlencoded';
 const DRAFT_FORM_LIMIT = 64 * 1024;
@@ -75,6 +77,11 @@ export function parseServices(value) {
   return value.split(/\r?\n|\r|,/).map(s => s.trim()).filter(s => s !== '');
 }
 
+/** The canonical address of GET /rise, from the configured base address only; '' when it is not a plain site address. */
+export function riseCanonical(config) {
+  return canonicalUrl(config, '/rise');
+}
+
 /** Builds raw listing fields from an urlencoded review-form body. */
 function fieldsFromForm(body) {
   const b = body !== null && typeof body === 'object' ? body : {};
@@ -92,8 +99,45 @@ function fieldsFromForm(body) {
     state: str('state'),
     address: str('address'),
     ownerEmail: str('ownerEmail'),
+    reviewsLink: str('reviewsLink'),
+    website: ownerWebsite(str('website')),
     hours,
   };
+}
+
+/**
+ * A website as the owner typed it, ready for `normalizeWebsite` (which still decides, unchanged): text with no
+ * scheme ("mybusiness.com", "www.mybusiness.com/menu") gets "https://" in front; an "http://" address is
+ * rewritten the way the claim does it (`claimWebsite`); anything else is passed on as typed, so
+ * `normalizeWebsite` refuses it as before. Never throws.
+ * @param {string} typed
+ * @returns {string}
+ */
+export function ownerWebsite(typed) {
+  const text = typeof typed === 'string' ? typed.trim() : '';
+  if (text === '') return '';
+  if (/^http:\/\//i.test(text)) return claimWebsite(text);
+  if (/^[a-z][a-z0-9+.-]*:/i.test(text) || text.startsWith('//')) return text;
+  return `https://${text}`;
+}
+
+/** True when the owner typed something in `key` that validation left out (the review page then says so). */
+function leftOut(body, fields, key) {
+  const typed = body !== null && typeof body === 'object' && typeof body[key] === 'string' ? body[key].trim() : '';
+  return typed !== '' && !(typeof fields[key] === 'string' && fields[key] !== '');
+}
+
+/**
+ * Fixed query text naming what was left out ("left=reviews", "left=website" or "left=both"), or ''. The typed
+ * value is never echoed.
+ */
+function leftOutQuery(body, fields) {
+  const reviews = leftOut(body, fields, 'reviewsLink');
+  const website = leftOut(body, fields, 'website');
+  if (reviews && website) return 'left=both';
+  if (reviews) return 'left=reviews';
+  if (website) return 'left=website';
+  return '';
 }
 
 /**
@@ -135,6 +179,8 @@ export function createRiseRouter(ctx) {
     sendPage(res, 200, uploadPage({ photoEnabled: !photoListingClosed(), discarded: req.query.discarded === '1',
       founders: typeof ctx.store.getFoundersStatus === 'function' ? ctx.store.getFoundersStatus() : undefined,
       fees: ctx.trust ? ctx.config?.trust : undefined,
+      // From the configured base address only, never the request's Host (V94); none when it is not a plain site address.
+      canonical: riseCanonical(ctx.config),
     }));
   });
 
@@ -263,7 +309,11 @@ export function createRiseRouter(ctx) {
       if (found.draft.status === 'rejected') {
         return sendPage(res, 200, messagePage('Not approved', 'This listing was not approved.', HOME_LINK));
       }
-      sendPage(res, 200, reviewPage(found.draft, ctx.store.getCategories(), { saved: req.query.saved === '1' }));
+      sendPage(res, 200, reviewPage(found.draft, ctx.store.getCategories(), {
+        saved: req.query.saved === '1',
+        reviewsLeftOut: req.query.left === 'reviews' || req.query.left === 'both',
+        websiteLeftOut: req.query.left === 'website' || req.query.left === 'both',
+      }));
     } catch (err) {
       next(err);
     }
@@ -287,7 +337,8 @@ export function createRiseRouter(ctx) {
       if (result.status === 409) {
         return sendPage(res, 409, await lockedPage(req.params.id));
       }
-      res.redirect(303, `/rise/drafts/${encodeURIComponent(req.params.id)}?saved=1`);
+      const left = leftOutQuery(req.body, fields);
+      res.redirect(303, `/rise/drafts/${encodeURIComponent(req.params.id)}?saved=1${left ? `&${left}` : ''}`);
     } catch (err) {
       next(err);
     }
@@ -319,6 +370,11 @@ export function createRiseRouter(ctx) {
         }
         if (saved.status === 409) {
           return sendPage(res, 409, await lockedPage(req.params.id));
+        }
+        // A link that was left out is said so before anything is sent, so the owner can fix or clear it.
+        const left = leftOutQuery(req.body, fields);
+        if (left !== '') {
+          return res.redirect(303, `/rise/drafts/${encodeURIComponent(req.params.id)}?saved=1&${left}`);
         }
       }
       const result = await ctx.store.submitDraft(req.params.id);

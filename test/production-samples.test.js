@@ -203,7 +203,11 @@ test('production: MCP search_listings returns nothing and get_listing errors for
 
   const all = await callTool(env, 'search_listings', {});
   assert.notEqual(all.isError, true);
-  assert.deepEqual(all.structuredContent, { listings: [], count: 0 });
+  // Requirement 9.2: every lookup answer also says when it was built.
+  const { fetchedAt, ...rest } = all.structuredContent;
+  assert.equal(typeof fetchedAt, 'string');
+  assert.equal(new Date(fetchedAt).toISOString(), fetchedAt, 'an ISO time');
+  assert.deepEqual(rest, { listings: [], count: 0 });
 
   const byCategory = await callTool(env, 'search_listings', { category: 'plumbers', query: 'pipe' });
   assert.equal(byCategory.structuredContent.count, 0);

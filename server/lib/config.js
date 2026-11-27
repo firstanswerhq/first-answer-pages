@@ -116,6 +116,74 @@ export function parseGradeAiCalls(value, warn = console.warn) {
   return DEFAULT_GRADE_AI_CALLS_PER_DAY;
 }
 
+export const DEFAULT_GRADE_MAIN_ASKS = 3;
+
+/**
+ * GRADE_MAIN_ASKS: how many times the free question is asked of the main assistant (Feature E). A whole number
+ * from 1 to 3. Unset gives 3; anything else warns (without echoing the value) and gives 3.
+ * @param {string | undefined} value
+ * @param {(msg: string) => void} [warn]
+ * @returns {number}
+ */
+export function parseGradeMainAsks(value, warn = console.warn) {
+  const v = nonEmpty(value);
+  if (v === undefined) return DEFAULT_GRADE_MAIN_ASKS;
+  if (/^[1-3]$/.test(v)) return Number(v);
+  warn(`GRADE_MAIN_ASKS must be 1, 2 or 3; using ${DEFAULT_GRADE_MAIN_ASKS}.`);
+  return DEFAULT_GRADE_MAIN_ASKS;
+}
+
+export const DEFAULT_GRADE_MAX_RUNNING = 20;
+
+/**
+ * GRADE_MAX_RUNNING: how many checks may run at the same time; the rest wait in line. A positive
+ * whole number. Unset gives 20; anything else warns (without echoing the value) and gives 20.
+ * @param {string | undefined} value
+ * @param {(msg: string) => void} [warn]
+ * @returns {number}
+ */
+export function parseGradeMaxRunning(value, warn = console.warn) {
+  const v = nonEmpty(value);
+  if (v === undefined) return DEFAULT_GRADE_MAX_RUNNING;
+  if (/^[1-9][0-9]*$/.test(v) && Number.isSafeInteger(Number(v))) return Number(v);
+  warn(`GRADE_MAX_RUNNING must be a positive whole number; using ${DEFAULT_GRADE_MAX_RUNNING}.`);
+  return DEFAULT_GRADE_MAX_RUNNING;
+}
+
+export const DEFAULT_GRADE_NETWORK_PER_DAY = 20;
+
+/**
+ * GRADE_NETWORK_PER_DAY: how many new checks one network (an IPv4 /24 or an IPv6 /64) may start a day.
+ * A positive whole number. Unset gives 20; anything else warns (without echoing the value) and gives 20.
+ * @param {string | undefined} value
+ * @param {(msg: string) => void} [warn]
+ * @returns {number}
+ */
+export function parseGradeNetworkPerDay(value, warn = console.warn) {
+  const v = nonEmpty(value);
+  if (v === undefined) return DEFAULT_GRADE_NETWORK_PER_DAY;
+  if (/^[1-9][0-9]*$/.test(v) && Number.isSafeInteger(Number(v))) return Number(v);
+  warn(`GRADE_NETWORK_PER_DAY must be a positive whole number; using ${DEFAULT_GRADE_NETWORK_PER_DAY}.`);
+  return DEFAULT_GRADE_NETWORK_PER_DAY;
+}
+
+export const DEFAULT_GRADE_AI_REPEAT_DAYS = 7;
+
+/**
+ * GRADE_AI_REPEAT_DAYS (high-tech-look 11.6): one full check with AI per business in this many days. A whole number
+ * from 0 (the limit is off) to 365. Unset gives 7; anything else warns (without echoing the value) and gives 7.
+ * @param {string | undefined} value
+ * @param {(msg: string) => void} [warn]
+ * @returns {number}
+ */
+export function parseGradeAiRepeatDays(value, warn = console.warn) {
+  const v = nonEmpty(value);
+  if (v === undefined) return DEFAULT_GRADE_AI_REPEAT_DAYS;
+  if (/^(0|[1-9][0-9]{0,2})$/.test(v) && Number(v) <= 365) return Number(v);
+  warn(`GRADE_AI_REPEAT_DAYS must be a whole number from 0 to 365; using ${DEFAULT_GRADE_AI_REPEAT_DAYS}.`);
+  return DEFAULT_GRADE_AI_REPEAT_DAYS;
+}
+
 /** GRADER_ENABLED / GRADER_LEAD_GATE: 'off' (any case) is false; anything else is true. */
 export function parseOnOff(value) {
   return nonEmpty(value)?.toLowerCase() !== 'off';
@@ -293,6 +361,18 @@ export function configFromEnv(env = process.env, opts = {}) {
     graderEnabled: parseOnOff(env.GRADER_ENABLED),
     graderLeadGate: parseOnOff(env.GRADER_LEAD_GATE),
     gradeAiCallsPerDay: parseGradeAiCalls(env.GRADE_AI_CALLS_PER_DAY, opts.warn ?? console.warn),
+    gradeMaxRunning: parseGradeMaxRunning(env.GRADE_MAX_RUNNING, opts.warn ?? console.warn),
+    // How many times the free question is asked of the main assistant (1 to 3, default 3). The score counts only these answers.
+    gradeMainAsks: parseGradeMainAsks(env.GRADE_MAIN_ASKS, opts.warn ?? console.warn),
+    gradeNetworkPerDay: parseGradeNetworkPerDay(env.GRADE_NETWORK_PER_DAY, opts.warn ?? console.warn),
+    // Off in test runs unless set (like the paid lookups), so older tests that check one business twice still run;
+    // the fair-use tests turn it on. Everywhere else the default is 7.
+    gradeAiRepeatDays: isTestRun(env) && nonEmpty(env.GRADE_AI_REPEAT_DAYS) === undefined
+      ? 0
+      : parseGradeAiRepeatDays(env.GRADE_AI_REPEAT_DAYS, opts.warn ?? console.warn),
+    // The human check on the check form (Cloudflare Turnstile). Off unless both keys are set.
+    turnstileSiteKey: nonEmpty(env.TURNSTILE_SITE_KEY) ?? '',
+    turnstileSecretKey: nonEmpty(env.TURNSTILE_SECRET_KEY) ?? '',
     // Signs form stamps and unlock cookies. Without GRADER_SECRET a random per-process key is
     // used (unlocks then reset on restart); graderSecretGenerated lets createApp warn once.
     graderSecret: nonEmpty(env.GRADER_SECRET) ?? (processGraderSecret ??= randomBytes(32).toString('hex')),
@@ -311,6 +391,10 @@ export function configFromEnv(env = process.env, opts = {}) {
     // Gemini Decisions as a second check on reading AI answers for names. On with GEMINI_API_KEY unless 'off'.
     geminiNameCheck: parseOnOff(env.GEMINI_NAME_CHECK),
     decisionModel: nonEmpty(env.GEMINI_DECISION_MODEL),
+    // The health map's one Google Places lookup per check (Google Business Profile, reviews, details match) and
+    // one Azure Maps search (Bing). Each is off without its key: the signals then read "Not checked".
+    places: { apiKey: nonEmpty(env.GOOGLE_PLACES_API_KEY) },
+    azureMaps: { apiKey: nonEmpty(env.AZURE_MAPS_KEY) },
 
     visionProviderName: vision,
     assistantProviderName: assistant,
@@ -358,6 +442,7 @@ export function redactConfig(config) {
     ...config,
     adminToken: mark(config.adminToken),
     ...(config.graderSecret !== undefined && { graderSecret: mark(config.graderSecret) }),
+    ...(config.turnstileSecretKey !== undefined && { turnstileSecretKey: mark(config.turnstileSecretKey) }),
     ...(config.resend && { resend: { ...config.resend, apiKey: mark(config.resend.apiKey) } }),
     vision: { ...config.vision, ...(config.vision.apiKey !== undefined && { apiKey: mark(config.vision.apiKey) }) },
     assistant: {
@@ -368,6 +453,8 @@ export function redactConfig(config) {
     ...(config.gemini && { gemini: { ...config.gemini, apiKey: mark(config.gemini.apiKey) } }),
     ...(config.grok && { grok: { ...config.grok, apiKey: mark(config.grok.apiKey) } }),
     ...(config.perplexity && { perplexity: { ...config.perplexity, apiKey: mark(config.perplexity.apiKey) } }),
+    ...(config.places && { places: { ...config.places, apiKey: mark(config.places.apiKey) } }),
+    ...(config.azureMaps && { azureMaps: { ...config.azureMaps, apiKey: mark(config.azureMaps.apiKey) } }),
     ...(config.trust && {
       trust: {
         ...config.trust,

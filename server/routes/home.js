@@ -35,6 +35,75 @@ export function emptyTradeText(label) {
   return `No ${what} listed yet. Own one?`;
 }
 
+/**
+ * Empty search for a city: "No plumbers in Nashville yet. Own one?" (a trade name gets "businesses", as in
+ * emptyTradeText; with no trade it reads "No businesses in Nashville yet. Own one?").
+ */
+export function emptyTradeInCityText(label, city) {
+  const what = emptyTradeText(label).replace(/^No (.*) listed yet\. Own one\?$/, '$1');
+  // The typed city, at most 60 characters, with the first letter of each word in capitals (V250, V225-3).
+  const shown = Array.from(String(city ?? '')).slice(0, 60).join('')
+    .replace(/(^|[\s-])(\p{L})/gu, (m, before, letter) => `${before}${letter.toUpperCase()}`);
+  return `No ${what} in ${shown} yet. Own one?`;
+}
+
+/** high-tech-look Step 1D: the script that draws the live network from the list (loaded after the page). */
+export const HOME_NETWORK_SCRIPT = '/js/home-network.js';
+/** How many listings of each category the list holds (the directory below the search has every one). */
+export const NETWORK_LISTINGS_PER_CATEGORY = 6;
+
+/**
+ * high-tech-look Step 1D (Requirement 1.9, 1.13): the network's nodes as a plain list of real links: each category that
+ * has listings (its page), and under it up to six of its listings (their pages), in the directory's own order.
+ * Nothing is made up: no other names, counts or activity. '' when there is nothing to list.
+ * @param {Map<string, object[]>} grouped  the directory's listings by category slug
+ * @returns {string}
+ */
+export function networkList(grouped, categories) {
+  const items = [];
+  for (const [slug, group] of grouped) {
+    const label = categories.find(c => c.slug === slug)?.label;
+    if (!label || !Array.isArray(group) || group.length === 0) continue;
+    const listings = group.slice(0, NETWORK_LISTINGS_PER_CATEGORY)
+      .map(l => `<li><a href="/listings/${encodeURIComponent(l.id)}" data-node="listing">${escapeHtml(l.name)}</a></li>`)
+      .join('');
+    items.push(`<li class="network-category"><a href="/?category=${encodeURIComponent(slug)}" data-node="category">${escapeHtml(label)}</a><ul>${listings}</ul></li>`);
+  }
+  if (items.length === 0) return '';
+  return `<nav class="home-network" aria-label="Categories and listings">
+<ul class="network-list">${items.join('')}</ul>
+</nav>
+`;
+}
+
+/**
+ * high-tech-look Step 1B (Requirement 1.2): the A-Z index tabs down the book's right edge, one per first letter of the
+ * categories that have listings. Each tab is a real link to that letter's first category page (the same page the
+ * search form opens); its name is in the link for screen readers. The tab for the category being shown is lit.
+ * Hidden on phones by CSS. '' when no category has a listing.
+ * @returns {string}
+ */
+export function bookTabs(store, categories, shown) {
+  const used = new Set(store.searchListings({}).map(l => l.category));
+  const byLetter = new Map();
+  for (const c of categories) {
+    if (!c || !used.has(c.slug) || typeof c.label !== 'string' || c.label.trim() === '') continue;
+    const letter = c.label.trim()[0].toUpperCase();
+    if (!/^[A-Z]$/.test(letter)) continue;
+    if (!byLetter.has(letter)) byLetter.set(letter, []);
+    byLetter.get(letter).push(c);
+  }
+  if (byLetter.size === 0) return '';
+  const tabs = [...byLetter.keys()].sort().map(letter => {
+    const group = byLetter.get(letter);
+    const target = group.find(c => c.slug === shown) ?? group[0];
+    const lit = group.some(c => c.slug === shown);
+    const current = target.slug === shown ? ' aria-current="page"' : '';
+    return `<a class="book-tab${lit ? ' is-on' : ''}" href="/?category=${encodeURIComponent(target.slug)}"${current}><span aria-hidden="true">${letter}</span><span class="book-tab-name">${escapeHtml(target.label)}</span></a>`;
+  });
+  return `<nav class="book-tabs" aria-label="Categories A to Z">${tabs.join('')}</nav>\n`;
+}
+
 export function createHomeRouter(ctx) {
   const router = Router();
   const { store } = ctx;
@@ -80,8 +149,13 @@ export function createHomeRouter(ctx) {
 
     let results;
     if (filtered.length === 0) {
+      // A search that finds nothing is not a page for search engines to keep: any typed city would make a new one (V225-3).
+      if (city || category) res.set('X-Robots-Tag', 'noindex');
       if (!city && (categoryLabel || !category)) {
         results = `<p class="no-results">${escapeHtml(emptyTradeText(categoryLabel))} <a href="/rise">List it free &rarr;</a></p>`;
+      } else if (city && (categoryLabel || !category)) {
+        // A search for a city (with a known trade, or none) that finds nothing says what was searched for (V217).
+        results = `<p class="no-results">${escapeHtml(emptyTradeInCityText(categoryLabel, city))} <a href="/rise">List it free &rarr;</a></p>`;
       } else {
         results = '<p class="no-results">No results found. Try a different category or city.</p>';
       }
@@ -107,26 +181,42 @@ ${group.map(l => listingCard(l, categories, { founder: founderOf(l.id), trust: t
       results = `<div class="directory">\n${title}${sections.join('\n')}\n</div>`;
     }
 
-    const graderLink = ctx.config?.graderEnabled === false
+    // The AI Visibility Check, as large and as clear as the search button, right under the search form (D3). With the
+    // grader off there is no link to /grade anywhere on the page.
+    // The button shows on the unfiltered home page only (V174); the sentence stays on every view.
+    const graderButton = ctx.config?.graderEnabled === false || category || city
       ? ''
-      : '\n<p class="grade-link"><a href="/grade">Can AI find your business? Get a free check.</a></p>';
+      : '\n<p class="home-check"><a class="button" href="/grade">Check if AI can find your business</a></p>';
     // Owners see the founders invite on the unfiltered home page only.
     const inviteHtml = !category && !city && typeof store.getFoundersStatus === 'function'
       ? foundersInvite(store.getFoundersStatus(), { link: true, fees: ctx.trust ? ctx.config?.trust : undefined })
       : '';
     const invite = inviteHtml ? `\n${inviteHtml}` : '';
-    const body = `<header class="home-head">
+    // high-tech-look Step 1B (Requirement 1.2, 1.3): the main area is an open book, with a glowing spine down the left
+    // edge (CSS) and A-Z index tabs down the right edge on wide screens. The h1 keeps its text, so headings stay the
+    // same (Requirement 5). The big headline is the tagline: "The phone book is back." with "And AI can read it." on
+    // the next line in the glow color, and the owner's sentence under it as written.
+    // high-tech-look Step 1D (Requirement 1.8 to 1.13): the live network, on the unfiltered home page only. The page
+    // holds a plain list of real links (the categories with listings, and their listings); the script draws the
+    // network from that list on a canvas it adds (aria-hidden). With JavaScript off the list is the whole thing.
+    const network = !category && !city ? networkList(grouped, categories) : '';
+    const body = `<div class="book">
+${bookTabs(store, categories, category)}<header class="home-head">
 <h1>Local Business Directory</h1>
-<p class="tagline">The phone book is back, and AI can read it.</p>${graderLink}
+<p class="tagline"><span class="tagline-back">The phone book is back.</span> <span class="tagline-ai">And AI can read it.</span></p>
+<p class="home-why">People now ask AI who to call. List your business free so AI can find it.</p>
 </header>
-${filterForm}${invite}
-${results}`;
+${network}${filterForm}${graderButton}${invite}
+${results}
+</div>`;
 
     // Category pages: "Plumbers in Nashville | First Answer Pages". The default site
     // name is swapped for SITE_NAME by the app-level HTML wrapper.
     let title = `${DEFAULT_SITE_NAME}: Local Business Directory`;
+    // The typed city, cut at 60 characters, is the only form of it in the title and the description (V256).
+    const shownCity = Array.from(city).slice(0, 60).join('');
     if (categoryLabel) {
-      let titleCity = city;
+      let titleCity = shownCity;
       if (!titleCity) {
         const cities = new Set(filtered.map(l => (typeof l.city === 'string' ? l.city.trim() : '')).filter(Boolean));
         if (cities.size === 1) [titleCity] = cities;
@@ -138,12 +228,14 @@ ${results}`;
     // known category (city filters point at the category page).
     const base = baseUrlFor(req, ctx.config);
     const canonical = categoryLabel ? `${base}/?category=${encodeURIComponent(category)}` : `${base}/`;
-    const where = city ? ` in ${city}` : '';
+    const where = shownCity ? ` in ${shownCity}` : '';
     const description = categoryLabel
       ? `${categoryLabel}${where}: phone numbers, services and hours. Call them or ask for a quote, free.`
       : `Free local business directory that AI assistants can read. Find a local business${where}, call them, or ask for a quote.`;
 
-    res.status(200).type('html').send(layout({ title, body, canonical, description }));
+    res.status(200).type('html').send(layout({
+      title, body, canonical, description, ...(network ? { scripts: [HOME_NETWORK_SCRIPT] } : {}),
+    }));
   });
 
   return router;
