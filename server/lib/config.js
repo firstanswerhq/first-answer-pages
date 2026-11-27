@@ -116,7 +116,7 @@ export function parseGradeAiCalls(value, warn = console.warn) {
   return DEFAULT_GRADE_AI_CALLS_PER_DAY;
 }
 
-export const DEFAULT_GRADE_MAIN_ASKS = 3;
+export const DEFAULT_GRADE_MAIN_ASKS = 1;
 
 /**
  * GRADE_MAIN_ASKS: how many times the free question is asked of the main assistant (Feature E). A whole number
@@ -129,8 +129,8 @@ export function parseGradeMainAsks(value, warn = console.warn) {
   const v = nonEmpty(value);
   if (v === undefined) return DEFAULT_GRADE_MAIN_ASKS;
   if (/^[1-3]$/.test(v)) return Number(v);
-  warn(`GRADE_MAIN_ASKS must be 1, 2 or 3; using ${DEFAULT_GRADE_MAIN_ASKS}.`);
-  return DEFAULT_GRADE_MAIN_ASKS;
+  warn(`GRADE_MAIN_ASKS must be 1, 2 or 3; using 1.`);
+  return 1;
 }
 
 export const DEFAULT_GRADE_MAX_RUNNING = 20;

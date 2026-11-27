@@ -180,7 +180,7 @@ export function gradeFormPage({
     .join('');
   const body = `<section class="grade-start">
   <h1>Can AI find your business?</h1>
-  <p class="tagline">Get a free check in about two minutes. We ask AI assistants to name the best businesses like yours in your city, and see if they name you. We also look at what AI can read on your website.</p>
+  <p class="tagline">Get a free check in about a minute. We ask AI assistants to name the best businesses like yours in your city, and see if they name you. We also look at what AI can read on your website.</p>
   ${prefilled === true && Object.keys(errors).length === 0 ? '<p class="notice" role="status">We filled this in from your last check. Change anything that\'s wrong, then press Check my business.</p>' : ''}
   ${errors.form ? `<p class="form-error" role="alert">${h(errors.form)}</p>` : ''}
   ${['name', 'city', 'state', 'service', 'website'].some(k => errors[k]) ? '<p class="form-error" role="alert">Please fix the problems below.</p>' : ''}
@@ -232,9 +232,19 @@ export function scanPage(grade) {
     items.unshift('<li class="grade-step running grade-step-line"><span class="step-mark">Working</span><span class="step-name">You\'re in line. Your check starts in a moment.</span></li>');
   }
   const itemsHtml = items.join('\n    ');
-  const body = `<section class="grade-scan" data-grade-scan data-status-url="/grade/${h(grade.id)}/status.json">
+  const totalSteps = names.length;
+  const doneCount = [...done.values()].filter(s => s).length;
+  const pct = Math.round((doneCount / totalSteps) * 100);
+  const body = `<section class="grade-scan" data-grade-scan data-status-url="/grade/${h(grade.id)}/status.json" data-total-steps="${totalSteps}" data-done-steps="${doneCount}">
   <h1>Checking ${h(grade.input.name)}</h1>
-  <p class="tagline">This takes about two minutes. You can leave this page open.</p>
+  <div class="scan-progress-wrap">
+    <div class="scan-progress-bar" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" style="--pct:${pct}%">
+      <div class="scan-progress-fill"></div>
+      <div class="scan-progress-glow"></div>
+    </div>
+    <span class="scan-progress-label">${pct}%</span>
+  </div>
+  <p class="tagline">This can take up to a minute. We're asking AI assistants about your business.</p>
   <ol class="grade-steps">
     ${itemsHtml}
   </ol>
