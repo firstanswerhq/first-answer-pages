@@ -149,7 +149,7 @@ export function createGradeRouter(ctx) {
         // Only a finished check fills the form (done, or failed): a Grade still running gives the plain form (V168).
         if (i && typeof i === 'object' && (earlier.status === 'done' || earlier.status === 'failed')) {
           values = {
-            name: i.name, city: i.city, state: i.state, service: i.service, website: i.website ?? '',
+            name: i.name, city: i.city, state: i.state, service: i.service, website: i.website ?? '', about: i.about ?? '',
             noStorefront: i.noStorefront === true,
           };
         }

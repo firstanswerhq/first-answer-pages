@@ -190,7 +190,7 @@ export function gradeFormPage({
     ${field({ id: 'g-state', name: 'state', label: 'State', value: values.state, hint: '2 letters, like TN', error: errors.state, attrs: ' autocomplete="address-level1"' })}
     ${field({ id: 'g-service', name: 'service', label: 'What you do', value: values.service, hint: 'Like roofers, plumbers or restaurants', error: errors.service, attrs: ' list="service-suggestions"' })}
     <datalist id="service-suggestions">${options}</datalist>
-    ${field({ id: 'g-about', name: 'about', label: 'Describe what you do, in your own words (optional)', value: values.about, hint: 'One sentence is plenty. Example: We pressure wash driveways and soft-wash roofs.', error: errors.about, attrs: ' maxlength="200"' })}
+    ${field({ id: 'g-about', name: 'about', label: 'Describe what you do, in your own words (optional)', value: values.about, hint: 'One sentence is plenty. Example: We pressure wash driveways and soft-wash roofs.', error: errors.about })}
     ${field({ id: 'g-website', name: 'website', label: 'Your website (optional)', value: values.website, hint: "Like example.com. Leave it empty if you don't have one.", error: errors.website, attrs: ' inputmode="url" autocapitalize="none"' })}
     <div class="field">
       <label class="check" for="g-nostorefront"><input type="checkbox" id="g-nostorefront" name="noStorefront" value="1"${values.noStorefront === true ? ' checked' : ''}> We go to our customers (no storefront)</label>
@@ -264,6 +264,8 @@ export function failedPage(grade, { stamp = '', turnstileSiteKey = '' } = {}) {
   const i = grade.input ?? {};
   const fields = ['name', 'city', 'state', 'service', 'website']
     .map(k => `<input type="hidden" name="${k}" value="${h(i[k] ?? '')}">`);
+  // "Start again" keeps the owner's own words about what they do, when given.
+  if (typeof i.about === 'string' && i.about !== '') fields.push(`<input type="hidden" name="about" value="${h(i.about)}">`);
   // "Start again" keeps the no-storefront mode.
   if (i.noStorefront === true) fields.push('<input type="hidden" name="noStorefront" value="1">');
   const hidden = fields.join('\n    ');

@@ -97,7 +97,7 @@ const MESSAGES = Object.freeze({
   name: 'Type your business name (up to 120 characters).',
   city: 'Type your city (up to 80 characters).',
   service: 'Say what you do, like roofers or plumbers (up to 60 characters).',
-  about: 'Describe what you do in 200 characters or fewer.',
+  about: 'Shorten this to 200 characters or fewer.',
   website: 'Type your website like example.com.',
 });
 
@@ -414,12 +414,17 @@ function foodPhrase(words) {
 }
 
 /** The question in the free part of a report. */
-/** The owner's own words, as typed, minus any closing punctuation so they read inside a question. */
+/**
+ * The owner's own words, as typed, minus any closing punctuation, in double quotes (owner-describes-business item 6),
+ * so the AI reads them as the owner's description, not as part of the question. A double quote the owner typed
+ * becomes a single one, so the quoted words stay whole.
+ */
 const aboutText = input => String(input.about ?? '').replace(/[\s.,!?:;]+$/u, '');
+const quotedAbout = input => `"${aboutText(input).replace(/["\u201C\u201D]/gu, "'")}"`;
 
 export function freeQuestion(input) {
-  // The owner's own words, when given, are used as typed (never made plural or recased).
-  if (input.about) return `Who are the best businesses in ${input.city}, ${input.state} that do this: ${aboutText(input)}? Name your top 5.`;
+  // The owner's own words, when given, are used as typed (never made plural or recased), in quotes.
+  if (input.about) return `Who are the best businesses in ${input.city}, ${input.state} that do this: ${quotedAbout(input)}? Name your top 5.`;
   return `Who are the best ${servicePhrase(input.service).named} in ${input.city}, ${input.state}? Name your top 5.`;
 }
 
@@ -427,8 +432,8 @@ export function freeQuestion(input) {
 export function extraQuestions(input) {
   if (input.about) {
     return [
-      `I'm looking for a business in ${input.city}, ${input.state} that does this: ${aboutText(input)}. Which ones would you recommend?`,
-      `Which businesses in ${input.city}, ${input.state} that do this do people recommend most: ${aboutText(input)}?`,
+      `I'm looking for a business in ${input.city}, ${input.state} that does this: ${quotedAbout(input)}. Which ones would you recommend?`,
+      `Which businesses in ${input.city}, ${input.state} that do this do people recommend most: ${quotedAbout(input)}?`,
     ];
   }
   const { named } = servicePhrase(input.service);
@@ -445,7 +450,7 @@ export function stepNames(input) {
     'Reading your home page',
     'Checking what AI is allowed to read',
     input.about
-      ? `Asking AI who does this in ${input.city}`
+      ? `Asking AI who does what you described in ${input.city}`
       : `Asking AI to name the best ${servicePhrase(input.service).named} in ${input.city}`,
     'Drafting your free directory listing',
   ];
