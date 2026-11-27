@@ -166,12 +166,12 @@ test('item 1: "Start again" on a check that didn\'t finish keeps "about" (escape
 test('item 2: "Run a new check" (/grade?from=ID) fills in "about" too, escaped', async () => {
   const input = normalizeGradeInput({ ...base, website: 'https://acmewash.example/', about: HOSTILE }).input;
   const plainInput = normalizeGradeInput({ ...base, website: 'https://acmewash.example/' }).input;
-  const env = await startEnv({ grades: [storedGrade('aboutstored0000000001', input), storedGrade('aboutstored0000000002', plainInput)] });
-  const page = await (await fetch(`${env.base}/grade?from=aboutstored0000000001`)).text();
+  const env = await startEnv({ grades: [storedGrade('aboutstored00000000001', input), storedGrade('aboutstored00000000002', plainInput)] });
+  const page = await (await fetch(`${env.base}/grade?from=aboutstored00000000001`)).text();
   assert.match(page, /<input type="text" id="g-about" name="about" value="&lt;script&gt;alert\(1\)&lt;\/script&gt; &quot;quoted&quot; &amp; &lt;b&gt;bold&lt;\/b&gt;">/);
   assert.equal(page.includes('<script>alert(1)'), false);
   // An earlier check without the words: the box is empty.
-  const plain = await (await fetch(`${env.base}/grade?from=aboutstored0000000002`)).text();
+  const plain = await (await fetch(`${env.base}/grade?from=aboutstored00000000002`)).text();
   assert.match(plain, /<input type="text" id="g-about" name="about" value="">/);
 });
 
