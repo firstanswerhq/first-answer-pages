@@ -24,14 +24,16 @@ function setupCopyButtons(root) {
 }
 
 // Update progress bar without touching the DOM heavily.
-function updateProgressBar(doneSteps, totalSteps) {
+function updateProgressBar(doneSteps, totalSteps, isDone) {
   var bar = document.querySelector('.scan-progress-fill');
   var glow = document.querySelector('.scan-progress-glow');
   var label = document.querySelector('.scan-progress-label');
   var wrap = document.querySelector('.scan-progress-bar');
   if (!bar || !label || !wrap) return;
   var pct = Math.round((doneSteps / totalSteps) * 100);
-  if (doneSteps < totalSteps) pct = Math.min(pct, 95);
+  // Never show 100% until the check is truly done — all steps can be
+  // recorded before the grade status flips from running to done
+  if (!isDone) pct = Math.min(pct, 95);
   bar.style.width = pct + '%';
   wrap.style.setProperty('--pct', pct + '%');
   wrap.setAttribute('aria-valuenow', pct);
@@ -104,16 +106,19 @@ function watchScan(scan) {
       if (res.ok) {
         var status = await res.json();
         var newSteps = status.steps ? status.steps.length : 0;
-        // Update progress bar (lightweight, no DOM swap)
-        updateProgressBar(newSteps, totalSteps);
+        // Update progress bar — only show 100% when status.done is true,
+        // not just when all steps are recorded (there's a gap between the
+        // last step recording and the grade status flipping to done)
+        updateProgressBar(newSteps, totalSteps, status.done === true);
         // Update step text in place (lightweight)
         if (status.steps && newSteps !== seenSteps) {
           updateSteps(status.steps, totalSteps);
         }
         seenSteps = newSteps;
-        // Only do the heavy full-page swap when the check is DONE (report ready)
+        // When the check is done, just reload — let Chrome handle the report
+        // page natively instead of parsing and swapping the DOM in JavaScript
         if (status.done) {
-          await swapInPage();
+          window.location.reload();
           return;
         }
       }
@@ -132,13 +137,21 @@ function watchRecheck() {
   var tick = async function() {
     tries += 1;
     try {
-      await swapInPage();
+      // Check if recheck is done via a lightweight JSON fetch, then reload
+      var res = await fetch(window.location.href, { headers: { Accept: 'text/html' }, credentials: 'same-origin' });
+      if (res.ok) {
+        var text = await res.text();
+        if (text.indexOf('data-grade-rechecking') === -1) {
+          window.location.reload();
+          return;
+        }
+      }
     } catch (e) {
       // Try again on the next tick.
     }
-    if (document.querySelector('[data-grade-rechecking]') && tries < 60) setTimeout(tick, 3000);
+    if (tries < 60) setTimeout(tick, 5000);
   };
-  setTimeout(tick, 3000);
+  setTimeout(tick, 5000);
 }
 
 setupCopyButtons(document);

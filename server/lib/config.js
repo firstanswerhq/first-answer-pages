@@ -120,7 +120,7 @@ export const DEFAULT_GRADE_MAIN_ASKS = 1;
 
 /**
  * GRADE_MAIN_ASKS: how many times the free question is asked of the main assistant (Feature E). A whole number
- * from 1 to 3. Unset gives 3; anything else warns (without echoing the value) and gives 3.
+ * from 1 to 3. Unset gives 1; anything else warns (without echoing the value) and gives 1.
  * @param {string | undefined} value
  * @param {(msg: string) => void} [warn]
  * @returns {number}

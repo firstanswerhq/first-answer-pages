@@ -1,5 +1,4 @@
 // health-interact.js — canvas interactive drill-down for the health map.
-// Progressive enhancement · keyboard accessible · respects prefers-reduced-motion.
 const motion = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
 const FAST = motion && motion.matches;
 const COLORS = { good:'#4ADE80', partly:'#FBBF24', missing:'#F87171', not_checked:'#94A3B8', info:'#67E8F9' };
@@ -102,16 +101,18 @@ function initInteract() {
   let activeSub = null;
   let animT = 0;
   let targetT = 0;
-  let subAnimT = 0;    // 0 = subs hidden, 1 = subs visible
+  let subAnimT = 0;
   let subTargetT = 0;
   let frameId = null;
   let lastTime = 0;
   let pulseAngle = 0;
   let subOrbitAngle = 0;
+  let cachedLayout = null;
+  let cachedW = 0;
+  let cachedH = 0;
 
-  // Size the canvas
   function resize() {
-    const dpr = window.devicePixelRatio || 1;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const rect = artHost.getBoundingClientRect();
     const w = Math.round(rect.width * dpr);
     const h = Math.round(rect.height * dpr);
@@ -122,17 +123,14 @@ function initInteract() {
     return { w, h, dpr };
   }
 
-  // ---- Drawing ----
-
   function draw(now) {
     frameId = requestAnimationFrame(draw);
-    if (now - lastTime < 33) return; // 30fps cap
+    if (now - lastTime < 66) return; // 15fps cap (easy on slower machines)
     lastTime = now;
 
     const { w, h, dpr } = resize();
     ctx.clearRect(0, 0, w, h);
 
-    // Advance animation
     const dt = FAST ? 1 : 0.08;
     if (animT < targetT) animT = Math.min(animT + dt, targetT);
     else if (animT > targetT) animT = Math.max(animT - dt, targetT);
@@ -141,17 +139,18 @@ function initInteract() {
     pulseAngle += 0.04;
     subOrbitAngle += 0.012;
 
-    if (animT < 0.01 && targetT === 0) return; // nothing to draw in idle state
-
-    const layout = nodePositions(model.mains, w, h);
+    if (animT < 0.01 && targetT === 0) return;
+    if (w !== cachedW || h !== cachedH) {
+      cachedLayout = nodePositions(model.mains, w, h);
+      cachedW = w;
+      cachedH = h;
+    }
+    const layout = cachedLayout;
     const { nodes, cx, cy, scale } = layout;
 
-    // Draw dimmed state for non-active nodes
     for (const node of nodes) {
       const isActive = activeMain && node.id === activeMain.id;
-
       if (animT > 0 && !isActive) {
-        // Fade non-active nodes
         const alpha = 0.15 * animT;
         ctx.save();
         ctx.globalAlpha = alpha;
@@ -160,11 +159,8 @@ function initInteract() {
       }
 
       if (isActive && animT > 0) {
-        // Draw active node with glow
         ctx.save();
         drawActiveNode(ctx, node, scale, animT);
-
-        // Draw sub-nodes if drilled
         if (subAnimT > 0) {
           drawSubNodes(ctx, node, scale, subAnimT);
         }
@@ -186,7 +182,6 @@ function initInteract() {
     ctx.lineWidth = 2 * scale;
     ctx.stroke();
 
-    // Name text
     ctx.fillStyle = TEXT_DIM;
     ctx.font = `${Math.round(14 * scale)}px system-ui, sans-serif`;
     ctx.textAlign = 'center';
@@ -199,7 +194,6 @@ function initInteract() {
     const pulse = 1 + 0.06 * Math.sin(pulseAngle) * t;
     const r = node.r * pulse;
 
-    // Outer glow rings
     for (let i = 3; i > 0; i--) {
       ctx.beginPath();
       ctx.arc(node.x, node.y, r + i * 8 * scale * t, 0, Math.PI * 2);
@@ -210,32 +204,24 @@ function initInteract() {
     }
     ctx.globalAlpha = 1;
 
-    // Main ring
     ctx.beginPath();
     ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
     ctx.strokeStyle = color;
     ctx.lineWidth = 3 * scale * t;
-    ctx.shadowColor = color;
-    ctx.shadowBlur = 20 * scale * t;
     ctx.stroke();
-    ctx.shadowBlur = 0;
 
-    // Fill with semi-transparent dark
     ctx.beginPath();
     ctx.arc(node.x, node.y, r - 2, 0, Math.PI * 2);
     ctx.fillStyle = BG_DARK;
     ctx.globalAlpha = 0.7 * t;
     ctx.fill();
     ctx.globalAlpha = 1;
-
-    // Name text (brighter when active)
     ctx.fillStyle = TEXT_LIGHT;
     ctx.font = `bold ${Math.round(16 * scale)}px system-ui, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(node.name, node.x, node.y - 8 * scale);
 
-    // Status label
     ctx.fillStyle = color;
     ctx.font = `${Math.round(13 * scale)}px system-ui, sans-serif`;
     ctx.fillText(node.label, node.x, node.y + 14 * scale);
@@ -253,7 +239,6 @@ function initInteract() {
       const baseAngle = subs.length > 1
         ? node.deg - spread / 2 + (k * spread) / (subs.length - 1)
         : node.deg;
-      // Slight orbital drift for life
       const angle = baseAngle + Math.sin(subOrbitAngle + k * 0.7) * 3;
       const [sx, sy] = polar(node.x, node.y, rOrbit, angle);
       sub._drawX = sx;
@@ -263,7 +248,6 @@ function initInteract() {
       const color = COLORS[sub.status] || COLORS.not_checked;
       const isActiveSub = activeSub && activeSub.name === sub.name;
 
-      // Connection line from main to sub
       ctx.beginPath();
       const [lx1, ly1] = polar(node.x, node.y, node.r + 4 * scale, angle);
       const [lx2, ly2] = polar(node.x, node.y, rOrbit - sub.r * t - 2, angle);
@@ -277,39 +261,30 @@ function initInteract() {
       ctx.setLineDash([]);
       ctx.globalAlpha = 1;
 
-      // Sub node circle
       const subPulse = isActiveSub ? 1 + 0.08 * Math.sin(pulseAngle * 1.5) : 1;
       const sr = sub.r * t * subPulse;
 
-      // Glow
       ctx.beginPath();
       ctx.arc(sx, sy, sr + 4 * scale, 0, Math.PI * 2);
       ctx.fillStyle = color;
       ctx.globalAlpha = (isActiveSub ? 0.2 : 0.08) * t;
       ctx.fill();
       ctx.globalAlpha = 1;
-
-      // Ring
       ctx.beginPath();
       ctx.arc(sx, sy, sr, 0, Math.PI * 2);
       ctx.strokeStyle = color;
       ctx.lineWidth = (isActiveSub ? 2.5 : 1.5) * scale;
       if (isActiveSub) {
-        ctx.shadowColor = color;
-        ctx.shadowBlur = 12 * scale;
+        ctx.lineWidth = 3 * scale;
       }
       ctx.stroke();
-      ctx.shadowBlur = 0;
 
-      // Fill
       ctx.beginPath();
       ctx.arc(sx, sy, sr - 1, 0, Math.PI * 2);
       ctx.fillStyle = BG_DARK;
       ctx.globalAlpha = 0.8 * t;
       ctx.fill();
       ctx.globalAlpha = 1;
-
-      // Status symbol
       const symbols = { good: '✓', partly: '!', missing: '✕', not_checked: '?', info: 'i' };
       ctx.fillStyle = color;
       ctx.font = `bold ${Math.round(12 * scale * t)}px system-ui, sans-serif`;
@@ -319,33 +294,23 @@ function initInteract() {
     }
   }
 
-  // ---- Hit testing ----
-
   function getNodeAt(px, py) {
     const { w, h } = resize();
-    const layout = nodePositions(model.mains, w, h);
-    for (const node of layout.nodes) {
-      const dx = px - node.x;
-      const dy = py - node.y;
+    if (w !== cachedW || h !== cachedH) { cachedLayout = nodePositions(model.mains, w, h); cachedW = w; cachedH = h; }
+    for (const node of cachedLayout.nodes) {
+      const dx = px - node.x, dy = py - node.y;
       if (dx * dx + dy * dy <= node.r * node.r) return { type: 'main', node };
     }
-    // If drilled, check sub-nodes
     if (activeMain) {
-      const mainNode = layout.nodes.find(n => n.id === activeMain.id);
-      if (mainNode && mainNode.subNodes) {
-        for (const sub of mainNode.subNodes) {
-          if (sub._drawX === undefined) continue;
-          const dx = px - sub._drawX;
-          const dy = py - sub._drawY;
-          const r = sub._drawR || sub.r;
-          if (dx * dx + dy * dy <= (r + 10) * (r + 10)) return { type: 'sub', node: sub, mainNode };
-        }
+      const mn = cachedLayout.nodes.find(n => n.id === activeMain.id);
+      if (mn && mn.subNodes) for (const sub of mn.subNodes) {
+        if (sub._drawX === undefined) continue;
+        const dx = px - sub._drawX, dy = py - sub._drawY, r = sub._drawR || sub.r;
+        if (dx * dx + dy * dy <= (r + 10) * (r + 10)) return { type: 'sub', node: sub, mainNode: mn };
       }
     }
     return null;
   }
-
-  // ---- Panel ----
 
   function showPanel(sub) {
     if (!sub.panelHtml) return;
@@ -373,13 +338,7 @@ function initInteract() {
     panelOverlay.hidden = true;
   }
 
-  function escapeText(s) {
-    const d = document.createElement('span');
-    d.appendChild(document.createTextNode(s));
-    return d.innerHTML;
-  }
-
-  // ---- Interaction ----
+  function escapeText(s) { const d = document.createElement('span'); d.appendChild(document.createTextNode(s)); return d.innerHTML; }
 
   function activate(mainNode) {
     if (activeMain && activeMain.id === mainNode.id) {
@@ -393,7 +352,6 @@ function initInteract() {
     subTargetT = 1;
     section.classList.add('health-paused', 'health-drilled');
 
-    // Also trigger the HTML drill for screen readers
     const htmlGroup = section.querySelector(`.health-group[data-main-id="${mainNode.id}"]`);
     if (htmlGroup) {
       for (const g of section.querySelectorAll('.health-group[data-main-id]')) {
@@ -420,8 +378,6 @@ function initInteract() {
     }
   }
 
-  // ---- Events ----
-
   function canvasXY(e) {
     const rect = canvas.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
@@ -431,60 +387,36 @@ function initInteract() {
   canvas.addEventListener('click', (e) => {
     const [px, py] = canvasXY(e);
     const hit = getNodeAt(px, py);
-    if (!hit) {
-      if (activeMain) deactivate();
-      return;
-    }
-    if (hit.type === 'main') {
-      e.preventDefault();
-      e.stopPropagation();
-      activate(hit.node);
-    } else if (hit.type === 'sub') {
-      e.preventDefault();
-      e.stopPropagation();
-      showPanel(hit.node);
-    }
+    if (!hit) { if (activeMain) deactivate(); return; }
+    e.preventDefault(); e.stopPropagation();
+    if (hit.type === 'main') activate(hit.node);
+    else if (hit.type === 'sub') showPanel(hit.node);
   });
-
-  // Hover cursor
   canvas.addEventListener('mousemove', (e) => {
     const [px, py] = canvasXY(e);
-    const hit = getNodeAt(px, py);
-    canvas.style.cursor = hit ? 'pointer' : 'default';
+    canvas.style.cursor = getNodeAt(px, py) ? 'pointer' : 'default';
   });
-
-  // Keyboard: use the SVG node links as keyboard targets
   for (const link of artHost.querySelectorAll('.health-node-link')) {
     link.addEventListener('click', (e) => {
       e.preventDefault();
-      const branch = link.closest('[data-main]');
-      if (!branch) return;
-      const mainId = branch.dataset.main;
-      const mainData = model.mains.find(m => m.id === mainId);
-      if (mainData) activate(mainData);
+      const b = link.closest('[data-main]');
+      if (b) { const m = model.mains.find(x => x.id === b.dataset.main); if (m) activate(m); }
     });
   }
-
-  // Escape
   section.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      if (activeSub) { hidePanel(); e.stopPropagation(); }
-      else if (activeMain) { deactivate(); e.stopPropagation(); }
-    }
+    if (e.key === 'Escape') { if (activeSub) { hidePanel(); e.stopPropagation(); } else if (activeMain) { deactivate(); e.stopPropagation(); } }
   });
+  panelOverlay.addEventListener('click', (e) => { if (e.target === panelOverlay) hidePanel(); });
 
-  // Click outside panel closes it
-  panelOverlay.addEventListener('click', (e) => {
-    if (e.target === panelOverlay) hidePanel();
-  });
-
-  // Start the draw loop
   if (!FAST) {
-    frameId = requestAnimationFrame(draw);
+    if (window.IntersectionObserver) {
+      const io = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) { io.disconnect(); frameId = requestAnimationFrame(draw); } });
+      io.observe(section);
+    } else { frameId = requestAnimationFrame(draw); }
   }
 }
 
-// Run on load and reinitialise if the DOM changes (rechecks swap content).
+// Init on load, reinit on DOM changes.
 initInteract();
 if (window.MutationObserver) {
   new MutationObserver(() => {

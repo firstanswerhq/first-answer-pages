@@ -75,7 +75,7 @@ function start(host) {
   }
 
   // Scatter particles on sphere surface for sparkle
-  const PARTICLE_COUNT = 80;
+  const PARTICLE_COUNT = 30;
   const particles = [];
   for (let i = 0; i < PARTICLE_COUNT; i++) {
     const y = 1 - (i / (PARTICLE_COUNT - 1)) * 2;
@@ -122,12 +122,12 @@ function start(host) {
 
   const draw = (now) => {
     if (!host.isConnected) { stop(); return; }
-    // 30fps cap
-    if (now - lastTime < 33) { frame = 0; loop(); return; }
+    // 15fps cap (easy on slower machines)
+    if (now - lastTime < 66) { frame = 0; loop(); return; }
     lastTime = now;
     frame = 0;
 
-    const size = Math.max(1, Math.round(host.clientWidth * (window.devicePixelRatio || 1)));
+    const size = Math.max(1, Math.round(host.clientWidth * Math.min(window.devicePixelRatio || 1, 2)));
     if (canvas.width !== size) { canvas.width = size; canvas.height = size; }
     const half = size / 2;
     const scale = 0.86;
@@ -182,11 +182,8 @@ function start(host) {
       const fadeAlpha = 0.4 + Math.sin(offset * 2) * 0.2;
       ctx.globalAlpha = fadeAlpha;
       ctx.strokeStyle = arcColors[a];
-      ctx.lineWidth = size / 180;
-      ctx.shadowColor = arcColors[a];
-      ctx.shadowBlur = size / 40;
+      ctx.lineWidth = size / 120;
       ctx.stroke();
-      ctx.shadowBlur = 0;
     }
 
     // 5. Sparkle particles
@@ -260,7 +257,9 @@ function start(host) {
   document.addEventListener('visibilitychange', onVisibility);
   if (motion && motion.addEventListener) motion.addEventListener('change', onMotion);
   orbs.set(host, stop);
-  loop();
+  // Start paused — the IntersectionObserver will trigger loop() when visible.
+  // This prevents the canvas from choking the page during initial load.
+  if (!watcher) loop();
 }
 
 function init() {

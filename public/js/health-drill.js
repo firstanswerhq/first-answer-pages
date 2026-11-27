@@ -16,9 +16,12 @@ function findSection() {
 function initDrill() {
   const section = findSection();
   if (!section) return;
+  if (section.dataset.drillStarted === '1') return;
 
   const groups = section.querySelectorAll('.health-group[data-main-id]');
   if (groups.length === 0) return;
+
+  section.dataset.drillStarted = '1';
 
   // The SVG map area (decoration, aria-hidden) — we fade it during drill-down.
   const mapHost = section.querySelector('[data-health-orb]');
