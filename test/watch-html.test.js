@@ -100,7 +100,7 @@ test('watchPage keeps only the last 12 readings and shows "We couldn\'t check th
   const out = watchPage(w);
   const rows = out.match(/<tr><td>/gu) ?? [];
   assert.equal(rows.length, 12);
-  assert.ok(out.includes(COULD_NOT_CHECK));
+  assert.ok(out.includes(COULD_NOT_CHECK.replace("'", "&#39;")), "the page shows the plain-words line (the apostrophe is escaped)");
 });
 
 test('watchPage: pending, paused and page-only states say so', () => {

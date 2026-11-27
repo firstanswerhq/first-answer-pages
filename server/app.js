@@ -339,9 +339,10 @@ export function createApp(deps = {}) {
   app.use(createMcpRouter(ctx));
   app.use(createSeanceRouter(ctx));
   app.use(createAdminRouter(ctx));
-  app.use(createGradeRouter(ctx));
-  // Monthly watch (add-on): every path falls through to the 404 below unless WATCH_ENABLED=on.
+  // Monthly watch (add-on): every path falls through to the 404 below unless WATCH_ENABLED=on. Mounted BEFORE the Grader's
+  // router, whose last route answers any other /grade/... path with "not found" (POST /grade/:id/watch lives here).
   app.use(createWatchRouter(ctx));
+  app.use(createGradeRouter(ctx));
 
   if (ctx.a2a) mountA2A(app, ctx.a2a); // registers BOTH the card route and ctx.a2a.path together
 
