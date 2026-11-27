@@ -33,11 +33,33 @@ test('about: over 200 characters is an error', () => {
   assert.equal(normalizeGradeInput({ ...base, about: 'x'.repeat(200) }).ok, true);
 });
 
-test('about: the owner\'s words go in the questions as typed, and not in the step name', () => {
+test('about: the owner\'s words go in the questions as typed, in quotes, and not in the step name (item 6)', () => {
   const input = normalizeGradeInput({ ...base, about: 'We pressure wash driveways and soft-wash roofs.' }).input;
-  assert.equal(freeQuestion(input), 'Who are the best businesses in Nashville, TN that do this: We pressure wash driveways and soft-wash roofs? Name your top 5.');
-  for (const q of extraQuestions(input)) assert.ok(q.includes('We pressure wash driveways and soft-wash roofs'));
-  assert.equal(stepNames(input)[3], 'Asking AI who does this in Nashville');
+  assert.equal(freeQuestion(input), 'Who are the best businesses in Nashville, TN that do this: "We pressure wash driveways and soft-wash roofs"? Name your top 5.');
+  assert.deepEqual(extraQuestions(input), [
+    'I\'m looking for a business in Nashville, TN that does this: "We pressure wash driveways and soft-wash roofs". Which ones would you recommend?',
+    'Which businesses in Nashville, TN that do this do people recommend most: "We pressure wash driveways and soft-wash roofs"?',
+  ]);
+  assert.equal(stepNames(input)[3], 'Asking AI who does what you described in Nashville');
+  assert.equal(stepNames(input)[3].includes('pressure'), false, 'the step name never repeats the owner\'s words');
+});
+
+test('item 6: the quotes hold exactly the owner\'s words; a quote mark they typed can\'t break them open', () => {
+  const quoted = q => [...q.matchAll(/"([^"]*)"/g)].map(m => m[1]);
+  const input = normalizeGradeInput({ ...base, about: '  Soft-wash roofs, decks & driveways!!  ' }).input;
+  for (const q of [freeQuestion(input), ...extraQuestions(input)]) {
+    assert.deepEqual(quoted(q), ['Soft-wash roofs, decks & driveways'], q);
+    assert.equal((q.match(/"/g) ?? []).length, 2, 'one pair of quotes');
+  }
+  // Double quotes the owner typed (straight or curly) become single ones, so the pair stays whole.
+  const typed = normalizeGradeInput({ ...base, about: 'We do "same day" repairs and \u201Cfree\u201D estimates' }).input;
+  for (const q of [freeQuestion(typed), ...extraQuestions(typed)]) {
+    assert.equal((q.match(/["\u201C\u201D]/g) ?? []).length, 2, q);
+    assert.deepEqual(quoted(q), ["We do 'same day' repairs and 'free' estimates"], q);
+  }
+  // Without the words: no quotes at all, the questions as before.
+  const plain = normalizeGradeInput(base).input;
+  for (const q of [freeQuestion(plain), ...extraQuestions(plain)]) assert.equal(q.includes('"'), false, q);
 });
 
 test('about: line breaks and control characters cannot split the question', () => {
@@ -146,6 +168,8 @@ test('item 4: repeatCheck: the same "about" within 7 days is the same check; a d
   assert.equal((await post(env, { about: ABOUT })).status, 303);
   assert.equal((await post(env, { about: ABOUT })).status, 200, 'the same words: the "checked recently" page');
   assert.equal((await post(env, { about: 'We clean gutters and paint fences.' })).status, 303, 'different words ask AI a different question');
+  // Item 6 keeps the rule: words that differ only inside the quotes are still a new check.
+  assert.equal((await post(env, { about: 'We pressure wash driveways and soft-wash decks.' })).status, 303);
   assert.equal((await post(env, {})).status, 303, 'no words at all is different from some words');
   assert.equal((await post(env, {})).status, 200, 'and the same as no words again');
   // Straight from the grader too.
