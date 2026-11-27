@@ -59,7 +59,7 @@ test('1F-canvas: health-interact.js has animation drawing functions', async () =
   assert.match(js, /drawSubNodes/, 'has sub-node drawing');
   assert.match(js, /pulseAngle/, 'has pulse animation');
   assert.match(js, /subOrbitAngle/, 'has orbital animation for sub-nodes');
-  assert.match(js, /shadowBlur/, 'uses glow effects');
+  assert.match(js, /lineWidth/, 'uses line width for emphasis');
 });
 
 test('1F-canvas: health-interact.js has panel overlay for sub-check details', async () => {

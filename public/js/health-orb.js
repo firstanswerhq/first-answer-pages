@@ -122,8 +122,8 @@ function start(host) {
 
   const draw = (now) => {
     if (!host.isConnected) { stop(); return; }
-    // 30fps cap
-    if (now - lastTime < 33) { frame = 0; loop(); return; }
+    // 15fps cap (easy on slower machines)
+    if (now - lastTime < 66) { frame = 0; loop(); return; }
     lastTime = now;
     frame = 0;
 
@@ -183,10 +183,8 @@ function start(host) {
       ctx.globalAlpha = fadeAlpha;
       ctx.strokeStyle = arcColors[a];
       ctx.lineWidth = size / 180;
-      ctx.shadowColor = arcColors[a];
-      ctx.shadowBlur = size / 40;
+      ctx.lineWidth = size / 120;
       ctx.stroke();
-      ctx.shadowBlur = 0;
     }
 
     // 5. Sparkle particles

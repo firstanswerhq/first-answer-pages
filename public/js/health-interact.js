@@ -126,7 +126,7 @@ function initInteract() {
 
   function draw(now) {
     frameId = requestAnimationFrame(draw);
-    if (now - lastTime < 33) return; // 30fps cap
+    if (now - lastTime < 66) return; // 15fps cap (easy on slower machines)
     lastTime = now;
 
     const { w, h, dpr } = resize();
@@ -215,10 +215,7 @@ function initInteract() {
     ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
     ctx.strokeStyle = color;
     ctx.lineWidth = 3 * scale * t;
-    ctx.shadowColor = color;
-    ctx.shadowBlur = 20 * scale * t;
     ctx.stroke();
-    ctx.shadowBlur = 0;
 
     // Fill with semi-transparent dark
     ctx.beginPath();
@@ -295,11 +292,9 @@ function initInteract() {
       ctx.strokeStyle = color;
       ctx.lineWidth = (isActiveSub ? 2.5 : 1.5) * scale;
       if (isActiveSub) {
-        ctx.shadowColor = color;
-        ctx.shadowBlur = 12 * scale;
+        ctx.lineWidth = 3 * scale;
       }
       ctx.stroke();
-      ctx.shadowBlur = 0;
 
       // Fill
       ctx.beginPath();
