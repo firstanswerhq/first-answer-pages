@@ -31,6 +31,7 @@ import {
   gradeFormPage, scanPage, reportPage, failedPage, aboutPage, googleLivePage, messagePage, notFoundPage, repeatCheckPage,
   printPage, reportCsvFor,
 } from '../lib/grade-html.js';
+import { watchOfferFor } from './watch.js';
 
 const ID_PATTERN = /^[A-Za-z0-9_-]{22}$/;
 const SECOND_OPINION_RESERVE = 12; // the day's last AI calls stay for new checks
@@ -313,6 +314,11 @@ export function createGradeRouter(ctx) {
         ctx.grader.startExtraQuestions(grade.id).catch(() => {
           process.stderr.write(`[grader] extra-ai-failed id=${grade.id}\n`);
         });
+      }
+      // The monthly watch's opt-in (add-on): only in the full report, only when on and the business claimed a listing.
+      if (full) {
+        const watch = await watchOfferFor(ctx, grade);
+        if (watch) opts.watch = watch;
       }
       return html(res, 200, reportPage(grade, opts));
     } catch (err) {

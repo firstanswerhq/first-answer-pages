@@ -37,6 +37,9 @@ import { createMcpRouter }      from './routes/mcp.js';
 import { createSeanceRouter }   from './routes/seance.js';
 import { createAdminRouter }   from './routes/admin.js';
 import { createGradeRouter }   from './routes/grade.js';
+import { createWatchRouter }   from './routes/watch.js';
+import { createWatchService, watchTick, shouldStartWatchTimer, startWatchTimer } from './lib/watch-service.js';
+import { watchEmails, assistantLabel } from './lib/watch-html.js';
 import { createPagesRouter }    from './routes/pages.js';
 import { mountA2A }             from './routes/a2a.js';
 import { layout, markDemo, applySiteName, applyTitleSuffix } from './lib/html.js';
@@ -198,6 +201,22 @@ export function createApp(deps = {}) {
     config,
     ...(deps.graderTiming ?? {}),
   });
+  // The monthly watch's service. Built always (it starts nothing by itself); its routes and timer are off unless
+  // WATCH_ENABLED=on. Logs hold the watch id, step names and counts only.
+  const watchLog = line => process.stderr.write(`[watch] ${line}\n`);
+  ctx.watch = deps.watch ?? createWatchService({
+    store,
+    grader: ctx.watchReader,
+    aiBudget: ctx.aiBudget,
+    notifier: ctx.notifier,
+    clock,
+    config,
+    log: watchLog,
+    emails: watchEmails({ contactEmail: config.contactEmail ?? '', assistantName: assistantLabel(ctx.assistantProvider?.name) }),
+  });
+  // One hourly tick: nothing runs while GRADE_MAX_RUNNING checks are running; a failure logs a step name only.
+  ctx.watchTick = () => watchTick({ service: ctx.watch, grader: ctx.grader, log: watchLog });
+  if (shouldStartWatchTimer(config)) startWatchTimer({ tick: ctx.watchTick });
 
   // IndexNow (Bing ping): real sites only; tests send only with their own fetch.
   if (deps.indexNow) {
@@ -321,6 +340,8 @@ export function createApp(deps = {}) {
   app.use(createSeanceRouter(ctx));
   app.use(createAdminRouter(ctx));
   app.use(createGradeRouter(ctx));
+  // Monthly watch (add-on): every path falls through to the 404 below unless WATCH_ENABLED=on.
+  app.use(createWatchRouter(ctx));
 
   if (ctx.a2a) mountA2A(app, ctx.a2a); // registers BOTH the card route and ctx.a2a.path together
 

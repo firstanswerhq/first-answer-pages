@@ -13,6 +13,7 @@
  */
 
 import { layout, escapeHtml as h } from './html.js';
+import { watchBlock } from './watch-html.js';
 import { CHECKS, GROUPS, checkById } from './grade-checks.js';
 import {
   suggestedTitle, suggestedSummary, jsonLdBlock, llmsDraft, robotsLines,
@@ -1288,6 +1289,7 @@ export function reportPage(storedGrade, opts = {}) {
   ${answersSection(grade, { now })}
   ${fixKit(grade, contactEmail, { offer: !prepared && !agency })}
   ${recheckBlock(grade, rechecking)}
+  ${watchBlock(grade, opts)}
 </div>`
     : leadForm(grade, { values: leadValues, errors: leadErrors });
 

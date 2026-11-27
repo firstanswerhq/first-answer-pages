@@ -401,5 +401,53 @@ export function createWatchService({
     });
   }
 
-  return { start, confirm, stop, get, runDue, prunePending };
+  /** True when WATCH_MAX_ACTIVE watches (active or waiting for a confirm) exist, so the form says it is full. */
+  async function isFull() {
+    const list = await watches().read();
+    const open = (Array.isArray(list) ? list : []).filter(w => w && (w.status === 'active' || w.status === 'pending')).length;
+    return open >= maxActive();
+  }
+
+  return { start, confirm, stop, get, runDue, prunePending, isFull };
+}
+
+// ---- the hourly timer (task 9) --------------------------------------------------------------------------------------
+
+/** One hour between ticks. */
+export const WATCH_TICK_MS = 60 * 60 * 1000;
+
+/** The timer runs only with WATCH_ENABLED=on, and never in a test run. */
+export function shouldStartWatchTimer(config = {}) {
+  return config.watchEnabled === true && config.testRun !== true;
+}
+
+/**
+ * One tick: nothing runs while the Grader's checks are at GRADE_MAX_RUNNING (requirement 15); otherwise `runDue`,
+ * which also deletes pending watches older than 7 days. Never rejects: a failure logs a step name only (each watch's
+ * own failure is logged with its id inside `runDue`).
+ * @param {{ service: { runDue: Function }, grader?: { busy?: () => boolean }, log?: (line: string) => void }} opts
+ */
+export function watchTick({ service, grader, log = () => {} }) {
+  if (typeof grader?.busy === 'function' && grader.busy()) {
+    log('watch-tick-skipped reason=busy');
+    return Promise.resolve(null);
+  }
+  return Promise.resolve()
+    .then(() => service.runDue())
+    .catch(() => {
+      log('watch-tick-failed');
+      return null;
+    });
+}
+
+/**
+ * Starts the hourly timer and returns it, unref'd so it never keeps the process alive. Tests pass a fake
+ * `setIntervalFn`; no real timer runs in a test.
+ */
+export function startWatchTimer({ tick, setIntervalFn = setInterval, everyMs = WATCH_TICK_MS }) {
+  const timer = setIntervalFn(() => {
+    Promise.resolve().then(tick).catch(() => {});
+  }, everyMs);
+  if (timer && typeof timer.unref === 'function') timer.unref();
+  return timer;
 }

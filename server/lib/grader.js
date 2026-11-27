@@ -2301,6 +2301,8 @@ export function createGrader({
     setPreparedBy,
     readFree,
     watchEligible,
+    // The monthly watch's timer runs nothing while GRADE_MAX_RUNNING checks are running (addon-monthly-watch 15).
+    busy: () => active.size >= maxRunning || waiting.length > 0,
     run: id => { startRun(id); return active.get(id) ?? Promise.resolve(); },
     get,
     peek: id => (live.has(id) ? structuredClone(live.get(id)) : undefined),
