@@ -183,13 +183,14 @@ export function gradeFormPage({
   <p class="tagline">Get a free check in about a minute. We ask AI assistants to name the best businesses like yours in your city, and see if they name you. We also look at what AI can read on your website.</p>
   ${prefilled === true && Object.keys(errors).length === 0 ? '<p class="notice" role="status">We filled this in from your last check. Change anything that\'s wrong, then press Check my business.</p>' : ''}
   ${errors.form ? `<p class="form-error" role="alert">${h(errors.form)}</p>` : ''}
-  ${['name', 'city', 'state', 'service', 'website'].some(k => errors[k]) ? '<p class="form-error" role="alert">Please fix the problems below.</p>' : ''}
+  ${['name', 'city', 'state', 'service', 'about', 'website'].some(k => errors[k]) ? '<p class="form-error" role="alert">Please fix the problems below.</p>' : ''}
   <form class="rise-form" method="POST" action="/grade">
     ${field({ id: 'g-name', name: 'name', label: 'Business name', value: values.name, error: errors.name, attrs: ' autocomplete="organization"' })}
     ${field({ id: 'g-city', name: 'city', label: 'City', value: values.city, error: errors.city, attrs: ' autocomplete="address-level2"' })}
     ${field({ id: 'g-state', name: 'state', label: 'State', value: values.state, hint: '2 letters, like TN', error: errors.state, attrs: ' autocomplete="address-level1"' })}
     ${field({ id: 'g-service', name: 'service', label: 'What you do', value: values.service, hint: 'Like roofers, plumbers or restaurants', error: errors.service, attrs: ' list="service-suggestions"' })}
     <datalist id="service-suggestions">${options}</datalist>
+    ${field({ id: 'g-about', name: 'about', label: 'Describe what you do, in your own words (optional)', value: values.about, hint: 'One sentence is plenty. Example: We pressure wash driveways and soft-wash roofs.', error: errors.about, attrs: ' maxlength="200"' })}
     ${field({ id: 'g-website', name: 'website', label: 'Your website (optional)', value: values.website, hint: "Like example.com. Leave it empty if you don't have one.", error: errors.website, attrs: ' inputmode="url" autocapitalize="none"' })}
     <div class="field">
       <label class="check" for="g-nostorefront"><input type="checkbox" id="g-nostorefront" name="noStorefront" value="1"${values.noStorefront === true ? ' checked' : ''}> We go to our customers (no storefront)</label>

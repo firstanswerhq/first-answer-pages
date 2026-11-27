@@ -97,6 +97,7 @@ const MESSAGES = Object.freeze({
   name: 'Type your business name (up to 120 characters).',
   city: 'Type your city (up to 80 characters).',
   service: 'Say what you do, like roofers or plumbers (up to 60 characters).',
+  about: 'Describe what you do in 200 characters or fewer.',
   website: 'Type your website like example.com.',
 });
 
@@ -137,7 +138,10 @@ export function normalizeGradeInput(raw) {
   const state = normalizeState(stateText);
   const service = cleanText(src.service);
   const websiteText = cleanText(src.website);
+  // The owner's own words about what they do (optional, up to 200 characters). Kept only when not empty.
+  const about = cleanText(src.about);
   const values = { name, city, state: stateText, service, website: websiteText };
+  if (about !== '') values.about = about;
   // "We go to our customers (no storefront)": kept only when ticked, so a Grade made without it looks as before.
   // A browser sends "1" (or "on"); a stored input that is read again holds `true`. Anything else is not ticked.
   const noStorefront = src.noStorefront === '1' || src.noStorefront === 'on' || src.noStorefront === true;
@@ -147,10 +151,12 @@ export function normalizeGradeInput(raw) {
   if (city === '' || codePoints(city) > 80) errors.city = MESSAGES.city;
   if (!US_STATE_CODES.has(state)) errors.state = STATE_ERROR;
   if (service === '' || codePoints(service) > 60) errors.service = MESSAGES.service;
+  if (codePoints(about) > 200) errors.about = MESSAGES.about;
   const site = readWebsiteInput(websiteText);
   if (site.error) errors.website = site.error;
   if (Object.keys(errors).length > 0) return { ok: false, values, errors };
   const input = { name, city, state, service, website: site.value };
+  if (about !== '') input.about = about;
   // An input that was already cleaned once (the route cleans the form, then start() cleans it again) only has the home
   // page in `website`, so its kept page is read again here, and kept only when it is on the same host.
   const kept = site.page ?? (typeof src.websitePage === 'string' ? readWebsiteInput(src.websitePage).page : undefined);
@@ -408,12 +414,23 @@ function foodPhrase(words) {
 }
 
 /** The question in the free part of a report. */
+/** The owner's own words, as typed, minus any closing punctuation so they read inside a question. */
+const aboutText = input => String(input.about ?? '').replace(/[\s.,!?:;]+$/u, '');
+
 export function freeQuestion(input) {
+  // The owner's own words, when given, are used as typed (never made plural or recased).
+  if (input.about) return `Who are the best businesses in ${input.city}, ${input.state} that do this: ${aboutText(input)}? Name your top 5.`;
   return `Who are the best ${servicePhrase(input.service).named} in ${input.city}, ${input.state}? Name your top 5.`;
 }
 
 /** The two questions asked after the report is opened (V111: both use the named phrase). */
 export function extraQuestions(input) {
+  if (input.about) {
+    return [
+      `I'm looking for a business in ${input.city}, ${input.state} that does this: ${aboutText(input)}. Which ones would you recommend?`,
+      `Which businesses in ${input.city}, ${input.state} that do this do people recommend most: ${aboutText(input)}?`,
+    ];
+  }
   const { named } = servicePhrase(input.service);
   return [
     `I'm looking for ${named} in ${input.city}, ${input.state}. Which ones would you recommend?`,
@@ -427,7 +444,9 @@ export function stepNames(input) {
     'Finding your website',
     'Reading your home page',
     'Checking what AI is allowed to read',
-    `Asking AI to name the best ${servicePhrase(input.service).named} in ${input.city}`,
+    input.about
+      ? `Asking AI who does this in ${input.city}`
+      : `Asking AI to name the best ${servicePhrase(input.service).named} in ${input.city}`,
     'Drafting your free directory listing',
   ];
 }
@@ -1910,7 +1929,7 @@ export function createGrader({
       || freeAnswersOf(Array.isArray(g.ai) ? g.ai : []).some(a => !a.reusedFrom);
     const earlier = list
       .filter(g => g && typeof g === 'object' && ['running', 'done'].includes(g.status) && g.byAdmin !== true
-        && Date.parse(g.createdAt) >= cutoff && sameBusinessInput(g.input, input) && askedAi(g))
+        && Date.parse(g.createdAt) >= cutoff && sameBusinessInput(g.input, input) && (g.input?.about ?? '') === (input.about ?? '') && askedAi(g))
       .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0];
     if (!earlier) return null;
     const at = Date.parse(earlier.createdAt);
