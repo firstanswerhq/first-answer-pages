@@ -2828,9 +2828,74 @@ p.grade-prepared-by { font-weight: 700; font-size: 1.1rem; }
 }
 .drill-back:hover { color: var(--color-text, #e0e6f0); border-color: var(--color-text-muted, #8090b0); }
 
+/* Step 1F-canvas: interactive overlay panel (health-interact.js) */
+.interact-panel {
+  position: fixed; inset: 0; z-index: 100;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(11,16,32,0.75); backdrop-filter: blur(6px);
+  animation: interact-fade-in 0.25s ease-out;
+}
+@keyframes interact-fade-in { from { opacity: 0; } to { opacity: 1; } }
+.interact-panel[hidden] { display: none !important; }
+
+.interact-panel-inner {
+  position: relative; max-width: 28rem; width: 90%;
+  max-height: 80vh; overflow-y: auto;
+  padding: 1.5rem 1.5rem 1.2rem;
+  background: var(--color-surface, #111b30);
+  border: 1px solid rgba(103,232,249,0.25);
+  border-radius: 10px;
+  box-shadow: 0 0 40px rgba(103,232,249,0.12), 0 0 80px rgba(103,232,249,0.06),
+              inset 0 0 20px rgba(103,232,249,0.04);
+}
+.interact-panel-close {
+  position: absolute; top: 0.6rem; right: 0.6rem;
+  width: 2rem; height: 2rem; display: flex; align-items: center; justify-content: center;
+  background: none; border: 1px solid rgba(103,232,249,0.2);
+  border-radius: 50%; color: var(--color-text-muted, #8090b0);
+  font-size: 1.1rem; cursor: pointer; transition: color 0.15s, border-color 0.15s;
+}
+.interact-panel-close:hover {
+  color: #67e8f9; border-color: #67e8f9;
+}
+.interact-panel-title {
+  margin: 0 0 0.6rem; font-size: 1.05rem; font-weight: 600;
+  color: var(--color-text, #e0e6f0); display: flex; align-items: center; gap: 0.5rem;
+}
+.interact-dot {
+  display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+}
+.interact-dot-good        { background: var(--health-good, #00e676); box-shadow: 0 0 6px var(--health-good, #00e676); }
+.interact-dot-partly      { background: var(--health-partly, #ffab00); box-shadow: 0 0 6px var(--health-partly, #ffab00); }
+.interact-dot-missing     { background: var(--health-missing, #ff5252); box-shadow: 0 0 6px var(--health-missing, #ff5252); }
+.interact-dot-not_checked { background: var(--health-gray, #607090); box-shadow: 0 0 6px var(--health-gray, #607090); }
+.interact-dot-info        { background: #67e8f9; box-shadow: 0 0 6px #67e8f9; }
+
+.interact-panel-label {
+  margin: 0 0 0.6rem; font-size: 0.88rem;
+  color: var(--color-text-muted, #8090b0);
+}
+.interact-panel-body {
+  font-size: 0.92rem; line-height: 1.5;
+  color: var(--color-text, #e0e6f0);
+}
+.interact-panel-body .drill-status { margin-top: 0; }
+.interact-panel-body .drill-fix { margin-bottom: 0.6rem; }
+.interact-panel-body .drill-recheck .btn {
+  background: rgba(103,232,249,0.1); border: 1px solid rgba(103,232,249,0.3);
+  color: #67e8f9; transition: background 0.15s;
+}
+.interact-panel-body .drill-recheck .btn:hover {
+  background: rgba(103,232,249,0.2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .interact-panel { animation: none; }
+}
+
 /* Print: hide all drill-down UI */
 @media print {
-  .drill-close, .health-drill-panel, .drill-back { display: none !important; }
+  .drill-close, .health-drill-panel, .drill-back, .interact-panel { display: none !important; }
   .drill-faded { opacity: 1 !important; pointer-events: auto !important; }
 }
 

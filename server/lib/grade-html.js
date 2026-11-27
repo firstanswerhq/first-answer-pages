@@ -241,7 +241,7 @@ export function scanPage(grade) {
 </section>`;
   // The finished report is swapped into this page in place, so the orb script is loaded here too (Step 2 review V12).
   // It does nothing until a health map is on the page.
-  return page(`Checking ${grade.input.name}`, body, { refresh: true, scripts: [HEALTH_ORB_SCRIPT, HEALTH_DRILL_SCRIPT, HEALTH_SCAN_SCRIPT] });
+  return page(`Checking ${grade.input.name}`, body, { refresh: true, scripts: [HEALTH_ORB_SCRIPT, HEALTH_DRILL_SCRIPT, HEALTH_INTERACT_SCRIPT, HEALTH_SCAN_SCRIPT] });
 }
 
 /** The page for a Grade that did not finish. `stamp` lets "Start again" post the same details. */
@@ -1308,7 +1308,7 @@ ${foot}
   return page(`AI Visibility Check for ${i.name}`, body, {
     refresh: rechecking || secondPending.length > 0 || body.includes('The other questions are still being answered.'),
     // The orb's turning particles: a small script loaded after the page; the report reads the same without it.
-    scripts: [HEALTH_ORB_SCRIPT, HEALTH_DRILL_SCRIPT, HEALTH_SCAN_SCRIPT],
+    scripts: [HEALTH_ORB_SCRIPT, HEALTH_DRILL_SCRIPT, HEALTH_INTERACT_SCRIPT, HEALTH_SCAN_SCRIPT],
     // Fix B item 4: no "List your business free" header button on an agency's report.
     navCta: !agency,
   });
@@ -1393,6 +1393,9 @@ export const HEALTH_ORB_SCRIPT = '/js/health-orb.js';
 
 /** Step 1F: the drill-down interaction script for the health map. */
 export const HEALTH_DRILL_SCRIPT = '/js/health-drill.js';
+
+/** Step 1F-canvas: the interactive canvas overlay for the health map drill-down. */
+export const HEALTH_INTERACT_SCRIPT = '/js/health-interact.js';
 
 // ---- Requirement 13: the agency-grade parts of the full report --------------------------------------------------------
 
