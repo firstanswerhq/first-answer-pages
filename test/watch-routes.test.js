@@ -315,7 +315,8 @@ test('rate limits: start 5 an hour per client; confirm 20 an hour; stop is count
   const sixth = await startWatch(env, id, {}, { ip });
   assert.equal(sixth.status, 429);
   assert.ok(sixth.headers.get('retry-after'));
-  assert.equal((await env.ctx.store.collection('watches').read()).length, 5);
+  // One watch per report (code fix 2): starts 2 to 5 went to the same watch, but still counted toward the limit.
+  assert.equal((await env.ctx.store.collection('watches').read()).length, 1);
 
   const other = '198.51.100.8';
   for (let i = 0; i < 20; i += 1) assert.notEqual((await post(env, '/watch/abcdefghijklmnopqrstuv/confirm', { t: 'x' }, { ip: other })).status, 429);

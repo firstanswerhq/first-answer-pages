@@ -425,6 +425,8 @@ export function configFromEnv(env = process.env, opts = {}) {
     watchEnabled: parseWatchEnabled(env.WATCH_ENABLED, opts.warn ?? console.warn),
     watchMaxPerDay: parseWatchMaxPerDay(env.WATCH_MAX_PER_DAY, opts.warn ?? console.warn),
     watchMaxActive: parseWatchMaxActive(env.WATCH_MAX_ACTIVE, opts.warn ?? console.warn),
+    // A postal address line for the footer of owner emails (monthly watch). Empty means no line.
+    notifyPostalAddress: nonEmpty(env.NOTIFY_POSTAL_ADDRESS) ?? '',
     // The human check on the check form (Cloudflare Turnstile). Off unless both keys are set.
     turnstileSiteKey: nonEmpty(env.TURNSTILE_SITE_KEY) ?? '',
     turnstileSecretKey: nonEmpty(env.TURNSTILE_SECRET_KEY) ?? '',

@@ -21,6 +21,7 @@ import { normalizeEmail } from '../lib/listing-fields.js';
 import { maskEmail } from '../lib/watch.js';
 import {
   watchPage, confirmPage, confirmedPage, stopPage, stoppedPage, watchMessagePage, watchNotFoundPage, WATCH_FULL_TEXT,
+  RATE_LIMIT_TEXT, BAD_CONFIRM_TEXT,
 } from '../lib/watch-html.js';
 
 const ID_PATTERN = /^[A-Za-z0-9_-]{22}$/;
@@ -31,6 +32,8 @@ const isOn = ctx => ctx.config.watchEnabled === true && ctx.config.graderEnabled
 /** Email alerts only with the Resend notifier (requirement 12). */
 const emailOn = ctx => ctx.config.notifierName === 'resend';
 const tokenOf = v => (typeof v === 'string' && TOKEN_PATTERN.test(v) ? v : '');
+/** A start refused by the per-address confirm-email limits (watch code fix 1). */
+export const EMAIL_LIMIT_TEXT = "We can't send another confirm email to that address today. Please try again tomorrow, or leave the email empty.";
 
 /**
  * What the report's watch block needs, or null when it shows nothing: the watch is off, the Grade is not done, or
@@ -54,7 +57,7 @@ export function createWatchRouter(ctx) {
   const notFound = res => html(res, 404, watchNotFoundPage());
   const tooMany = (res, retryAfterSeconds) => {
     res.set('Retry-After', String(retryAfterSeconds));
-    return html(res, 429, watchMessagePage('Please slow down', 'We have had a lot of requests from your internet connection. Please try again a little later.'));
+    return html(res, 429, watchMessagePage('Please slow down', RATE_LIMIT_TEXT));
   };
   const leadGate = () => ctx.config.graderLeadGate !== false;
   const fullAccess = (req, grade) => grade?.status === 'done'
@@ -93,7 +96,13 @@ export function createWatchRouter(ctx) {
       if (!limited.allowed) return tooMany(res, limited.retryAfterSeconds);
 
       const result = await ctx.watch.start({ gradeId: grade.id, email });
+      // One watch per report: a second start goes to the watch that is there, and sends nothing.
+      if (result.ok && result.existing) return res.redirect(303, `/watch/${encodeURIComponent(result.watch.id)}?already=1`);
       if (result.ok) return res.redirect(303, `/watch/${encodeURIComponent(result.watch.id)}`);
+      if (result.reason === 'email_limit') {
+        // The same words whether the address had 2 emails today or was stopped today, so neither can be told apart.
+        return html(res, 429, watchMessagePage('Please try again tomorrow', EMAIL_LIMIT_TEXT, backLink));
+      }
       if (result.reason === 'full') return html(res, 200, watchMessagePage('Monthly watch is full', WATCH_FULL_TEXT, backLink));
       if (result.reason === 'email') {
         return html(res, 422, watchMessagePage('Check the email address', 'Type a real email address, like name@example.com, or leave it empty.', backLink));
@@ -110,7 +119,9 @@ export function createWatchRouter(ctx) {
       const { id } = req.params;
       const watch = ID_PATTERN.test(id) ? await ctx.watch.get(id) : undefined;
       if (!watch) return notFound(res);
-      return html(res, 200, watchPage(watch, { maskedEmail: maskEmail(watch.email), question: freeQuestion(watch.input) }));
+      return html(res, 200, watchPage(watch, {
+        maskedEmail: maskEmail(watch.email), question: freeQuestion(watch.input), already: req.query.already === '1',
+      }));
     } catch (err) {
       return next(err);
     }
@@ -138,7 +149,7 @@ export function createWatchRouter(ctx) {
       const result = await ctx.watch.confirm(id, tokenOf(req.body?.t ?? req.query.t));
       if (result.ok) return html(res, 200, confirmedPage(id));
       if (result.state === 'not_found') return notFound(res);
-      return html(res, 400, watchMessagePage('That link did not work', 'Open the newest email from us and press Confirm again.'));
+      return html(res, 400, watchMessagePage('That link did not work', BAD_CONFIRM_TEXT));
     } catch (err) {
       return next(err);
     }

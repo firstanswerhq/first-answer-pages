@@ -39,7 +39,7 @@ import { createAdminRouter }   from './routes/admin.js';
 import { createGradeRouter }   from './routes/grade.js';
 import { createWatchRouter }   from './routes/watch.js';
 import { createWatchService, watchTick, shouldStartWatchTimer, startWatchTimer } from './lib/watch-service.js';
-import { watchEmails, assistantLabel } from './lib/watch-html.js';
+import { watchEmails } from './lib/watch-html.js';
 import { createPagesRouter }    from './routes/pages.js';
 import { mountA2A }             from './routes/a2a.js';
 import { layout, markDemo, applySiteName, applyTitleSuffix } from './lib/html.js';
@@ -189,7 +189,8 @@ export function createApp(deps = {}) {
     store,
     assistantProvider: ctx.assistantProvider,
     extraAssistants: [],
-    nameChecker: deps.nameChecker !== undefined ? deps.nameChecker : createNameCheck(config),
+    // No Gemini name check: it is an extra call the daily allowance does not count (watch code fix 5).
+    nameChecker: null,
     placesLookup: null,
     bingLookup: null,
     aiBudget: ctx.aiBudget,
@@ -212,7 +213,7 @@ export function createApp(deps = {}) {
     clock,
     config,
     log: watchLog,
-    emails: watchEmails({ contactEmail: config.contactEmail ?? '', assistantName: assistantLabel(ctx.assistantProvider?.name) }),
+    emails: watchEmails({ contactEmail: config.contactEmail ?? '', postalAddress: config.notifyPostalAddress ?? '' }),
   });
   // One hourly tick: nothing runs while GRADE_MAX_RUNNING checks are running; a failure logs a step name only.
   ctx.watchTick = () => watchTick({ service: ctx.watch, grader: ctx.grader, log: watchLog });

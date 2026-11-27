@@ -12,11 +12,13 @@
  * Logs hold the watch id, step names and counts only: never the business, the email, the question or an answer.
  */
 
-import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { randomBytes, timingSafeEqual, createHmac } from 'node:crypto';
 
 import { freeAnswersOf, freeQuestion, sameBusinessInput } from './grader.js';
 import { normalizeEmail } from './listing-fields.js';
 import { newWatch, dueWatches, addReading, confirmedChange, lastReading, makeReading } from './watch.js';
+import { watchEmails } from './watch-html.js';
+import { EMAIL_RE } from './notifier.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** No reading runs when this many or fewer Grader calls are left today (requirement 7). */
@@ -29,8 +31,15 @@ export const PENDING_DAYS = 7;
 export const MAX_SEND_FAILURES = 3;
 /** The aiBudget day counter for watch readings. */
 export const WATCH_RUNS_NOTE = 'watchRuns';
+/** At most this many confirm emails to one address in 24 hours (code fix 1). */
+export const MAX_CONFIRM_EMAILS = 2;
+/** A paused watch, and its address, is deleted after this many days (code fix 4). */
+export const PAUSED_DAYS = 14;
+/** The address-limit maps keep at most this many keys. */
+const ADDRESS_KEYS_MAX = 10000;
 
-const SNAPSHOT_LINE = 'AI answers change from one time to the next, so this is one snapshot, not a ranking.';
+// The Chicago day, as aiBudget counts days.
+const CHICAGO_DAY = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit' });
 
 const iso = ms => new Date(ms).toISOString();
 const toMs = t => (t instanceof Date ? t.getTime() : typeof t === 'string' ? Date.parse(t) : Number(t));
@@ -68,35 +77,10 @@ export function unsubscribeHeaders(urls) {
 }
 
 /**
- * Plain-text email builders. Task 7 (`watch-html.js`) brings the final wording; these keep the same rules: no HTML,
- * every inserted value on one plain line, no promise that anything makes AI name a business.
+ * The plain-text email builders used when none are passed: the same wording as the app's (`watchEmails` in
+ * watch-html.js), with no postal address and no Questions line. No HTML; every inserted value on one plain line.
  */
-export const defaultEmails = Object.freeze({
-  confirm({ watch, urls }) {
-    const name = plainLine(watch.input?.name);
-    return {
-      subject: `Confirm the monthly watch for ${name}`,
-      text: [
-        `Someone asked us to email this address once a month about how AI answers for ${name}.`,
-        `To start the emails, open this page and press Confirm: ${urls.confirm}`,
-        'If this was not you, do nothing. We delete the request in 7 days.',
-        `Stop watching: ${urls.stop}`,
-      ].join('\n'),
-    };
-  },
-  change({ watch, change, reading, question, urls }) {
-    const name = plainLine(watch.input?.name);
-    const names = (reading.competitors ?? []).map(plainLine).filter(Boolean).join(', ');
-    const started = change === 'started';
-    const lines = [
-      started ? 'AI named your business this time.' : 'AI did not name your business this time.',
-      `We asked: ${plainLine(question)}`,
-    ];
-    if (names) lines.push(`${started ? 'AI named' : 'AI named instead'}: ${names}`);
-    lines.push(SNAPSHOT_LINE, `Your watch page: ${urls.page}`, `Stop watching: ${urls.stop}`);
-    return { subject: started ? `AI named ${name} this month` : `AI did not name ${name} this month`, text: lines.join('\n') };
-  },
-});
+export const defaultEmails = Object.freeze(watchEmails());
 
 /** A reading's fields from one Grade answer list: named if any main answer named it. */
 function readingFromAnswers(answers) {
@@ -161,31 +145,81 @@ export function createWatchService({
     if (!res?.error) return false;
     const after = await change(watch.id, w => {
       w.sendFailures = (Number.isInteger(w.sendFailures) ? w.sendFailures : 0) + 1;
-      if (w.sendFailures >= MAX_SEND_FAILURES && w.status === 'active') w.status = 'paused';
+      if (w.sendFailures >= MAX_SEND_FAILURES && w.status === 'active') {
+        w.status = 'paused';
+        // A paused watch keeps its address only PAUSED_DAYS more days (code fix 4).
+        w.pausedAt = iso(clock.now());
+      }
     });
     log(`watch-email-failed id=${watch.id} failures=${after?.sendFailures ?? 0}${after?.status === 'paused' ? ' paused' : ''}`);
     return false;
   }
 
+  // ---- confirm-email limits (code fix 1). Kept in memory, keyed by a keyed hash of the address: the plain address is
+  // never a key and never logged. A restart clears them, which only ever allows a few more emails, never fewer.
+  const confirmSends = new Map(); // address key -> times a confirm email was sent (ms), newest last
+  const stoppedAt = new Map(); // address key -> when a watch with this address was stopped (ms)
+  const addressKey = address => createHmac('sha256', `watch-address:${String(config.graderSecret ?? '')}`)
+    .update(String(address).trim().toLowerCase()).digest('base64url');
+  const remember = (map, key, value) => {
+    map.delete(key);
+    map.set(key, value);
+    while (map.size > ADDRESS_KEYS_MAX) map.delete(map.keys().next().value);
+  };
+  const sendsToday = (key, now) => {
+    const kept = (confirmSends.get(key) ?? []).filter(t => t > now - DAY_MS);
+    if (kept.length > 0) confirmSends.set(key, kept);
+    else confirmSends.delete(key);
+    return kept.length;
+  };
+  const stoppedRecently = (key, now) => {
+    const t = stoppedAt.get(key);
+    if (t === undefined) return false;
+    if (t > now - DAY_MS) return true;
+    stoppedAt.delete(key);
+    return false;
+  };
+
   /**
-   * Starts a watch for a finished Grade whose business has claimed a listing.
-   * @returns {Promise<{ ok: true, watch: object } | { ok: false, reason: 'not_eligible'|'full'|'email' }>}
+   * Starts a watch for a finished Grade whose business has claimed a listing. At most one watch per Grade: a second
+   * start returns the one there (`existing: true`) and sends nothing. An address gets at most 2 confirm emails in 24
+   * hours, and none for 24 hours after a watch with it was stopped (`reason: 'email_limit'`).
+   * @returns {Promise<{ ok: true, watch: object, existing?: true }
+   *   | { ok: false, reason: 'not_eligible'|'full'|'email'|'email_limit' }>}
    */
   async function start({ gradeId, email = null } = {}) {
     let address = null;
     if (typeof email === 'string' && email.trim() !== '') {
       address = normalizeEmail(email);
-      if (!address) return { ok: false, reason: 'email' };
+      // The same check the Resend notifier makes, so "a,b@x.com" is refused here and never reaches a send (code fix 6).
+      if (!address || address.length > 254 || !EMAIL_RE.test(address)) return { ok: false, reason: 'email' };
     }
     const grade = typeof gradeId === 'string' ? await grader.get(gradeId) : undefined;
     if (!grade || !(await grader.watchEligible(gradeId))) return { ok: false, reason: 'not_eligible' };
 
+    const already = async () => {
+      const list = await watches().read();
+      const w = Array.isArray(list) ? list.find(x => x && x.gradeId === gradeId) : undefined;
+      return w ? { ok: true, existing: true, watch: structuredClone(w) } : null;
+    };
+    const there = await already();
+    if (there) return there;
+
     const now = clock.now();
+    const key = address ? addressKey(address) : null;
+    if (key && (stoppedRecently(key, now) || sendsToday(key, now) >= MAX_CONFIRM_EMAILS)) {
+      log('watch-email-limit');
+      return { ok: false, reason: 'email_limit' };
+    }
+
     const first = readingFromAnswers(freeAnswersOf(Array.isArray(grade.ai) ? grade.ai : []));
     let made = null;
     let full = false;
-    // Not behind the `watch-run` lock: a start never waits for an hourly run's AI asks. The file update is queued.
+    let raced = false;
+    // Not behind the `watch-run` lock: a start never waits for an hourly run's AI asks. The file update is queued, and
+    // the one-watch-per-Grade rule is checked again inside it, so two starts at once make one watch.
     await watches().update(list => {
+      if (list.some(w => w && w.gradeId === gradeId)) { raced = true; return; }
       const open = list.filter(w => w && (w.status === 'active' || w.status === 'pending')).length;
       if (open >= maxActive()) { full = true; return; }
       made = newWatch({
@@ -194,12 +228,16 @@ export function createWatchService({
       });
       list.push(made);
     });
+    if (raced) return (await already()) ?? { ok: false, reason: 'not_eligible' };
     if (full) {
       log('watch-full');
       return { ok: false, reason: 'full' };
     }
     log(`watch-started id=${made.id} status=${made.status}`);
-    if (made.email) await send(made, emails.confirm({ watch: made, urls: watchUrls(config.baseUrl, made) }));
+    if (made.email) {
+      remember(confirmSends, key, [...(confirmSends.get(key) ?? []), now]);
+      await send(made, emails.confirm({ watch: made, urls: watchUrls(config.baseUrl, made) }));
+    }
     return { ok: true, watch: (await get(made.id)) ?? made };
   }
 
@@ -222,12 +260,16 @@ export function createWatchService({
   /** Deletes the watch and its email address, with the right stop token. */
   async function stop(id, token) {
     let removed = false;
+    let address = null;
     await watches().update(list => {
       const i = list.findIndex(w => w && w.id === id);
       if (i === -1 || !sameToken(token, list[i].stopToken)) return;
+      address = list[i].email;
       list.splice(i, 1);
       removed = true;
     });
+    // A stopped address gets no new confirm email for 24 hours (only its keyed hash is kept).
+    if (removed && address) remember(stoppedAt, addressKey(address), clock.now());
     if (removed) log(`watch-stopped id=${id}`);
     return { ok: removed };
   }
@@ -264,12 +306,33 @@ export function createWatchService({
     return best ? readingFromAnswers(best.answers) : null;
   }
 
+  // ---- the daily cap (code fix 3) -----------------------------------------------------------------------------
+  // The watch's own count of today's asks, kept here so the aiBudget's 50-name limit on notes can never stop it
+  // counting. The aiBudget note is still written (it survives a restart and shows on the admin page); the higher of the
+  // two counts is used, and a note that could not be written (0) is taken as the cap reached, so the cap fails closed.
+  const runs = { day: '', count: 0 };
+  const runsToday = now => {
+    const day = CHICAGO_DAY.format(new Date(now));
+    if (runs.day !== day) {
+      runs.day = day;
+      runs.count = 0;
+    }
+    return Math.max(runs.count, aiBudget.notes()[WATCH_RUNS_NOTE] ?? 0);
+  };
+  const capReached = now => runsToday(now) >= maxPerDay();
+  /** Counts one ask. False when the cap is reached, or the aiBudget note could not be written. */
+  const countAsk = now => {
+    if (capReached(now)) return false;
+    runs.count += 1;
+    return aiBudget.note(WATCH_RUNS_NOTE) !== 0;
+  };
+
   /**
-   * One ask through the watch's reader (its AI call is counted by the grader's own budget use). A month's reading is
-   * counted in today's watch readings; the confirm ask is not (WATCH_MAX_PER_DAY counts readings, not calls).
+   * One ask through the watch's reader (its AI call is also counted by the grader's own budget use). Every ask counts
+   * toward WATCH_MAX_PER_DAY, the confirming second ask too. Returns { capped: true } when the cap stops it.
    */
-  async function ask(watch, { reading = true } = {}) {
-    if (reading) aiBudget.note(WATCH_RUNS_NOTE);
+  async function ask(watch, now) {
+    if (!countAsk(now)) return { capped: true };
     try {
       const r = await grader.readFree(watch.input);
       return r && r.state === 'ok' ? r : null;
@@ -279,7 +342,6 @@ export function createWatchService({
   }
 
   const belowFloor = () => aiBudget.peek({ kind: 'grade' }).remaining <= WATCH_BUDGET_FLOOR;
-  const capReached = () => (aiBudget.notes()[WATCH_RUNS_NOTE] ?? 0) >= maxPerDay();
 
   /** A reading that could not run: tried again tomorrow, and after 3 more days recorded as "couldn't check". */
   async function failed(id, now) {
@@ -318,7 +380,9 @@ export function createWatchService({
     }
     if (!reading) {
       source = 'ask';
-      reading = await ask(claimed);
+      reading = await ask(claimed, now);
+      // The cap stopped it before anything was asked: due again tomorrow (the claim moved the date), not a failure.
+      if (reading?.capped) return 'capped';
       if (!reading) return failed(claimed.id, now);
     }
 
@@ -326,7 +390,8 @@ export function createWatchService({
     let changed = null;
     if (before && before.named !== reading.named) {
       if (belowFloor()) return failed(claimed.id, now);
-      const second = await ask(claimed, { reading: false });
+      const second = await ask(claimed, now);
+      if (second?.capped) return 'capped';
       if (!second) return failed(claimed.id, now);
       changed = confirmedChange(before, reading, second);
       if (!changed) {
@@ -354,14 +419,21 @@ export function createWatchService({
     return changed ? `change-${changed}` : source;
   }
 
-  /** Deletes pending watches not confirmed in 7 days. Returns how many. */
+  /**
+   * Deletes pending watches not confirmed in 7 days, and paused watches (with their address) paused for more than 14
+   * days (code fix 4). Returns how many. A paused watch with no pause date (made before the date was kept) counts
+   * from its last check.
+   */
   async function prunePending(now) {
     let removed = 0;
     await watches().update(list => {
       const kept = list.filter(w => {
-        const old = w && w.status === 'pending' && Date.parse(w.createdAt) <= now - PENDING_DAYS * DAY_MS;
-        if (old) removed += 1;
-        return !old;
+        if (!w) return true;
+        const pendingOld = w.status === 'pending' && Date.parse(w.createdAt) <= now - PENDING_DAYS * DAY_MS;
+        const pausedSince = Date.parse(w.pausedAt ?? w.lastCheckedAt);
+        const pausedOld = w.status === 'paused' && Number.isFinite(pausedSince) && pausedSince < now - PAUSED_DAYS * DAY_MS;
+        if (pendingOld || pausedOld) removed += 1;
+        return !(pendingOld || pausedOld);
       });
       return removed > 0 ? kept : undefined;
     });
@@ -383,7 +455,7 @@ export function createWatchService({
       out.due = due.length;
       for (const w of due) {
         if (belowFloor()) { out.stopped = 'floor'; break; }
-        if (capReached()) { out.stopped = 'cap'; break; }
+        if (capReached(now)) { out.stopped = 'cap'; break; }
         let step;
         try {
           step = await readOne(w, now);
@@ -391,6 +463,7 @@ export function createWatchService({
           log(`watch-run-failed id=${w.id}`);
           continue;
         }
+        if (step === 'capped') { out.stopped = 'cap'; break; }
         if (step === 'reused') out.reused += 1;
         else if (step === 'ask') out.asked += 1;
         else if (step === 'retry' || step === 'none') out.failed += 1;

@@ -177,7 +177,8 @@ function ownerHeaders(headers) {
 }
 
 const RESEND_URL = 'https://api.resend.com/emails';
-const EMAIL_RE = /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/;
+/** The address check every owner and quote email passes (the watch's start uses it too). */
+export const EMAIL_RE = /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/;
 
 /** Plain-text email body. Control characters removed; no HTML in plain text. */
 function plainText(value) {

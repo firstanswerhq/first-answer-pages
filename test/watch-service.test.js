@@ -82,8 +82,8 @@ const notNamed = () => ({ named: false, position: null, total: 5, competitors: [
 const failedRead = () => ({ named: false, position: null, total: 0, competitors: [], state: 'failed' });
 
 /** Starts a watch with an email and confirms it. */
-async function activeWithEmail(env) {
-  const started = await env.service.start({ gradeId: 'g1', email: EMAIL });
+async function activeWithEmail(env, gradeId = 'g1') {
+  const started = await env.service.start({ gradeId, email: EMAIL });
   assert.equal(started.ok, true);
   const done = await env.service.confirm(started.watch.id, started.watch.confirmToken);
   assert.equal(done.ok, true);
@@ -156,14 +156,15 @@ test('confirm: a wrong token changes nothing; the right one makes the watch acti
 test('start: not eligible, a bad email and the WATCH_MAX_ACTIVE cap start nothing', async () => {
   const env = await makeEnv({
     config: { watchMaxActive: 1 },
-    grades: [grade('g1'), grade('g2', { draftId: undefined }), grade('g3', { status: 'running' })],
+    grades: [grade('g1'), grade('g2', { draftId: undefined }), grade('g3', { status: 'running' }), grade('g4')],
   });
   assert.deepEqual(await env.service.start({ gradeId: 'g2' }), { ok: false, reason: 'not_eligible' });
   assert.deepEqual(await env.service.start({ gradeId: 'g3' }), { ok: false, reason: 'not_eligible' });
   assert.deepEqual(await env.service.start({ gradeId: 'missing' }), { ok: false, reason: 'not_eligible' });
   assert.deepEqual(await env.service.start({ gradeId: 'g1', email: 'not an email' }), { ok: false, reason: 'email' });
   assert.equal((await env.service.start({ gradeId: 'g1' })).ok, true);
-  assert.deepEqual(await env.service.start({ gradeId: 'g1' }), { ok: false, reason: 'full' });
+  // A second report (one watch per report since code fix 2, so the cap is shown with another Grade).
+  assert.deepEqual(await env.service.start({ gradeId: 'g4' }), { ok: false, reason: 'full' });
   assert.equal((await env.store.collection('watches').read()).length, 1);
 
   const none = await makeEnv({ config: { watchMaxActive: 0 } });
@@ -212,10 +213,11 @@ test('runDue never runs at 25 or fewer Grader calls left', async () => {
 });
 
 test('runDue stops at WATCH_MAX_PER_DAY readings, oldest due first, and goes on the next day', async () => {
-  const env = await makeEnv({ config: { watchMaxPerDay: 2 } });
+  // Three reports, one watch each (one watch per report since code fix 2).
+  const env = await makeEnv({ config: { watchMaxPerDay: 2 }, grades: [grade('g1'), grade('g2'), grade('g3')] });
   const ids = [];
   for (let i = 0; i < 3; i += 1) {
-    ids.push((await env.service.start({ gradeId: 'g1' })).watch.id);
+    ids.push((await env.service.start({ gradeId: `g${i + 1}` })).watch.id);
     env.clock.t += 60000;
   }
   env.clock.t = START + 31 * DAY;
@@ -317,11 +319,12 @@ test('runDue: a change confirmed by a second ask is kept and emailed', async () 
   assert.equal(env.notifier.owners.length, sentBefore + 1);
   const mail = env.notifier.owners.at(-1);
   assert.equal(mail.to, EMAIL);
-  assert.equal(mail.subject, 'AI did not name Zephyr Plumbing this month');
-  assert.ok(mail.text.includes('AI did not name your business this time.'));
+  assert.equal(mail.subject, 'A change in what Claude says about Zephyr Plumbing');
+  assert.ok(mail.text.includes('Last time we asked, Claude named your business. This time it did not.'));
   assert.match(mail.text, /^We asked: Who are the best .+ in Nashville, TN\? Name your top 5\.$/mu);
-  assert.ok(mail.text.includes('Other Co, Rival Pipes'));
-  assert.ok(mail.text.includes('AI answers change from one time to the next, so this is one snapshot, not a ranking.'));
+  assert.ok(mail.text.includes('Businesses Claude named this time: Other Co, Rival Pipes'));
+  assert.ok(mail.text.includes('Claude can answer differently each time you ask, so treat this as one example, not your place in a list.'));
+  assert.ok(mail.text.includes('Sent by the AI Grader from First Answer Pages.'));
   assert.ok(mail.text.includes(`${BASE}/watch/${w.id}`));
   assert.equal(mail.headers['List-Unsubscribe'], `<${BASE}/watch/${w.id}/stop?t=${w.stopToken}>`);
   assert.equal(mail.headers['List-Unsubscribe-Post'], 'List-Unsubscribe=One-Click');
@@ -383,9 +386,9 @@ test('runDue: a reader that throws counts as a failed reading', async () => {
 });
 
 test('runDue deletes a pending watch not confirmed in 7 days', async () => {
-  const env = await makeEnv();
+  const env = await makeEnv({ grades: [grade('g1'), grade('g2')] });
   const { watch } = await env.service.start({ gradeId: 'g1', email: EMAIL });
-  const kept = await activeWithEmail(env);
+  const kept = await activeWithEmail(env, 'g2');
   assert.equal((await env.service.runDue(START + 6 * DAY)).pruned, 0);
   assert.ok(await env.service.get(watch.id));
   assert.equal((await env.service.runDue(START + 7 * DAY)).pruned, 1);
@@ -459,8 +462,8 @@ test('email builders: every inserted value is one plain line', () => {
     watch, change: 'started', question: 'Who\r\nis best?', urls,
     reading: { competitors: ['A\nB', 'C'] },
   });
-  assert.equal(change.subject, `AI named ${plainLine(watch.input.name)} this month`);
+  assert.equal(change.subject, `A change in what Claude says about ${plainLine(watch.input.name)}`);
   assert.ok(change.text.includes('We asked: Who is best?'));
-  assert.ok(change.text.includes('AI named: A B, C'));
+  assert.ok(change.text.includes('Businesses Claude named this time: A B, C'));
   assert.equal(plainLine('a\u202Eb\tc'), 'a b c');
 });
