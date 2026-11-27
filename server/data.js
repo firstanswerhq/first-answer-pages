@@ -35,7 +35,8 @@ import { readJsonFile, updateJsonFile, StoreError } from './lib/json-file.js';
 import { configFromEnv } from './lib/config.js';
 import { pruneQuotes, pruneDrafts, pruneGrades, pruneLeads } from './lib/retention.js';
 
-const COLLECTIONS = new Set(['drafts', 'quotes', 'seance', 'pending', 'grades', 'leads']);
+// `watches`: the monthly watch add-on (addon-monthly-watch), one record per watch.
+const COLLECTIONS = new Set(['drafts', 'quotes', 'seance', 'pending', 'grades', 'leads', 'watches']);
 const MODEL_KEYS = [
   'name', 'category', 'phone', 'hours', 'services', 'serviceArea',
   'description', 'city', 'state', 'address', 'ownerEmail', 'reviewsLink', 'website',

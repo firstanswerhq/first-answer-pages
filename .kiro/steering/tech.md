@@ -30,7 +30,7 @@
 - **JSON files in `data/`** — no database server, no ORM, no query language
 - One JSON file per collection (e.g., `data/listings.json`, `data/categories.json`)
 - Seeds (`listings.json`, `categories.json`) are read-only. Reads are served from an in-memory snapshot.
-- The web layer writes only the allow-listed collections (`drafts`, `pending`, `quotes`, `seance`, `grades`, `leads`, plus `published.json` and `verified.json` on approval), only through `server/lib/json-file.js`.
+- The web layer writes only the allow-listed collections (`drafts`, `pending`, `quotes`, `seance`, `grades`, `leads`, `watches`, plus `published.json` and `verified.json` on approval), only through `server/lib/json-file.js`.
 
 ## Testing
 

@@ -184,6 +184,57 @@ export function parseGradeAiRepeatDays(value, warn = console.warn) {
   return DEFAULT_GRADE_AI_REPEAT_DAYS;
 }
 
+// ---- monthly watch (addon-monthly-watch requirements 1 and 7) --------------------------------------------------
+
+/**
+ * WATCH_ENABLED: 'on' or 'off' (any case), default off. Any other value warns once (without echoing it) and means off,
+ * so the add-on never starts by mistake.
+ * @param {string | undefined} value
+ * @param {(msg: string) => void} [warn]
+ * @returns {boolean}
+ */
+export function parseWatchEnabled(value, warn = console.warn) {
+  const v = nonEmpty(value)?.toLowerCase();
+  if (v === undefined || v === 'off') return false;
+  if (v === 'on') return true;
+  warn('WATCH_ENABLED must be on or off; using off.');
+  return false;
+}
+
+export const DEFAULT_WATCH_MAX_PER_DAY = 10;
+
+/**
+ * WATCH_MAX_PER_DAY: at most this many monthly readings a day. A whole number from 0 (no readings) to 200. Unset gives
+ * 10; anything else warns (without echoing the value) and gives 10.
+ * @param {string | undefined} value
+ * @param {(msg: string) => void} [warn]
+ * @returns {number}
+ */
+export function parseWatchMaxPerDay(value, warn = console.warn) {
+  const v = nonEmpty(value);
+  if (v === undefined) return DEFAULT_WATCH_MAX_PER_DAY;
+  if (/^(0|[1-9][0-9]{0,2})$/.test(v) && Number(v) <= 200) return Number(v);
+  warn(`WATCH_MAX_PER_DAY must be a whole number from 0 to 200; using ${DEFAULT_WATCH_MAX_PER_DAY}.`);
+  return DEFAULT_WATCH_MAX_PER_DAY;
+}
+
+export const DEFAULT_WATCH_MAX_ACTIVE = 200;
+
+/**
+ * WATCH_MAX_ACTIVE: at most this many watches at once (at the cap the form says the watch is full). A whole number from
+ * 0 to 10000. Unset gives 200; anything else warns (without echoing the value) and gives 200.
+ * @param {string | undefined} value
+ * @param {(msg: string) => void} [warn]
+ * @returns {number}
+ */
+export function parseWatchMaxActive(value, warn = console.warn) {
+  const v = nonEmpty(value);
+  if (v === undefined) return DEFAULT_WATCH_MAX_ACTIVE;
+  if (/^(0|[1-9][0-9]{0,4})$/.test(v) && Number(v) <= 10000) return Number(v);
+  warn(`WATCH_MAX_ACTIVE must be a whole number from 0 to 10000; using ${DEFAULT_WATCH_MAX_ACTIVE}.`);
+  return DEFAULT_WATCH_MAX_ACTIVE;
+}
+
 /** GRADER_ENABLED / GRADER_LEAD_GATE: 'off' (any case) is false; anything else is true. */
 export function parseOnOff(value) {
   return nonEmpty(value)?.toLowerCase() !== 'off';
@@ -370,6 +421,10 @@ export function configFromEnv(env = process.env, opts = {}) {
     gradeAiRepeatDays: isTestRun(env) && nonEmpty(env.GRADE_AI_REPEAT_DAYS) === undefined
       ? 0
       : parseGradeAiRepeatDays(env.GRADE_AI_REPEAT_DAYS, opts.warn ?? console.warn),
+    // Monthly watch (add-on): off unless WATCH_ENABLED=on, in test runs too.
+    watchEnabled: parseWatchEnabled(env.WATCH_ENABLED, opts.warn ?? console.warn),
+    watchMaxPerDay: parseWatchMaxPerDay(env.WATCH_MAX_PER_DAY, opts.warn ?? console.warn),
+    watchMaxActive: parseWatchMaxActive(env.WATCH_MAX_ACTIVE, opts.warn ?? console.warn),
     // The human check on the check form (Cloudflare Turnstile). Off unless both keys are set.
     turnstileSiteKey: nonEmpty(env.TURNSTILE_SITE_KEY) ?? '',
     turnstileSecretKey: nonEmpty(env.TURNSTILE_SECRET_KEY) ?? '',

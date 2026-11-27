@@ -41,5 +41,5 @@ first-answer-pages/
 - All test files live under `test/`. No test files alongside source files.
 - `data/` contains only JSON. No code, no scripts in `data/`.
 - `public/` is served statically. No server logic in `public/`.
-- The web layer may write only to these allow-listed collections, through the data store's JSON-file writer: `drafts`, `pending`, `quotes`, `seance`, `grades`, `leads` (plus `published.json` and `verified.json` on admin approval).
+- The web layer may write only to these allow-listed collections, through the data store's JSON-file writer: `drafts`, `pending`, `quotes`, `seance`, `grades`, `leads`, `watches` (plus `published.json` and `verified.json` on admin approval).
 - The root contains only config/meta files: `package.json`, `README.md`, `render.yaml`, `.gitignore`, and similar.

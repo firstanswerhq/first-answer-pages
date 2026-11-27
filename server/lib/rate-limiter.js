@@ -36,6 +36,11 @@ export const RULES = Object.freeze({
   // Google's live answer: a paid search call each time, so a few per visitor and per report.
   'grade-google': Object.freeze({ limit: 6, windowMs: 60 * 60 * 1000 }),
   'grade-google-grade': Object.freeze({ limit: 3, windowMs: 60 * 60 * 1000 }),
+
+  // Monthly watch (add-on): starting a watch, 5 an hour per client; confirming and stopping, 20 an hour per client.
+  // Stopping is only counted, never refused (the route decides).
+  'watch-start': Object.freeze({ limit: 5, windowMs: 60 * 60 * 1000 }),
+  'watch-manage': Object.freeze({ limit: 20, windowMs: 60 * 60 * 1000 }),
 });
 
 const systemClock = { now: () => Date.now() };
