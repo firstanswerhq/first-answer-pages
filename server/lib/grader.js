@@ -97,7 +97,7 @@ const MESSAGES = Object.freeze({
   name: 'Type your business name (up to 120 characters).',
   city: 'Type your city (up to 80 characters).',
   service: 'Say what you do, like roofers or plumbers (up to 60 characters).',
-  about: 'Describe what you do in 200 characters or fewer.',
+  about: 'Shorten this to 200 characters or fewer.',
   website: 'Type your website like example.com.',
 });
 
