@@ -327,28 +327,17 @@ function initInteract() {
 
   function getNodeAt(px, py) {
     const { w, h } = resize();
-    if (w !== cachedW || h !== cachedH) {
-      cachedLayout = nodePositions(model.mains, w, h);
-      cachedW = w;
-      cachedH = h;
-    }
-    const layout = cachedLayout;
-    for (const node of layout.nodes) {
-      const dx = px - node.x;
-      const dy = py - node.y;
+    if (w !== cachedW || h !== cachedH) { cachedLayout = nodePositions(model.mains, w, h); cachedW = w; cachedH = h; }
+    for (const node of cachedLayout.nodes) {
+      const dx = px - node.x, dy = py - node.y;
       if (dx * dx + dy * dy <= node.r * node.r) return { type: 'main', node };
     }
-    // If drilled, check sub-nodes
     if (activeMain) {
-      const mainNode = layout.nodes.find(n => n.id === activeMain.id);
-      if (mainNode && mainNode.subNodes) {
-        for (const sub of mainNode.subNodes) {
-          if (sub._drawX === undefined) continue;
-          const dx = px - sub._drawX;
-          const dy = py - sub._drawY;
-          const r = sub._drawR || sub.r;
-          if (dx * dx + dy * dy <= (r + 10) * (r + 10)) return { type: 'sub', node: sub, mainNode };
-        }
+      const mn = cachedLayout.nodes.find(n => n.id === activeMain.id);
+      if (mn && mn.subNodes) for (const sub of mn.subNodes) {
+        if (sub._drawX === undefined) continue;
+        const dx = px - sub._drawX, dy = py - sub._drawY, r = sub._drawR || sub.r;
+        if (dx * dx + dy * dy <= (r + 10) * (r + 10)) return { type: 'sub', node: sub, mainNode: mn };
       }
     }
     return null;
@@ -382,13 +371,7 @@ function initInteract() {
     panelOverlay.hidden = true;
   }
 
-  function escapeText(s) {
-    const d = document.createElement('span');
-    d.appendChild(document.createTextNode(s));
-    return d.innerHTML;
-  }
-
-  // ---- Interaction ----
+  function escapeText(s) { const d = document.createElement('span'); d.appendChild(document.createTextNode(s)); return d.innerHTML; }
 
   function activate(mainNode) {
     if (activeMain && activeMain.id === mainNode.id) {
@@ -440,66 +423,33 @@ function initInteract() {
   canvas.addEventListener('click', (e) => {
     const [px, py] = canvasXY(e);
     const hit = getNodeAt(px, py);
-    if (!hit) {
-      if (activeMain) deactivate();
-      return;
-    }
-    if (hit.type === 'main') {
-      e.preventDefault();
-      e.stopPropagation();
-      activate(hit.node);
-    } else if (hit.type === 'sub') {
-      e.preventDefault();
-      e.stopPropagation();
-      showPanel(hit.node);
-    }
+    if (!hit) { if (activeMain) deactivate(); return; }
+    e.preventDefault(); e.stopPropagation();
+    if (hit.type === 'main') activate(hit.node);
+    else if (hit.type === 'sub') showPanel(hit.node);
   });
-
-  // Hover cursor
   canvas.addEventListener('mousemove', (e) => {
     const [px, py] = canvasXY(e);
-    const hit = getNodeAt(px, py);
-    canvas.style.cursor = hit ? 'pointer' : 'default';
+    canvas.style.cursor = getNodeAt(px, py) ? 'pointer' : 'default';
   });
-
-  // Keyboard: use the SVG node links as keyboard targets
   for (const link of artHost.querySelectorAll('.health-node-link')) {
     link.addEventListener('click', (e) => {
       e.preventDefault();
-      const branch = link.closest('[data-main]');
-      if (!branch) return;
-      const mainId = branch.dataset.main;
-      const mainData = model.mains.find(m => m.id === mainId);
-      if (mainData) activate(mainData);
+      const b = link.closest('[data-main]');
+      if (b) { const m = model.mains.find(x => x.id === b.dataset.main); if (m) activate(m); }
     });
   }
-
-  // Escape
   section.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      if (activeSub) { hidePanel(); e.stopPropagation(); }
-      else if (activeMain) { deactivate(); e.stopPropagation(); }
-    }
+    if (e.key === 'Escape') { if (activeSub) { hidePanel(); e.stopPropagation(); } else if (activeMain) { deactivate(); e.stopPropagation(); } }
   });
+  panelOverlay.addEventListener('click', (e) => { if (e.target === panelOverlay) hidePanel(); });
 
-  // Click outside panel closes it
-  panelOverlay.addEventListener('click', (e) => {
-    if (e.target === panelOverlay) hidePanel();
-  });
-
-  // Start the draw loop only when visible (lazy start for slow machines)
+  // Lazy start: only animate when visible
   if (!FAST) {
     if (window.IntersectionObserver) {
-      const io = new IntersectionObserver(entries => {
-        if (entries.some(e => e.isIntersecting)) {
-          io.disconnect();
-          frameId = requestAnimationFrame(draw);
-        }
-      });
+      const io = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) { io.disconnect(); frameId = requestAnimationFrame(draw); } });
       io.observe(section);
-    } else {
-      frameId = requestAnimationFrame(draw);
-    }
+    } else { frameId = requestAnimationFrame(draw); }
   }
 }
 
