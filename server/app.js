@@ -164,7 +164,7 @@ export function createApp(deps = {}) {
     guard: ctx.gradeGuard,
     store,
     assistantProvider: ctx.assistantProvider,
-    extraAssistants: deps.extraAssistants ?? [],  // second opinions disabled for speed
+    extraAssistants: deps.extraAssistants ?? createExtraAssistants(config),
     nameChecker: deps.nameChecker !== undefined ? deps.nameChecker : createNameCheck(config),
     placesLookup,
     bingLookup,
