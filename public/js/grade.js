@@ -23,14 +23,15 @@ function setupCopyButtons(root) {
   }
 }
 
-// Update the progress bar without a full page swap.
+// Update progress bar without touching the DOM heavily.
 function updateProgressBar(doneSteps, totalSteps) {
-  const bar = document.querySelector('.scan-progress-fill');
-  const glow = document.querySelector('.scan-progress-glow');
-  const label = document.querySelector('.scan-progress-label');
-  const wrap = document.querySelector('.scan-progress-bar');
+  var bar = document.querySelector('.scan-progress-fill');
+  var glow = document.querySelector('.scan-progress-glow');
+  var label = document.querySelector('.scan-progress-label');
+  var wrap = document.querySelector('.scan-progress-bar');
   if (!bar || !label || !wrap) return;
-  const pct = Math.round((doneSteps / totalSteps) * 100);
+  var pct = Math.round((doneSteps / totalSteps) * 100);
+  if (doneSteps < totalSteps) pct = Math.min(pct, 95);
   bar.style.width = pct + '%';
   wrap.style.setProperty('--pct', pct + '%');
   wrap.setAttribute('aria-valuenow', pct);
@@ -38,58 +39,101 @@ function updateProgressBar(doneSteps, totalSteps) {
   label.textContent = pct + '%';
 }
 
+// Update step list items in place instead of swapping the whole page.
+function updateSteps(steps, totalSteps) {
+  var items = document.querySelectorAll('.grade-step');
+  if (!items.length) return;
+  var doneSet = {};
+  for (var i = 0; i < steps.length; i++) {
+    doneSet[steps[i].name] = steps[i];
+  }
+  var firstOpen = -1;
+  for (var j = 0; j < items.length; j++) {
+    var nameEl = items[j].querySelector('.step-name');
+    if (!nameEl) continue;
+    var name = nameEl.textContent;
+    var step = doneSet[name];
+    var findingEl = items[j].querySelector('.finding');
+    if (step) {
+      var cls = step.state === 'skipped' ? 'done skipped' : step.state === 'failed' ? 'done failed' : 'done';
+      var mark = step.state === 'skipped' ? 'Skipped' : step.state === 'failed' ? 'Problem' : 'Done';
+      items[j].className = 'grade-step ' + cls;
+      var markEl = items[j].querySelector('.step-mark');
+      if (markEl) markEl.textContent = mark;
+      if (step.finding) {
+        if (!findingEl) {
+          findingEl = document.createElement('span');
+          findingEl.className = 'finding';
+          items[j].appendChild(findingEl);
+        }
+        findingEl.textContent = step.finding;
+      }
+    } else if (firstOpen === -1) {
+      firstOpen = j;
+      items[j].className = 'grade-step running';
+      var markEl2 = items[j].querySelector('.step-mark');
+      if (markEl2) markEl2.textContent = 'Working';
+    }
+  }
+}
+
 // Replace the page's <main> with the one the server renders now (no full reload).
 async function swapInPage() {
-  const res = await fetch(window.location.href, { headers: { Accept: 'text/html' }, credentials: 'same-origin' });
+  var res = await fetch(window.location.href, { headers: { Accept: 'text/html' }, credentials: 'same-origin' });
   if (!res.ok) return false;
-  const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
-  const fresh = doc.querySelector('main');
-  const current = document.querySelector('main');
+  var doc = new DOMParser().parseFromString(await res.text(), 'text/html');
+  var fresh = doc.querySelector('main');
+  var current = document.querySelector('main');
   if (!fresh || !current) return false;
-  current.replaceChildren(...Array.from(fresh.childNodes).map(n => document.importNode(n, true)));
+  current.replaceChildren.apply(current, Array.from(fresh.childNodes).map(function(n) { return document.importNode(n, true); }));
   if (doc.title) document.title = doc.title;
   setupCopyButtons(current);
   return true;
 }
 
 function watchScan(scan) {
-  const url = scan.dataset.statusUrl;
+  var url = scan.dataset.statusUrl;
   if (!url) return;
-  const totalSteps = parseInt(scan.dataset.totalSteps, 10) || 5;
-  let seenSteps = -1;
-  let tries = 0;
-  const poll = async () => {
+  var totalSteps = parseInt(scan.dataset.totalSteps, 10) || 5;
+  var seenSteps = -1;
+  var tries = 0;
+  var poll = async function() {
     tries += 1;
     try {
-      const res = await fetch(url, { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
+      var res = await fetch(url, { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
       if (res.ok) {
-        const status = await res.json();
-        const changed = status.done || status.steps.length !== seenSteps;
-        seenSteps = status.steps.length;
-        // Update progress bar smoothly before swapping
-        updateProgressBar(seenSteps, totalSteps);
-        if (changed && (await swapInPage())) {
-          if (status.done) return; // the report is showing now
-          const next = document.querySelector('[data-grade-scan]');
-          if (!next) return;
+        var status = await res.json();
+        var newSteps = status.steps ? status.steps.length : 0;
+        // Update progress bar (lightweight, no DOM swap)
+        updateProgressBar(newSteps, totalSteps);
+        // Update step text in place (lightweight)
+        if (status.steps && newSteps !== seenSteps) {
+          updateSteps(status.steps, totalSteps);
+        }
+        seenSteps = newSteps;
+        // Only do the heavy full-page swap when the check is DONE (report ready)
+        if (status.done) {
+          await swapInPage();
+          return;
         }
       }
-    } catch {
-      // Keep going: the next poll may work, and the page also refreshes without this script.
+    } catch (e) {
+      // Keep going: the next poll may work.
     }
-    if (tries < 300) setTimeout(poll, 1000); // at most one request per second, about five minutes
+    // Poll every 2 seconds instead of 1 — easier on Chrome
+    if (tries < 150) setTimeout(poll, 2000);
   };
-  setTimeout(poll, 1000);
+  setTimeout(poll, 2000);
 }
 
 // After "Check again": reload the report every few seconds until the notice is gone.
 function watchRecheck() {
-  let tries = 0;
-  const tick = async () => {
+  var tries = 0;
+  var tick = async function() {
     tries += 1;
     try {
       await swapInPage();
-    } catch {
+    } catch (e) {
       // Try again on the next tick.
     }
     if (document.querySelector('[data-grade-rechecking]') && tries < 60) setTimeout(tick, 3000);
@@ -98,7 +142,7 @@ function watchRecheck() {
 }
 
 setupCopyButtons(document);
-const scan = document.querySelector('[data-grade-scan]');
+var scan = document.querySelector('[data-grade-scan]');
 if (scan) watchScan(scan);
 if (document.querySelector('[data-grade-rechecking]')) watchRecheck();
 

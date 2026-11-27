@@ -234,7 +234,9 @@ export function scanPage(grade) {
   const itemsHtml = items.join('\n    ');
   const totalSteps = names.length;
   const doneCount = [...done.values()].filter(s => s).length;
-  const pct = Math.round((doneCount / totalSteps) * 100);
+  // Never show 100% until ALL steps are done — cap at 95% while any step is still running/waiting.
+  const rawPct = Math.round((doneCount / totalSteps) * 100);
+  const pct = doneCount < totalSteps ? Math.min(rawPct, 95) : 100;
   const body = `<section class="grade-scan" data-grade-scan data-status-url="/grade/${h(grade.id)}/status.json" data-total-steps="${totalSteps}" data-done-steps="${doneCount}">
   <h1>Checking ${h(grade.input.name)}</h1>
   <div class="scan-progress-wrap">
