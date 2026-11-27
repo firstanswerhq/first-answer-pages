@@ -108,10 +108,13 @@ function initInteract() {
   let lastTime = 0;
   let pulseAngle = 0;
   let subOrbitAngle = 0;
+  let cachedLayout = null;
+  let cachedW = 0;
+  let cachedH = 0;
 
   // Size the canvas
   function resize() {
-    const dpr = window.devicePixelRatio || 1;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const rect = artHost.getBoundingClientRect();
     const w = Math.round(rect.width * dpr);
     const h = Math.round(rect.height * dpr);
@@ -143,7 +146,13 @@ function initInteract() {
 
     if (animT < 0.01 && targetT === 0) return; // nothing to draw in idle state
 
-    const layout = nodePositions(model.mains, w, h);
+    // Cache layout — only recompute when canvas size changes
+    if (w !== cachedW || h !== cachedH) {
+      cachedLayout = nodePositions(model.mains, w, h);
+      cachedW = w;
+      cachedH = h;
+    }
+    const layout = cachedLayout;
     const { nodes, cx, cy, scale } = layout;
 
     // Draw dimmed state for non-active nodes
@@ -318,7 +327,12 @@ function initInteract() {
 
   function getNodeAt(px, py) {
     const { w, h } = resize();
-    const layout = nodePositions(model.mains, w, h);
+    if (w !== cachedW || h !== cachedH) {
+      cachedLayout = nodePositions(model.mains, w, h);
+      cachedW = w;
+      cachedH = h;
+    }
+    const layout = cachedLayout;
     for (const node of layout.nodes) {
       const dx = px - node.x;
       const dy = py - node.y;
@@ -473,9 +487,19 @@ function initInteract() {
     if (e.target === panelOverlay) hidePanel();
   });
 
-  // Start the draw loop
+  // Start the draw loop only when visible (lazy start for slow machines)
   if (!FAST) {
-    frameId = requestAnimationFrame(draw);
+    if (window.IntersectionObserver) {
+      const io = new IntersectionObserver(entries => {
+        if (entries.some(e => e.isIntersecting)) {
+          io.disconnect();
+          frameId = requestAnimationFrame(draw);
+        }
+      });
+      io.observe(section);
+    } else {
+      frameId = requestAnimationFrame(draw);
+    }
   }
 }
 

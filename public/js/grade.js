@@ -137,13 +137,21 @@ function watchRecheck() {
   var tick = async function() {
     tries += 1;
     try {
-      await swapInPage();
+      // Check if recheck is done via a lightweight JSON fetch, then reload
+      var res = await fetch(window.location.href, { headers: { Accept: 'text/html' }, credentials: 'same-origin' });
+      if (res.ok) {
+        var text = await res.text();
+        if (text.indexOf('data-grade-rechecking') === -1) {
+          window.location.reload();
+          return;
+        }
+      }
     } catch (e) {
       // Try again on the next tick.
     }
-    if (document.querySelector('[data-grade-rechecking]') && tries < 60) setTimeout(tick, 3000);
+    if (tries < 60) setTimeout(tick, 5000);
   };
-  setTimeout(tick, 3000);
+  setTimeout(tick, 5000);
 }
 
 setupCopyButtons(document);

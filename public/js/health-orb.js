@@ -75,7 +75,7 @@ function start(host) {
   }
 
   // Scatter particles on sphere surface for sparkle
-  const PARTICLE_COUNT = 80;
+  const PARTICLE_COUNT = 30;
   const particles = [];
   for (let i = 0; i < PARTICLE_COUNT; i++) {
     const y = 1 - (i / (PARTICLE_COUNT - 1)) * 2;
@@ -127,7 +127,7 @@ function start(host) {
     lastTime = now;
     frame = 0;
 
-    const size = Math.max(1, Math.round(host.clientWidth * (window.devicePixelRatio || 1)));
+    const size = Math.max(1, Math.round(host.clientWidth * Math.min(window.devicePixelRatio || 1, 2)));
     if (canvas.width !== size) { canvas.width = size; canvas.height = size; }
     const half = size / 2;
     const scale = 0.86;
@@ -182,7 +182,6 @@ function start(host) {
       const fadeAlpha = 0.4 + Math.sin(offset * 2) * 0.2;
       ctx.globalAlpha = fadeAlpha;
       ctx.strokeStyle = arcColors[a];
-      ctx.lineWidth = size / 180;
       ctx.lineWidth = size / 120;
       ctx.stroke();
     }
