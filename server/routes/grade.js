@@ -10,6 +10,7 @@
  *   POST /grade/:id/claim          create (or return) the free listing draft
  *   POST /grade/:id/recheck        read the website again, keep the AI answers
  *   POST /grade/:id/google-live    Google's live answer, shown once to the browser that ran the check
+ *   GET  /grade/:id/fix-pack.txt   the fix pack as plain text (full report only, like data.csv)
  *
  * Every /grade response sends no referrer and is never cached. Every /grade page is noindex except the two open
  * pages, /grade (the plain form) and /grade/about. With GRADER_ENABLED=off every /grade path falls through to the
@@ -29,7 +30,7 @@ import { normalizeGradeInput, freeQuestion, recheckIsRunning } from '../lib/grad
 import { normalizeEmail, normalizePhone } from '../lib/listing-fields.js';
 import {
   gradeFormPage, scanPage, reportPage, failedPage, aboutPage, googleLivePage, messagePage, notFoundPage, repeatCheckPage,
-  printPage, reportCsvFor,
+  printPage, reportCsvFor, fixPackTextFor,
 } from '../lib/grade-html.js';
 import { watchOfferFor } from './watch.js';
 
@@ -406,6 +407,19 @@ export function createGradeRouter(ctx) {
       if (!fullAccess(req, grade)) return res.redirect(303, `/grade/${grade.id}`);
       res.set('Content-Disposition', `attachment; filename="ai-visibility-check-${grade.id}.csv"`);
       return res.status(200).type('text/csv; charset=utf-8').send(reportCsvFor(grade));
+    } catch (err) {
+      return next(err);
+    }
+  });
+
+  // The fix pack as plain text (addon-fix-pack requirement 8): the same access rule as data.csv.
+  router.get('/grade/:id/fix-pack.txt', async (req, res, next) => {
+    try {
+      const grade = await load(req.params.id);
+      if (!grade) return notFound(res);
+      if (!fullAccess(req, grade)) return res.redirect(303, `/grade/${grade.id}`);
+      res.set('Content-Disposition', `attachment; filename="fix-pack-${grade.id}.txt"`);
+      return res.status(200).type('text/plain; charset=utf-8').send(fixPackTextFor(grade));
     } catch (err) {
       return next(err);
     }

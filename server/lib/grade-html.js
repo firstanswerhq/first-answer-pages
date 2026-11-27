@@ -23,6 +23,10 @@ import { listedNames, splitLists } from './name-match.js';
 import { scoreGrade } from './grade-score.js';
 import { healthModel, healthMapHtml, checkTip, checkName, CHECK_ROW_IDS } from './health-map.js';
 import { hasPlaceholder, REPLACE_CAPITALS } from './fix-kit.js';
+import {
+  gbpDescription, gbpAboutLeftOut, faqPairs, faqText, faqJsonLd, fixPackText, FAQ_MIN_PAIRS, FAQ_ADD_FIRST,
+  FAQ_MARKUP_LINE, GBP_ABOUT_LEFT_OUT, PACK_HEADINGS,
+} from './fix-kit.js';
 import { registeredDomain } from './name-match.js';
 import {
   shareOfVoice, sitesUsed, evidence, reportCsv, cleanPreparedBy, PREPARED_BY_MAX, answersOf,
@@ -1104,6 +1108,68 @@ function fixKit(grade, contactEmail, { offer = true } = {}) {
 </section>${offerBlock}`;
 }
 
+/**
+ * The fix pack's facts from a stored Grade (addon-fix-pack): what the owner typed and what the check found on the
+ * owner's own website. No street address for a business with no storefront.
+ */
+export function fixPackFacts(grade) {
+  const i = grade?.input ?? {};
+  const found = foundOf(grade);
+  const noStorefront = i.noStorefront === true;
+  return {
+    name: i.name, service: i.service, city: i.city, state: i.state, about: i.about ?? '',
+    phone: found.phone ?? '', website: i.website ?? '', address: noStorefront ? '' : (found.address ?? ''),
+    hours: readableHours(found.hours), noStorefront, sameAs: profileLinks(grade),
+  };
+}
+
+/** The plain-text download of the fix pack (`GET /grade/:id/fix-pack.txt`). */
+export const fixPackTextFor = grade => fixPackText(fixPackFacts(grade));
+
+/** Where each pack box goes, in one sentence (requirement 2). */
+export const PACK_HELP = Object.freeze({
+  gbp: 'Paste this into the description box of your Google Business Profile. Read it once before you paste it.',
+  faq: 'Add these questions and answers to a page on your website, such as your home page.',
+  all: 'Everything above in one box, with a plain label above each part, to send to whoever looks after your listing and website.',
+});
+
+/**
+ * "Your fix pack" (addon-fix-pack): a Google Business Profile description, FAQ text and the FAQ markup, made only from
+ * what the owner typed and what the check found. Built from the stored Grade when the page is shown; nothing is
+ * stored or asked. The boxes reuse the kit's markup, and their Copy buttons stay `hidden` until the script shows them.
+ */
+function fixPack(grade, contactEmail) { // eslint-disable-line no-unused-vars
+  const facts = fixPackFacts(grade);
+  const gbp = gbpDescription(facts);
+  const pairs = faqPairs(facts);
+  const enough = pairs.length >= FAQ_MIN_PAIRS;
+  const box = (id, title, help, text) => `<div class="kit-item">
+      <h3>${h(title)}</h3>
+      ${help}
+      <pre id="${id}">${h(text)}</pre>
+      <button type="button" class="copy-btn button" data-copy="${id}" hidden>Copy</button>
+    </div>`;
+  const items = [];
+  if (gbp) {
+    const leftOut = gbpAboutLeftOut(facts) ? `\n      <p class="hint">${h(GBP_ABOUT_LEFT_OUT)}</p>` : '';
+    items.push(box('pack-gbp', PACK_HEADINGS.gbp, `<p class="hint">${h(PACK_HELP.gbp)}</p>${leftOut}`, gbp));
+  }
+  if (enough) {
+    items.push(box('pack-faq', PACK_HEADINGS.faq, `<p class="hint">${h(PACK_HELP.faq)}</p>`, faqText(pairs)));
+    // The markup belongs on a page of the website, so it is offered only when there is one.
+    if (facts.website) items.push(box('pack-faq-json', PACK_HEADINGS.markup, `<p class="hint">${h(FAQ_MARKUP_LINE)}</p>`, faqJsonLd(pairs)));
+  } else {
+    items.push(`<p class="hint grade-pack-first">${h(FAQ_ADD_FIRST)}</p>`);
+  }
+  items.push(box('pack-all', 'Everything in one box', `<p class="hint">${h(PACK_HELP.all)}</p>`, fixPackText(facts, { markup: 'script' })));
+  return `<section class="grade-kit grade-pack">
+  <h2>Your fix pack</h2>
+  <p>Text you can paste today: a description for your Google Business Profile, and questions and answers for your website. It is made only from what you typed and what we found on your website.</p>
+  ${items.join('\n    ')}
+  <p><a href="/grade/${h(grade.id)}/fix-pack.txt">Download the fix pack as a text file</a></p>
+</section>`;
+}
+
 function leadForm(grade, { values = {}, errors = {} } = {}) {
   const keys = ['name', 'email', 'phone'];
   const firstBad = keys.find(k => errors[k]);
@@ -1288,6 +1354,7 @@ export function reportPage(storedGrade, opts = {}) {
   ${allChecks(grade, { agency })}
   ${answersSection(grade, { now })}
   ${fixKit(grade, contactEmail, { offer: !prepared && !agency })}
+  ${fixPack(grade, contactEmail)}
   ${recheckBlock(grade, rechecking)}
   ${watchBlock(grade, opts)}
 </div>`
