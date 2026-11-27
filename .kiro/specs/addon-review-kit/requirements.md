@@ -1,0 +1,28 @@
+# Review kit (add-on 4, from the Nov 26, 2026 competitor research, rank 4)
+
+Owner: Colby. Reviews matter to the owner's customers and to what Google shows. This add-on gives the owner ready words to ask for reviews and a printable card with a QR code that opens their Google review page.
+Rules that still apply: `.kiro/steering/wording.md`, `grader-safety.md`, `rebuild.md`, `tech.md` (no new dependency: the QR code is written in plain JavaScript). Plain words. American spelling. No dollar figures. Never promise or imply that reviews, or anything else, will make an AI assistant name a business. Say "days to weeks". Do not use the word "guarantee".
+Do not touch the ChatGPT, Gemini, Grok and Perplexity second opinions. Do not touch the progress bar, polling or reload code, or `public/js/grade.js` (its generic Copy button already handles any `.copy-btn[data-copy]`). `public/js/health-interact.js` stays under 16,000 bytes.
+
+## Why
+BrightLocal Grow and Birdeye sell review requests by text and email. A one-person shop needs three short messages and a card for the counter, not a platform. The report already reads a review link from the owner's website (`found.reviewsLink`) and checks Google reviews when a key is set.
+
+## Requirements
+1. The full report gets one new section, "Ask for reviews", after "Your fix kit" (and after "Your fix pack" if that add-on is built), under the same access rule as the fix kit. Works with JavaScript off; Copy buttons work as in the kit.
+2. The review link used is the first of: (a) a link the owner pasted in this section, (b) the Google review link read from the owner's own website (`foundOf(grade).reviewsLink`, only when `reviewsLinkHost` says it is a Google link). A Yelp, Facebook or Nextdoor link may be used for the messages only (not the card) when no Google link exists. With none, the messages show the placeholder `ADD YOUR REVIEW LINK` and a plain line saying where to find it ("Open your Google Business Profile and look for the way to share your review link.").
+3. Pasting a link: one small form in the section, field "Your Google review link", `POST /grade/:id/review-link`. The link must pass `reviewsLinkHost` (https, a known review host, no redirect addresses). Anything else gives a plain error in the same section ("That doesn't look like a Google review link. Paste the one Google gives you."). The valid link is saved on the Grade as `reviewLink` (a string, nothing else). Rate limit as for `unlock`. An empty submit removes it.
+4. Templates, each in its own copy box, with the business name and the link filled in and `[CUSTOMER NAME]` as the only other placeholder (capitals, the same "Replace the CAPITAL WORDS before pasting." line as the kit): a text message (at most 160 code points with a typical link, and the box shows its length), a longer text message, an email (subject and body), and a thank-you reply for a review the customer already left. Plain, polite, first-person plural ("we"), no hype.
+5. Wording in every template: asks for an honest review; never asks for stars, never says "5-star", never offers a gift, discount or entry to anything for a review, never says "if you were happy" or asks only some customers. The section tells the owner in one plain line: "Ask every customer, not only the happy ones. Do not offer anything in return for a review. Google's review rules don't allow either." (Check the current Google review policy page in task 1 and keep the line true.)
+6. Printable card: `GET /grade/:id/review-card`, same access rule as `print`: a page with the business name, the words "Tell us how we did", a QR code of the review link, and the link in small text under it. Print styles make it fit one sheet; the page has a "Print this card" line that works with the browser's own print command (no script required). Offered only when the link is a Google link (requirement 2). Otherwise the section says "Paste your Google review link above to get a printable card."
+7. The QR code is made on our server, with no dependency and no outside service: a small encoder in `server/lib/qr.js`, byte mode, error correction level M, versions 1 to 10 (links up to 213 bytes). `qrSvg(text)` returns an inline `<svg>` with a 4-module quiet zone, black on white, `shape-rendering="crispEdges"`, and a text alternative ("QR code that opens your Google review page"). It throws a plain error for text longer than 213 bytes; the page then shows the link and no code.
+8. The link is never fetched, followed or checked by us. It is shown and encoded exactly as stored. The QR code holds the link and nothing else.
+9. Every inserted value is escaped on every page; text boxes strip control characters and line breaks from inserted values. The business name is the one the owner typed.
+10. The kit has no sending, no scheduling and no list of customers: the owner copies the words and sends them herself or himself.
+11. A Google Places ID path (building the link from a `placeId`) is not part of this change; see the open question in design.md.
+12. Tests as listed in design.md. The existing suite must still pass except the lines named there.
+
+## Rules that still apply (checks, not new work)
+Every `/grade` page sends no referrer, is never cached, and is `noindex`. The new routes follow the same router rules.
+
+## Not in this change
+No texting or email sending, no customer list, no reminders, no review replies written by AI, no review monitoring, no Google API, no Places ID storage, no star or rating claims, no change to the reviews check or its points, the score, the second opinions, the progress bar or `public/js/grade.js`.
