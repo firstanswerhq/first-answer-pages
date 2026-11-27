@@ -111,9 +111,10 @@ function watchScan(scan) {
           updateSteps(status.steps, totalSteps);
         }
         seenSteps = newSteps;
-        // Only do the heavy full-page swap when the check is DONE (report ready)
+        // When the check is done, just reload — let Chrome handle the report
+        // page natively instead of parsing and swapping the DOM in JavaScript
         if (status.done) {
-          await swapInPage();
+          window.location.reload();
           return;
         }
       }

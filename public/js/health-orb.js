@@ -258,7 +258,9 @@ function start(host) {
   document.addEventListener('visibilitychange', onVisibility);
   if (motion && motion.addEventListener) motion.addEventListener('change', onMotion);
   orbs.set(host, stop);
-  loop();
+  // Start paused — the IntersectionObserver will trigger loop() when visible.
+  // This prevents the canvas from choking the page during initial load.
+  if (!watcher) loop();
 }
 
 function init() {
