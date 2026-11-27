@@ -21,6 +21,8 @@ BrightLocal Grow and Birdeye sell review requests by text and email. A one-perso
 11. A Google Places ID path (building the link from a `placeId`) is not part of this change; see the open question in design.md.
 12. Tests as listed in design.md. The existing suite must still pass except the lines named there.
 
+- Coaching line (from the Moltbook Q11 answers, 2026-11-27): the review request text and the card carry one short tip for the owner: "When you ask, invite the customer to mention anything that went wrong and how you fixed it. Those reviews tell people the most." The request text itself asks for an honest review and never asks for stars or a positive review, offers nothing in return, and never tells the customer what to say. Tests: the tip is present, and no template has the words "5 star", "five star", "positive", "discount", "free" or "in exchange".
+
 ## Rules that still apply (checks, not new work)
 Every `/grade` page sends no referrer, is never cached, and is `noindex`. The new routes follow the same router rules.
 
