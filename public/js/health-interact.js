@@ -1,5 +1,4 @@
 // health-interact.js — canvas interactive drill-down for the health map.
-// Progressive enhancement · keyboard accessible · respects prefers-reduced-motion.
 const motion = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
 const FAST = motion && motion.matches;
 const COLORS = { good:'#4ADE80', partly:'#FBBF24', missing:'#F87171', not_checked:'#94A3B8', info:'#67E8F9' };
@@ -102,7 +101,7 @@ function initInteract() {
   let activeSub = null;
   let animT = 0;
   let targetT = 0;
-  let subAnimT = 0;    // 0 = subs hidden, 1 = subs visible
+  let subAnimT = 0;
   let subTargetT = 0;
   let frameId = null;
   let lastTime = 0;
@@ -112,7 +111,6 @@ function initInteract() {
   let cachedW = 0;
   let cachedH = 0;
 
-  // Size the canvas
   function resize() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const rect = artHost.getBoundingClientRect();
@@ -125,8 +123,6 @@ function initInteract() {
     return { w, h, dpr };
   }
 
-  // ---- Drawing ----
-
   function draw(now) {
     frameId = requestAnimationFrame(draw);
     if (now - lastTime < 66) return; // 15fps cap (easy on slower machines)
@@ -135,7 +131,6 @@ function initInteract() {
     const { w, h, dpr } = resize();
     ctx.clearRect(0, 0, w, h);
 
-    // Advance animation
     const dt = FAST ? 1 : 0.08;
     if (animT < targetT) animT = Math.min(animT + dt, targetT);
     else if (animT > targetT) animT = Math.max(animT - dt, targetT);
@@ -144,9 +139,7 @@ function initInteract() {
     pulseAngle += 0.04;
     subOrbitAngle += 0.012;
 
-    if (animT < 0.01 && targetT === 0) return; // nothing to draw in idle state
-
-    // Cache layout — only recompute when canvas size changes
+    if (animT < 0.01 && targetT === 0) return;
     if (w !== cachedW || h !== cachedH) {
       cachedLayout = nodePositions(model.mains, w, h);
       cachedW = w;
@@ -155,12 +148,9 @@ function initInteract() {
     const layout = cachedLayout;
     const { nodes, cx, cy, scale } = layout;
 
-    // Draw dimmed state for non-active nodes
     for (const node of nodes) {
       const isActive = activeMain && node.id === activeMain.id;
-
       if (animT > 0 && !isActive) {
-        // Fade non-active nodes
         const alpha = 0.15 * animT;
         ctx.save();
         ctx.globalAlpha = alpha;
@@ -169,11 +159,8 @@ function initInteract() {
       }
 
       if (isActive && animT > 0) {
-        // Draw active node with glow
         ctx.save();
         drawActiveNode(ctx, node, scale, animT);
-
-        // Draw sub-nodes if drilled
         if (subAnimT > 0) {
           drawSubNodes(ctx, node, scale, subAnimT);
         }
@@ -323,8 +310,6 @@ function initInteract() {
     }
   }
 
-  // ---- Hit testing ----
-
   function getNodeAt(px, py) {
     const { w, h } = resize();
     if (w !== cachedW || h !== cachedH) { cachedLayout = nodePositions(model.mains, w, h); cachedW = w; cachedH = h; }
@@ -342,8 +327,6 @@ function initInteract() {
     }
     return null;
   }
-
-  // ---- Panel ----
 
   function showPanel(sub) {
     if (!sub.panelHtml) return;
@@ -385,7 +368,6 @@ function initInteract() {
     subTargetT = 1;
     section.classList.add('health-paused', 'health-drilled');
 
-    // Also trigger the HTML drill for screen readers
     const htmlGroup = section.querySelector(`.health-group[data-main-id="${mainNode.id}"]`);
     if (htmlGroup) {
       for (const g of section.querySelectorAll('.health-group[data-main-id]')) {
@@ -411,8 +393,6 @@ function initInteract() {
       g.removeAttribute('aria-expanded');
     }
   }
-
-  // ---- Events ----
 
   function canvasXY(e) {
     const rect = canvas.getBoundingClientRect();
@@ -444,7 +424,6 @@ function initInteract() {
   });
   panelOverlay.addEventListener('click', (e) => { if (e.target === panelOverlay) hidePanel(); });
 
-  // Lazy start: only animate when visible
   if (!FAST) {
     if (window.IntersectionObserver) {
       const io = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) { io.disconnect(); frameId = requestAnimationFrame(draw); } });
@@ -453,7 +432,7 @@ function initInteract() {
   }
 }
 
-// Run on load and reinitialise if the DOM changes (rechecks swap content).
+// Init on load, reinit on DOM changes.
 initInteract();
 if (window.MutationObserver) {
   new MutationObserver(() => {
